@@ -1,0 +1,264 @@
+# enterprise-platform runtime config.
+#
+# The platform service owns the control-plane authorization server, first-run
+# setup, platform admin, and platform config surfaces. It is the local licensing
+# authority for the deployment and is exempt from the deployment license gate.
+#
+# Public surface: OAuth/OIDC discovery and protocol endpoints plus the operator
+# login UI. The platform admin and setup APIs are internal and require an
+# operator bearer; expose them only through an internal ingress or service mesh.
+server:
+  rest:
+    port: 18080
+    auth:
+      enabled: true
+      # Open paths: first-run setup UI/API, OAuth protocol surface, discovery/JWKS,
+      # the internal pre-auth registration channel (own Basic auth), and the
+      # in-network command transport. Everything else requires an operator bearer.
+      anonymous-path-prefixes: /,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/api/commands,/introspect
+# Browser CORS allow-list for the setup and admin UI. Set this to the external
+# origin that serves the operator UI. The platform serves the admin site at its
+# own instance root, so this is normally the platform external URL.
+cors:
+  origins: ${env:ONBOARDING_UI_BASE_URL}
+sphereon:
+  telemetry:
+    enabled: true
+    tracing:
+      enabled: true
+    metrics:
+      enabled: true
+    sampling:
+      rate: 1.0
+    export:
+      preset: otlp-all
+otel:
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+  exporter:
+    otlp:
+      endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
+      traces:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL:grpc}
+      metrics:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
+security:
+  header-trust-policy:
+    trusted_service_ids:
+      - service-crypto
+      - service-data
+      - service-oid4vci
+      - service-oid4vp
+      - service-eidas
+      - service-monolith
+    service_client_bindings:
+      "[service-crypto]": kms-service
+      "[service-data]": did-service
+      "[service-oid4vci]": issuer-service
+      "[service-oid4vp]": verifier-service
+transport:
+  grpc:
+    enabled: true
+    port: 9090
+database:
+  app:
+    default:
+      dialect: postgresql
+      host: ${env:EDK_DB_HOST}
+      port: 5432
+      database: ${env:EDK_DB_NAME}
+      username: ${env:EDK_DB_USERNAME}
+      password: ${env:EDK_DB_PASSWORD}
+  tenants:
+    default:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_DB_HOST}
+      port: 5432
+      database: ${env:EDK_DB_NAME}
+      username: ${env:EDK_DB_USERNAME}
+      password: ${env:EDK_DB_PASSWORD}
+tenant:
+  resolution:
+    platform:
+      # Tenants resolve by subdomain under this base domain. TODO: set to your
+      # public base domain (for example saas.example.com).
+      base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+      subdomain:
+        enabled: true
+    custom-domain:
+      enabled: true
+    self:
+      tenant-id: "<platform>"
+      hosts: "enterprise-platform,localhost,platform.${env:EDK_PLATFORM_BASE_DOMAIN}"
+  platform:
+    owner:
+      initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+  onboarding:
+    operator:
+      enabled: true
+kms:
+  providers:
+    software:
+      type: software
+      enabled: true
+      autoCreateCertificate: true
+      keystore:
+        type: pkcs12
+        id: software
+        password: ${env:EDK_KEYSTORE_PASSWORD}
+        # The platform keeps its own keystore in the platform-keystore volume
+        # mounted at /keystore.
+        path: /keystore/edk-keystore.p12
+crypto:
+  kms:
+    roles:
+      oauth2-as:
+        provider: software
+        algorithm: ES256
+      issuer-signing:
+        provider: software
+        algorithm: ES256
+      issuer-request-decryption:
+        provider: software
+        algorithm: ES256
+      verifier-request-object-signing:
+        provider: software
+        algorithm: ES256
+oauth2:
+  user-provider:
+    mode: local
+  clients:
+    platform-operator-cli:
+      client-id: platform-operator-cli
+      client-name: Platform Operator CLI
+      client-type: public
+      # authorization_code for operator sign-in; token-exchange for the admin
+      # console's operator->tenant STS exchange (RFC 8693) onto the tenant KMS
+      # and DID resource APIs.
+      grant-types: "authorization_code,urn:ietf:params:oauth:grant-type:token-exchange"
+      # Two same-origin apps share this operator client, each owning its own callback and running
+      # the code->token exchange itself against the anonymous /token endpoint:
+      #  1. the admin console (/admin-console basePath) -> {host}/admin-console/callback;
+      #  2. the first-run setup wizard (served at the platform root) -> {host}/onboarding/callback.
+      # Both are served same-origin on the platform host, so the redirect_uris use the platform
+      # external URL. Listed explicitly rather than relying on permissive-redirect-uri.
+      redirect-uris:
+        - ${env:EXTERNAL_BASE_URL}/admin-console/callback
+        - ${env:EXTERNAL_BASE_URL}/onboarding/callback
+      # OIDC RP-Initiated Logout target: where the AS may redirect after revoking the login session.
+      # The admin console sign-out calls the AS /logout end-session endpoint with this as
+      # post_logout_redirect_uri (unregistered values are ignored), landing the operator back on sign-in.
+      # Comma-separated string (NOT a YAML list — the client config binder reads these via
+      # readStringList, which resolves a delimited string here, not block-sequence items).
+      post-logout-redirect-uris: "${env:EXTERNAL_BASE_URL}/admin-console"
+      allowed-scopes: openid
+      token-endpoint-auth-method: none
+  servers:
+    default:
+      mode: HOSTED
+      signing-key:
+        auto-generate: true
+      issuer: ${env:EXTERNAL_BASE_URL}
+      oidc: SUPPORTED
+      # Enable the OIDC RP-Initiated Logout end-session endpoint (/logout); default is DISABLED. The
+      # admin console needs it so sign-out ends the operator's SSO login session instead of silently
+      # re-authenticating on the next /authorize.
+      logout: SUPPORTED
+      pkce: REQUIRED
+      token-format: JWT
+      scopes-supported: "openid,profile,email"
+      grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
+      public-clients:
+        allow-any: true
+        permissive-redirect-uri: true
+      internal-clients:
+        issuer:
+          client-id: issuer-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        kms:
+          client-id: kms-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        did:
+          client-id: did-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        verifier:
+          client-id: verifier-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenantas:
+          client-id: tenant-as-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+application:
+  admin:
+    secret-backend:
+      # Secret backend that resolves admin and onboarding secrets. TODO: select a
+      # production backend (for example a managed vault) before going live.
+      type: ${env:EDK_SECRET_BACKEND:config-system-dev-only}
+  tenant:
+    hosted-as:
+      issuer: ${env:EXTERNAL_BASE_URL}
+    owner:
+      # TODO: set the platform operator identity for this deployment.
+      email: ${env:EDK_PLATFORM_OPERATOR_EMAIL:operator@example.com}
+      display-name: Platform Operator
+      roles: platform-admin
+app:
+  # TODO: set to prod for a production deployment. dev unlocks the break-glass
+  # operator credential below; prod requires the invitation flow instead.
+  deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
+auth:
+  login:
+    require-application: false
+platform:
+  admin-console:
+    sts:
+      allowed-audiences: "enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-issuer,enterprise-verifier"
+  config:
+    mount-path: /app/config
+  onboarding:
+    installation-base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+    deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
+    # Interactive setup-screen mode: no license-token-path is configured here.
+    # The anonymous setup surface remains open until the operator installs a
+    # license through /setup-license and completes bootstrap. The setup service
+    # creates this recipient key on first license-request generation when it is
+    # not already present. Offline pre-provisioning is opt-in through
+    # config/offline/application.yml.
+    recipient-key-path: /app/license/license-recipient.jwk.json
+    trust-bundle-path: /app/license/license-root-ca.pem
+    operator:
+      # TODO: set the platform operator identity for this deployment.
+      email: ${env:EDK_PLATFORM_OPERATOR_EMAIL:operator@example.com}
+      display-name: Platform Operator
+      initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+  setup:
+    kms:
+      provider-id: software
+      tenant-id: "<platform>"
+      principal-id: platform-setup
+    license-request:
+      default-alias: platform-license-request
+      default-algorithm: ECDSA_SHA256
+      default-use: sig
+east-west:
+  tenant-as:
+    base-url: http://enterprise-tenant-as:18083
+license:
+  # This is the local licensing authority: it owns the deployment and is exempt
+  # from the deployment license gate.
+  deployment-role: platform
+  recipient:
+    # The setup service creates this key on first license-request generation.
+    key-id: ${env:EDK_LICENSE_RECIPIENT_KEY_ID:license-recipient}
+    private-key-path: /app/license/license-recipient.jwk.json
+  trust:
+    # Trust the compiled-in durable root. A license bound to this deployment
+    # chains leaf -> intermediate -> embedded root, so no trust file is mounted.
+    embedded:
+      enabled: ${env:EDK_LICENSE_TRUST_EMBEDDED:true}
+    root-ca-bundle-path: /app/license/license-root-ca.pem

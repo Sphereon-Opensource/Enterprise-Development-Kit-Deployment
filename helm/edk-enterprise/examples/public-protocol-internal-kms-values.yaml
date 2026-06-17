@@ -1,0 +1,41 @@
+global:
+  imageTag: 0.25.0-SNAPSHOT
+  imagePullSecrets:
+    - sphereon-nexus
+  platformBaseDomain: example.com
+
+services:
+  tenant-kms:
+    publicIngress:
+      enabled: false
+    internalIngress:
+      enabled: false
+  did:
+    publicIngress:
+      host: did.example.com
+    internalIngress:
+      host: did.internal.example.com
+  tenant-as:
+    publicIngress:
+      host: as.example.com
+    internalIngress:
+      host: as.internal.example.com
+  issuer:
+    publicIngress:
+      host: issuer.example.com
+    internalIngress:
+      host: issuer.internal.example.com
+  verifier:
+    publicIngress:
+      host: verifier.example.com
+    internalIngress:
+      host: verifier.internal.example.com
+
+ingress:
+  public:
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+  internal:
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"

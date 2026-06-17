@@ -1,0 +1,6 @@
+EDK enterprise services have been deployed.
+
+Images are pulled from:
+{{ .Values.global.imageRegistry }}/enterprise-*:{{ .Values.global.imageTag | default .Chart.AppVersion }}
+
+KMS is internal-only by default. DID, AS, Issuer, and Verifier have separate public and internal ingress settings in values.yaml.

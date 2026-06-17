@@ -1,0 +1,17 @@
+# Single-port multi-tenant front door via the Cilium Gateway API. One wildcard
+# HTTPS listener terminates TLS for the operator host and all tenant hosts;
+# HTTPRoutes fan out by host and path. The classic per-service Ingress objects
+# are disabled so the Gateway is the only public entry point.
+gateway:
+  enabled: true
+  className: cilium
+  operatorHost: platform
+  baseDomain: example.com
+  tls:
+    mode: secret
+    secretName: edk-wildcard-tls
+  httpRedirect: true
+
+ingress:
+  legacy:
+    enabled: false

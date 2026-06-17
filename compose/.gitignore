@@ -1,0 +1,5 @@
+# Local deployment secrets and generated material — never commit.
+.env
+config/license-token.txt
+config/license-recipient.jwk.json
+config/license-root-ca.pem

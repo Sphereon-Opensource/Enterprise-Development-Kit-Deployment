@@ -1,0 +1,30 @@
+global:
+  imageTag: 0.25.0-SNAPSHOT
+  imagePullSecrets:
+    - sphereon-nexus
+  platformBaseDomain: example.com
+
+database:
+  enabled: true
+  dialect: postgresql
+  host: edk-postgres.default.svc.cluster.local
+  port: 5432
+  name: edk
+  existingSecret: edk-postgres
+  usernameKey: username
+  passwordKey: password
+  networkPolicy:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: default
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: postgresql
+
+auth:
+  enabled: true
+  jwt:
+    enabled: true
+    issuer: https://as.example.com
+    jwksUri: https://as.example.com/.well-known/jwks.json
+    audience: edk-enterprise

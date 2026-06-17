@@ -1,0 +1,86 @@
+# Let's Encrypt single-port gateway overlay for the EDK enterprise stack.
+#
+# This is a template rendered by scripts/start-letsencrypt.(ps1|sh). The rendered
+# file is compose/docker-compose.letsencrypt.yml and is intentionally gitignored.
+#
+# Use this overlay instead of docker-compose.gateway.yml when the machine is
+# reachable through a real public base domain and Traefik should obtain public
+# Let's Encrypt certificates. The local CA/truststore mounts are intentionally
+# absent: containers and browsers validate LE certificates with their default
+# truststores.
+
+services:
+  traefik:
+    image: traefik:v3.3
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+    command: []
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./gateway/traefik/traefik.letsencrypt.generated.yml:/etc/traefik/traefik.yml:ro
+      - ./gateway/traefik/dynamic.letsencrypt.generated.yml:/etc/traefik/dynamic/dynamic.yml:ro
+      - edk-acme:/etc/traefik/acme
+__LE_DNS_ENV_SECTION__
+    networks:
+      default:
+        aliases:
+          - platform.example.com
+__LE_TENANT_ALIASES__
+
+  enterprise-platform:
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: example.com
+      EDK_PLATFORM_PUBLIC_URL: https://platform.example.com
+      EDK_TENANT_AS_PUBLIC_URL: https://tenant-as.example.com
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: https://platform.example.com
+      ONBOARDING_UI_BASE_URL: https://platform.example.com
+
+  enterprise-tenant-as:
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: example.com
+      EDK_PLATFORM_PUBLIC_URL: https://platform.example.com
+      EDK_TENANT_AS_PUBLIC_URL: https://tenant-as.example.com
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: https://platform.example.com
+
+  enterprise-tenant-kms:
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: example.com
+      EDK_PLATFORM_PUBLIC_URL: https://platform.example.com
+      EDK_TENANT_AS_PUBLIC_URL: https://tenant-as.example.com
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+
+  enterprise-did:
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: example.com
+      EDK_PLATFORM_PUBLIC_URL: https://platform.example.com
+      EDK_TENANT_AS_PUBLIC_URL: https://tenant-as.example.com
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: https://platform.example.com
+
+  enterprise-issuer:
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: example.com
+      EDK_PLATFORM_PUBLIC_URL: https://platform.example.com
+      EDK_TENANT_AS_PUBLIC_URL: https://tenant-as.example.com
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: https://platform.example.com
+
+  enterprise-verifier:
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: example.com
+      EDK_PLATFORM_PUBLIC_URL: https://platform.example.com
+      EDK_TENANT_AS_PUBLIC_URL: https://tenant-as.example.com
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: https://platform.example.com
+
+  admin-console:
+    networks:
+      default: {}
+
+volumes:
+  edk-acme:

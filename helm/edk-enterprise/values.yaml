@@ -1,0 +1,423 @@
+global:
+  imageRegistry: nexus.sphereon.com/edk-docker
+  imageTag: "0.25.0-SNAPSHOT"
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  platformBaseDomain: example.com
+
+database:
+  enabled: true
+  dialect: postgresql
+  host: postgres
+  port: 5432
+  name: edk
+  existingSecret: edk-postgres
+  usernameKey: username
+  passwordKey: password
+  networkPolicy:
+    # Keep empty to allow DNS/external managed Postgres. Set podSelector or ipBlock
+    # in production values to restrict database egress.
+    podSelector: {}
+    namespaceSelector: {}
+    ipBlock: {}
+
+auth:
+  enabled: true
+  jwt:
+    enabled: true
+    issuer: ""
+    jwksUri: ""
+    audience: edk-enterprise
+
+grpc:
+  # Platform and tenant KMS carry the gRPC server transport. The other services use
+  # routed command clients and route KMS commands to tenant-kms over gRPC.
+  enabled: true
+  port: 9090
+  authMode: service-jwt
+
+# Keystore persistence is split per the per-tenant KMS keystore separation: the
+# platform holds the platform AS cert/user plus the license-request instance
+# cert, and tenant-kms holds the per-tenant software KMS key material. Each is a
+# dedicated PVC mounted at /keystore in its own service only. The route-only
+# services (issuer/verifier/did/tenant-as) route KMS to tenant-kms and mount no
+# keystore at all.
+platformKeystore:
+  # PVC mounted at /keystore in the platform service only.
+  enabled: true
+  size: 1Gi
+  # Empty uses the cluster default StorageClass.
+  storageClass: ""
+  # Reference an existing PVC instead of creating one (e.g. a pre-seeded
+  # license-request cert volume). When set, no PVC is rendered.
+  existingClaim: ""
+
+tenantKmsKeystore:
+  # PVC mounted at /keystore in the tenant-kms service only.
+  enabled: true
+  size: 2Gi
+  # Empty uses the cluster default StorageClass.
+  storageClass: ""
+  # Reference an existing PVC instead of creating one. When set, no PVC is rendered.
+  existingClaim: ""
+
+license:
+  # Deployment binding for the license gate. The non-platform services fail closed unless they
+  # bind to this deployment and declare their service role. It must match the
+  # deployment id the platform license is minted with. The platform itself is the
+  # local licensing authority and is exempt via deployment-role=platform (set in
+  # the deployment template, not here).
+  deploymentId: deployment-1
+  # Per-service gate role advertised by each service. The platform key is
+  # present for completeness but unused (the platform is exempt).
+  serviceRoles:
+    platform: enterprise-platform
+    tenant-kms: enterprise-tenant-kms
+    did: enterprise-did
+    tenant-as: enterprise-tenant-as
+    issuer: enterprise-issuer
+    verifier: enterprise-verifier
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+networkPolicy:
+  enabled: true
+  allowDnsEgress: true
+  ingressController:
+    enabled: true
+    namespaceSelector: {}
+    podSelector: {}
+  metricsScraper:
+    enabled: false
+    namespaceSelector: {}
+    podSelector: {}
+
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+
+opentelemetry:
+  enabled: false
+  endpoint: ""
+  protocol: http/protobuf
+  headers: ""
+  resourceAttributes: ""
+
+ingress:
+  legacy:
+    # Render the classic per-service public and internal Ingress objects. Set to
+    # false when adopting the single-port Gateway below so only the Gateway and
+    # HTTPRoutes front public traffic.
+    enabled: true
+  public:
+    annotations: {}
+  internal:
+    annotations: {}
+
+gateway:
+  # Single-port multi-tenant Gateway API front door. One wildcard HTTPS listener
+  # terminates TLS for both the operator host and tenant hosts; HTTPRoutes fan
+  # out by host and path to each service per the routing contract.
+  enabled: false
+  className: cilium
+  # Operator host = {operatorHost}.{baseDomain} (the platform plane).
+  operatorHost: platform
+  # Defaults to global.platformBaseDomain when empty.
+  baseDomain: ""
+  tls:
+    # secret: reference an existing wildcard TLS Secret.
+    # certManager: rely on a cert-manager ClusterIssuer (DNS-01) for the wildcard.
+    mode: secret
+    secretName: edk-wildcard-tls
+    clusterIssuer: ""
+  # Add a :80 HTTP listener and a redirect HTTPRoute that 301s to https.
+  httpRedirect: true
+
+services:
+  platform:
+    enabled: true
+    image: enterprise-platform
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: true
+      className: public
+      host: platform.example.com
+      paths:
+        - /.well-known/oauth-authorization-server
+        - /.well-known/openid-configuration
+        - /authorize
+        - /login
+        - /token
+        - /userinfo
+        - /oauth2
+        - /api/platform/setup/v1
+        - /api/platform/admin/v1
+      annotations: {}
+    internalIngress:
+      enabled: true
+      className: internal
+      host: platform.internal.example.com
+      paths:
+        - /api/platform/setup/v1
+        - /api/platform/admin/v1
+      annotations: {}
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 1536Mi
+    env:
+      - name: EXTERNAL_BASE_URL
+        value: https://platform.example.com
+      # External origin of the onboarding/admin UI. The platform serves setup and (after
+      # license + operator account) the platform-admin site at the SAME instance root, so this
+      # is normally the platform's own external URL. The AS registers the operator-cli OAuth
+      # redirect_uri against it and it is the setup-API CORS origin. (Local dev serves the UI as
+      # a separate :3003 static export; there ONBOARDING_UI_BASE_URL points at :3003 instead.)
+      - name: ONBOARDING_UI_BASE_URL
+        value: https://platform.example.com
+      - name: PLATFORM_SETUP_KMS_PROVIDER_ID
+        value: software
+      - name: PLATFORM_SETUP_LICENSE_MATERIAL_DEFAULT_ALIAS
+        value: license-recipient
+
+  tenant-kms:
+    enabled: true
+    image: enterprise-tenant-kms
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: false
+    internalIngress:
+      enabled: false
+      className: internal
+      host: kms.internal.example.com
+      paths:
+        - /api/kms/v1
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    env: []
+
+  did:
+    enabled: true
+    image: enterprise-did
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: true
+      className: public
+      host: did.example.com
+      paths:
+        - /1.0/identifiers
+        - /.well-known/did.json
+        - /api/did/v1
+      annotations: {}
+    internalIngress:
+      enabled: true
+      className: internal
+      host: did.internal.example.com
+      paths:
+        - /api/did/v1
+        - /1.0/create
+        - /1.0/update
+        - /1.0/deactivate
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    env: []
+
+  tenant-as:
+    enabled: true
+    image: enterprise-tenant-as
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: true
+      className: public
+      host: as.example.com
+      paths:
+        - /.well-known/oauth-authorization-server
+        - /.well-known/openid-configuration
+        - /.well-known/jwks.json
+        - /authorize
+        - /token
+        - /userinfo
+        - /oauth2
+        - /login
+      annotations: {}
+    internalIngress:
+      enabled: true
+      className: internal
+      host: as.internal.example.com
+      paths:
+        - /authorize
+        - /token
+        - /userinfo
+        - /oauth2
+        - /login
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    env: []
+
+  issuer:
+    enabled: true
+    image: enterprise-issuer
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: true
+      className: public
+      host: issuer.example.com
+      paths:
+        - /.well-known/openid-credential-issuer
+        - /oid4vci
+        - /credential
+        - /credential_deferred
+        - /nonce
+        - /notification
+        - /public/statuslists
+        - /api/oid4vci/v1
+        - /api/credential-design/v1
+        - /api/statuslist/v1
+      annotations: {}
+    internalIngress:
+      enabled: true
+      className: internal
+      host: issuer.internal.example.com
+      paths:
+        - /api/oid4vci/v1
+        - /api/credential-design/v1
+        - /api/statuslist/v1
+      annotations: {}
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 1536Mi
+    env: []
+
+  verifier:
+    enabled: true
+    image: enterprise-verifier
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: true
+      className: public
+      host: verifier.example.com
+      paths:
+        - /oid4vp
+        - /request_uri
+        - /direct_post
+        - /api/dcql/v1
+      annotations: {}
+    internalIngress:
+      enabled: true
+      className: internal
+      host: verifier.internal.example.com
+      paths:
+        - /api/dcql/v1
+      annotations: {}
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 1536Mi
+    env: []
+
+  # Operator/admin web console (Next.js standalone, served under the /admin-console
+  # basePath; the root / returns 404). A single host-agnostic build resolves the
+  # API and OIDC authorization-server origin from the request host at runtime, so
+  # there is no per-host pod config: the gateway/ingress per-host routing already
+  # routes auth endpoints to the right AS (platform AS on the operator host;
+  # tenant AS on tenant hosts). NEVER strip the /admin-console prefix at the proxy:
+  # Next emits absolute /admin-console/_next/... asset URLs. The OAuth callback path
+  # is /admin-console/callback.
+  admin-console:
+    enabled: true
+    image: admin-console
+    replicas: 1
+    restPort: 3000
+    publicIngress:
+      enabled: true
+      className: public
+      # Operator/platform host (= gateway.operatorHost.baseDomain). Matches the
+      # platform service public host so the console is served at
+      # platform.<baseDomain>/admin-console alongside the platform AS endpoints.
+      host: platform.example.com
+      paths:
+        - /admin-console
+      annotations: {}
+    internalIngress:
+      enabled: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    env:
+      - name: NEXT_PUBLIC_BASE_PATH
+        value: /admin-console
+      - name: PORT
+        value: "3000"
+
+# Render the FUTURE tenant-host console route (*.{baseDomain}/admin-console ->
+# admin-console). Do NOT enable until a per-tenant API authorization proxy
+# enforces tenant isolation: routing alone does not stop a tenant principal from
+# reaching platform-admin APIs or another tenant's data. The operator-host
+# console (platform.<baseDomain>/admin-console) is always rendered via
+# services.admin-console.publicIngress above; this flag only adds the wildcard
+# tenant-host HTTPRoute (Gateway API path).
+enableTenantConsole: false

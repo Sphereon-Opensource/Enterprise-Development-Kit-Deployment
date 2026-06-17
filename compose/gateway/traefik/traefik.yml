@@ -1,0 +1,38 @@
+# Traefik static configuration for the EDK single-port gateway.
+#
+# One external port (443) terminates TLS and fans out to the enterprise
+# services by host and path. Port 80 only redirects to 443. The dynamic routing
+# table and TLS certificate live in dynamic.yml (file provider, hot-reloaded).
+#
+# The gateway preserves the inbound Host header, sets X-Forwarded-Proto, listens
+# on one port, and serves a wildcard TLS certificate.
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic/dynamic.yml
+    watch: true
+
+# Traefik sets X-Forwarded-Proto/Host/For on requests it forwards. By default it
+# does not trust X-Forwarded-* from untrusted clients, so the values backends see
+# come from Traefik, which is what the services rely on for https scheme
+# detection. Host is preserved by the service-level passHostHeader (dynamic.yml).
+
+log:
+  level: INFO
+
+accessLog: {}
+
+api:
+  dashboard: false

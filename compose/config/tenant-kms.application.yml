@@ -1,0 +1,143 @@
+# enterprise-tenant-kms runtime config.
+#
+# The KMS service holds key material and serves signing, MAC, and encryption
+# commands to the other services over gRPC. It has NO public ingress. Reach it
+# only from inside the cluster network or service mesh. Every REST request
+# outside the implicit /health, /ready, /metrics prefixes must carry a bearer
+# minted by the tenant AS.
+server:
+  rest:
+    port: 8080
+    auth:
+      enabled: true
+      # The issuer must match the token `iss` (the tenant AS public URL). The
+      # JWKS is fetched over the internal network because the public URL may not
+      # resolve in-cluster.
+      issuer: ${env:EDK_TENANT_AS_PUBLIC_URL}
+      jwks-uri: http://enterprise-tenant-as:18083/.well-known/jwks.json
+      # Trust the platform operator AS as a second fixed issuer so operator->tenant
+      # STS tokens (RFC 8693) from the admin console are accepted.
+      platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
+      platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      expected-audience: enterprise-tenant-kms
+      # Single-port multi-tenant mode: trust per-tenant AS issuers from active
+      # OAUTH2_AUTHORIZATION_SERVER bindings. Default off.
+      trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:false}
+  service-identity:
+    token-endpoint: http://enterprise-platform:18080/token
+    client-id: kms-service
+    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+sphereon:
+  telemetry:
+    enabled: true
+    tracing:
+      enabled: true
+    metrics:
+      enabled: true
+    sampling:
+      rate: 1.0
+    export:
+      preset: otlp-all
+  service:
+    id: service-crypto
+otel:
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+  exporter:
+    otlp:
+      endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
+      traces:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL:grpc}
+      metrics:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
+security:
+  header-trust-policy:
+    internal:
+      tenant_mismatch: header_wins
+      principal_mismatch: header_wins
+    trusted_service_ids:
+      - service-crypto
+      - service-data
+      - service-oid4vci
+      - service-oid4vp
+      - service-eidas
+      - service-monolith
+      - service-tenant-as
+    service_client_bindings:
+      "[service-crypto]": kms-service
+      "[service-data]": did-service
+      "[service-oid4vci]": issuer-service
+      "[service-oid4vp]": verifier-service
+      "[service-tenant-as]": tenant-as-service
+transport:
+  grpc:
+    enabled: true
+    port: 9090
+  routing:
+    modules:
+      platform:
+        services:
+          config: &platformGrpcRoute
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+      application:
+        target: SERVER
+        transport: HTTP
+        endpoint: http://enterprise-platform:18080
+config:
+  providers:
+    platform-config-remote:
+      enabled: true
+license:
+  # Deployment gate: this service fails closed unless it binds to the platform
+  # deployment and declares its service role.
+  deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
+  gate:
+    service-role: enterprise-tenant-kms
+database:
+  app:
+    default:
+      dialect: postgresql
+      host: ${env:EDK_DB_HOST}
+      port: 5432
+      database: ${env:EDK_DB_NAME}
+      username: ${env:EDK_DB_USERNAME}
+      password: ${env:EDK_DB_PASSWORD}
+  tenants:
+    default:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_DB_HOST}
+      port: 5432
+      database: ${env:EDK_DB_NAME}
+      username: ${env:EDK_DB_USERNAME}
+      password: ${env:EDK_DB_PASSWORD}
+tenant:
+  resolution:
+    platform:
+      base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+      subdomain:
+        enabled: true
+    custom-domain:
+      enabled: true
+kms:
+  providers:
+    software:
+      type: software
+      enabled: true
+      autoCreateCertificate: true
+      keystore:
+        type: pkcs12
+        id: software
+        password: ${env:EDK_KEYSTORE_PASSWORD}
+        # Per-tenant key material lives in the tenant-kms-keystore volume mounted
+        # at /keystore. The explicit path is omitted so the software KMS provider
+        # derives a per-tenant, per-provider file under the keystore root
+        # (<root>/<tenantName>/<providerName>.p12, root defaults to /keystore).
+        # Each tenant gets its own .p12 here.

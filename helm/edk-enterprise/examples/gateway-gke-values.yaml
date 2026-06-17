@@ -1,0 +1,28 @@
+# Single-port multi-tenant front door on GKE via the Gateway API. One wildcard
+# HTTPS listener terminates TLS for the operator host and all tenant hosts;
+# HTTPRoutes fan out by host and path. The classic per-service Ingress objects
+# are disabled so the Gateway is the only public entry point.
+#
+# GKE Gateway preserves the inbound Host header and sets X-Forwarded-Proto by
+# default, so it satisfies the contract without extra tuning.
+#
+# Wildcard TLS for *.example.com has two options:
+#   - tls.mode secret (used below): reference a pre-created Kubernetes TLS Secret
+#     holding the *.example.com certificate and key.
+#   - Google-managed certificate: provision a Certificate Manager managed cert
+#     for *.example.com using DNS authorization (a wildcard SAN requires DNS
+#     auth, not load-balancer auth), then bind it to the Gateway with a
+#     networking.gke.io/certmap annotation instead of a Secret reference.
+gateway:
+  enabled: true
+  className: gke-l7-global-external-managed
+  operatorHost: platform
+  baseDomain: example.com
+  tls:
+    mode: secret
+    secretName: edk-wildcard-tls
+  httpRedirect: true
+
+ingress:
+  legacy:
+    enabled: false

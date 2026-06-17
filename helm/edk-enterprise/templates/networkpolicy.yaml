@@ -1,0 +1,124 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+{{- $peersIn := list }}
+{{- if eq $name "tenant-kms" }}{{- $peersIn = list "did" "issuer" "verifier" }}{{- end }}
+{{- if eq $name "platform" }}{{- $peersIn = list "tenant-as" "did" "issuer" "verifier" }}{{- end }}
+{{- if eq $name "tenant-as" }}{{- $peersIn = list "tenant-kms" "did" "issuer" "verifier" }}{{- end }}
+{{- if eq $name "did" }}{{- $peersIn = list "verifier" }}{{- end }}
+{{- $peersOut := list }}
+{{- if eq $name "platform" }}{{- $peersOut = list }}{{- end }}
+{{- if eq $name "tenant-kms" }}{{- $peersOut = list "tenant-as" "platform" }}{{- end }}
+{{- if eq $name "did" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
+{{- if eq $name "tenant-as" }}{{- $peersOut = list "platform" }}{{- end }}
+{{- if eq $name "issuer" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
+{{- if eq $name "verifier" }}{{- $peersOut = list "tenant-kms" "tenant-as" "did" "platform" }}{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- if and $.Values.networkPolicy.ingressController.enabled (or $svc.publicIngress.enabled $svc.internalIngress.enabled) }}
+    - from:
+        - namespaceSelector:
+            {{- toYaml ($.Values.networkPolicy.ingressController.namespaceSelector | default dict) | nindent 12 }}
+          podSelector:
+            {{- toYaml ($.Values.networkPolicy.ingressController.podSelector | default dict) | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: rest
+    {{- end }}
+    {{- if $peersIn }}
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  {{- range $peer := $peersIn }}
+                  - {{ $peer }}
+                  {{- end }}
+      ports:
+        - protocol: TCP
+          port: rest
+        {{- if and $.Values.grpc.enabled $grpcReceiver }}
+        - protocol: TCP
+          port: grpc
+        {{- end }}
+    {{- end }}
+    {{- if $.Values.networkPolicy.metricsScraper.enabled }}
+    - from:
+        - namespaceSelector:
+            {{- toYaml ($.Values.networkPolicy.metricsScraper.namespaceSelector | default dict) | nindent 12 }}
+          podSelector:
+            {{- toYaml ($.Values.networkPolicy.metricsScraper.podSelector | default dict) | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: rest
+    {{- end }}
+  egress:
+    {{- if $.Values.networkPolicy.allowDnsEgress }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- end }}
+    {{- if $.Values.database.enabled }}
+    - to:
+        - {{- if $.Values.database.networkPolicy.ipBlock }}
+          ipBlock:
+            {{- toYaml $.Values.database.networkPolicy.ipBlock | nindent 12 }}
+          {{- else if or $.Values.database.networkPolicy.podSelector $.Values.database.networkPolicy.namespaceSelector }}
+          {{- if $.Values.database.networkPolicy.namespaceSelector }}
+          namespaceSelector:
+            {{- toYaml $.Values.database.networkPolicy.namespaceSelector | nindent 12 }}
+          {{- end }}
+          {{- if $.Values.database.networkPolicy.podSelector }}
+          podSelector:
+            {{- toYaml $.Values.database.networkPolicy.podSelector | nindent 12 }}
+          {{- end }}
+          {{- else }}
+          ipBlock:
+            cidr: 0.0.0.0/0
+          {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.database.port }}
+    {{- end }}
+    {{- range $peer := $peersOut }}
+    {{- $peerSvc := index $.Values.services $peer }}
+    {{- $peerGrpcReceiver := or (eq $peer "platform") (eq $peer "tenant-kms") }}
+    {{- if $peerSvc.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $peer) | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: rest
+        {{- if and $.Values.grpc.enabled $peerGrpcReceiver }}
+        - protocol: TCP
+          port: grpc
+        {{- end }}
+    {{- end }}
+    {{- end }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,45 @@
+# Operator/admin web console (Next.js standalone) served at
+# platform.<baseDomain>/admin-console. A single host-agnostic build resolves the API and
+# OIDC authorization-server origin from the request host at runtime, so no
+# per-host pod config is needed: the gateway/ingress per-host routing already
+# routes auth endpoints to the right AS. NEVER strip the /admin-console prefix at
+# the proxy: Next emits absolute /admin-console/_next/... asset URLs. OAuth callback
+# path is /admin-console/callback.
+#
+# The console is enabled by default in the base chart; this overlay shows the
+# relevant knobs to copy/tune. Pin the operator host to your install domain.
+global:
+  platformBaseDomain: example.com
+
+services:
+  admin-console:
+    enabled: true
+    image: admin-console
+    replicas: 1
+    restPort: 3000
+    publicIngress:
+      enabled: true
+      className: public
+      # Operator/platform host. Must match the platform service public host and
+      # the gateway operatorHost (= platform.<baseDomain>).
+      host: platform.example.com
+      paths:
+        - /admin-console
+    env:
+      - name: NEXT_PUBLIC_BASE_PATH
+        value: /admin-console
+      - name: PORT
+        value: "3000"
+
+# --------------------------------------------------------------------------
+# FUTURE: tenant-host console (*.<baseDomain>/admin-console -> admin-console).
+#
+# WARNING: Do NOT set this to true until a per-tenant API authorization proxy
+# enforces tenant isolation. Routing alone does not stop a tenant principal from
+# reaching platform-admin APIs or another tenant's data. Leave it false until
+# that proxy is in place.
+#
+# This flag only adds the wildcard tenant-host HTTPRoute on the Gateway API path
+# (gateway.enabled: true). The operator-host console route is always rendered.
+# --------------------------------------------------------------------------
+enableTenantConsole: false

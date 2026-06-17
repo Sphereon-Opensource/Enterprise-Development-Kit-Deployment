@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">EDK single-port gateway routing</title>
+  <desc id="desc">Shows public TLS termination, host preservation, platform routing, tenant path routing, and internal east-west service traffic.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .zone { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 12; }
+      .edge { fill: #eff6ff; stroke: #2563eb; stroke-width: 2.5; rx: 10; }
+      .svc { fill: #f1f5f9; stroke: #64748b; stroke-width: 2; rx: 9; }
+      .svc-green { fill: #ecfdf5; stroke: #16a34a; stroke-width: 2; rx: 9; }
+      .svc-warn { fill: #fff7ed; stroke: #f97316; stroke-width: 2; rx: 9; }
+      .text { font-family: Inter, Segoe UI, Arial, sans-serif; fill: #0f172a; }
+      .title { font-size: 30px; font-weight: 700; }
+      .h2 { font-size: 21px; font-weight: 700; }
+      .body { font-size: 17px; }
+      .small { font-size: 14px; fill: #334155; }
+      .mono { font-family: Consolas, Monaco, monospace; font-size: 15px; fill: #0f172a; }
+      .line { stroke: #334155; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .line-blue { stroke: #2563eb; stroke-width: 2.8; fill: none; marker-end: url(#arrowBlue); }
+      .line-green { stroke: #16a34a; stroke-width: 2.4; fill: none; marker-end: url(#arrowGreen); }
+      .dash { stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 7; fill: none; marker-end: url(#arrow); }
+      .tag { fill: #dbeafe; stroke: #93c5fd; stroke-width: 1.5; rx: 7; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#16a34a"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1280" height="760"/>
+  <text class="text title" x="44" y="56">Single-port EDK gateway routing</text>
+  <text class="text body" x="44" y="88">Terminate TLS once, preserve the original Host header, then route by host and path.</text>
+
+  <rect class="zone" x="44" y="126" width="240" height="520"/>
+  <text class="text h2" x="72" y="166">External clients</text>
+  <rect class="svc" x="72" y="204" width="184" height="74"/>
+  <text class="text body" x="96" y="236">Browser</text>
+  <text class="text small" x="96" y="258">operator console</text>
+  <rect class="svc" x="72" y="312" width="184" height="74"/>
+  <text class="text body" x="96" y="344">Wallet</text>
+  <text class="text small" x="96" y="366">OID4VCI / OID4VP</text>
+  <rect class="svc" x="72" y="420" width="184" height="74"/>
+  <text class="text body" x="96" y="452">Verifier / issuer</text>
+  <text class="text small" x="96" y="474">metadata and callbacks</text>
+
+  <rect class="edge" x="352" y="208" width="250" height="254"/>
+  <text class="text h2" x="386" y="248">Gateway / ingress</text>
+  <text class="text mono" x="386" y="284">HTTPS :443</text>
+  <text class="text small" x="386" y="316">TLS cert:</text>
+  <text class="text mono" x="386" y="342">*.example.com</text>
+  <text class="text mono" x="386" y="368">platform.example.com</text>
+  <rect class="tag" x="386" y="396" width="170" height="34"/>
+  <text class="text small" x="402" y="418">passHostHeader=true</text>
+
+  <line class="line-blue" x1="256" y1="241" x2="352" y2="286"/>
+  <line class="line-blue" x1="256" y1="349" x2="352" y2="342"/>
+  <line class="line-blue" x1="256" y1="457" x2="352" y2="398"/>
+
+  <rect class="zone" x="674" y="126" width="268" height="520"/>
+  <text class="text h2" x="704" y="166">Platform host</text>
+  <text class="text mono" x="704" y="194">platform.example.com</text>
+  <rect class="svc-green" x="704" y="232" width="208" height="82"/>
+  <text class="text body" x="730" y="264">Platform service</text>
+  <text class="text small" x="730" y="286">setup, admin APIs, AS</text>
+  <rect class="svc-green" x="704" y="348" width="208" height="82"/>
+  <text class="text body" x="730" y="380">Admin console</text>
+  <text class="text mono" x="730" y="404">/admin-console</text>
+
+  <rect class="zone" x="980" y="126" width="256" height="520"/>
+  <text class="text h2" x="1010" y="166">Tenant hosts</text>
+  <text class="text mono" x="1010" y="194">acme.example.com</text>
+  <rect class="svc" x="1010" y="224" width="188" height="58"/>
+  <text class="text body" x="1034" y="258">Tenant AS</text>
+  <rect class="svc" x="1010" y="300" width="188" height="58"/>
+  <text class="text body" x="1034" y="334">Issuer</text>
+  <rect class="svc" x="1010" y="376" width="188" height="58"/>
+  <text class="text body" x="1034" y="410">Verifier</text>
+  <rect class="svc" x="1010" y="452" width="188" height="58"/>
+  <text class="text body" x="1034" y="486">DID</text>
+  <rect class="svc-warn" x="1010" y="528" width="188" height="58"/>
+  <text class="text body" x="1034" y="562">Tenant KMS</text>
+
+  <line class="line" x1="602" y1="282" x2="704" y2="270"/>
+  <text class="text small" x="620" y="260">Host: platform...</text>
+  <line class="line" x1="602" y1="402" x2="704" y2="392"/>
+  <text class="text small" x="612" y="430">/admin-console</text>
+  <line class="line" x1="602" y1="344" x2="1010" y2="253"/>
+  <text class="text small" x="718" y="294">Host: tenant...</text>
+  <line class="line" x1="602" y1="356" x2="1010" y2="329"/>
+  <line class="line" x1="602" y1="368" x2="1010" y2="405"/>
+  <line class="line" x1="602" y1="380" x2="1010" y2="481"/>
+  <line class="line" x1="602" y1="392" x2="1010" y2="557"/>
+
+  <path class="dash" d="M808 314 C846 496 900 560 1010 557"/>
+  <path class="dash" d="M1104 528 C1084 470 1034 354 912 296"/>
+  <text class="text small" x="680" y="686">Internal traffic stays east-west: platform configuration and KMS operations use cluster or compose-network service names, not the public gateway. gRPC receivers are internal only.</text>
+</svg>

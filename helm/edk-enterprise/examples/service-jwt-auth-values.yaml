@@ -1,0 +1,33 @@
+auth:
+  enabled: true
+  jwt:
+    enabled: true
+    issuer: https://as.example.com
+    jwksUri: https://as.example.com/.well-known/jwks.json
+    audience: edk-enterprise
+
+grpc:
+  enabled: false
+  authMode: service-jwt
+
+services:
+  tenant-kms:
+    env:
+      - name: SPHEREON_APP_SERVER_REST_ADMIN_AUTH_REQUIRED
+        value: "true"
+  did:
+    env:
+      - name: SPHEREON_APP_SERVER_REST_ADMIN_AUTH_REQUIRED
+        value: "true"
+  tenant-as:
+    env:
+      - name: SPHEREON_APP_SERVER_REST_ADMIN_AUTH_REQUIRED
+        value: "true"
+  issuer:
+    env:
+      - name: SPHEREON_APP_SERVER_REST_ADMIN_AUTH_REQUIRED
+        value: "true"
+  verifier:
+    env:
+      - name: SPHEREON_APP_SERVER_REST_ADMIN_AUTH_REQUIRED
+        value: "true"

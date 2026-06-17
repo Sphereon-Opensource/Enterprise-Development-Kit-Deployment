@@ -1,0 +1,141 @@
+{{- if .Values.gateway.enabled }}
+{{- $base := include "edk-enterprise.gateway.baseDomain" . }}
+{{- $wildcard := printf "*.%s" $base }}
+{{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
+{{- $gatewayName := printf "%s-gateway" (include "edk-enterprise.fullname" .) }}
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+{{- if eq $name "platform" }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+{{- else if eq $name "admin-console" }}
+# Operator/admin console on the operator host. The explicit /admin-console PathPrefix is
+# more specific than the platform route's / catch-all, so Gateway API path
+# precedence (longest prefix wins) routes /admin-console/* here while everything
+# else falls through to the platform service. NEVER strip the /admin-console
+# prefix: Next emits absolute /admin-console/_next/... asset URLs.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /admin-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+{{- if $.Values.enableTenantConsole }}
+# FUTURE tenant-host console: *.{baseDomain}/admin-console -> admin-console. Rendered
+# only when enableTenantConsole is true.
+# WARNING: Do NOT enable until a per-tenant API authorization proxy enforces
+# tenant isolation. Routing alone does not stop a tenant principal from reaching
+# platform-admin APIs or another tenant's data.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" (printf "%s-tenant" $name)) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - matches:
+        {{- range $path := (include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim | fromYamlArray) }}
+        - path:
+            type: PathPrefix
+            value: {{ $path | quote }}
+        {{- end }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+{{- end }}
+{{- else }}
+{{- $paths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
+{{- if $paths }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - matches:
+        {{- range $path := ($paths | fromYamlArray) }}
+        - path:
+            type: PathPrefix
+            value: {{ $path | quote }}
+        {{- end }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.gateway.httpRedirect }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-https-redirect
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: http
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end }}
+{{- end }}

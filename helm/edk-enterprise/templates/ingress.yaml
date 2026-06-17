@@ -1,0 +1,64 @@
+{{- if .Values.ingress.legacy.enabled }}
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled $svc.publicIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" (printf "%s-public" $name)) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+  {{- $publicAnnotations := merge (dict) ($.Values.ingress.public.annotations | default dict) ($svc.publicIngress.annotations | default dict) }}
+  {{- with $publicAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ $svc.publicIngress.className | quote }}
+  rules:
+    - host: {{ $svc.publicIngress.host | quote }}
+      http:
+        paths:
+          {{- range $path := $svc.publicIngress.paths }}
+          - path: {{ $path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+                port:
+                  name: rest
+          {{- end }}
+---
+{{- end }}
+{{- if and $svc.enabled $svc.internalIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" (printf "%s-internal" $name)) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+  {{- $internalAnnotations := merge (dict) ($.Values.ingress.internal.annotations | default dict) ($svc.internalIngress.annotations | default dict) }}
+  {{- with $internalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ $svc.internalIngress.className | quote }}
+  rules:
+    - host: {{ $svc.internalIngress.host | quote }}
+      http:
+        paths:
+          {{- range $path := $svc.internalIngress.paths }}
+          - path: {{ $path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+                port:
+                  name: rest
+          {{- end }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

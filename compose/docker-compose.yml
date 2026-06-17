@@ -1,0 +1,320 @@
+# EDK enterprise stack, single-node Docker Compose deployment.
+#
+# This file runs the six EDK enterprise services plus a PostgreSQL database from
+# published container images. It pulls images only; nothing is built locally.
+#
+# Prerequisites:
+#   1. docker login to the registry that holds the enterprise images, so the
+#      pull succeeds. Set EDK_REGISTRY and EDK_TAG in .env to match.
+#   2. Edit .env (hostnames, database credentials, secrets) and review the per
+#      service templates under config/ for the TODO markers.
+#   3. Start the stack and complete the license setup screen. For offline
+#      pre-provisioning from a mounted token, add docker-compose.offline.yml.
+#
+# Public surface:
+#   - For the base file alone, each REST service is bound to a loopback host
+#     port and advertises the matching http://localhost:<port> origin.
+#   - For the gateway overlay, one TLS gateway owns platform.<base-domain> and
+#     tenant hosts; tenant protocol origins come from tenant public-endpoint
+#     bindings created during onboarding.
+#   - For a customer-managed reverse proxy without the gateway overlay, set the
+#     EDK_*_EXTERNAL_BASE_URL values in .env to the actual public origins that
+#     proxy preserves in Host/X-Forwarded-Proto.
+#   platform  - operator login + OAuth/OIDC discovery; admin and setup APIs are
+#               internal-only and require an operator bearer. The platform admin
+#               console is served at /admin-console on this host; operator-authenticated.
+#   tenant-as - tenant OAuth/OIDC discovery and protocol endpoints.
+#   did       - DID resolver and did.json hosting; management API is internal.
+#   issuer    - OID4VCI protocol endpoints and metadata; management API internal.
+#   verifier  - OID4VP protocol endpoints; management API internal.
+#   tenant-kms- NO public ingress. Reachable only on the internal compose network.
+#
+# The platform and tenant KMS run the gRPC server transport (inbound). The other
+# services route KMS commands outbound to enterprise-tenant-kms:9090.
+
+name: edk-enterprise
+
+x-edk-common-env: &edk-common-env
+  APP_PROFILE: container
+  PORT: "8080"
+  REST_PORT: "8080"
+  SPHEREON_CONFIG_LOCATION: /app/config
+  EDK_DB_HOST: postgres
+  EDK_DB_NAME: ${EDK_DB_NAME:-edk}
+  EDK_DB_USERNAME: ${EDK_DB_USERNAME:-edk}
+  EDK_DB_PASSWORD: ${EDK_DB_PASSWORD}
+  EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+  EDK_TENANT_SLUG: ${EDK_TENANT_SLUG:-acme}
+  EDK_PLATFORM_PUBLIC_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
+  EDK_TENANT_AS_PUBLIC_URL: ${EDK_TENANT_AS_EXTERNAL_BASE_URL:-http://localhost:18083}
+  EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD}
+  EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET}
+  EDK_DEPLOYMENT_ID: ${EDK_DEPLOYMENT_ID:-deployment-1}
+  EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
+  EDK_SECRET_BACKEND: ${EDK_SECRET_BACKEND:-config-system-dev-only}
+  EDK_OWNER_INITIAL_CREDENTIAL: ${EDK_OWNER_INITIAL_CREDENTIAL}
+
+x-edk-healthcheck: &edk-healthcheck
+  # The runtime image ships no curl or wget; bash /dev/tcp is always available.
+  test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q 200"]
+  interval: 5s
+  timeout: 5s
+  retries: 30
+  start_period: 20s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${EDK_DB_USERNAME:-edk}
+      POSTGRES_PASSWORD: ${EDK_DB_PASSWORD}
+      POSTGRES_DB: ${EDK_DB_NAME:-edk}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${EDK_POSTGRES_HOST_PORT:-15432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EDK_DB_USERNAME:-edk} -d ${EDK_DB_NAME:-edk}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:${EDK_OTEL_COLLECTOR_GRPC_HOST_PORT:-4317}:4317"
+      - "127.0.0.1:${EDK_OTEL_COLLECTOR_HTTP_HOST_PORT:-4318}:4318"
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${EDK_JAEGER_UI_HOST_PORT:-16686}:16686"
+
+  # One-shot: the keystore volumes mount root-owned, but the service containers
+  # run as uid 10001 and need write access to their keystore. This grants both,
+  # then exits. The platform and tenant-kms wait for it to complete.
+  keystore-init:
+    image: busybox:1.36
+    command: ["sh", "-c", "chown 10001:10001 /platform-keystore /tenant-kms-keystore /license-recipient"]
+    volumes:
+      - platform-keystore:/platform-keystore
+      - tenant-kms-keystore:/tenant-kms-keystore
+      - license-recipient:/license-recipient
+
+  # Control plane: operator login, OAuth/OIDC discovery, setup, platform admin,
+  # platform config. Local licensing authority for the deployment. Runs the gRPC
+  # server transport for config routing; REST listens on 18080 in-container.
+  enterprise-platform:
+    image: ${EDK_REGISTRY:-nexus.sphereon.com/edk-docker}/enterprise-platform:${EDK_TAG:-0.25.0-SNAPSHOT}
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      keystore-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *edk-common-env
+      EXTERNAL_BASE_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
+      ONBOARDING_UI_BASE_URL: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
+      PORT: "18080"
+      REST_PORT: "18080"
+      REST_ENABLED: "false"
+      GRPC_ENABLED: "true"
+      GRPC_PORT: "9090"
+    volumes:
+      - ./config/platform.application.yml:/app/config/application.yml:ro
+      - ./config:/app/config/external:ro
+      - license-recipient:/app/license
+      - platform-keystore:/keystore
+    ports:
+      - "${EDK_PLATFORM_HOST_PORT:-18080}:18080"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q 200"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # Tenant authorization server: mints the bearer tokens the runtime services
+  # validate. REST listens on 18083 in-container so its issuer URL self-resolves.
+  enterprise-tenant-as:
+    image: ${EDK_REGISTRY:-nexus.sphereon.com/edk-docker}/enterprise-tenant-as:${EDK_TAG:-0.25.0-SNAPSHOT}
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      enterprise-platform:
+        condition: service_healthy
+    environment:
+      <<: *edk-common-env
+      EXTERNAL_BASE_URL: ${EDK_TENANT_AS_EXTERNAL_BASE_URL:-http://localhost:18083}
+      PORT: "18083"
+      REST_PORT: "18083"
+    volumes:
+      - ./config/tenant-as.application.yml:/app/config/application.yml:ro
+      - ./config:/app/config/external:ro
+      - license-recipient:/app/license
+    ports:
+      - "${EDK_AS_HOST_PORT:-18083}:18083"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q 200"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # Key management: holds key material, serves signing/MAC/encryption commands
+  # over gRPC. No public ingress. Runs the gRPC server transport (inbound).
+  enterprise-tenant-kms:
+    image: ${EDK_REGISTRY:-nexus.sphereon.com/edk-docker}/enterprise-tenant-kms:${EDK_TAG:-0.25.0-SNAPSHOT}
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keystore-init:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-tenant-as:
+        condition: service_healthy
+    environment:
+      <<: *edk-common-env
+      EXTERNAL_BASE_URL: ${EDK_KMS_INTERNAL_BASE_URL:-http://enterprise-tenant-kms:8080}
+      REST_ENABLED: "false"
+      GRPC_ENABLED: "true"
+      GRPC_PORT: "9090"
+    volumes:
+      - ./config/tenant-kms.application.yml:/app/config/application.yml:ro
+      - tenant-kms-keystore:/keystore
+    # No host port mapping: tenant KMS is internal-only.
+    expose:
+      - "8080"
+      - "9090"
+    healthcheck: *edk-healthcheck
+
+  # DID resolver and did.json hosting; routes KMS commands to tenant KMS.
+  enterprise-did:
+    image: ${EDK_REGISTRY:-nexus.sphereon.com/edk-docker}/enterprise-did:${EDK_TAG:-0.25.0-SNAPSHOT}
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-tenant-kms:
+        condition: service_healthy
+    environment:
+      <<: *edk-common-env
+      EXTERNAL_BASE_URL: ${EDK_DID_EXTERNAL_BASE_URL:-http://localhost:18082}
+    volumes:
+      - ./config/did.application.yml:/app/config/application.yml:ro
+    ports:
+      - "${EDK_DID_HOST_PORT:-18082}:8080"
+    healthcheck: *edk-healthcheck
+
+  # OID4VCI issuer: serves the wallet-facing protocol surface, signs credentials
+  # by routing KMS commands to tenant KMS.
+  enterprise-issuer:
+    image: ${EDK_REGISTRY:-nexus.sphereon.com/edk-docker}/enterprise-issuer:${EDK_TAG:-0.25.0-SNAPSHOT}
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-tenant-kms:
+        condition: service_healthy
+      enterprise-tenant-as:
+        condition: service_healthy
+    environment:
+      <<: *edk-common-env
+      EXTERNAL_BASE_URL: ${EDK_ISSUER_EXTERNAL_BASE_URL:-http://localhost:18084}
+      EDK_PIPELINE_MASTER_KEK: ${EDK_PIPELINE_MASTER_KEK}
+      EDK_PIPELINE_BLIND_INDEX_KEY: ${EDK_PIPELINE_BLIND_INDEX_KEY}
+    volumes:
+      - ./config/issuer.application.yml:/app/config/application.yml:ro
+    ports:
+      - "${EDK_ISSUER_HOST_PORT:-18084}:8080"
+    healthcheck: *edk-healthcheck
+
+  # OID4VP verifier: serves the wallet-facing presentation surface, routes KMS
+  # and DID commands.
+  enterprise-verifier:
+    image: ${EDK_REGISTRY:-nexus.sphereon.com/edk-docker}/enterprise-verifier:${EDK_TAG:-0.25.0-SNAPSHOT}
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-tenant-kms:
+        condition: service_healthy
+      enterprise-did:
+        condition: service_healthy
+      enterprise-tenant-as:
+        condition: service_healthy
+    environment:
+      <<: *edk-common-env
+      EXTERNAL_BASE_URL: ${EDK_VERIFIER_EXTERNAL_BASE_URL:-http://localhost:18085}
+    volumes:
+      - ./config/verifier.application.yml:/app/config/application.yml:ro
+    ports:
+      - "${EDK_VERIFIER_HOST_PORT:-18085}:8080"
+    healthcheck: *edk-healthcheck
+
+  # Platform admin console: a Next.js standalone app served under /admin-console on the
+  # platform host. Host-agnostic single build that resolves the API and operator
+  # AS (OIDC) origins from the request host at runtime, so it carries no per-host
+  # config. Operator login runs against the platform AS; the OAuth callback is
+  # {host}/admin-console/callback. Reached only through the gateway (no host
+  # port by default).
+  admin-console:
+    image: ${EDK_REGISTRY:-nexus.sphereon.com/edk-docker}/admin-console:${EDK_TAG:-0.25.0-SNAPSHOT}
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+    environment:
+      # basePath: the app serves under /admin-console; the root / returns 404.
+      NEXT_PUBLIC_BASE_PATH: /admin-console
+      PLATFORM_PROXY_TARGET: http://enterprise-platform:8080
+      PORT: "3000"
+    # No host port mapping: reached via the gateway at
+    # platform.<base-domain>/admin-console.
+    # Uncomment to expose the standalone server directly for local debugging.
+    # ports:
+    #   - "127.0.0.1:${EDK_ADMIN_CONSOLE_HOST_PORT:-13000}:3000"
+    healthcheck:
+      # The standalone image ships wget; probe the basePath, not the 404 root.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/admin-console"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  postgres-data:
+  # License recipient key: created by first-run setup when the license request is generated.
+  license-recipient:
+  # Platform keystore: platform AS cert/user + the license-request instance cert.
+  platform-keystore:
+  # Tenant-KMS keystore: per-tenant key material (software now; AWS/Key Vault later).
+  tenant-kms-keystore:

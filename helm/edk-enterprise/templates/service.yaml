@@ -1,0 +1,28 @@
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 4 }}
+  ports:
+    - name: rest
+      port: {{ $svc.restPort }}
+      targetPort: rest
+      protocol: TCP
+    {{- if and $.Values.grpc.enabled $grpcReceiver }}
+    - name: grpc
+      port: {{ $.Values.grpc.port }}
+      targetPort: grpc
+      protocol: TCP
+    {{- end }}
+---
+{{- end }}
+{{- end }}

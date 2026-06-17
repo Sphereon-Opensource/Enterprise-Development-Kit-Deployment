@@ -1,0 +1,21 @@
+# Optional offline license-token bootstrap overlay.
+#
+# Use this only when the deployment should be pre-provisioned from a mounted
+# license token and the first-run setup screen should be closed at boot.
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.offline.yml \
+#     up -d
+
+services:
+  enterprise-platform:
+    environment:
+      APP_PROFILE: offline
+    volumes:
+      - ./config/offline/application.yml:/app/config/offline/application.yml:ro
+      - ${EDK_LICENSE_TOKEN_PATH:-./config/license-token.txt}:/app/config/license-token.txt:ro
+      - ${EDK_LICENSE_RECIPIENT_KEY_PATH:-./config/license-recipient.jwk.json}:/app/license/license-recipient.jwk.json:ro
+  enterprise-tenant-as:
+    volumes:
+      - ${EDK_LICENSE_RECIPIENT_KEY_PATH:-./config/license-recipient.jwk.json}:/app/license/license-recipient.jwk.json:ro

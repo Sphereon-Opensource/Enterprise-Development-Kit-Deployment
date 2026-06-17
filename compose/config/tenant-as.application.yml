@@ -1,0 +1,254 @@
+# enterprise-tenant-as runtime config.
+#
+# The tenant authorization server mints the bearer tokens that the tenant runtime
+# services (KMS, DID, issuer, verifier) validate. Tenant runtime services trust
+# tokens this server issues; the platform AS handles operator login.
+#
+# Public surface: OAuth/OIDC discovery and protocol endpoints plus the login UI.
+# The /api/platform/admin/v1 surface requires an operator bearer even though it
+# is tenantless; expose it only internally.
+server:
+  rest:
+    # The AS listens on its public port so its issuer URL self-resolves for JWKS
+    # fetches (bearer validation reads <issuer>/.well-known/jwks.json).
+    port: 18083
+    auth:
+      enabled: true
+      # Open prefixes: OAuth protocol surface, login UI, discovery/JWKS, the
+      # internal pre-auth registration channel, the signing-key provisioning
+      # channel (validates a platform-issued bearer — see below), the in-network
+      # command transport, and RFC 7662 introspection. Everything else requires a
+      # bearer this server minted.
+      anonymous-path-prefixes: /authorize,/login,/token,/.well-known,/internal/preauth,/internal/provision,/api/commands,/introspect
+      # Trust anchor for the platform AS. The /internal/provision/signing-key endpoint validates a
+      # short-lived, platform-issued bearer bound to this tenant (per-tenant audience), so it needs the
+      # platform issuer and JWKS — the same anchor the tenant runtime services trust. The path is
+      # anonymous to the strict-auth gate because the endpoint performs this validation itself.
+      platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
+      platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+  service-identity:
+    token-endpoint: http://enterprise-platform:18080/token
+    client-id: tenant-as-service
+    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+sphereon:
+  telemetry:
+    enabled: true
+    tracing:
+      enabled: true
+    metrics:
+      enabled: true
+    sampling:
+      rate: 1.0
+    export:
+      preset: otlp-all
+  service:
+    id: service-tenant-as
+otel:
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+  exporter:
+    otlp:
+      endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
+      traces:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL:grpc}
+      metrics:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
+security:
+  header-trust-policy:
+    trusted_service_ids:
+      - service-crypto
+      - service-data
+      - service-oid4vci
+      - service-oid4vp
+      - service-eidas
+      - service-monolith
+    service_client_bindings:
+      "[service-crypto]": kms-service
+      "[service-data]": did-service
+      "[service-oid4vci]": issuer-service
+      "[service-oid4vp]": verifier-service
+transport:
+  grpc:
+    enabled: false
+    port: 9090
+  routing:
+    modules:
+      kms:
+        services:
+          key: &tenantKmsGrpcRoute
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+          keys: *tenantKmsGrpcRoute
+          signature:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+            commands:
+              "[kms.signature.verify]":
+                target: LOCAL
+          mac: *tenantKmsGrpcRoute
+          encryption: *tenantKmsGrpcRoute
+      platform:
+        services:
+          config: &platformGrpcRoute
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+      application:
+        target: SERVER
+        transport: HTTP
+        endpoint: http://enterprise-platform:18080
+config:
+  providers:
+    platform-config-remote:
+      enabled: true
+database:
+  app:
+    default:
+      dialect: postgresql
+      host: ${env:EDK_DB_HOST}
+      port: 5432
+      database: ${env:EDK_DB_NAME}
+      username: ${env:EDK_DB_USERNAME}
+      password: ${env:EDK_DB_PASSWORD}
+  tenants:
+    default:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_DB_HOST}
+      port: 5432
+      database: ${env:EDK_DB_NAME}
+      username: ${env:EDK_DB_USERNAME}
+      password: ${env:EDK_DB_PASSWORD}
+tenant:
+  resolution:
+    platform:
+      base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+      subdomain:
+        enabled: true
+    custom-domain:
+      enabled: true
+  platform:
+    owner:
+      initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+  onboarding:
+    operator:
+      enabled: true
+kms:
+  providers:
+    software:
+      type: software
+      enabled: true
+      autoCreateCertificate: true
+      keystore:
+        type: pkcs12
+        id: software
+        password: ${env:EDK_KEYSTORE_PASSWORD}
+        path: "{tempDir}/edk-verify-keystore.p12"
+crypto:
+  kms:
+    # The AS signing roles resolve against the 'software' provider, which is
+    # served remotely by the tenant KMS via the kms routing module above. No key
+    # material is held locally.
+    roles:
+      oauth2-as:
+        provider: software
+        algorithm: ES256
+      issuer-signing:
+        provider: software
+        algorithm: ES256
+      issuer-request-decryption:
+        provider: software
+        algorithm: ES256
+      verifier-request-object-signing:
+        provider: software
+        algorithm: ES256
+oauth2:
+  user-provider:
+    mode: local
+  clients:
+    platform-operator-cli:
+      client-id: platform-operator-cli
+      client-name: Platform Operator CLI
+      client-type: public
+      grant-types: authorization_code
+      # Two apps share this operator client, each owning its own callback: the admin console
+      # (/admin-console basePath) -> {host}/admin-console/callback, and the first-run setup wizard
+      # (served at the platform root) -> {host}/onboarding/callback.
+      #
+      # FUTURE tenant console: the tenant-host admin console is disabled until a per-tenant API
+      # authorization proxy enforces tenant isolation (see the gateway routing notes). For multiple
+      # tenant hosts behind a wildcard, each tenant host must be a registered redirect_uri here (or
+      # the AS must be configured to allow the per-tenant host pattern); a single base URL cannot
+      # match every tenant subdomain.
+      redirect-uris:
+        - ${env:EDK_TENANT_AS_PUBLIC_URL}/admin-console/callback
+        - ${env:EDK_TENANT_AS_PUBLIC_URL}/onboarding/callback
+      allowed-scopes: openid
+      token-endpoint-auth-method: none
+  servers:
+    default:
+      mode: HOSTED
+      signing-key:
+        auto-generate: true
+      issuer: ${env:EXTERNAL_BASE_URL}
+      oidc: SUPPORTED
+      pkce: REQUIRED
+      token-format: JWT
+      scopes-supported: "openid,profile,email"
+      grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token"
+      public-clients:
+        allow-any: true
+        permissive-redirect-uri: true
+      internal-clients:
+        issuer:
+          client-id: issuer-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        kms:
+          client-id: kms-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        did:
+          client-id: did-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        verifier:
+          client-id: verifier-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+application:
+  bootstrap:
+    on-startup: false
+  tenant:
+    hosted-as:
+      issuer: ${env:EXTERNAL_BASE_URL}
+    owner:
+      # TODO: set the platform operator identity for this deployment.
+      email: ${env:EDK_PLATFORM_OPERATOR_EMAIL:operator@example.com}
+      display-name: Platform Operator
+app:
+  # TODO: set to prod for a production deployment.
+  deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
+auth:
+  login:
+    require-application: false
+license:
+  # Deployment gate: the tenant AS binds to the platform deployment and declares
+  # its service role. The deployment-id must match the value the license is bound
+  # to.
+  deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
+  gate:
+    service-role: enterprise-tenant-as
+  recipient:
+    # Shared with platform setup through the license-recipient Docker volume.
+    key-id: ${env:EDK_LICENSE_RECIPIENT_KEY_ID:license-recipient}
+    private-key-path: /app/license/license-recipient.jwk.json
+  trust:
+    # Trust the compiled-in durable root. A license bound to this deployment
+    # chains leaf -> intermediate -> embedded root, so no trust file is mounted.
+    embedded:
+      enabled: ${env:EDK_LICENSE_TRUST_EMBEDDED:true}
+    root-ca-bundle-path: /app/license/license-root-ca.pem

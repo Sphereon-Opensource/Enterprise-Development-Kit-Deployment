@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="640" viewBox="0 0 1180 640" role="img" aria-labelledby="title desc">
+  <title id="title">EDK base domain and subdomain model</title>
+  <desc id="desc">Shows one customer-controlled base domain with platform and tenant subdomains, all covered by wildcard TLS at the front door.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 10; }
+      .panel-strong { fill: #eef6ff; stroke: #2563eb; stroke-width: 2.5; rx: 10; }
+      .panel-green { fill: #eefdf5; stroke: #16a34a; stroke-width: 2.5; rx: 10; }
+      .text { font-family: Inter, Segoe UI, Arial, sans-serif; fill: #0f172a; }
+      .title { font-size: 30px; font-weight: 700; }
+      .h2 { font-size: 22px; font-weight: 700; }
+      .body { font-size: 18px; }
+      .small { font-size: 15px; fill: #334155; }
+      .mono { font-family: Consolas, Monaco, monospace; font-size: 17px; fill: #0f172a; }
+      .line { stroke: #334155; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 7; fill: none; }
+      .tag { fill: #dbeafe; stroke: #93c5fd; stroke-width: 1.5; rx: 7; }
+      .tag-green { fill: #dcfce7; stroke: #86efac; stroke-width: 1.5; rx: 7; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1180" height="640"/>
+  <text class="text title" x="44" y="56">EDK public domain model</text>
+  <text class="text body" x="44" y="88">Choose one base domain. The platform and every tenant are subdomains of that base domain.</text>
+
+  <rect class="panel-strong" x="44" y="122" width="1092" height="140"/>
+  <text class="text h2" x="74" y="160">Customer-controlled base domain</text>
+  <text class="text mono" x="74" y="196">global.platformBaseDomain = example.com</text>
+  <text class="text small" x="74" y="228">DNS for the operator host and tenant wildcard points at the same public gateway or load balancer.</text>
+
+  <line class="line" x1="308" y1="262" x2="248" y2="336"/>
+  <line class="line" x1="590" y1="262" x2="590" y2="336"/>
+  <line class="line" x1="872" y1="262" x2="932" y2="336"/>
+
+  <rect class="panel" x="64" y="336" width="330" height="170"/>
+  <text class="text h2" x="94" y="374">Platform subdomain</text>
+  <text class="text mono" x="94" y="410">platform.example.com</text>
+  <text class="text small" x="94" y="446">Operator plane, platform AS, setup, admin APIs, and admin console.</text>
+  <rect class="tag" x="94" y="468" width="164" height="30"/>
+  <text class="text small" x="108" y="489">operator traffic</text>
+
+  <rect class="panel" x="425" y="336" width="330" height="170"/>
+  <text class="text h2" x="455" y="374">Tenant subdomains</text>
+  <text class="text mono" x="455" y="410">acme.example.com</text>
+  <text class="text mono" x="455" y="440">beta.example.com</text>
+  <text class="text small" x="455" y="476">The tenant slug is resolved from the inbound Host header.</text>
+
+  <rect class="panel-green" x="786" y="336" width="330" height="170"/>
+  <text class="text h2" x="816" y="374">Wildcard TLS certificate</text>
+  <text class="text mono" x="816" y="410">*.example.com</text>
+  <text class="text mono" x="816" y="440">platform.example.com</text>
+  <text class="text small" x="816" y="476">Use a public CA such as Let's Encrypt, or import an existing certificate.</text>
+
+  <path class="dash" d="M64 548 H1116"/>
+  <text class="text small" x="74" y="584">Important: a wildcard for *.example.com covers platform.example.com and acme.example.com, but not example.com itself and not nested names such as api.acme.example.com.</text>
+</svg>

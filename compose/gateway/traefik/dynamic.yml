@@ -1,0 +1,180 @@
+# Traefik dynamic configuration: the single-port routing table.
+#
+# The base domain saas.localtest.me below is the local-evaluation default; every
+# subdomain of localtest.me resolves to 127.0.0.1. To use a real base domain,
+# replace saas.localtest.me throughout this file (the Traefik file provider does
+# not interpolate environment variables).
+#
+# Host model (base domain saas.localtest.me):
+#   - platform.saas.localtest.me        -> the operator/platform plane
+#   - {tenant}.saas.localtest.me        -> per-tenant protocol + management plane
+#
+# Tenant identity is the Host (the services resolve the tenant from it), so the
+# gateway never peels a tenant from the path. It only fans out by path prefix to
+# the right backend, and preserves the Host header so tenant resolution works.
+#
+# Backends listen on their in-container REST ports: platform 18080, tenant-as
+# 18083, everything else 8080. gRPC (9090) is internal-only and never routed
+# here.
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/wildcard.crt
+        keyFile: /etc/traefik/certs/wildcard.key
+  certificates:
+    - certFile: /etc/traefik/certs/wildcard.crt
+      keyFile: /etc/traefik/certs/wildcard.key
+
+http:
+  routers:
+    # --- Operator / platform host -------------------------------------------
+    # No path constraint: the platform plane owns this host entirely (setup,
+    # admin, operator login AS, onboarding + admin UI). Higher priority than the
+    # tenant wildcard so platform.saas.localtest.me never falls through to it.
+    platform:
+      rule: "Host(`platform.saas.localtest.me`)"
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 1000
+      tls: {}
+
+    # --- Platform admin console (operator-authenticated) --------------------
+    # Path-prefix only (no StripPrefix): Next.js serves under /admin-console and emits
+    # /admin-console/_next/* asset URLs, which break if the prefix is stripped. Priority
+    # above the platform catch-all (1000) so /admin-console reaches the console, not the
+    # platform plane. The console resolves the API and operator AS origins from
+    # the request host, so it needs no per-host config.
+    platform-admin-console:
+      rule: "Host(`platform.saas.localtest.me`) && PathPrefix(`/admin-console`)"
+      entryPoints: ["websecure"]
+      service: svc-admin-console
+      priority: 1100   # above platform catch-all (1000)
+      tls: {}
+
+    # --- FUTURE: tenant admin console (DISABLED) ----------------------------
+    # Do NOT enable until a per-tenant API authorization proxy enforces tenant
+    # isolation. The gateway only routes; it does not stop a tenant principal
+    # reaching platform-admin APIs or another tenant's data. The console is
+    # host-agnostic, so the same backend would serve every tenant host once an
+    # isolating proxy sits in front of the resource APIs.
+    # tenant-admin-console:
+    #   rule: >-
+    #     HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+    #     PathPrefix(`/admin-console`)
+    #   entryPoints: ["websecure"]
+    #   service: svc-admin-console
+    #   priority: 250
+    #   tls: {}
+
+    # --- Tenant hosts: liveness/readiness probes (every service serves these;
+    # route to one healthy backend so health checks pass) --------------------
+    tenant-health:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (PathPrefix(`/health`) || PathPrefix(`/ready`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 300
+      tls: {}
+
+    # --- Tenant hosts: OID4VCI issuer ---------------------------------------
+    tenant-issuer:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (PathPrefix(`/oid4vci`) || PathPrefix(`/credential`) ||
+         PathPrefix(`/credential_deferred`) || PathPrefix(`/nonce`) ||
+         PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
+         PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
+         PathPrefix(`/public/assets`) ||
+         PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
+         PathPrefix(`/api/statuslist/v1`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 200
+      tls: {}
+
+    # --- Tenant hosts: OID4VP verifier --------------------------------------
+    tenant-verifier:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (PathPrefix(`/oid4vp`) || PathPrefix(`/request_uri`) ||
+         PathPrefix(`/direct_post`) || PathPrefix(`/api/dcql/v1`))
+      entryPoints: ["websecure"]
+      service: svc-verifier
+      priority: 200
+      tls: {}
+
+    # --- Tenant hosts: DID --------------------------------------------------
+    tenant-did:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (PathPrefix(`/1.0/identifiers`) || PathPrefix(`/.well-known/did.json`) ||
+         PathPrefix(`/api/did/v1`))
+      entryPoints: ["websecure"]
+      service: svc-did
+      priority: 200
+      tls: {}
+
+    # --- Tenant hosts: KMS management --------------------------------------
+    tenant-kms:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        PathPrefix(`/api/kms/v1`)
+      entryPoints: ["websecure"]
+      service: svc-kms
+      priority: 200
+      tls: {}
+
+    # --- Tenant hosts: authorization server (lowest tenant priority so the
+    # protocol-specific routers above win their paths first) -----------------
+    tenant-as:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (PathPrefix(`/authorize`) || PathPrefix(`/token`) ||
+         PathPrefix(`/userinfo`) || PathPrefix(`/oauth2`) || PathPrefix(`/login`) ||
+         PathPrefix(`/.well-known/oauth-authorization-server`) ||
+         PathPrefix(`/.well-known/openid-configuration`) ||
+         PathPrefix(`/.well-known/jwks.json`))
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 100
+      tls: {}
+
+  services:
+    svc-platform:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-platform:18080"
+    svc-as:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-as:18083"
+    svc-issuer:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-issuer:8080"
+    svc-verifier:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-verifier:8080"
+    svc-did:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-did:8080"
+    svc-kms:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-kms:8080"
+    svc-admin-console:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://admin-console:3000"

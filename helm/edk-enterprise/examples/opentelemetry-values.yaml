@@ -1,0 +1,22 @@
+opentelemetry:
+  enabled: true
+  endpoint: http://otel-collector.observability.svc.cluster.local:4318
+  protocol: http/protobuf
+  resourceAttributes: deployment.environment=production
+
+serviceMonitor:
+  enabled: true
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+  path: /metrics
+
+networkPolicy:
+  metricsScraper:
+    enabled: true
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: observability
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: prometheus

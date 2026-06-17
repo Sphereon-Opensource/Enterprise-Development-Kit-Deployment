@@ -1,0 +1,152 @@
+# enterprise-verifier runtime config.
+#
+# The verifier serves the OID4VP protocol surface to wallets and routes KMS and
+# DID commands over gRPC and HTTP. Public surface is limited to the wallet-facing
+# OID4VP endpoints (request-uri fetch and direct_post response) plus discovery;
+# /oid4vp/backend and /api/dcql/v1 require a tenant AS bearer. The /oid4vp prefix
+# is deliberately not anonymous wholesale so /oid4vp/backend stays protected.
+server:
+  rest:
+    port: 8080
+    auth:
+      enabled: true
+      issuer: ${env:EDK_TENANT_AS_PUBLIC_URL}
+      jwks-uri: http://enterprise-tenant-as:18083/.well-known/jwks.json
+      platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
+      platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      expected-audience: enterprise-verifier
+      trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:false}
+      anonymous-path-prefixes: /oid4vp/request-uri,/oid4vp/auth/response,/.well-known
+  service-identity:
+    token-endpoint: http://enterprise-platform:18080/token
+    client-id: verifier-service
+    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+sphereon:
+  telemetry:
+    enabled: true
+    tracing:
+      enabled: true
+    metrics:
+      enabled: true
+    sampling:
+      rate: 1.0
+    export:
+      preset: otlp-all
+  service:
+    id: service-oid4vp
+otel:
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+  exporter:
+    otlp:
+      endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
+      traces:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL:grpc}
+      metrics:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
+security:
+  header-trust-policy:
+    trusted_service_ids:
+      - service-crypto
+      - service-data
+      - service-oid4vci
+      - service-oid4vp
+      - service-eidas
+      - service-monolith
+    service_client_bindings:
+      "[service-crypto]": kms-service
+      "[service-data]": did-service
+      "[service-oid4vci]": issuer-service
+      "[service-oid4vp]": verifier-service
+transport:
+  grpc:
+    enabled: false
+    port: 9090
+  routing:
+    modules:
+      kms:
+        services:
+          key: &tenantKmsGrpcRoute
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+          keys: *tenantKmsGrpcRoute
+          signature:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+            commands:
+              "[kms.signature.verify]":
+                target: LOCAL
+          mac: *tenantKmsGrpcRoute
+          encryption: *tenantKmsGrpcRoute
+      did:
+        target: SERVER
+        transport: HTTP
+        endpoint: http://enterprise-did:8080
+      platform:
+        services:
+          config: &platformGrpcRoute
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+      application:
+        target: SERVER
+        transport: HTTP
+        endpoint: http://enterprise-platform:18080
+config:
+  providers:
+    platform-config-remote:
+      enabled: true
+    tenant-config-db:
+      enabled: false
+license:
+  deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
+  gate:
+    service-role: enterprise-verifier
+database:
+  app:
+    default:
+      dialect: postgresql
+      host: ${env:EDK_DB_HOST}
+      port: 5432
+      database: ${env:EDK_DB_NAME}
+      username: ${env:EDK_DB_USERNAME}
+      password: ${env:EDK_DB_PASSWORD}
+  tenants:
+    default:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_DB_HOST}
+      port: 5432
+      database: ${env:EDK_DB_NAME}
+      username: ${env:EDK_DB_USERNAME}
+      password: ${env:EDK_DB_PASSWORD}
+tenant:
+  resolution:
+    platform:
+      base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+      subdomain:
+        enabled: true
+    custom-domain:
+      enabled: true
+kms:
+  providers:
+    software:
+      type: software
+      enabled: true
+      autoCreateCertificate: true
+      keystore:
+        type: pkcs12
+        id: software
+        password: ${env:EDK_KEYSTORE_PASSWORD}
+        # This service routes KMS to the tenant KMS and holds no key material. The
+        # only local use is the [kms.signature.verify] route, which operates on
+        # public keys, so this keystore is ephemeral in the container temp
+        # directory and not backed by a shared volume.
+        path: "{tempDir}/edk-verify-keystore.p12"

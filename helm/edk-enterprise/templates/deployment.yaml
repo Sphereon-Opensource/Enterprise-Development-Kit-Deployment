@@ -1,0 +1,232 @@
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+{{- /* admin-console is a Next.js standalone web app, not an EDK Java service:
+       it carries no DB/JWT/gRPC/KMS-routing/license-gate wiring and is probed on
+       its /admin-console basePath rather than /health. */}}
+{{- $isAdminConsole := eq $name "admin-console" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  replicas: {{ $svc.replicas }}
+  selector:
+    matchLabels:
+      {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- toYaml $.Values.podAnnotations | nindent 8 }}
+      labels:
+        {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "edk-enterprise.serviceAccountName" $ }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $.Values.global.imageTag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: rest
+              containerPort: {{ $svc.restPort }}
+              protocol: TCP
+            {{- if and $.Values.grpc.enabled $grpcReceiver }}
+            - name: grpc
+              containerPort: {{ $.Values.grpc.port }}
+              protocol: TCP
+            {{- end }}
+          env:
+            {{- if not $isAdminConsole }}
+            - name: APP_PROFILE
+              value: "container"
+            - name: PORT
+              value: {{ $svc.restPort | quote }}
+            - name: REST_PORT
+              value: {{ $svc.restPort | quote }}
+            - name: GRPC_ENABLED
+              value: {{ and $.Values.grpc.enabled $grpcReceiver | quote }}
+            - name: GRPC_PORT
+              value: {{ $.Values.grpc.port | quote }}
+            - name: GRPC_AUTH_MODE
+              value: {{ $.Values.grpc.authMode | quote }}
+            - name: TENANT_RESOLUTION_PLATFORM_BASE_DOMAIN
+              value: {{ $.Values.global.platformBaseDomain | quote }}
+            - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
+              value: {{ $.Values.auth.enabled | quote }}
+            {{- if $.Values.opentelemetry.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $.Values.opentelemetry.endpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: {{ $.Values.opentelemetry.protocol | quote }}
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              value: {{ $.Values.opentelemetry.headers | quote }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ printf "service.name=%s,%s" (include "edk-enterprise.serviceName" (dict "root" $ "name" $name)) $.Values.opentelemetry.resourceAttributes | trimSuffix "," | quote }}
+            {{- end }}
+            {{- if $.Values.auth.jwt.enabled }}
+            - name: SPHEREON_APP_SERVER_REST_JWT_ENABLED
+              value: "true"
+            - name: SPHEREON_APP_SERVER_REST_JWT_DEFAULT_IDP_ISSUER
+              value: {{ $.Values.auth.jwt.issuer | quote }}
+            - name: SPHEREON_APP_SERVER_REST_JWT_DEFAULT_IDP_JWKS_URI
+              value: {{ $.Values.auth.jwt.jwksUri | quote }}
+            - name: SPHEREON_APP_SERVER_REST_JWT_DEFAULT_IDP_AUDIENCE
+              value: {{ $.Values.auth.jwt.audience | quote }}
+            {{- end }}
+            {{- if $.Values.database.enabled }}
+            - name: DATABASE_TENANTS_DEFAULT_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_HOST
+              value: {{ $.Values.database.host | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_PORT
+              value: {{ $.Values.database.port | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_DATABASE
+              value: {{ $.Values.database.name | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.existingSecret }}
+                  key: {{ $.Values.database.usernameKey }}
+            - name: DATABASE_TENANTS_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.existingSecret }}
+                  key: {{ $.Values.database.passwordKey }}
+            # APP-scope datasource: the tenant registry and other control-plane
+            # tables resolve through database.app.default.*, not the tenant scope.
+            - name: DATABASE_APP_DEFAULT_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_APP_DEFAULT_HOST
+              value: {{ $.Values.database.host | quote }}
+            - name: DATABASE_APP_DEFAULT_PORT
+              value: {{ $.Values.database.port | quote }}
+            - name: DATABASE_APP_DEFAULT_DATABASE
+              value: {{ $.Values.database.name | quote }}
+            - name: DATABASE_APP_DEFAULT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.existingSecret }}
+                  key: {{ $.Values.database.usernameKey }}
+            - name: DATABASE_APP_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.existingSecret }}
+                  key: {{ $.Values.database.passwordKey }}
+            {{- end }}
+            {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") }}
+            {{- range $kmsService := list "key" "keys" "signature" "mac" "encryption" }}
+            - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_TARGET
+              value: "SERVER"
+            - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_TRANSPORT
+              value: "GRPC"
+            - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_ENDPOINT
+              value: {{ printf "grpc://%s-tenant-kms:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if ne $name "platform" }}
+            - name: TRANSPORT_ROUTING_MODULES_PLATFORM_TARGET
+              value: "SERVER"
+            - name: TRANSPORT_ROUTING_MODULES_PLATFORM_TRANSPORT
+              value: "HTTP"
+            - name: TRANSPORT_ROUTING_MODULES_PLATFORM_ENDPOINT
+              value: {{ printf "http://%s-platform:%v" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+            - name: TRANSPORT_ROUTING_MODULES_APPLICATION_TARGET
+              value: "SERVER"
+            - name: TRANSPORT_ROUTING_MODULES_APPLICATION_TRANSPORT
+              value: "HTTP"
+            - name: TRANSPORT_ROUTING_MODULES_APPLICATION_ENDPOINT
+              value: {{ printf "http://%s-platform:%v" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+            {{- end }}
+            {{- if eq $name "platform" }}
+            # The platform is the local licensing authority and is exempt from the
+            # deployment license gate.
+            - name: LICENSE_DEPLOYMENT_ROLE
+              value: "platform"
+            {{- else }}
+            # Non-platform services fail closed unless they bind to the platform deployment
+            # and declare their service role.
+            - name: LICENSE_DEPLOYMENT_ID
+              value: {{ $.Values.license.deploymentId | quote }}
+            - name: LICENSE_GATE_SERVICE_ROLE
+              value: {{ index $.Values.license.serviceRoles $name | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if $isAdminConsole }}
+            - name: PLATFORM_PROXY_TARGET
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            {{- end }}
+            {{- with $svc.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- $probePath := $isAdminConsole | ternary "/admin-console" "/health" }}
+          livenessProbe:
+            httpGet:
+              path: {{ $probePath }}
+              port: rest
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: {{ $probePath }}
+              port: rest
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if and (eq $name "platform") $.Values.platformKeystore.enabled }}
+            # The platform keystore holds the platform AS cert/user and the
+            # license-request instance cert. Mounted only in the platform service.
+            - name: keystore
+              mountPath: /keystore
+            {{- end }}
+            {{- if and (eq $name "tenant-kms") $.Values.tenantKmsKeystore.enabled }}
+            # The tenant-kms keystore holds per-tenant software KMS key material.
+            # Mounted only in the tenant-kms service. The route-only services
+            # (issuer/verifier/did/tenant-as) route KMS here and mount no keystore.
+            - name: keystore
+              mountPath: /keystore
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if and (eq $name "platform") $.Values.platformKeystore.enabled }}
+        - name: keystore
+          persistentVolumeClaim:
+            claimName: {{ $.Values.platformKeystore.existingClaim | default (printf "%s-platform-keystore" (include "edk-enterprise.fullname" $)) }}
+        {{- end }}
+        {{- if and (eq $name "tenant-kms") $.Values.tenantKmsKeystore.enabled }}
+        - name: keystore
+          persistentVolumeClaim:
+            claimName: {{ $.Values.tenantKmsKeystore.existingClaim | default (printf "%s-tenant-kms-keystore" (include "edk-enterprise.fullname" $)) }}
+        {{- end }}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+{{- end }}
+{{- end }}

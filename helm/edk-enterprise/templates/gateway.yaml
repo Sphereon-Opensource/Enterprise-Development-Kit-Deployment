@@ -1,0 +1,38 @@
+{{- if .Values.gateway.enabled }}
+{{- $base := include "edk-enterprise.gateway.baseDomain" . }}
+{{- $wildcard := printf "*.%s" $base }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-gateway
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+  {{- if and (eq .Values.gateway.tls.mode "certManager") .Values.gateway.tls.clusterIssuer }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.gateway.tls.clusterIssuer | quote }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ .Values.gateway.className | quote }}
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: {{ $wildcard | quote }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ .Values.gateway.tls.secretName | quote }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- if .Values.gateway.httpRedirect }}
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: {{ $wildcard | quote }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+{{- end }}

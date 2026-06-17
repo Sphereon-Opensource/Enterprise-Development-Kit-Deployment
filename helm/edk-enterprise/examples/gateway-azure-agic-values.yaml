@@ -1,0 +1,69 @@
+# Single-port multi-tenant front door on Azure via the Application Gateway
+# Ingress Controller (AGIC), classic Ingress path. One Application Gateway
+# terminates TLS on 443 and routes by host and path to each service.
+#
+# CRITICAL HOST-PRESERVATION CAVEAT (read before deploying):
+# AGIC, by default, rewrites the Host header to the backend pool address before
+# forwarding to the upstream. Tenant resolution in this stack reads the raw
+# inbound Host header (acme.example.com resolves tenant acme), so a rewritten
+# Host makes every request resolve to the wrong tenant or to none and tenant
+# routing breaks completely. You MUST keep the original public Host on the way
+# to the backend. Do one of the following:
+#   - Set appgw.ingress.kubernetes.io/backend-hostname to the public host so the
+#     forwarded Host matches the inbound host (per-service, since each host
+#     differs). For tenant hosts this is the wildcard tenant host.
+#   - Or disable host override on the Application Gateway HTTP setting / backend
+#     pool so the inbound Host is passed through unchanged.
+# Verify with a request to a tenant host that the backend sees the original Host
+# and not the pod or service name.
+#
+# Wildcard TLS for *.example.com is supplied to the Application Gateway either
+# from Azure Key Vault (appgw.ingress.kubernetes.io/appgw-ssl-certificate
+# referencing a pre-uploaded cert) or from a Kubernetes TLS Secret referenced in
+# the Ingress tls block. The annotations below show the Key Vault path.
+gateway:
+  enabled: false
+
+ingress:
+  legacy:
+    enabled: true
+  public:
+    annotations:
+      kubernetes.io/ingress.class: azure/application-gateway
+      appgw.ingress.kubernetes.io/ssl-redirect: "true"
+      # Wildcard cert pre-uploaded to the Application Gateway (Key Vault backed).
+      appgw.ingress.kubernetes.io/appgw-ssl-certificate: edk-wildcard
+      # Host preservation is set per service below (backend-hostname must match
+      # each public host), not globally, so it is not declared here.
+
+services:
+  platform:
+    publicIngress:
+      className: azure-application-gateway
+      host: platform.example.com
+      annotations:
+        appgw.ingress.kubernetes.io/backend-hostname: platform.example.com
+  did:
+    publicIngress:
+      className: azure-application-gateway
+      host: did.example.com
+      annotations:
+        appgw.ingress.kubernetes.io/backend-hostname: did.example.com
+  tenant-as:
+    publicIngress:
+      className: azure-application-gateway
+      host: as.example.com
+      annotations:
+        appgw.ingress.kubernetes.io/backend-hostname: as.example.com
+  issuer:
+    publicIngress:
+      className: azure-application-gateway
+      host: issuer.example.com
+      annotations:
+        appgw.ingress.kubernetes.io/backend-hostname: issuer.example.com
+  verifier:
+    publicIngress:
+      className: azure-application-gateway
+      host: verifier.example.com
+      annotations:
+        appgw.ingress.kubernetes.io/backend-hostname: verifier.example.com
