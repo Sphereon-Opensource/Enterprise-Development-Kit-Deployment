@@ -9,7 +9,7 @@
 
     1. Waits for the enterprise services to report healthy.
     2. Platform setup (only if the setup gate is still open): bootstraps the
-       operator account and installs your license token.
+       operator account and imports your protected license bundle.
     3. Signs the operator in through the platform authorization-code flow with
        PKCE, carrying cookies and the login form CSRF tuple like a browser.
     4. Registers the first production tenant.
@@ -20,7 +20,8 @@
   Prerequisites:
     - A running EDK enterprise deployment reachable at platform.<baseDomain>
       and <tenantSlug>.<baseDomain>, or explicit service URLs in the environment file.
-    - A Sphereon license token (set in the environment file as licenseToken).
+    - A Sphereon protected license bundle ZIP plus bundle key (set in the
+      environment file as licenseBundleZipPath and licenseBundleKey).
     - Node.js installed (used to parse the environment JSON and compute the
       PKCE S256 code challenge).
     - Windows PowerShell 5.1 or later.
@@ -71,6 +72,8 @@ if (-not (Test-Path $EnvFile)) { Fail "Environment file not found: $EnvFile" }
 # S256 code challenge. Both scripts depend on node for consistency.
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($null -eq $node) { Fail "node is required but was not found on PATH. Install Node.js and retry." }
+$curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+if ($null -eq $curl) { Fail "curl.exe is required but was not found on PATH." }
 
 # --- Load the Postman environment file into a flat hashtable ------------------
 $envFileResolved = (Resolve-Path $EnvFile).Path
@@ -108,7 +111,9 @@ if ([string]::IsNullOrWhiteSpace($operatorDisplayName)) { $operatorDisplayName =
 $operatorPassword     = Cfg 'operatorPassword'
 $operatorRedirectUri  = Cfg 'operatorRedirectUri'
 $operatorCodeVerifier = Cfg 'operatorCodeVerifier'
-$licenseToken         = Cfg 'licenseToken'
+$licenseBundleZipPath = Cfg 'licenseBundleZipPath'
+$licenseBundleKey     = Cfg 'licenseBundleKey'
+$installationId       = Cfg 'installationId'
 
 if ([string]::IsNullOrWhiteSpace($TenantName)) { $TenantName = Cfg 'tenantName' }
 if ([string]::IsNullOrWhiteSpace($TenantSlug)) { $TenantSlug = Cfg 'tenantSlug' }
@@ -174,6 +179,29 @@ function Invoke-Json {
   }
 }
 
+function Invoke-LicenseBundle {
+  param([string]$Uri)
+  $tmp = [System.IO.Path]::GetTempFileName()
+  try {
+    $args = @(
+      '-s', '-o', $tmp, '-w', '%{http_code}', '-X', 'POST', $Uri,
+      '-F', "bundle=@$licenseBundleZipPath;type=application/zip",
+      '-F', "bundleKey=$licenseBundleKey"
+    )
+    if (-not [string]::IsNullOrWhiteSpace($installationId)) {
+      $args += @('-F', "installationId=$installationId")
+    }
+    $code = & curl.exe @args
+    $out = Get-Content -Path $tmp -Raw
+    if ($LASTEXITCODE -ne 0 -or -not ($code -match '^2')) {
+      Fail "POST $Uri failed ($code): $out"
+    }
+    return $out
+  } finally {
+    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+  }
+}
+
 # --- Step 1: wait for health --------------------------------------------------
 function Wait-Health {
   param([hashtable]$Services, [int]$Retries = 30, [int]$DelaySeconds = 4)
@@ -228,14 +256,24 @@ if ($setupOpen) {
   if ([string]::IsNullOrWhiteSpace($operatorEmail) -or [string]::IsNullOrWhiteSpace($operatorPassword)) {
     Fail "operatorEmail and operatorPassword are required to bootstrap the operator."
   }
-  if ([string]::IsNullOrWhiteSpace($licenseToken) -or $licenseToken -like 'PASTE-*') {
-    Fail "licenseToken is not set in the environment file. Set it before running setup."
+  if ([string]::IsNullOrWhiteSpace($licenseBundleZipPath) -or $licenseBundleZipPath -like 'PASTE-*') {
+    Fail "licenseBundleZipPath is not set in the environment file. Set it before running setup."
   }
-  Write-Host "Installing license token..." -ForegroundColor Cyan
-  $null = Invoke-Json -Method Post -Uri "$platformUrl/api/platform/setup/v1/license/install" -Body @{
-    licenseToken = $licenseToken
+  if ([string]::IsNullOrWhiteSpace($licenseBundleKey) -or $licenseBundleKey -like 'PASTE-*') {
+    Fail "licenseBundleKey is not set in the environment file. Set it before running setup."
   }
-  Write-Host "  License installed." -ForegroundColor Green
+  if (-not (Test-Path -LiteralPath $licenseBundleZipPath)) {
+    Fail "licenseBundleZipPath does not point to a file: $licenseBundleZipPath"
+  }
+  $licenseBundleZipPath = (Resolve-Path -LiteralPath $licenseBundleZipPath).Path
+
+  Write-Host "Previewing license bundle import..." -ForegroundColor Cyan
+  $null = Invoke-LicenseBundle -Uri "$platformUrl/api/platform/setup/v1/license/import/preview"
+  Write-Host "  License bundle preview accepted." -ForegroundColor Green
+
+  Write-Host "Importing license bundle..." -ForegroundColor Cyan
+  $null = Invoke-LicenseBundle -Uri "$platformUrl/api/platform/setup/v1/license/import"
+  Write-Host "  License bundle imported." -ForegroundColor Green
 
   Write-Host "Bootstrapping platform operator..." -ForegroundColor Cyan
   $null = Invoke-Json -Method Post -Uri "$platformUrl/api/platform/setup/v1/bootstrap" -Body @{

@@ -14,7 +14,7 @@ There are two run modes:
 - Docker with Compose v2.
 - Nexus credentials for the private `nexus.sphereon.com/edk-docker` enterprise image repository.
 - Docker Compose starts a local PostgreSQL 16 container for evaluation. For a real single-node deployment, replace it with a managed or operator-run PostgreSQL database and point the service configuration at that database.
-- A Sphereon license token, or access to your evaluation license issuer. The setup UI creates the local recipient key when it generates the license request. For evaluation licenses that do not chain to the embedded production root, you also need the root CA bundle.
+- A Sphereon protected license bundle ZIP plus bundle key, or access to your evaluation license issuer. The setup UI creates the license recipient key in the platform software KMS when it generates the license request. Evaluation bundles can include the test root CA material when needed.
 - TLS certificates for the operator and tenant hosts when you use the gateway overlay. For local gateway evaluation, use the included wildcard certificate helper. For a real domain, use a publicly trusted wildcard certificate for `*.<base-domain>` plus `platform.<base-domain>`, or individual certificates for each host.
 
 ## 1. Authenticate to Nexus
@@ -49,9 +49,9 @@ Set, at minimum:
 For customer evaluation test licenses that do not use the embedded production
 trust root, set `EDK_DEPLOYMENT_MODE=dev` and
 `EDK_LICENSE_TRUST_EMBEDDED=false`; paste the supplied test root CA bundle in
-the setup UI. The setup API stores it in the durable license-recipient volume.
-Do not add `docker-compose.offline.yml`; that overlay is only for
-pre-provisioning from a mounted token and intentionally skips the setup screen.
+the setup UI. Do not add `docker-compose.offline.yml`; that overlay is only for
+pre-provisioning from a mounted token and recipient seed and intentionally skips
+the setup screen.
 
 For gateway runs, the default base domain `saas.localtest.me` resolves every
 subdomain to `127.0.0.1` with no host-file edits and no local DNS server, so

@@ -276,26 +276,28 @@ In Helm these are under `license`:
 
 By default the platform starts with the setup gate open. The operator installs
 the license through `/setup-license`. When the operator generates a license
-request, the setup service creates the local recipient key at
-`platform.onboarding.recipient-key-path` if it does not already exist, stores it
-in the deployment's license-recipient volume, and copies only the public JWK into
-the request artifact. The setup UI also creates the platform CSR key and CSR at
-that point; the recipient key is separate and is used only to decrypt the issued
-license token.
+request, the setup service creates the license recipient key in the platform
+software KMS (`license.recipient.kms.*`) and copies only the public JWK into the
+request artifact. The setup UI also creates the platform CSR key and CSR at that
+point; the recipient key is separate and is used only by the platform license
+authority to decrypt the issued license token. Non-platform services do not mount
+the recipient private key; they fetch the platform-evaluated license status and
+entitlement projection over the internal command route and fail closed when that
+projection is missing, expired, or unreachable.
 
 A mounted license-token bootstrap is an explicit offline mode: add
 `docker-compose.offline.yml`, which enables `platform.onboarding.license-token-path`
 and closes the setup gate at boot. In that mode the mounted token must already
-match the recipient key mounted through `EDK_LICENSE_RECIPIENT_KEY_PATH`. The
+match the recipient key mounted through `EDK_LICENSE_RECIPIENT_KEY_PATH`; the
+runtime imports that seed into the software KMS before reading the license. The
 `scripts/generate-license-recipient-key.*` helpers are optional and are only for
 bring-your-own recipient material, offline bootstrap, or intentional key rotation
 before a license is issued.
 
 For non-production/evaluation test-license roots, set
 `EDK_DEPLOYMENT_MODE=dev` and `EDK_LICENSE_TRUST_EMBEDDED=false`, then paste the
-supplied test root CA bundle in `/setup-license`. The setup API stores it in the
-durable license-recipient volume at `/app/license/license-root-ca.pem`. File-based
-trust is intentionally rejected in production/on-prem mode.
+supplied test root CA bundle in `/setup-license`. File-based trust is intentionally
+rejected in production/on-prem mode.
 
 ## Observability
 

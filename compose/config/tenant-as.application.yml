@@ -242,10 +242,6 @@ license:
   deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
   gate:
     service-role: enterprise-tenant-as
-  recipient:
-    # Shared with platform setup through the license-recipient Docker volume.
-    key-id: ${env:EDK_LICENSE_RECIPIENT_KEY_ID:license-recipient}
-    private-key-path: /app/license/license-recipient.jwk.json
   trust:
     # Trust the compiled-in durable root. A license bound to this deployment
     # chains leaf -> intermediate -> embedded root, so no trust file is mounted.

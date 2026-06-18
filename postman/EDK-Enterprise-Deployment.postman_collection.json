@@ -44,6 +44,107 @@
   ],
   "item": [
     {
+      "name": "00 Docker Smoke",
+      "description": "Local Docker smoke checks for the service health endpoints. This folder does not require a license bundle or completed tenant onboarding.",
+      "item": [
+        {
+          "name": "01 Platform health",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/health",
+            "description": "Checks the platform service health endpoint."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('platform is healthy', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 DID health",
+          "request": {
+            "method": "GET",
+            "url": "{{didUrl}}/health",
+            "description": "Checks the DID service health endpoint."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DID service is healthy', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Authorization server health",
+          "request": {
+            "method": "GET",
+            "url": "{{asUrl}}/health",
+            "description": "Checks the tenant authorization server health endpoint."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('authorization server is healthy', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Issuer health",
+          "request": {
+            "method": "GET",
+            "url": "{{issuerUrl}}/health",
+            "description": "Checks the issuer service health endpoint."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer is healthy', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Verifier health",
+          "request": {
+            "method": "GET",
+            "url": "{{verifierUrl}}/health",
+            "description": "Checks the verifier service health endpoint."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('verifier is healthy', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "01 Platform Onboarding",
       "description": "Platform onboarding covers the setup gate, license request, license activation, platform operator bootstrap, and admin console checks. Run this group first on a new installation. If setup is already complete, setup endpoints return 404 and the checks continue.",
       "item": [
@@ -113,7 +214,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"alias\": \"{{licenseRequestAlias}}\",\n  \"providerId\": \"{{kmsProviderId}}\",\n  \"algorithm\": \"ECDSA_SHA256\",\n  \"use\": \"sig\",\n  \"deployment\": {\n    \"installationBaseDomain\": \"{{baseDomain}}\",\n    \"organizationName\": \"{{tenantName}}\",\n    \"organizationUnit\": \"Platform Operations\",\n    \"locality\": \"Amsterdam\",\n    \"country\": \"NL\",\n    \"licenseDeliveryMethod\": \"MANUAL\",\n    \"technicalContact\": {\n      \"email\": \"{{operatorEmail}}\",\n      \"displayName\": \"Platform Operator\",\n      \"role\": \"TECHNICAL\"\n    },\n    \"administratorContact\": {\n      \"email\": \"{{operatorEmail}}\",\n      \"displayName\": \"Platform Operator\",\n      \"role\": \"ADMINISTRATOR\"\n    }\n  },\n  \"serialNumber\": 1\n}",
+              "raw": "{\n  \"alias\": \"{{licenseRequestAlias}}\",\n  \"providerId\": \"{{kmsProviderId}}\",\n  \"algorithm\": \"ECDSA_SHA256\",\n  \"use\": \"sig\",\n  \"deployment\": {\n    \"deployment\": {\n      \"baseDomains\": [\"{{baseDomain}}\"]\n    },\n    \"organizationName\": \"{{tenantName}}\",\n    \"organizationUnit\": \"Platform Operations\",\n    \"locality\": \"Amsterdam\",\n    \"country\": \"NL\",\n    \"licenseDeliveryMethod\": \"MANUAL\",\n    \"contacts\": [\n      {\n        \"email\": \"{{operatorEmail}}\",\n        \"givenName\": \"Platform\",\n        \"familyName\": \"Operator\",\n        \"roles\": [\"TECHNICAL\"]\n      },\n      {\n        \"email\": \"{{operatorEmail}}\",\n        \"givenName\": \"Platform\",\n        \"familyName\": \"Operator\",\n        \"roles\": [\"ADMINISTRATOR\"]\n      }\n    ]\n  },\n  \"serialNumber\": 1\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -138,25 +239,30 @@
           ]
         },
         {
-          "name": "04 Verify issued license token",
+          "name": "04 Preview protected license bundle import",
           "request": {
             "method": "POST",
-            "url": "{{platformUrl}}/api/platform/setup/v1/license/verify",
-            "description": "Verifies the issued license token before install, using the same setup surface and trust configuration that install uses.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "url": "{{platformUrl}}/api/platform/setup/v1/license/import/preview",
+            "description": "Decrypts and validates the protected license bundle and reports overwrite impact without mutating setup state.",
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"licenseToken\": \"{{licenseToken}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "bundle",
+                  "type": "file",
+                  "src": "{{licenseBundleZipPath}}"
+                },
+                {
+                  "key": "bundleKey",
+                  "value": "{{licenseBundleKey}}",
+                  "type": "text"
+                },
+                {
+                  "key": "installationId",
+                  "value": "{{installationId}}",
+                  "type": "text"
                 }
-              }
+              ]
             }
           },
           "event": [
@@ -165,32 +271,37 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('license token verifies or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));"
+                  "pm.test('license bundle previews or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "05 Install issued license token",
+          "name": "05 Import protected license bundle",
           "request": {
             "method": "POST",
-            "url": "{{platformUrl}}/api/platform/setup/v1/license/install",
-            "description": "Installs the verified license token while the anonymous setup gate is still open. The gate remains open until the operator bootstrap step completes.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "url": "{{platformUrl}}/api/platform/setup/v1/license/import",
+            "description": "Applies the protected license bundle while the anonymous setup gate is still open. The gate remains open until the operator bootstrap step completes.",
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"licenseToken\": \"{{licenseToken}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "bundle",
+                  "type": "file",
+                  "src": "{{licenseBundleZipPath}}"
+                },
+                {
+                  "key": "bundleKey",
+                  "value": "{{licenseBundleKey}}",
+                  "type": "text"
+                },
+                {
+                  "key": "installationId",
+                  "value": "{{installationId}}",
+                  "type": "text"
                 }
-              }
+              ]
             }
           },
           "event": [
@@ -199,7 +310,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('license token installed or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));"
+                  "pm.test('license bundle imported or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));"
                 ]
               }
             }
@@ -219,7 +330,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"operatorEmail\": \"{{operatorEmail}}\",\n  \"operatorDisplayName\": \"Platform Operator\",\n  \"operatorPassword\": \"{{operatorPassword}}\"\n}",
+              "raw": "{\n  \"adminEmail\": \"{{operatorEmail}}\",\n  \"adminDisplayName\": \"Platform Operator\",\n  \"adminPassword\": \"{{operatorPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1700,7 +1811,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"{{issuerUrl}}/public/schema/vct/EuPid\",\n      \"credentialConfigurationId\": \"EuPid\"\n    }\n  ],\n  \"alias\": \"eu-pid\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
+              "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"EuPid\",\n      \"vctHostingMode\": \"HOSTED\",\n      \"credentialConfigurationId\": \"EuPid\"\n    }\n  ],\n  \"alias\": \"eu-pid\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
             },
             "description": "EuPid credential design with English and Dutch displays, per-locale claim labels, and the en/nl render variants attached (both at the design level and as per-display preferred variants). family_name, given_name, and issuing_country are always selectively disclosable."
           },
@@ -2333,7 +2444,7 @@
                 "value": "{{issuerPublicHost}}"
               }
             ],
-            "description": "Public SD-JWT VC Type Metadata for EuPid. Asserts localized displays (en/nl with locale, not lang), rendering.simple logo + colors, content-addressed uri#integrity when hosted, and lowercase claims[].sd."
+            "description": "Public SD-JWT VC Type Metadata for EuPid. Asserts localized displays (en/nl with lang), rendering.simple logo + colors, content-addressed uri#integrity when hosted, and lowercase claims[].sd."
           },
           "event": [
             {
@@ -2347,15 +2458,15 @@
                   "pm.test('vct present', () => pm.expect(j.vct, 'vct').to.be.a('string'));",
                   "const displays = j.display || [];",
                   "pm.test('display has en and nl entries', () => {",
-                  "  const locales = displays.map((d) => d.locale);",
-                  "  pm.expect(locales, 'display[].locale').to.include('en');",
-                  "  pm.expect(locales, 'display[].locale').to.include('nl');",
+                  "  const langs = displays.map((d) => d.lang);",
+                  "  pm.expect(langs, 'display[].lang').to.include('en');",
+                  "  pm.expect(langs, 'display[].lang').to.include('nl');",
                   "});",
-                  "// SD-JWT VC Type Metadata uses `locale`, not `lang`.",
-                  "pm.test('display entries use locale (not lang)', () => {",
+                  "// SD-JWT VC draft-11 Type Metadata uses `lang`, not OID4VCI metadata `locale`.",
+                  "pm.test('display entries use lang (not locale)', () => {",
                   "  displays.forEach((d) => {",
-                  "    pm.expect(d, 'display entry').to.have.property('locale');",
-                  "    pm.expect(d, 'display entry').to.not.have.property('lang');",
+                  "    pm.expect(d, 'display entry').to.have.property('lang');",
+                  "    pm.expect(d, 'display entry').to.not.have.property('locale');",
                   "  });",
                   "});",
                   "const withSimple = displays.filter((d) => d.rendering && d.rendering.simple);",
@@ -2381,8 +2492,8 @@
                   "    });",
                   "  });",
                   "  // Same bytes -> same content-addressed url across en and nl displays (dedup).",
-                  "  const enLogo = (displays.find((d) => d.locale === \"en\") || {}).rendering;",
-                  "  const nlLogo = (displays.find((d) => d.locale === \"nl\") || {}).rendering;",
+                  "  const enLogo = (displays.find((d) => d.lang === \"en\") || {}).rendering;",
+                  "  const nlLogo = (displays.find((d) => d.lang === \"nl\") || {}).rendering;",
                   "  if (enLogo && enLogo.simple && enLogo.simple.logo && nlLogo && nlLogo.simple && nlLogo.simple.logo) {",
                   "    pm.test('en and nl displays share the same content-addressed logo uri', () =>",
                   "      pm.expect(enLogo.simple.logo.uri).to.eql(nlLogo.simple.logo.uri));",
@@ -2404,9 +2515,9 @@
                   "pm.test('claims carry localized display labels (en and nl)', () => {",
                   "  pm.expect(claims.length, \"claims\").to.be.above(0);",
                   "  const claimDisplays = claims.flatMap((cl) => cl.display || []);",
-                  "  const claimLocales = claimDisplays.map((d) => d.locale);",
-                  "  pm.expect(claimLocales, 'claims[].display[].locale').to.include('en');",
-                  "  pm.expect(claimLocales, 'claims[].display[].locale').to.include('nl');",
+                  "  const claimLangs = claimDisplays.map((d) => d.lang);",
+                  "  pm.expect(claimLangs, 'claims[].display[].lang').to.include('en');",
+                  "  pm.expect(claimLangs, 'claims[].display[].lang').to.include('nl');",
                   "});",
                   "pm.test('claims[].sd is lowercase', () => {",
                   "  claims.forEach((cl) => {",
@@ -3606,16 +3717,18 @@
       "script": {
         "type": "text/javascript",
         "exec": [
+          "const set = (key, value) => {",
+          "  if (value !== undefined && value !== null && String(value).trim()) pm.collectionVariables.set(key, String(value).trim().replace(/\\/$/, ''));",
+          "};",
           "const baseDomain = String(pm.variables.get('baseDomain') || '').trim().replace(/^https?:\\/\\//, '').replace(/\\/$/, '');",
           "const tenantSlug = String(pm.variables.get('tenantSlug') || 'acme').trim();",
           "const tenantName = String(pm.variables.get('tenantName') || 'Acme Corporation').trim();",
+          "set('tenantSlug', tenantSlug);",
+          "set('tenantName', tenantName);",
           "if (baseDomain) {",
           "  const tenantHost = tenantSlug + '.' + baseDomain;",
           "  const tenantBaseUrl = 'https://' + tenantHost;",
           "  const platformUrl = 'https://platform.' + baseDomain;",
-          "  const set = (key, value) => pm.collectionVariables.set(key, value);",
-          "  set('tenantSlug', tenantSlug);",
-          "  set('tenantName', tenantName);",
           "  set('tenantHost', tenantHost);",
           "  set('tenantBaseUrl', tenantBaseUrl);",
           "  set('platformUrl', platformUrl);",
@@ -3624,7 +3737,12 @@
           "  for (const key of ['kmsUrl', 'didUrl', 'asUrl', 'issuerUrl', 'verifierUrl']) set(key, tenantBaseUrl);",
           "  for (const key of ['issuerPublicHost', 'verifierPublicHost', 'asPublicHost', 'didWebDomain']) set(key, tenantHost);",
           "  if (!pm.variables.get('bindAuthorizationServer')) set('bindAuthorizationServer', 'true');",
-          "}"
+          "}",
+          "for (const key of ['platformUrl', 'adminConsoleUrl', 'operatorRedirectUri', 'kmsUrl', 'didUrl', 'asUrl', 'issuerUrl', 'verifierUrl', 'tenantHost', 'tenantBaseUrl', 'issuerPublicHost', 'verifierPublicHost', 'asPublicHost', 'didWebDomain']) {",
+          "  set(key, pm.environment.get(key));",
+          "}",
+          "if (!pm.collectionVariables.get('adminConsoleUrl') && pm.collectionVariables.get('platformUrl')) set('adminConsoleUrl', pm.collectionVariables.get('platformUrl') + '/admin-console');",
+          "if (!pm.collectionVariables.get('operatorRedirectUri') && pm.collectionVariables.get('platformUrl')) set('operatorRedirectUri', pm.collectionVariables.get('platformUrl') + '/admin-console/callback');"
         ]
       }
     }

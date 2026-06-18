@@ -209,6 +209,12 @@ services:
         value: software
       - name: PLATFORM_SETUP_LICENSE_MATERIAL_DEFAULT_ALIAS
         value: license-recipient
+      - name: LICENSE_RECIPIENT_KMS_ENABLED
+        value: "true"
+      - name: LICENSE_RECIPIENT_KMS_PROVIDER_ID
+        value: software
+      - name: LICENSE_RECIPIENT_KMS_ALIAS
+        value: license-recipient
 
   tenant-kms:
     enabled: true

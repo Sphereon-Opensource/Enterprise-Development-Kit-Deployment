@@ -8,7 +8,7 @@
 #
 #   1. Waits for the enterprise services to report healthy.
 #   2. Platform setup (only if the setup gate is still open): bootstraps the
-#      operator account and installs your license token.
+#      operator account and imports your protected license bundle.
 #   3. Signs the operator in through the platform authorization-code flow with
 #      PKCE, carrying cookies and the login form CSRF tuple like a browser.
 #   4. Registers the first production tenant.
@@ -19,7 +19,8 @@
 # Prerequisites:
 #   - A running EDK enterprise deployment reachable at platform.<baseDomain>
 #     and <tenantSlug>.<baseDomain>, or explicit service URLs in the environment file.
-#   - A Sphereon license token (set in the environment file as licenseToken).
+#   - A Sphereon protected license bundle ZIP plus bundle key (set in the
+#     environment file as licenseBundleZipPath and licenseBundleKey).
 #   - curl and node installed. node parses the environment JSON and computes the
 #     PKCE S256 code challenge.
 #
@@ -107,7 +108,9 @@ OPERATOR_DISPLAY_NAME="$(cfg operatorDisplayName)"
 OPERATOR_PASSWORD="$(cfg operatorPassword)"
 OPERATOR_REDIRECT_URI="$(cfg operatorRedirectUri)"
 OPERATOR_CODE_VERIFIER="$(cfg operatorCodeVerifier)"
-LICENSE_TOKEN="$(cfg licenseToken)"
+LICENSE_BUNDLE_ZIP_PATH="$(cfg licenseBundleZipPath)"
+LICENSE_BUNDLE_KEY="$(cfg licenseBundleKey)"
+INSTALLATION_ID="$(cfg installationId)"
 
 [ -n "$TENANT_NAME" ] || TENANT_NAME="$(cfg tenantName)"
 [ -n "$TENANT_SLUG" ] || TENANT_SLUG="$(cfg tenantSlug)"
@@ -227,17 +230,46 @@ post_json() {
   esac
 }
 
+post_license_bundle() {
+  # $1 = url
+  local url="$1" tmp code
+  tmp="$(mktemp)"
+  if [ -n "$INSTALLATION_ID" ]; then
+    code="$(curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
+      -F "bundle=@${LICENSE_BUNDLE_ZIP_PATH};type=application/zip" \
+      -F "bundleKey=${LICENSE_BUNDLE_KEY}" \
+      -F "installationId=${INSTALLATION_ID}")"
+  else
+    code="$(curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
+      -F "bundle=@${LICENSE_BUNDLE_ZIP_PATH};type=application/zip" \
+      -F "bundleKey=${LICENSE_BUNDLE_KEY}")"
+  fi
+  local out; out="$(cat "$tmp")"; rm -f "$tmp"
+  case "$code" in
+    2*) printf '%s' "$out"; return 0 ;;
+    *)  fail "POST $url failed ($code): $out" ;;
+  esac
+}
+
 if [ "$SETUP_OPEN" = "true" ]; then
   [ -n "$OPERATOR_EMAIL" ] && [ -n "$OPERATOR_PASSWORD" ] || \
     fail "operatorEmail and operatorPassword are required to bootstrap the operator."
 
-  case "$LICENSE_TOKEN" in
-    ""|PASTE-*) fail "licenseToken is not set in the environment file. Set it before running setup." ;;
+  case "$LICENSE_BUNDLE_ZIP_PATH" in
+    ""|PASTE-*) fail "licenseBundleZipPath is not set in the environment file. Set it before running setup." ;;
   esac
-  echo "Installing license token..."
-  LICENSE_BODY="$(node -e 'process.stdout.write(JSON.stringify({licenseToken:process.argv[1]}))' "$LICENSE_TOKEN")"
-  post_json "$PLATFORM_URL/api/platform/setup/v1/license/install" "$LICENSE_BODY" >/dev/null
-  echo "  License installed."
+  case "$LICENSE_BUNDLE_KEY" in
+    ""|PASTE-*) fail "licenseBundleKey is not set in the environment file. Set it before running setup." ;;
+  esac
+  [ -f "$LICENSE_BUNDLE_ZIP_PATH" ] || fail "licenseBundleZipPath does not point to a file: $LICENSE_BUNDLE_ZIP_PATH"
+
+  echo "Previewing license bundle import..."
+  post_license_bundle "$PLATFORM_URL/api/platform/setup/v1/license/import/preview" >/dev/null
+  echo "  License bundle preview accepted."
+
+  echo "Importing license bundle..."
+  post_license_bundle "$PLATFORM_URL/api/platform/setup/v1/license/import" >/dev/null
+  echo "  License bundle imported."
 
   echo "Bootstrapping platform operator..."
   BOOTSTRAP_BODY="$(node -e 'process.stdout.write(JSON.stringify({adminEmail:process.argv[1],adminDisplayName:process.argv[2],adminPassword:process.argv[3]}))' \

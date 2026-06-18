@@ -2,3 +2,4 @@
 /compose/docker-compose.letsencrypt.yml
 /compose/gateway/traefik/traefik.letsencrypt.generated.yml
 /compose/gateway/traefik/dynamic.letsencrypt.generated.yml
+/build/

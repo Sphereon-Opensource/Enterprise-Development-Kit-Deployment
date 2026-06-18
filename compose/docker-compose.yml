@@ -102,11 +102,10 @@ services:
   # then exits. The platform and tenant-kms wait for it to complete.
   keystore-init:
     image: busybox:1.36
-    command: ["sh", "-c", "chown 10001:10001 /platform-keystore /tenant-kms-keystore /license-recipient"]
+    command: ["sh", "-c", "chown 10001:10001 /platform-keystore /tenant-kms-keystore"]
     volumes:
       - platform-keystore:/platform-keystore
       - tenant-kms-keystore:/tenant-kms-keystore
-      - license-recipient:/license-recipient
 
   # Control plane: operator login, OAuth/OIDC discovery, setup, platform admin,
   # platform config. Local licensing authority for the deployment. Runs the gRPC
@@ -133,7 +132,6 @@ services:
     volumes:
       - ./config/platform.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
-      - license-recipient:/app/license
       - platform-keystore:/keystore
     ports:
       - "${EDK_PLATFORM_HOST_PORT:-18080}:18080"
@@ -164,7 +162,6 @@ services:
     volumes:
       - ./config/tenant-as.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
-      - license-recipient:/app/license
     ports:
       - "${EDK_AS_HOST_PORT:-18083}:18083"
     healthcheck:
@@ -312,8 +309,6 @@ services:
 
 volumes:
   postgres-data:
-  # License recipient key: created by first-run setup when the license request is generated.
-  license-recipient:
   # Platform keystore: platform AS cert/user + the license-request instance cert.
   platform-keystore:
   # Tenant-KMS keystore: per-tenant key material (software now; AWS/Key Vault later).

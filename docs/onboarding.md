@@ -21,7 +21,7 @@ Both read their configuration from the same Postman customer environment file un
 You need:
 
 - A running EDK enterprise deployment reachable at `https://platform.<base-domain>` and `https://<tenant-slug>.<base-domain>`.
-- A Sphereon license token.
+- A Sphereon protected license bundle ZIP and its bundle key. `installationId` is optional when the platform can resolve it from setup state.
 - Operator account details for the platform. First-run setup creates this account after license activation.
 - Node.js on your PATH. The provision script uses it to read the environment JSON and to compute the PKCE code challenge.
 
@@ -34,17 +34,21 @@ Both onboarding paths read `postman/EDK-Enterprise-Deployment.customer.postman_e
 | `baseDomain` | The customer-controlled base domain. The platform is `https://platform.<baseDomain>` and the tenant is `https://<tenantSlug>.<baseDomain>` |
 | `tenantSlug` | The first tenant slug. The default is `acme` |
 | `tenantName` | The first tenant display name |
-| `licenseToken` | Your Sphereon license token. Setup installs it |
+| `platformUrl`, `issuerUrl`, `verifierUrl`, `asUrl`, `didUrl`, `kmsUrl` | Optional explicit service URLs. Leave empty for the gateway model; set them for local Docker base-stack runs or a custom reverse proxy |
+| `operatorRedirectUri` | Optional operator OAuth callback URL. Leave empty to derive it from `platformUrl` |
+| `licenseBundleZipPath` | Path to the protected Sphereon license bundle ZIP |
+| `licenseBundleKey` | UUID bundle key supplied with the protected bundle |
+| `installationId` | Optional installation/deployment id supplied with the bundle |
 | `operatorEmail`, `operatorPassword` | The operator account credentials. Setup bootstraps the account after license activation; sign-in authenticates with it |
 
-The Postman collection derives `platformUrl`, `issuerUrl`, `verifierUrl`, `asUrl`, `kmsUrl`, `didUrl`, `operatorRedirectUri`, and the public endpoint hosts from those inputs. The provision scripts do the same, while still accepting explicit URL variables for non-standard deployments.
+The Postman collection derives `platformUrl`, `issuerUrl`, `verifierUrl`, `asUrl`, `kmsUrl`, `didUrl`, `operatorRedirectUri`, and the public endpoint hosts from `baseDomain` and `tenantSlug`. Explicit URL variables override those derived values for non-standard deployments. The provision scripts use the same rules.
 
 ## Option A: the provision script
 
 The provision script runs against the already-running deployment and onboards the platform and the first tenant by calling the published REST APIs. It performs, in order:
 
 1. Waits for the platform service to report healthy at `https://platform.<base-domain>/health`.
-2. Runs platform setup only if the setup gate is still open: it installs the license token, then bootstraps the operator account as the final gate-closing setup step. If the gate is already closed, this step is skipped, so the script is safe to re-run.
+2. Runs platform setup only if the setup gate is still open: it previews and imports the protected license bundle, then bootstraps the operator account as the final gate-closing setup step. If the gate is already closed, this step is skipped, so the script is safe to re-run.
 3. Signs the operator in through the platform authorization-code flow with PKCE, carrying cookies and the login form CSRF tuple like a browser, and exchanges the authorization code for an operator access token.
 4. Registers the first production tenant. Tenant registration provisions the tenant runtime surfaces for issuer, verifier, authorization server, KMS, and DID routing.
 5. Binds the tenant's three public endpoints: the OID4VCI issuer, the OID4VP verifier, and the OAuth2 authorization server.
@@ -94,11 +98,27 @@ The Postman collection walks the same onboarding flow request by request, plus t
 
 Select the imported environment, fill in the variables above, then run the folders in order. The collection derives all public service URLs from `baseDomain` and `tenantSlug`, then passes values from one request to the next through collection variables, so run within a folder top to bottom.
 
+For local Docker base-stack checks, set the explicit URL variables to the loopback
+ports from `compose/.env` and run a folder with Newman:
+
+```bash
+npx newman run postman/EDK-Enterprise-Deployment.postman_collection.json \
+  -e postman/EDK-Enterprise-Deployment.customer.postman_environment.json \
+  --folder "00 Docker Smoke"
+```
+
+The `00 Docker Smoke` folder checks the local service health endpoints and does
+not require a license bundle. Folder `01 Platform Onboarding` requires a real
+protected license bundle when the setup gate is open. If the platform was
+already initialized, setup endpoints return 404 and the collection continues
+with the already-running deployment.
+
 The folders, in order:
 
 | Folder | What it does |
 | --- | --- |
-| `01 Platform Onboarding` | Generates the license request, verifies and installs your license token, then bootstraps the operator account and closes the setup gate |
+| `00 Docker Smoke` | Checks local Docker service health endpoints without requiring a license bundle |
+| `01 Platform Onboarding` | Generates the license request, previews and imports your protected license bundle, then bootstraps the operator account and closes the setup gate |
 | `02 Operator Sign-in` | Signs in as the operator and exchanges the authorization code for an operator token |
 | `03 Tenant Onboarding` | Registers the tenant and binds its issuer, verifier, and authorization server public endpoints at `<tenantSlug>.<baseDomain>` |
 | `04 Tenant Federation` | Registers a federation IdP for the tenant |

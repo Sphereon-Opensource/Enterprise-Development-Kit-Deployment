@@ -226,10 +226,9 @@ platform:
     # Interactive setup-screen mode: no license-token-path is configured here.
     # The anonymous setup surface remains open until the operator installs a
     # license through /setup-license and completes bootstrap. The setup service
-    # creates this recipient key on first license-request generation when it is
-    # not already present. Offline pre-provisioning is opt-in through
+    # creates the license recipient key in the platform software KMS on first
+    # license-request generation. Offline pre-provisioning is opt-in through
     # config/offline/application.yml.
-    recipient-key-path: /app/license/license-recipient.jwk.json
     trust-bundle-path: /app/license/license-root-ca.pem
     operator:
       # TODO: set the platform operator identity for this deployment.
@@ -253,9 +252,11 @@ license:
   # from the deployment license gate.
   deployment-role: platform
   recipient:
-    # The setup service creates this key on first license-request generation.
     key-id: ${env:EDK_LICENSE_RECIPIENT_KEY_ID:license-recipient}
-    private-key-path: /app/license/license-recipient.jwk.json
+    kms:
+      enabled: true
+      provider-id: software
+      alias: license-recipient
   trust:
     # Trust the compiled-in durable root. A license bound to this deployment
     # chains leaf -> intermediate -> embedded root, so no trust file is mounted.

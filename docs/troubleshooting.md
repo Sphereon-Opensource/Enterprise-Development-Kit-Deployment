@@ -35,18 +35,22 @@ they bind to. If a service refuses to start with a license or gate error:
 - If using the setup screen, confirm the license was installed successfully
   before bootstrapping the first operator. Until install completes, the setup
   gate stays open and non-platform services may fail closed.
+- If using the setup screen, confirm the platform software KMS contains the
+  `license.recipient.kms.alias` key created during license-request generation.
+  A missing key means the platform cannot decrypt the issued license token and
+  the non-platform services will mirror that failed state.
 - If using the offline mounted-token overlay, confirm the platform can read the
-  token and recipient key from its config (`platform.onboarding.license-token-path`,
-  `platform.onboarding.recipient-key-path`, both relative to the config mount).
-  A missing or unreadable token leaves the gate unclaimed and the non-platform
-  services stay down.
+  token from `platform.onboarding.license-token-path` and can import the mounted
+  recipient seed from `EDK_LICENSE_RECIPIENT_KEY_PATH`. A missing or unreadable
+  token leaves the gate unclaimed and the non-platform services stay down.
 - Confirm `license.recipient.key-id` matches the recipient key id the license is
   bound to. A mismatch means the platform cannot read the license and the gate is
   never claimed.
 
 The platform is the local licensing authority and is exempt from the license
-gate. If only the non-platform services fail while the platform is healthy, the cause is the
-deployment id or the recipient key, not the platform itself.
+gate. If only the non-platform services fail while the platform is healthy, check
+the deployment id/service-role binding and the internal route from the service to
+the platform command endpoint.
 
 ## Database connectivity
 
