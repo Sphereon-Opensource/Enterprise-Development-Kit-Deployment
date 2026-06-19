@@ -27,7 +27,13 @@
       "key": "kmsProviderId",
       "value": "software",
       "type": "string",
-      "description": "KMS provider used by the walkthrough."
+      "description": "Tenant/runtime KMS provider used by the walkthrough."
+    },
+    {
+      "key": "licenseKmsProviderId",
+      "value": "_license_",
+      "type": "string",
+      "description": "Platform system KMS provider used for setup license-request and recipient material."
     },
     {
       "key": "verifierId",
@@ -214,7 +220,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"alias\": \"{{licenseRequestAlias}}\",\n  \"providerId\": \"{{kmsProviderId}}\",\n  \"algorithm\": \"ECDSA_SHA256\",\n  \"use\": \"sig\",\n  \"deployment\": {\n    \"deployment\": {\n      \"baseDomains\": [\"{{baseDomain}}\"]\n    },\n    \"organizationName\": \"{{tenantName}}\",\n    \"organizationUnit\": \"Platform Operations\",\n    \"locality\": \"Amsterdam\",\n    \"country\": \"NL\",\n    \"licenseDeliveryMethod\": \"MANUAL\",\n    \"contacts\": [\n      {\n        \"email\": \"{{operatorEmail}}\",\n        \"givenName\": \"Platform\",\n        \"familyName\": \"Operator\",\n        \"roles\": [\"TECHNICAL\"]\n      },\n      {\n        \"email\": \"{{operatorEmail}}\",\n        \"givenName\": \"Platform\",\n        \"familyName\": \"Operator\",\n        \"roles\": [\"ADMINISTRATOR\"]\n      }\n    ]\n  },\n  \"serialNumber\": 1\n}",
+              "raw": "{\n  \"alias\": \"{{licenseRequestAlias}}\",\n  \"providerId\": \"{{licenseKmsProviderId}}\",\n  \"algorithm\": \"ECDSA_SHA256\",\n  \"use\": \"sig\",\n  \"deployment\": {\n    \"deployment\": {\n      \"baseDomains\": [\"{{baseDomain}}\"]\n    },\n    \"organizationName\": \"{{tenantName}}\",\n    \"organizationUnit\": \"Platform Operations\",\n    \"locality\": \"Amsterdam\",\n    \"country\": \"NL\",\n    \"licenseDeliveryMethod\": \"MANUAL\",\n    \"contacts\": [\n      {\n        \"email\": \"{{operatorEmail}}\",\n        \"givenName\": \"Platform\",\n        \"familyName\": \"Operator\",\n        \"roles\": [\"TECHNICAL\"]\n      },\n      {\n        \"email\": \"{{operatorEmail}}\",\n        \"givenName\": \"Platform\",\n        \"familyName\": \"Operator\",\n        \"roles\": [\"ADMINISTRATOR\"]\n      }\n    ]\n  },\n  \"serialNumber\": 1\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3718,7 +3724,11 @@
         "type": "text/javascript",
         "exec": [
           "const set = (key, value) => {",
-          "  if (value !== undefined && value !== null && String(value).trim()) pm.collectionVariables.set(key, String(value).trim().replace(/\\/$/, ''));",
+          "  if (value !== undefined && value !== null && String(value).trim()) {",
+          "    const normalized = String(value).trim().replace(/\\/$/, '');",
+          "    pm.collectionVariables.set(key, normalized);",
+          "    pm.environment.set(key, normalized);",
+          "  }",
           "};",
           "const baseDomain = String(pm.variables.get('baseDomain') || '').trim().replace(/^https?:\\/\\//, '').replace(/\\/$/, '');",
           "const tenantSlug = String(pm.variables.get('tenantSlug') || 'acme').trim();",

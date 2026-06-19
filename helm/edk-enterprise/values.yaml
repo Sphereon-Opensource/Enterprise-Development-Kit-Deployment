@@ -68,6 +68,9 @@ license:
   # local licensing authority and is exempt via deployment-role=platform (set in
   # the deployment template, not here).
   deploymentId: deployment-1
+  commandEnforcement:
+    enabled: true
+    missingDescriptorMode: warn
   # Per-service gate role advertised by each service. The platform key is
   # present for completeness but unused (the platform is exempt).
   serviceRoles:
@@ -77,6 +80,11 @@ license:
     tenant-as: enterprise-tenant-as
     issuer: enterprise-issuer
     verifier: enterprise-verifier
+
+kmsLifecycle:
+  enabled: true
+  interval: PT1H
+  runOnStartup: true
 
 serviceAccount:
   create: true
@@ -206,13 +214,13 @@ services:
       - name: ONBOARDING_UI_BASE_URL
         value: https://platform.example.com
       - name: PLATFORM_SETUP_KMS_PROVIDER_ID
-        value: software
+        value: _license_
       - name: PLATFORM_SETUP_LICENSE_MATERIAL_DEFAULT_ALIAS
         value: license-recipient
       - name: LICENSE_RECIPIENT_KMS_ENABLED
         value: "true"
       - name: LICENSE_RECIPIENT_KMS_PROVIDER_ID
-        value: software
+        value: _license_
       - name: LICENSE_RECIPIENT_KMS_ALIAS
         value: license-recipient
 

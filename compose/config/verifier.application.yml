@@ -106,6 +106,9 @@ config:
     tenant-config-db:
       enabled: false
 license:
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
   deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
   gate:
     service-role: enterprise-verifier

@@ -155,6 +155,16 @@ spec:
             # deployment license gate.
             - name: LICENSE_DEPLOYMENT_ROLE
               value: "platform"
+            - name: LICENSE_COMMAND_ENFORCEMENT_ENABLED
+              value: {{ $.Values.license.commandEnforcement.enabled | quote }}
+            - name: LICENSE_COMMAND_ENFORCEMENT_MISSING_DESCRIPTOR_MODE
+              value: {{ $.Values.license.commandEnforcement.missingDescriptorMode | quote }}
+            - name: KMS_ENTERPRISE_LIFECYCLE_ENABLED
+              value: {{ $.Values.kmsLifecycle.enabled | quote }}
+            - name: KMS_ENTERPRISE_LIFECYCLE_INTERVAL
+              value: {{ $.Values.kmsLifecycle.interval | quote }}
+            - name: KMS_ENTERPRISE_LIFECYCLE_RUN_ON_STARTUP
+              value: {{ $.Values.kmsLifecycle.runOnStartup | quote }}
             {{- else }}
             # Non-platform services fail closed unless they bind to the platform deployment
             # and declare their service role.
@@ -162,6 +172,10 @@ spec:
               value: {{ $.Values.license.deploymentId | quote }}
             - name: LICENSE_GATE_SERVICE_ROLE
               value: {{ index $.Values.license.serviceRoles $name | quote }}
+            - name: LICENSE_COMMAND_ENFORCEMENT_ENABLED
+              value: {{ $.Values.license.commandEnforcement.enabled | quote }}
+            - name: LICENSE_COMMAND_ENFORCEMENT_MISSING_DESCRIPTOR_MODE
+              value: {{ $.Values.license.commandEnforcement.missingDescriptorMode | quote }}
             {{- end }}
             {{- end }}
             {{- if $isAdminConsole }}

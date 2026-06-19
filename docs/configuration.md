@@ -189,7 +189,7 @@ other services. Select the provider that backs key storage:
   supply credentials as references, never as literals.
 
 The platform setup uses `PLATFORM_SETUP_KMS_PROVIDER_ID` to name the provider
-the first-run setup binds to (the default is `software`). See
+the first-run setup binds to (the default is `_license_`). See
 [Secret backends](secret-backends.md) for choosing and wiring a provider and for
 the secret reference syntax.
 
@@ -277,7 +277,7 @@ In Helm these are under `license`:
 By default the platform starts with the setup gate open. The operator installs
 the license through `/setup-license`. When the operator generates a license
 request, the setup service creates the license recipient key in the platform
-software KMS (`license.recipient.kms.*`) and copies only the public JWK into the
+system KMS (`license.recipient.kms.*`, provider `_license_`) and copies only the public JWK into the
 request artifact. The setup UI also creates the platform CSR key and CSR at that
 point; the recipient key is separate and is used only by the platform license
 authority to decrypt the issued license token. Non-platform services do not mount
@@ -288,11 +288,10 @@ projection is missing, expired, or unreachable.
 A mounted license-token bootstrap is an explicit offline mode: add
 `docker-compose.offline.yml`, which enables `platform.onboarding.license-token-path`
 and closes the setup gate at boot. In that mode the mounted token must already
-match the recipient key mounted through `EDK_LICENSE_RECIPIENT_KEY_PATH`; the
-runtime imports that seed into the software KMS before reading the license. The
-`scripts/generate-license-recipient-key.*` helpers are optional and are only for
-bring-your-own recipient material, offline bootstrap, or intentional key rotation
-before a license is issued.
+match the recipient key in the platform system KMS (`license.recipient.kms.*`).
+Do not mount a recipient private JWK into the services; the platform decrypts
+the token through KMS and satellites consume only the platform-evaluated license
+projection.
 
 For non-production/evaluation test-license roots, set
 `EDK_DEPLOYMENT_MODE=dev` and `EDK_LICENSE_TRUST_EMBEDDED=false`, then paste the

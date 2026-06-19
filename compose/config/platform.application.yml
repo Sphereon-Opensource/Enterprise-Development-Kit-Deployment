@@ -103,6 +103,11 @@ tenant:
     operator:
       enabled: true
 kms:
+  enterprise:
+    lifecycle:
+      enabled: ${env:EDK_KMS_LIFECYCLE_ENABLED:true}
+      interval: ${env:EDK_KMS_LIFECYCLE_INTERVAL:PT1H}
+      run-on-startup: ${env:EDK_KMS_LIFECYCLE_RUN_ON_STARTUP:true}
   providers:
     software:
       type: software
@@ -113,8 +118,18 @@ kms:
         id: software
         password: ${env:EDK_KEYSTORE_PASSWORD}
         # The platform keeps its own keystore in the platform-keystore volume
-        # mounted at /keystore.
-        path: /keystore/edk-keystore.p12
+        # mounted at /keystore. The file path is derived as
+        # /keystore/<tenantId>/<providerId>.p12.
+        keystoreRoot: /keystore
+    _license_:
+      id: _license_
+      type: software
+      enabled: true
+      autoCreateCertificate: true
+      keystore:
+        type: pkcs12
+        id: _license_
+        password: ${env:EDK_KEYSTORE_PASSWORD}
 crypto:
   kms:
     roles:
@@ -226,7 +241,7 @@ platform:
     # Interactive setup-screen mode: no license-token-path is configured here.
     # The anonymous setup surface remains open until the operator installs a
     # license through /setup-license and completes bootstrap. The setup service
-    # creates the license recipient key in the platform software KMS on first
+    # creates the license recipient key in the platform _license_ system KMS on first
     # license-request generation. Offline pre-provisioning is opt-in through
     # config/offline/application.yml.
     trust-bundle-path: /app/license/license-root-ca.pem
@@ -237,7 +252,7 @@ platform:
       initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
   setup:
     kms:
-      provider-id: software
+      provider-id: _license_
       tenant-id: "<platform>"
       principal-id: platform-setup
     license-request:
@@ -250,12 +265,15 @@ east-west:
 license:
   # This is the local licensing authority: it owns the deployment and is exempt
   # from the deployment license gate.
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
   deployment-role: platform
   recipient:
     key-id: ${env:EDK_LICENSE_RECIPIENT_KEY_ID:license-recipient}
     kms:
       enabled: true
-      provider-id: software
+      provider-id: _license_
       alias: license-recipient
   trust:
     # Trust the compiled-in durable root. A license bound to this deployment

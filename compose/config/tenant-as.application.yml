@@ -239,6 +239,9 @@ license:
   # Deployment gate: the tenant AS binds to the platform deployment and declares
   # its service role. The deployment-id must match the value the license is bound
   # to.
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
   deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
   gate:
     service-role: enterprise-tenant-as

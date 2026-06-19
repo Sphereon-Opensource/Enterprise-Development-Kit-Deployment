@@ -97,6 +97,9 @@ config:
 license:
   # Deployment gate: this service fails closed unless it binds to the platform
   # deployment and declares its service role.
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
   deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
   gate:
     service-role: enterprise-tenant-kms

@@ -12,7 +12,6 @@ platform:
     installation-base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
     deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
     license-token-path: license-token.txt
-    recipient-key-path: /app/license/license-recipient.jwk.json
     trust-bundle-path: /app/license/license-root-ca.pem
     request-alias: platform-license-request
     operator:
@@ -25,10 +24,16 @@ application:
     secret-backend:
       type: ${env:EDK_SECRET_BACKEND:config-system-dev-only}
 license:
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
   recipient:
     # Must match the recipient key that the offline license token was encrypted to.
     key-id: ${env:EDK_LICENSE_RECIPIENT_KEY_ID:license-recipient}
-    private-key-path: /app/license/license-recipient.jwk.json
+    kms:
+      enabled: true
+      provider-id: _license_
+      alias: license-recipient
   trust:
     embedded:
       enabled: ${env:EDK_LICENSE_TRUST_EMBEDDED:true}

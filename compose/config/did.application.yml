@@ -131,6 +131,9 @@ tenant:
     custom-domain:
       enabled: true
 license:
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
   deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
   gate:
     service-role: enterprise-did

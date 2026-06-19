@@ -27,10 +27,10 @@ custody requirements:
   resolves a reference at use time.
 
 Select the KMS provider through configuration. The platform first-run setup binds
-to the provider named by `PLATFORM_SETUP_KMS_PROVIDER_ID` (default `software`).
+to the provider named by `PLATFORM_SETUP_KMS_PROVIDER_ID` (default `_license_`).
 The license recipient key used for setup activation is also KMS-backed in
 interactive deployments (`license.recipient.kms.enabled=true`) and defaults to
-the platform software provider with alias `license-recipient`; non-platform
+the platform system license provider with alias `license-recipient`; non-platform
 services consume the platform's effective license projection rather than mounting
 that private key.
 The admin and onboarding secret backend is selected by
