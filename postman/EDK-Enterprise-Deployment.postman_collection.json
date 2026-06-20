@@ -284,7 +284,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('license bundle previews or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));"
+                  "pm.test('license bundle previews or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
+                  "const formFields = pm.request.body && pm.request.body.formdata ? pm.request.body.formdata.all().map((item) => item.key) : [];",
+                  "pm.test('license bundle preview sends only the protected bundle file', () => {",
+                  "  pm.expect(formFields).to.eql(['bundle']);",
+                  "});"
                 ]
               }
             }
@@ -313,7 +317,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('license bundle imported or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));"
+                  "pm.test('license bundle imported or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
+                  "const formFields = pm.request.body && pm.request.body.formdata ? pm.request.body.formdata.all().map((item) => item.key) : [];",
+                  "pm.test('license bundle import sends only the protected bundle file', () => {",
+                  "  pm.expect(formFields).to.eql(['bundle']);",
+                  "});"
                 ]
               }
             }

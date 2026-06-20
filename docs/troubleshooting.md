@@ -25,27 +25,25 @@ Confirm the pull secret is valid by describing a failing pod and reading the
 events. A `401`/`403` from the registry or an `unauthorized` message means the
 pull secret is missing, misnamed, or lacks access to one of the repositories.
 
-## License token rejected
+## License bundle rejected
 
 The non-platform services fail closed unless the platform license claims the installation
 they bind to. If a service refuses to start with a license or gate error:
 
 - Confirm `license.installationId` matches across all non-platform services and
   the installed license claims. This value is only the runtime service binding
-  to the activated installation; it is not used as a bundle password or request
-  input.
-- If using the setup screen, confirm the license was installed successfully
-  before bootstrapping the first operator. Until install completes, the setup
-  gate stays open and non-platform services may fail closed.
-- If using the setup screen, confirm the platform `_license_` KMS contains the
-  `license.recipient.kms.alias` key created during license-request generation.
-  A missing key means the platform cannot decrypt the issued license token and
-  the non-platform services will mirror that failed state.
-- If using the offline mounted-token overlay, confirm the platform can read the
-  token from `platform.onboarding.license-token-path` and that the platform
-  platform `_license_` KMS contains the `license.recipient.kms.alias` key bound to the token.
-  A missing or unreadable token leaves the gate unclaimed and the non-platform
-  services stay down.
+  to the activated installation and is not supplied in license requests.
+- If using the setup screen, confirm the protected license bundle was imported
+  successfully before bootstrapping the first operator. Until import completes,
+  the setup gate stays open and non-platform services may fail closed.
+- If using the setup screen after generating a license request, confirm the
+  platform `_license_` KMS contains the `license.recipient.kms.alias` key created
+  during license-request generation. A missing key means the platform cannot
+  decrypt the issued license material and the non-platform services will mirror
+  that failed state.
+- If the license portal generated the complete bundle without a customer
+  request, confirm the imported bundle included the recipient private key and
+  installation certificate. The import preview shows these entries before Apply.
 - Confirm `license.recipient.key-id` matches the recipient key id the license is
   bound to. A mismatch means the platform cannot read the license and the gate is
   never claimed.

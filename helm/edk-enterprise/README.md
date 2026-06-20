@@ -39,7 +39,7 @@ For the private Nexus Docker repository, create a pull secret and reference it w
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
 | `grpc.enabled` | `true` | Renders inbound gRPC only for platform and tenant-KMS, and renders gRPC peer endpoints for routed calls to those receivers. |
-| `license.installationId` | `11111111-1111-4111-8111-111111111111` | Runtime service binding to the activated installation id. Must match across non-platform services and installed license claims; not a bundle password or request input. |
+| `license.installationId` | `11111111-1111-4111-8111-111111111111` | Runtime service binding to the activated installation id. Must match across non-platform services and installed license claims; not supplied in license requests. |
 | `networkPolicy.enabled` | `true` | Renders service ingress/egress NetworkPolicies. |
 | `serviceMonitor.enabled` | `false` | Renders Prometheus Operator ServiceMonitors. |
 | `opentelemetry.enabled` | `false` | Renders OTLP exporter environment variables. |

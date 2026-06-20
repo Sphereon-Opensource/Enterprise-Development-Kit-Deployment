@@ -8,8 +8,8 @@
 #      pull succeeds. Set EDK_REGISTRY and EDK_TAG in .env to match.
 #   2. Edit .env (hostnames, database credentials, secrets) and review the per
 #      service templates under config/ for the TODO markers.
-#   3. Start the stack and complete the license setup screen. For offline
-#      pre-provisioning from a mounted token, add docker-compose.offline.yml.
+#   3. Start the stack and complete the license setup screen with a protected
+#      license bundle from the license portal.
 #
 # Public surface:
 #   - For the base file alone, each REST service is bound to a loopback host

@@ -43,15 +43,13 @@ Set, at minimum:
 - The required secrets: keystore password, internal client secret, and the issuer pipeline keys.
 - The installation base domain. For the base file alone, leave the external base URLs on their loopback defaults. For the gateway overlay, tenant protocol URLs are created during onboarding from `<tenant-slug>.<base-domain>`.
 - For a test license that does not chain to the embedded production root, set
-  `EDK_DEPLOYMENT_MODE=dev` and `EDK_LICENSE_TRUST_EMBEDDED=false`; paste the
-  supplied test root CA bundle in the setup UI.
+  `EDK_DEPLOYMENT_MODE=dev` and `EDK_LICENSE_TRUST_EMBEDDED=false`. The license
+  portal includes the supplied test root CA bundle in the protected setup bundle.
 
 For customer evaluation test licenses that do not use the embedded production
 trust root, set `EDK_DEPLOYMENT_MODE=dev` and
-`EDK_LICENSE_TRUST_EMBEDDED=false`; paste the supplied test root CA bundle in
-the setup UI. Do not add `docker-compose.offline.yml`; that overlay is only for
-pre-provisioning from a mounted token and recipient seed and intentionally skips
-the setup screen.
+`EDK_LICENSE_TRUST_EMBEDDED=false`. The supplied test root CA bundle is delivered
+inside the protected setup bundle and is accepted only in dev/test-license mode.
 
 For gateway runs, the default base domain `saas.localtest.me` resolves every
 subdomain to `127.0.0.1` with no host-file edits and no local DNS server, so

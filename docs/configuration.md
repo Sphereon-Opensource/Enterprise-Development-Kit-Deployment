@@ -271,32 +271,30 @@ In Helm these are under `license`:
 
 | Key | Purpose |
 | --- | --- |
-| `license.installationId` | Runtime service binding to the activated platform installation id. Must match across non-platform services and the installed license claims. This is not a bundle password, security token, or license-request input. |
+| `license.installationId` | Runtime service binding to the activated platform installation id. Must match across non-platform services and the installed license claims. It is not supplied in license requests. |
 | `license.serviceRoles.<service>` | Per-service gate role advertised by each service. |
 
-By default the platform starts with the setup gate open. The operator installs
-the license through `/setup-license`. When the operator generates a license
-request, the setup service creates the license recipient key in the platform
-system KMS (`license.recipient.kms.*`, provider `_license_`) and copies only the public JWK into the
-request artifact. The setup UI also creates the platform CSR key and CSR at that
-point; the recipient key is separate and is used only by the platform license
-authority to decrypt the issued license token. Non-platform services do not mount
-the recipient private key; they fetch the platform-evaluated license status and
-entitlement projection over the internal command route and fail closed when that
-projection is missing, expired, or unreachable.
+By default the platform starts with the setup gate open. The operator imports a
+protected license bundle through `/setup-license`. When the operator generates a
+license request, the setup service creates the license recipient key in the
+platform system KMS (`license.recipient.kms.*`, provider `_license_`) and copies
+only the public JWK into the request artifact. The setup UI also creates the
+platform CSR key and CSR at that point; the recipient key is separate and is used
+only by the platform licensing authority to decrypt the issued license material
+inside the protected bundle.
 
-A mounted license-token bootstrap is an explicit offline mode: add
-`docker-compose.offline.yml`, which enables `platform.onboarding.license-token-path`
-and closes the setup gate at boot. In that mode the mounted token must already
-match the recipient key in the platform system KMS (`license.recipient.kms.*`).
-Do not mount a recipient private JWK into the services; the platform decrypts
-the token through KMS and satellites consume only the platform-evaluated license
-projection.
+The license portal may also create the full setup bundle without a customer
+request. In both flows the customer receives only the protected bundle; the
+platform derives the bundle security material internally from the protected
+installation binding embedded in the bundle. Non-platform services do not mount
+recipient private keys or license material; they fetch the platform-evaluated
+license status and entitlement projection over the internal command route and
+fail closed when that projection is missing, expired, or unreachable.
 
 For non-production/evaluation test-license roots, set
-`EDK_DEPLOYMENT_MODE=dev` and `EDK_LICENSE_TRUST_EMBEDDED=false`, then paste the
-supplied test root CA bundle in `/setup-license`. File-based trust is intentionally
-rejected in production/on-prem mode.
+`EDK_DEPLOYMENT_MODE=dev` and `EDK_LICENSE_TRUST_EMBEDDED=false`. Test trust
+material is delivered inside the protected setup bundle and remains rejected in
+production/on-prem mode.
 
 ## Observability
 
