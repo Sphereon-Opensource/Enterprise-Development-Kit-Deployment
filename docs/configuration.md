@@ -179,9 +179,9 @@ platform config template lists them under
 The KMS service holds signing key material and serves signing operations to the
 other services. Select the provider that backs key storage:
 
-- `software`. Keys live in a PKCS#12 keystore managed by the service. This is
+- Software keystore. Keys live in a PKCS#12 keystore managed by the service. This is
   the default in the platform config template
-  (`kms.providers.software`, `autoCreateCertificate: true`). Use it for
+  (`kms.providers._tenant_`, `type: software`, `autoCreateCertificate: true`). Use it for
   evaluation and for deployments where a software keystore meets your key
   custody requirements.
 - A managed vault or cloud KMS. The provider holds keys in an external system
@@ -263,15 +263,15 @@ services:
 
 ## License binding
 
-The non-platform services bind to a deployment and a service role and fail closed
-unless the platform license claims that deployment. The platform itself is the
-local licensing authority and is exempt.
+The non-platform services bind to an installation and a service role and fail
+closed unless the platform license claims that installation. The platform itself
+is the local licensing authority and is exempt.
 
 In Helm these are under `license`:
 
 | Key | Purpose |
 | --- | --- |
-| `license.deploymentId` | Deployment id the platform license is minted with. Must match across all services. |
+| `license.installationId` | Runtime service binding to the activated platform installation id. Must match across non-platform services and the installed license claims. This is not a bundle password, security token, or license-request input. |
 | `license.serviceRoles.<service>` | Per-service gate role advertised by each service. |
 
 By default the platform starts with the setup gate open. The operator installs

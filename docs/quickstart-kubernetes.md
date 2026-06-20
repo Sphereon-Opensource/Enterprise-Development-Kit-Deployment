@@ -12,7 +12,7 @@ The chart reference, including every value and its default, is in [helm/edk-ente
 - Helm 3.
 - Nexus credentials for the private `nexus.sphereon.com/edk-docker` enterprise image repository.
 - A reachable PostgreSQL 15 database. The chart does not deploy Postgres. Use a managed database, an operator-managed database, or an environment-owned Postgres release, then point `database.host` and `database.existingSecret` at it.
-- A Sphereon protected license bundle ZIP plus bundle key, ready to import during onboarding.
+- A Sphereon protected license bundle ZIP, ready to import during onboarding.
 - TLS material for the operator and tenant hosts. Use a wildcard certificate for `*.<base-domain>` plus `platform.<base-domain>`, or individual certificates for every deployed host. For Let's Encrypt wildcard certificates, use cert-manager with DNS-01 validation.
 
 ## 1. Create the namespace and pull secret

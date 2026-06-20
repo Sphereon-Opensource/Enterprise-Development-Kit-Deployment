@@ -59,6 +59,25 @@
     },
     "platformKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "tenantKmsKeystore": { "$ref": "#/definitions/keystorePersistence" },
+    "license": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "installationId": { "type": "string", "format": "uuid" },
+        "commandEnforcement": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "missingDescriptorMode": { "type": "string", "enum": ["warn", "deny"] }
+          }
+        },
+        "serviceRoles": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "serviceAccount": {
       "type": "object",
       "additionalProperties": true,

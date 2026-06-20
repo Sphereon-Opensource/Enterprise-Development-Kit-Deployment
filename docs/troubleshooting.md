@@ -27,11 +27,13 @@ pull secret is missing, misnamed, or lacks access to one of the repositories.
 
 ## License token rejected
 
-The non-platform services fail closed unless the platform license claims the deployment
+The non-platform services fail closed unless the platform license claims the installation
 they bind to. If a service refuses to start with a license or gate error:
 
-- Confirm `license.deploymentId` matches across all services and matches the
-  deployment the license was minted for.
+- Confirm `license.installationId` matches across all non-platform services and
+  the installed license claims. This value is only the runtime service binding
+  to the activated installation; it is not used as a bundle password or request
+  input.
 - If using the setup screen, confirm the license was installed successfully
   before bootstrapping the first operator. Until install completes, the setup
   gate stays open and non-platform services may fail closed.
@@ -50,8 +52,8 @@ they bind to. If a service refuses to start with a license or gate error:
 
 The platform is the local licensing authority and is exempt from the license
 gate. If only the non-platform services fail while the platform is healthy, check
-the deployment id/service-role binding and the internal route from the service to
-the platform command endpoint.
+the installation id/service-role binding and the internal route from the service
+to the platform command endpoint.
 
 ## Database connectivity
 

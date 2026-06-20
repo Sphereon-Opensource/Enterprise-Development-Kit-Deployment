@@ -166,10 +166,10 @@ spec:
             - name: KMS_ENTERPRISE_LIFECYCLE_RUN_ON_STARTUP
               value: {{ $.Values.kmsLifecycle.runOnStartup | quote }}
             {{- else }}
-            # Non-platform services fail closed unless they bind to the platform deployment
+            # Non-platform services fail closed unless they bind to the platform installation
             # and declare their service role.
-            - name: LICENSE_DEPLOYMENT_ID
-              value: {{ $.Values.license.deploymentId | quote }}
+            - name: LICENSE_INSTALLATION_ID
+              value: {{ $.Values.license.installationId | quote }}
             - name: LICENSE_GATE_SERVICE_ROLE
               value: {{ index $.Values.license.serviceRoles $name | quote }}
             - name: LICENSE_COMMAND_ENFORCEMENT_ENABLED

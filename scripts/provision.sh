@@ -19,8 +19,8 @@
 # Prerequisites:
 #   - A running EDK enterprise deployment reachable at platform.<baseDomain>
 #     and <tenantSlug>.<baseDomain>, or explicit service URLs in the environment file.
-#   - A Sphereon protected license bundle ZIP plus bundle key (set in the
-#     environment file as licenseBundleZipPath and licenseBundleKey).
+#   - A Sphereon protected license bundle ZIP (set in the environment file as
+#     licenseBundleZipPath).
 #   - curl and node installed. node parses the environment JSON and computes the
 #     PKCE S256 code challenge.
 #
@@ -109,8 +109,6 @@ OPERATOR_PASSWORD="$(cfg operatorPassword)"
 OPERATOR_REDIRECT_URI="$(cfg operatorRedirectUri)"
 OPERATOR_CODE_VERIFIER="$(cfg operatorCodeVerifier)"
 LICENSE_BUNDLE_ZIP_PATH="$(cfg licenseBundleZipPath)"
-LICENSE_BUNDLE_KEY="$(cfg licenseBundleKey)"
-INSTALLATION_ID="$(cfg installationId)"
 
 [ -n "$TENANT_NAME" ] || TENANT_NAME="$(cfg tenantName)"
 [ -n "$TENANT_SLUG" ] || TENANT_SLUG="$(cfg tenantSlug)"
@@ -234,16 +232,8 @@ post_license_bundle() {
   # $1 = url
   local url="$1" tmp code
   tmp="$(mktemp)"
-  if [ -n "$INSTALLATION_ID" ]; then
-    code="$(curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
-      -F "bundle=@${LICENSE_BUNDLE_ZIP_PATH};type=application/zip" \
-      -F "bundleKey=${LICENSE_BUNDLE_KEY}" \
-      -F "installationId=${INSTALLATION_ID}")"
-  else
-    code="$(curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
-      -F "bundle=@${LICENSE_BUNDLE_ZIP_PATH};type=application/zip" \
-      -F "bundleKey=${LICENSE_BUNDLE_KEY}")"
-  fi
+  code="$(curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
+    -F "bundle=@${LICENSE_BUNDLE_ZIP_PATH};type=application/zip")"
   local out; out="$(cat "$tmp")"; rm -f "$tmp"
   case "$code" in
     2*) printf '%s' "$out"; return 0 ;;
@@ -257,9 +247,6 @@ if [ "$SETUP_OPEN" = "true" ]; then
 
   case "$LICENSE_BUNDLE_ZIP_PATH" in
     ""|PASTE-*) fail "licenseBundleZipPath is not set in the environment file. Set it before running setup." ;;
-  esac
-  case "$LICENSE_BUNDLE_KEY" in
-    ""|PASTE-*) fail "licenseBundleKey is not set in the environment file. Set it before running setup." ;;
   esac
   [ -f "$LICENSE_BUNDLE_ZIP_PATH" ] || fail "licenseBundleZipPath does not point to a file: $LICENSE_BUNDLE_ZIP_PATH"
 

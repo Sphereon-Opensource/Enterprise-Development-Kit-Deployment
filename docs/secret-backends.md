@@ -15,7 +15,7 @@ tenant-AS, issuer, and verifier. Choose the provider that matches your key
 custody requirements:
 
 - Software keystore. Keys live in a PKCS#12 keystore the KMS service manages.
-  This is the platform config default (`kms.providers.software`). It is the
+  This is the tenant KMS config default (`kms.providers._tenant_`, type `software`). It is the
   right choice for evaluation and for deployments where a software keystore meets
   your custody policy. No external secret system is required, but you still
   supply the keystore password as a reference.

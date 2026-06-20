@@ -25,7 +25,7 @@
     },
     {
       "key": "kmsProviderId",
-      "value": "software",
+      "value": "_tenant_",
       "type": "string",
       "description": "Tenant/runtime KMS provider used by the walkthrough."
     },
@@ -66,7 +66,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('platform is healthy', () => pm.response.to.have.status(200));"
+                  "pm.test('platform is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
                 ]
               }
             }
@@ -85,7 +85,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('DID service is healthy', () => pm.response.to.have.status(200));"
+                  "pm.test('DID service is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
                 ]
               }
             }
@@ -104,7 +104,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('authorization server is healthy', () => pm.response.to.have.status(200));"
+                  "pm.test('authorization server is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
                 ]
               }
             }
@@ -123,7 +123,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('issuer is healthy', () => pm.response.to.have.status(200));"
+                  "pm.test('issuer is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
                 ]
               }
             }
@@ -142,7 +142,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('verifier is healthy', () => pm.response.to.have.status(200));"
+                  "pm.test('verifier is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
                 ]
               }
             }
@@ -207,11 +207,11 @@
           ]
         },
         {
-          "name": "03 Generate instance certificate license request",
+          "name": "03 Generate installation certificate license request",
           "request": {
             "method": "POST",
             "url": "{{platformUrl}}/api/platform/setup/v1/license-request/generate",
-            "description": "Generates the signed local instance certificate / license request that is sent to the license issuer out of band.",
+            "description": "Generates the signed local installation certificate / license request that is sent to the license issuer out of band. The readable installation id stays on the platform; the CSR carries the opaque installation binding.",
             "header": [
               {
                 "key": "Content-Type",
@@ -237,7 +237,24 @@
                   "pm.test('license request generated or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
                   "if (pm.response.code === 200) {",
                   "  const j = pm.response.json();",
+                  "  const request = j.request || {};",
+                  "  const requestJson = j.requestJson || JSON.stringify(request);",
+                  "  const parsedRequest = JSON.parse(requestJson);",
+                  "  const expectedFields = ['version', 'requestId', 'generatedAt', 'deployment', 'platformIssuer', 'tenant', 'owner', 'contacts', 'organizationName', 'organizationUnit', 'licenseDeliveryMethod', 'localCertificate', 'localPublicKey', 'certificateSigningRequest', 'licenseRecipient'];",
                   "  pm.test('license request payload returned', () => pm.expect(j.request || j.requestJson).to.exist);",
+                  "  pm.test('license request exposes only the public request fields', () => {",
+                  "    pm.expect(Object.keys(parsedRequest).sort()).to.eql(expectedFields.sort());",
+                  "  });",
+                  "  pm.test('license request does not expose the readable installation id', () => {",
+                  "    pm.expect(request).to.not.have.property('installationId');",
+                  "    pm.expect(parsedRequest).to.not.have.property('installationId');",
+                  "  });",
+                  "  pm.test('license request carries CSR and recipient public key', () => {",
+                  "    pm.expect(parsedRequest.certificateSigningRequest).to.exist;",
+                  "    pm.expect(parsedRequest.certificateSigningRequest.pem).to.include('BEGIN CERTIFICATE REQUEST');",
+                  "    pm.expect(parsedRequest.licenseRecipient).to.exist;",
+                  "    pm.expect(parsedRequest.licenseRecipient.publicJwk).to.exist;",
+                  "  });",
                   "}"
                 ]
               }
@@ -249,7 +266,7 @@
           "request": {
             "method": "POST",
             "url": "{{platformUrl}}/api/platform/setup/v1/license/import/preview",
-            "description": "Decrypts and validates the protected license bundle and reports overwrite impact without mutating setup state.",
+            "description": "Validates the protected license bundle and reports overwrite impact without mutating setup state.",
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -257,16 +274,6 @@
                   "key": "bundle",
                   "type": "file",
                   "src": "{{licenseBundleZipPath}}"
-                },
-                {
-                  "key": "bundleKey",
-                  "value": "{{licenseBundleKey}}",
-                  "type": "text"
-                },
-                {
-                  "key": "installationId",
-                  "value": "{{installationId}}",
-                  "type": "text"
                 }
               ]
             }
@@ -296,16 +303,6 @@
                   "key": "bundle",
                   "type": "file",
                   "src": "{{licenseBundleZipPath}}"
-                },
-                {
-                  "key": "bundleKey",
-                  "value": "{{licenseBundleKey}}",
-                  "type": "text"
-                },
-                {
-                  "key": "installationId",
-                  "value": "{{installationId}}",
-                  "type": "text"
                 }
               ]
             }
@@ -1351,14 +1348,16 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('kms providers listed', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.text(), 'software provider is present').to.include(pm.variables.get('kmsProviderId'));"
+                  "pm.expect(pm.response.text(), 'tenant system provider is present').to.include(pm.variables.get('kmsProviderId'));",
+                  "pm.expect(pm.response.text(), 'license system provider is hidden').to.not.include('_license_');",
+                  "pm.expect(pm.response.text(), 'platform system provider is hidden').to.not.include('_platform_');"
                 ]
               }
             }
           ]
         },
         {
-          "name": "08 Get software provider capabilities",
+          "name": "08 Get tenant provider capabilities",
           "request": {
             "method": "GET",
             "url": "{{kmsUrl}}/api/kms/v1/providers/{{kmsProviderId}}/capabilities",
@@ -3751,7 +3750,6 @@
           "for (const key of ['platformUrl', 'adminConsoleUrl', 'operatorRedirectUri', 'kmsUrl', 'didUrl', 'asUrl', 'issuerUrl', 'verifierUrl', 'tenantHost', 'tenantBaseUrl', 'issuerPublicHost', 'verifierPublicHost', 'asPublicHost', 'didWebDomain']) {",
           "  set(key, pm.environment.get(key));",
           "}",
-          "if (!pm.collectionVariables.get('adminConsoleUrl') && pm.collectionVariables.get('platformUrl')) set('adminConsoleUrl', pm.collectionVariables.get('platformUrl') + '/admin-console');",
           "if (!pm.collectionVariables.get('operatorRedirectUri') && pm.collectionVariables.get('platformUrl')) set('operatorRedirectUri', pm.collectionVariables.get('platformUrl') + '/admin-console/callback');"
         ]
       }

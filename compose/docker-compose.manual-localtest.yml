@@ -1,0 +1,55 @@
+# Manual first-run localtest overlay.
+#
+# The pristine manual stack deliberately starts before a deployment license is
+# installed. In that state /health and /ready can report 503 because the product
+# gate is open. For this local-only harness Docker health means "container has
+# booted far enough for manual onboarding", not "licensed runtime ready".
+
+services:
+  enterprise-platform:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q 200"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-tenant-as:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-tenant-kms:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-did:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-issuer:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-verifier:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

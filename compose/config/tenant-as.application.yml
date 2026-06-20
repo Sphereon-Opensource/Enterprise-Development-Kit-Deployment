@@ -102,8 +102,8 @@ transport:
             endpoint: grpc://enterprise-platform:9090
       application:
         target: SERVER
-        transport: HTTP
-        endpoint: http://enterprise-platform:18080
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
 config:
   providers:
     platform-config-remote:
@@ -142,32 +142,29 @@ tenant:
       enabled: true
 kms:
   providers:
-    software:
+    _tenant_:
+      id: _tenant_
       type: software
       enabled: true
       autoCreateCertificate: true
       keystore:
         type: pkcs12
-        id: software
+        id: _tenant_
         password: ${env:EDK_KEYSTORE_PASSWORD}
         path: "{tempDir}/edk-verify-keystore.p12"
 crypto:
   kms:
-    # The AS signing roles resolve against the 'software' provider, which is
+    # The AS signing roles resolve against the '_tenant_' provider, which is
     # served remotely by the tenant KMS via the kms routing module above. No key
     # material is held locally.
     roles:
       oauth2-as:
-        provider: software
         algorithm: ES256
       issuer-signing:
-        provider: software
         algorithm: ES256
       issuer-request-decryption:
-        provider: software
         algorithm: ES256
       verifier-request-object-signing:
-        provider: software
         algorithm: ES256
 oauth2:
   user-provider:
@@ -236,17 +233,17 @@ auth:
   login:
     require-application: false
 license:
-  # Deployment gate: the tenant AS binds to the platform deployment and declares
-  # its service role. The deployment-id must match the value the license is bound
-  # to.
+  # Installation gate: the tenant AS binds to the platform installation and
+  # declares its service role. The installation-id must match the value the
+  # license is bound to.
   command-enforcement:
     enabled: true
     missing-descriptor-mode: warn
-  deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
+  installation-id: ${env:EDK_INSTALLATION_ID:11111111-1111-4111-8111-111111111111}
   gate:
     service-role: enterprise-tenant-as
   trust:
-    # Trust the compiled-in durable root. A license bound to this deployment
+    # Trust the compiled-in durable root. A license bound to this installation
     # chains leaf -> intermediate -> embedded root, so no trust file is mounted.
     embedded:
       enabled: ${env:EDK_LICENSE_TRUST_EMBEDDED:true}

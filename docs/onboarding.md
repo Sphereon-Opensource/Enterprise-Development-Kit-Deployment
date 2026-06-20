@@ -21,7 +21,7 @@ Both read their configuration from the same Postman customer environment file un
 You need:
 
 - A running EDK enterprise deployment reachable at `https://platform.<base-domain>` and `https://<tenant-slug>.<base-domain>`.
-- A Sphereon protected license bundle ZIP and its bundle key. `installationId` is optional when the platform can resolve it from setup state.
+- A Sphereon protected license bundle ZIP from the license issuer.
 - Operator account details for the platform. First-run setup creates this account after license activation.
 - Node.js on your PATH. The provision script uses it to read the environment JSON and to compute the PKCE code challenge.
 
@@ -37,8 +37,6 @@ Both onboarding paths read `postman/EDK-Enterprise-Deployment.customer.postman_e
 | `platformUrl`, `issuerUrl`, `verifierUrl`, `asUrl`, `didUrl`, `kmsUrl` | Optional explicit service URLs. Leave empty for the gateway model; set them for local Docker base-stack runs or a custom reverse proxy |
 | `operatorRedirectUri` | Optional operator OAuth callback URL. Leave empty to derive it from `platformUrl` |
 | `licenseBundleZipPath` | Path to the protected Sphereon license bundle ZIP |
-| `licenseBundleKey` | UUID bundle key supplied with the protected bundle |
-| `installationId` | Optional installation/deployment id supplied with the bundle |
 | `operatorEmail`, `operatorPassword` | The operator account credentials. Setup bootstraps the account after license activation; sign-in authenticates with it |
 
 The Postman collection derives `platformUrl`, `issuerUrl`, `verifierUrl`, `asUrl`, `kmsUrl`, `didUrl`, `operatorRedirectUri`, and the public endpoint hosts from `baseDomain` and `tenantSlug`. Explicit URL variables override those derived values for non-standard deployments. The provision scripts use the same rules.
@@ -109,9 +107,9 @@ npx newman run postman/EDK-Enterprise-Deployment.postman_collection.json \
 
 The `00 Docker Smoke` folder checks the local service health endpoints and does
 not require a license bundle. Folder `01 Platform Onboarding` requires a real
-protected license bundle when the setup gate is open. If the platform was
-already initialized, setup endpoints return 404 and the collection continues
-with the already-running deployment.
+protected license bundle when the setup gate is open. If the platform was already
+initialized, setup endpoints return 404 and the collection continues with the
+already-running deployment.
 
 The folders, in order:
 

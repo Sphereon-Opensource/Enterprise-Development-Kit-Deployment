@@ -20,8 +20,8 @@
   Prerequisites:
     - A running EDK enterprise deployment reachable at platform.<baseDomain>
       and <tenantSlug>.<baseDomain>, or explicit service URLs in the environment file.
-    - A Sphereon protected license bundle ZIP plus bundle key (set in the
-      environment file as licenseBundleZipPath and licenseBundleKey).
+    - A Sphereon protected license bundle ZIP (set in the environment file as
+      licenseBundleZipPath).
     - Node.js installed (used to parse the environment JSON and compute the
       PKCE S256 code challenge).
     - Windows PowerShell 5.1 or later.
@@ -112,8 +112,6 @@ $operatorPassword     = Cfg 'operatorPassword'
 $operatorRedirectUri  = Cfg 'operatorRedirectUri'
 $operatorCodeVerifier = Cfg 'operatorCodeVerifier'
 $licenseBundleZipPath = Cfg 'licenseBundleZipPath'
-$licenseBundleKey     = Cfg 'licenseBundleKey'
-$installationId       = Cfg 'installationId'
 
 if ([string]::IsNullOrWhiteSpace($TenantName)) { $TenantName = Cfg 'tenantName' }
 if ([string]::IsNullOrWhiteSpace($TenantSlug)) { $TenantSlug = Cfg 'tenantSlug' }
@@ -185,12 +183,8 @@ function Invoke-LicenseBundle {
   try {
     $args = @(
       '-s', '-o', $tmp, '-w', '%{http_code}', '-X', 'POST', $Uri,
-      '-F', "bundle=@$licenseBundleZipPath;type=application/zip",
-      '-F', "bundleKey=$licenseBundleKey"
+      '-F', "bundle=@$licenseBundleZipPath;type=application/zip"
     )
-    if (-not [string]::IsNullOrWhiteSpace($installationId)) {
-      $args += @('-F', "installationId=$installationId")
-    }
     $code = & curl.exe @args
     $out = Get-Content -Path $tmp -Raw
     if ($LASTEXITCODE -ne 0 -or -not ($code -match '^2')) {
@@ -258,9 +252,6 @@ if ($setupOpen) {
   }
   if ([string]::IsNullOrWhiteSpace($licenseBundleZipPath) -or $licenseBundleZipPath -like 'PASTE-*') {
     Fail "licenseBundleZipPath is not set in the environment file. Set it before running setup."
-  }
-  if ([string]::IsNullOrWhiteSpace($licenseBundleKey) -or $licenseBundleKey -like 'PASTE-*') {
-    Fail "licenseBundleKey is not set in the environment file. Set it before running setup."
   }
   if (-not (Test-Path -LiteralPath $licenseBundleZipPath)) {
     Fail "licenseBundleZipPath does not point to a file: $licenseBundleZipPath"

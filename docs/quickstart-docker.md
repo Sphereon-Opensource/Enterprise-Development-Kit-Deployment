@@ -14,7 +14,7 @@ There are two run modes:
 - Docker with Compose v2.
 - Nexus credentials for the private `nexus.sphereon.com/edk-docker` enterprise image repository.
 - Docker Compose starts a local PostgreSQL 16 container for evaluation. For a real single-node deployment, replace it with a managed or operator-run PostgreSQL database and point the service configuration at that database.
-- A Sphereon protected license bundle ZIP plus bundle key, or access to your evaluation license issuer. The setup UI creates the license recipient key in the platform `_license_` KMS when it generates the license request. Evaluation bundles can include the test root CA material when needed.
+- A Sphereon protected license bundle ZIP, or access to your evaluation license issuer. The setup UI creates the license recipient key in the platform `_license_` KMS when it generates the license request. Evaluation bundles can include the test root CA material when needed.
 - TLS certificates for the operator and tenant hosts when you use the gateway overlay. For local gateway evaluation, use the included wildcard certificate helper. For a real domain, use a publicly trusted wildcard certificate for `*.<base-domain>` plus `platform.<base-domain>`, or individual certificates for each host.
 
 ## 1. Authenticate to Nexus

@@ -88,8 +88,8 @@ transport:
             endpoint: grpc://enterprise-platform:9090
       application:
         target: SERVER
-        transport: HTTP
-        endpoint: http://enterprise-platform:18080
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
 config:
   providers:
     platform-config-remote:
@@ -100,7 +100,7 @@ license:
   command-enforcement:
     enabled: true
     missing-descriptor-mode: warn
-  deployment-id: ${env:EDK_DEPLOYMENT_ID:deployment-1}
+  installation-id: ${env:EDK_INSTALLATION_ID:11111111-1111-4111-8111-111111111111}
   gate:
     service-role: enterprise-tenant-kms
 database:
@@ -131,13 +131,14 @@ tenant:
       enabled: true
 kms:
   providers:
-    software:
+    _tenant_:
+      id: _tenant_
       type: software
       enabled: true
       autoCreateCertificate: true
       keystore:
         type: pkcs12
-        id: software
+        id: _tenant_
         password: ${env:EDK_KEYSTORE_PASSWORD}
         # Per-tenant key material lives in the tenant-kms-keystore volume mounted
         # at /keystore. The explicit path is omitted so the software KMS provider

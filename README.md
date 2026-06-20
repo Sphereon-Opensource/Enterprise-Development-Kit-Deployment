@@ -46,7 +46,7 @@ Terminate TLS at the public gateway or load balancer with a certificate that cov
 ## Prerequisites
 
 - A Nexus pull secret for the private `nexus.sphereon.com/edk-docker` enterprise image repository. Sphereon provides the credentials.
-- A Sphereon protected license bundle ZIP plus bundle key, or access to your evaluation license issuer. The setup UI generates the deployment recipient key when it creates the license request and includes only its public key in that request. You import the protected bundle during platform setup, and setup must also create the first operator account. Evaluation bundles can include the test root CA material when needed.
+- A Sphereon protected license bundle ZIP, or access to your evaluation license issuer. The setup UI generates the license recipient key when it creates the license request and includes only its public key in that request. You import the protected bundle during platform setup, and setup must also create the first operator account. Evaluation bundles can include the test root CA material when needed.
 - TLS material for the operator and tenant hosts. Use a wildcard certificate for `*.<base-domain>` plus `platform.<base-domain>`, or individual certificates for every tenant host and the operator host. The wildcard model is recommended because tenants are hosted as `<tenant>.<base-domain>` and can be onboarded without per-tenant certificate work.
 - A PostgreSQL database. The Docker Compose stack starts a local Postgres container for evaluation. For Kubernetes or production-style deployments, use a managed, operator-managed, or separately run database and point the deployment at it with a credentials Secret or connection settings.
 
