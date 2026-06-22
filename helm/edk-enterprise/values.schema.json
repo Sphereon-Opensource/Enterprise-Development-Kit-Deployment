@@ -23,12 +23,20 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "dialect": { "type": "string", "enum": ["postgresql"] },
-        "host": { "type": "string", "minLength": 1 },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "name": { "type": "string", "minLength": 1 },
-        "existingSecret": { "type": "string", "minLength": 1 },
-        "usernameKey": { "type": "string", "minLength": 1 },
-        "passwordKey": { "type": "string", "minLength": 1 }
+        "platform": { "$ref": "#/definitions/databaseEndpoint" },
+        "tenant": {
+          "allOf": [
+            { "$ref": "#/definitions/databaseEndpoint" },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "isolation": { "type": "string", "enum": ["schema", "shared", "database", "host"] },
+                "schemaPattern": { "type": "string", "minLength": 1 }
+              }
+            }
+          ]
+        }
       }
     },
     "auth": {
@@ -59,6 +67,48 @@
     },
     "platformKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "tenantKmsKeystore": { "$ref": "#/definitions/keystorePersistence" },
+    "platform": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "bootstrap": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "issuer": { "type": "string", "minLength": 1 },
+            "owner": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "email": { "type": "string", "minLength": 1 },
+                "displayName": { "type": "string", "minLength": 1 },
+                "roles": { "type": "string" }
+              }
+            },
+            "ownerInitialCredential": { "type": "string" },
+            "userProviderMode": { "type": "string", "minLength": 1 },
+            "deploymentMode": { "type": "string", "enum": ["dev", "prod"] },
+            "deploymentId": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "serviceIdentity": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "internalClientExistingSecret": { "type": "string" },
+        "internalClientSecretKey": { "type": "string", "minLength": 1 }
+      }
+    },
+    "keystore": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "existingSecret": { "type": "string" },
+        "passwordKey": { "type": "string", "minLength": 1 }
+      }
+    },
     "license": {
       "type": "object",
       "additionalProperties": true,
@@ -75,6 +125,16 @@
         "serviceRoles": {
           "type": "object",
           "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "trust": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "existingSecret": { "type": "string" },
+            "rootCaKey": { "type": "string", "minLength": 1 },
+            "rootCaPath": { "type": "string", "minLength": 1 },
+            "embeddedEnabled": { "type": "boolean" }
+          }
         }
       }
     },
@@ -212,6 +272,18 @@
     }
   },
   "definitions": {
+    "databaseEndpoint": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "name": { "type": "string", "minLength": 1 },
+        "existingSecret": { "type": "string", "minLength": 1 },
+        "usernameKey": { "type": "string", "minLength": 1 },
+        "passwordKey": { "type": "string", "minLength": 1 }
+      }
+    },
     "keystorePersistence": {
       "type": "object",
       "additionalProperties": true,

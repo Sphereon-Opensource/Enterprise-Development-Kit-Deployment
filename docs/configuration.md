@@ -116,10 +116,20 @@ split and how the single-port gateway routes by host and path.
 
 ## Database
 
-The deployment requires PostgreSQL. Two database scopes are rendered from the
-same connection values: the TENANT scope holds per-tenant data, and the APP
-scope holds control-plane tables including the tenant registry that host-based
-tenant resolution reads. Both scopes are required.
+The deployment uses two PostgreSQL databases that form its data plane:
+
+- The **platform** (control-plane) database holds the tenant registry, routing and
+  public-endpoint bindings, platform configuration, the platform tenant, and the
+  platform authorization server. Only the platform service connects to it.
+- The **tenant** (workload) database holds per-tenant runtime data with one schema
+  per tenant (schema-per-tenant isolation). The platform writes tenant-scope data
+  here, and every runtime service (issuer, verifier, DID, tenant authorization
+  server, tenant KMS) reads and writes its tenant's schema here.
+
+The platform provisions a tenant's schema (`CREATE SCHEMA`) when the tenant is
+registered, and the database router sets `search_path` to that schema at request
+time. The platform tenant's own workload co-locates with the control plane in the
+platform database, so it is never written to the tenant database.
 
 In Helm, set these under `database`:
 
@@ -127,19 +137,27 @@ In Helm, set these under `database`:
 | --- | --- |
 | `database.enabled` | Render database configuration. Keep `true`. |
 | `database.dialect` | Database dialect. Use `postgresql`. |
-| `database.host` | PostgreSQL host. |
-| `database.port` | PostgreSQL port (typically `5432`). |
-| `database.name` | Database name. |
-| `database.existingSecret` | Name of a Kubernetes Secret holding the credentials. |
-| `database.usernameKey` | Key in the Secret that holds the username. |
-| `database.passwordKey` | Key in the Secret that holds the password. |
+| `database.platform.host` | Control-plane PostgreSQL host. |
+| `database.platform.port` | Control-plane PostgreSQL port (typically `5432`). |
+| `database.platform.name` | Control-plane database name. |
+| `database.platform.existingSecret` | Secret holding the control-plane database credentials. |
+| `database.platform.usernameKey` / `passwordKey` | Keys in the platform Secret. |
+| `database.tenant.host` | Tenant workload PostgreSQL host. |
+| `database.tenant.port` | Tenant workload PostgreSQL port (typically `5432`). |
+| `database.tenant.name` | Tenant workload database name. |
+| `database.tenant.existingSecret` | Secret holding the tenant database credentials. |
+| `database.tenant.usernameKey` / `passwordKey` | Keys in the tenant Secret. |
+| `database.tenant.isolation` | Tenant isolation strategy. Use `schema` for schema-per-tenant. |
+| `database.tenant.schemaPattern` | Schema name template, for example `tenant_{id}`. |
 
-These render to `DATABASE_TENANTS_DEFAULT_*` and `DATABASE_APP_DEFAULT_*`
-environment variables. The chart never renders a database password as a literal
+The platform service binds its control-plane datasource to the platform database
+and its tenant datasource to the tenant database; the runtime services bind both
+datasources to the tenant database, so the platform database is reachable only by
+the platform service. The chart never renders a database password as a literal
 value; the username and password are always read from the named Secret.
-`examples/external-managed-postgres-values.yaml` shows a managed Postgres host
-with an egress NetworkPolicy, and `examples/shared-postgres-values.yaml` shows an
-in-cluster Postgres with selector-based policy.
+`examples/external-managed-postgres-values.yaml` shows managed Postgres hosts with
+egress NetworkPolicies, and `examples/shared-postgres-values.yaml` shows in-cluster
+Postgres with selector-based policies.
 
 Under Docker Compose the default stack starts a local `postgres` service and the
 same values come from environment variables the config template references:

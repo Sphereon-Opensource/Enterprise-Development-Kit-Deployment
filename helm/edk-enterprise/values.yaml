@@ -8,18 +8,49 @@ global:
 database:
   enabled: true
   dialect: postgresql
-  host: postgres
-  port: 5432
-  name: edk
-  existingSecret: edk-postgres
-  usernameKey: username
-  passwordKey: password
-  networkPolicy:
-    # Keep empty to allow DNS/external managed Postgres. Set podSelector or ipBlock
-    # in production values to restrict database egress.
-    podSelector: {}
-    namespaceSelector: {}
-    ipBlock: {}
+  # Two PostgreSQL databases form the deployment's data plane.
+  #
+  # The control-plane (platform) database holds the tenant registry, routing and
+  # public-endpoint bindings, platform configuration, the platform tenant, and the
+  # platform authorization server. Only the platform service connects to it.
+  #
+  # The tenant workload database holds per-tenant runtime data, with one schema per
+  # tenant (schema-per-tenant isolation). The platform writes tenant-scope data here,
+  # and every runtime service (issuer, verifier, DID, tenant authorization server,
+  # tenant KMS) reads and writes its tenant's schema here.
+  platform:
+    host: edk-platform-postgres
+    port: 5432
+    name: platform
+    existingSecret: edk-platform-postgres
+    usernameKey: username
+    passwordKey: password
+    # Egress target for the platform database NetworkPolicy. Leave empty to allow
+    # DNS/external managed Postgres; set podSelector or ipBlock in production values
+    # to restrict egress to the platform database only.
+    networkPolicy:
+      podSelector: {}
+      namespaceSelector: {}
+      ipBlock: {}
+  tenant:
+    host: edk-tenant-postgres
+    port: 5432
+    name: tenant
+    existingSecret: edk-tenant-postgres
+    usernameKey: username
+    passwordKey: password
+    # Schema-per-tenant isolation: each tenant's workload lives in its own schema.
+    # The platform creates the schema (CREATE SCHEMA) when a tenant is registered;
+    # the database router sets search_path to the same name at request time.
+    isolation: schema
+    schemaPattern: "tenant_{id}"
+    # Egress target for the tenant database NetworkPolicy. Leave empty to allow
+    # DNS/external managed Postgres; set podSelector or ipBlock in production values
+    # to restrict egress to the tenant database only.
+    networkPolicy:
+      podSelector: {}
+      namespaceSelector: {}
+      ipBlock: {}
 
 auth:
   enabled: true
@@ -61,6 +92,103 @@ tenantKmsKeystore:
   # Reference an existing PVC instead of creating one. When set, no PVC is rendered.
   existingClaim: ""
 
+# Control-plane bootstrap for the platform service. The platform provisions its
+# `<platform>` tenant, hosted authorization server, and operator owner on first
+# boot. These inputs carry hyphenated keys that an environment variable name
+# cannot express, so they are rendered into the platform config overlay
+# (templates/configmap.yaml -> application-container.yml) and the steps are
+# idempotent across restarts.
+platform:
+  # The platform authorization server's external base URL, used as its token
+  # issuer (`iss`). The satellites trust this value as their platform-issuer when
+  # validating east-west platform bearers. It must equal the EXTERNAL_BASE_URL the
+  # platform service stamps on the tokens it mints.
+  externalBaseUrl: https://platform.example.com
+  bootstrap:
+    # Hosted authorization-server issuer URL for the `<platform>` tenant. The
+    # operator signs in here and the admin console exchanges operator tokens for
+    # tenant tokens against it. Set to the platform's external base URL.
+    issuer: https://platform.example.com
+    owner:
+      # The platform operator owner provisioned at first boot.
+      email: operator@example.com
+      displayName: Platform Operator
+      # Roles granted to the operator owner. platform-admin authorizes the
+      # tenant administration APIs (RegisterTenant and friends).
+      roles: platform-admin
+    # Break-glass operator credential. When set, the operator owner is
+    # provisioned with a password so the operator can sign in immediately; the
+    # value is supplied through the EDK_OWNER_INITIAL_CREDENTIAL Secret env.
+    # Leave empty to provision a credential-less owner that activates login
+    # through the invitation flow instead. Guarded to dev deployment mode.
+    ownerInitialCredential: ""
+    # Operator user store. `local` resolves operators against the platform's own
+    # identity store. Federate to an external IdP through the platform-config API.
+    userProviderMode: local
+    # `dev` unlocks the break-glass operator credential and the dev license-trust
+    # file override. Set to `prod` for production installations.
+    deploymentMode: dev
+    # Installation deployment id the license is minted against. Matches
+    # license.deploymentId consumed by the satellites.
+    deploymentId: deployment-1
+    # Permit the platform to serve its hosted authorization server over loopback
+    # HTTP. Production keeps the SSRF guard strict; enable only for a local
+    # cluster reached over http://localhost.
+    allowLocalHttpAs: false
+    # Extra hosts that resolve directly to the `<platform>` tenant, appended to
+    # the in-container service name and the platform gateway host. Use it to add
+    # a port-forward host (e.g. `,localhost:18080`) for a local cluster reached by
+    # `kubectl port-forward`. Leading comma required.
+    selfHostsExtra: ""
+
+# Service identity for the platform-issued east-west service tokens. The tenant
+# AS authenticates here as a client_credentials client to mint a platform service
+# token for its KMS hop during tenant registration. Provide the shared internal
+# client secret through a Secret referenced by `internalClientExistingSecret`.
+serviceIdentity:
+  # Secret holding the internal client secret (key `internal-client-secret` by
+  # default). When set, the platform AS registers the internal service clients
+  # (issuer/kms/did/verifier/tenant-as) and the satellites authenticate with it.
+  internalClientExistingSecret: ""
+  internalClientSecretKey: internal-client-secret
+  # Per-service client_credentials client id each satellite presents to the
+  # platform AS to mint its east-west service token. These match the platform's
+  # registered internal clients.
+  clientIds:
+    tenant-kms: kms-service
+    tenant-as: tenant-as-service
+    did: did-service
+    issuer: issuer-service
+    verifier: verifier-service
+  # Workload identity each satellite asserts on its east-west command-transport
+  # calls (the gRPC X-Service-Id). The platform header-trust-policy lists these in
+  # trusted_service_ids and binds each to its service token's client id.
+  serviceIds:
+    tenant-kms: service-crypto
+    tenant-as: service-tenant-as
+    did: service-data
+    issuer: service-oid4vci
+    verifier: service-oid4vp
+  # In-network surfaces each satellite admits without an operator bearer. The
+  # tenant authorization server validates the platform-issued bearer on its
+  # /internal/provision/signing-key endpoint itself; the OAuth protocol surfaces
+  # (authorize/login/token/discovery) and the in-network command/introspection
+  # channels stay open by design (each enforces its own validation). Empty leaves
+  # the service's baked default.
+  anonymousPathPrefixes:
+    tenant-as: "/authorize,/login,/token,/.well-known,/internal/preauth,/internal/provision,/api/commands,/introspect"
+    tenant-kms: ""
+    did: ""
+    issuer: ""
+    verifier: ""
+
+# Keystore password for the software KMS providers. Provide it through a Secret;
+# the platform and tenant-kms read it as EDK_KEYSTORE_PASSWORD.
+keystore:
+  # Secret holding the keystore password (key `keystore-password` by default).
+  existingSecret: ""
+  passwordKey: keystore-password
+
 license:
   # Installation binding for the license gate. The non-platform services fail closed unless they
   # bind to this installation and declare their service role. It must match the
@@ -80,6 +208,25 @@ license:
     tenant-as: enterprise-tenant-as
     issuer: enterprise-issuer
     verifier: enterprise-verifier
+  # License trust anchor and bundle delivery. The platform is the local
+  # licensing authority; it trusts the installed license bundle's root CA. The
+  # bundle itself is imported through the setup API after the platform boots.
+  trust:
+    # Mount a license root-CA PEM from a Secret into the platform (and the
+    # satellites) so the platform trusts the QA/portal-minted license that
+    # chains to it. The Secret's `rootCaKey` entry is mounted at `rootCaPath`.
+    # Leave existingSecret empty to rely on the embedded production roots only.
+    existingSecret: ""
+    rootCaKey: license-root-ca.pem
+    rootCaPath: /license-state/license-root-ca.pem
+    # Trust the embedded production roots. With a dev QA license that chains to a
+    # file-mounted root, set embeddedEnabled false and provide existingSecret.
+    embeddedEnabled: true
+    # Recipient key the platform decrypts the license envelope with. It must match
+    # the kid the license is minted against; the bundle import installs the
+    # matching private key into the KMS provider under recipientKmsAlias.
+    recipientKeyId: license-recipient
+    recipientKmsAlias: license-recipient
 
 kmsLifecycle:
   enabled: true

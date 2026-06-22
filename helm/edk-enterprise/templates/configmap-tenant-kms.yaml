@@ -1,0 +1,79 @@
+{{- /*
+Tenant KMS configuration overlay.
+
+The tenant KMS holds the per-tenant software key material and serves the
+east-west signing, MAC, and encryption hops over gRPC. It must trust the
+workload identities that call it — including the tenant authorization server,
+which seeds its signing key here during tenant registration — and must let a
+trusted caller assert the target tenant via the request header so the seed lands
+in the right tenant's key space.
+
+Delivered as the tenant KMS base application.yml; the image bakes no
+application.yml, so this is the KMS file configuration and it merges over the
+environment configuration.
+
+Rendered only for the tenant KMS.
+*/ -}}
+{{- if (index .Values.services "tenant-kms").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-tenant-kms-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tenant-kms
+data:
+  application.yml: |
+    # Workload identities the tenant KMS trusts on east-west command-transport
+    # calls, each bound to the client id of the service token the caller presents.
+    # A trusted caller may assert the target tenant via the request header
+    # (header_wins) so the tenant AS can seed its signing key into the right
+    # tenant's key space; untrusted callers keep the fail-closed reject default.
+    security:
+      header-trust-policy:
+        internal:
+          tenant_mismatch: header_wins
+          principal_mismatch: header_wins
+        trusted_service_ids:
+          - service-crypto
+          - service-data
+          - service-oid4vci
+          - service-oid4vp
+          - service-tenant-as
+        service_client_bindings:
+          "[service-crypto]": kms-service
+          "[service-data]": did-service
+          "[service-oid4vci]": issuer-service
+          "[service-oid4vp]": verifier-service
+          "[service-tenant-as]": tenant-as-service
+    # Per-tenant software KMS provider. Key material persists in the tenant-kms
+    # keystore volume; the path is derived as <root>/<tenantId>/<providerId>.p12.
+    kms:
+      enterprise:
+        lifecycle:
+          enabled: true
+          interval: PT1H
+          run-on-startup: true
+      providers:
+        _tenant_:
+          id: _tenant_
+          type: software
+          enabled: true
+          autoCreateCertificate: true
+          keystore:
+            type: pkcs12
+            id: _tenant_
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            keystoreRoot: /keystore
+    crypto:
+      kms:
+        roles:
+          oauth2-as:
+            algorithm: ES256
+          issuer-signing:
+            algorithm: ES256
+          issuer-request-decryption:
+            algorithm: ES256
+          verifier-request-object-signing:
+            algorithm: ES256
+{{- end }}

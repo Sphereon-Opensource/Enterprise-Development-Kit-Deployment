@@ -33,6 +33,28 @@ spec:
         - name: {{ . }}
         {{- end }}
       {{- end }}
+      {{- if and (eq $name "platform") $.Values.license.trust.existingSecret }}
+      {{- /* Seed the writable license-state volume with the root-CA trust anchor
+             from the Secret on every start, so the platform trusts the activated
+             license across restarts. The setup API still writes the imported
+             bundle's root CA into the same volume. */}}
+      initContainers:
+        - name: seed-license-trust
+          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $.Values.global.imageTag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - cp /license-trust-seed/license-root-ca.pem {{ $.Values.license.trust.rootCaPath | quote }}
+          volumeMounts:
+            - name: license-root-ca
+              mountPath: /license-trust-seed
+              readOnly: true
+            - name: license-state
+              mountPath: {{ dir $.Values.license.trust.rootCaPath | quote }}
+      {{- end }}
       containers:
         - name: {{ $name }}
           image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $.Values.global.imageTag | default $.Chart.AppVersion }}"
@@ -52,6 +74,11 @@ spec:
             {{- if not $isAdminConsole }}
             - name: APP_PROFILE
               value: "container"
+            # Configuration directory the service reads: application.yml plus the
+            # active-profile overlay (application-container.yml). The platform's
+            # <platform> tenant datasource override is delivered here.
+            - name: SPHEREON_CONFIG_LOCATION
+              value: "/app/config"
             - name: PORT
               value: {{ $svc.restPort | quote }}
             - name: REST_PORT
@@ -66,6 +93,31 @@ spec:
               value: {{ $.Values.global.platformBaseDomain | quote }}
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
+            {{- /* East-west service identity + keystore secrets shared by the JVM services.
+                   The platform AS mints the service tokens the satellites present; the
+                   satellites authenticate with the same internal client secret and read
+                   their software keystore with the keystore password. */}}
+            {{- if $.Values.serviceIdentity.internalClientExistingSecret }}
+            - name: EDK_INTERNAL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
+                  key: {{ $.Values.serviceIdentity.internalClientSecretKey }}
+            {{- end }}
+            {{- if $.Values.keystore.existingSecret }}
+            - name: EDK_KEYSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.keystore.existingSecret }}
+                  key: {{ $.Values.keystore.passwordKey }}
+            {{- end }}
+            {{- /* Public URLs the satellites self-fetch JWKS from and the platform/tenant
+                   AS stamp as token issuers. The platform host and tenant-AS host derive
+                   from the installation base domain. */}}
+            - name: EDK_PLATFORM_PUBLIC_URL
+              value: {{ printf "https://platform.%s" $.Values.global.platformBaseDomain | quote }}
+            - name: EDK_PLATFORM_BASE_DOMAIN
+              value: {{ $.Values.global.platformBaseDomain | quote }}
             {{- if $.Values.opentelemetry.enabled }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ $.Values.opentelemetry.endpoint | quote }}
@@ -87,44 +139,94 @@ spec:
               value: {{ $.Values.auth.jwt.audience | quote }}
             {{- end }}
             {{- if $.Values.database.enabled }}
+            {{- $platformDb := $.Values.database.platform }}
+            {{- $tenantDb := $.Values.database.tenant }}
+            # Tenant workload datasource: per-tenant schemas in the tenant database
+            # (schema-per-tenant isolation). Every service reads and writes its
+            # tenant's schema here. The platform also provisions the schema at
+            # tenant registration.
             - name: DATABASE_TENANTS_DEFAULT_DIALECT
               value: {{ $.Values.database.dialect | quote }}
             - name: DATABASE_TENANTS_DEFAULT_HOST
-              value: {{ $.Values.database.host | quote }}
+              value: {{ $tenantDb.host | quote }}
             - name: DATABASE_TENANTS_DEFAULT_PORT
-              value: {{ $.Values.database.port | quote }}
+              value: {{ $tenantDb.port | quote }}
             - name: DATABASE_TENANTS_DEFAULT_DATABASE
-              value: {{ $.Values.database.name | quote }}
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_ISOLATION
+              value: {{ $tenantDb.isolation | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN
+              value: {{ $tenantDb.schemaPattern | quote }}
             - name: DATABASE_TENANTS_DEFAULT_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: {{ $.Values.database.existingSecret }}
-                  key: {{ $.Values.database.usernameKey }}
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
             - name: DATABASE_TENANTS_DEFAULT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ $.Values.database.existingSecret }}
-                  key: {{ $.Values.database.passwordKey }}
-            # APP-scope datasource: the tenant registry and other control-plane
-            # tables resolve through database.app.default.*, not the tenant scope.
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            {{- if eq $name "platform" }}
+            # Control-plane datasource: the tenant registry, routing, public-endpoint
+            # bindings, and platform configuration live in the platform database. The
+            # platform service owns this connection. The platform tenant's own workload
+            # also co-locates here via the database.tenants override mounted from the
+            # platform config (the angle-bracketed tenant id cannot be expressed as an
+            # environment variable name, so it is supplied as a YAML overlay).
             - name: DATABASE_APP_DEFAULT_DIALECT
               value: {{ $.Values.database.dialect | quote }}
             - name: DATABASE_APP_DEFAULT_HOST
-              value: {{ $.Values.database.host | quote }}
+              value: {{ $platformDb.host | quote }}
             - name: DATABASE_APP_DEFAULT_PORT
-              value: {{ $.Values.database.port | quote }}
+              value: {{ $platformDb.port | quote }}
             - name: DATABASE_APP_DEFAULT_DATABASE
-              value: {{ $.Values.database.name | quote }}
+              value: {{ $platformDb.name | quote }}
             - name: DATABASE_APP_DEFAULT_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: {{ $.Values.database.existingSecret }}
-                  key: {{ $.Values.database.usernameKey }}
+                  name: {{ $platformDb.existingSecret }}
+                  key: {{ $platformDb.usernameKey }}
             - name: DATABASE_APP_DEFAULT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ $.Values.database.existingSecret }}
-                  key: {{ $.Values.database.passwordKey }}
+                  name: {{ $platformDb.existingSecret }}
+                  key: {{ $platformDb.passwordKey }}
+            # Platform database credentials for the platform tenant datasource overlay,
+            # resolved by the database.tenants override mounted from the platform config.
+            - name: EDK_PLATFORM_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $platformDb.existingSecret }}
+                  key: {{ $platformDb.usernameKey }}
+            - name: EDK_PLATFORM_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $platformDb.existingSecret }}
+                  key: {{ $platformDb.passwordKey }}
+            {{- else }}
+            # Runtime services keep their app-scope datasource on the tenant database,
+            # so any app-scope access stays in the tenant data plane. The control-plane
+            # platform database is reachable only by the platform service.
+            - name: DATABASE_APP_DEFAULT_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_APP_DEFAULT_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_APP_DEFAULT_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_APP_DEFAULT_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_APP_DEFAULT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: DATABASE_APP_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            {{- end }}
             {{- end }}
             {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") }}
             {{- range $kmsService := list "key" "keys" "signature" "mac" "encryption" }}
@@ -137,20 +239,33 @@ spec:
             {{- end }}
             {{- end }}
             {{- if ne $name "platform" }}
+            {{- /* The satellites route the platform and application command modules to the
+                   platform over gRPC: the platform exposes the binary command transport on
+                   its gRPC receiver, which carries the config reads and the license-state
+                   projection (application.license.get-effective) each satellite fails closed
+                   without. */}}
             - name: TRANSPORT_ROUTING_MODULES_PLATFORM_TARGET
               value: "SERVER"
             - name: TRANSPORT_ROUTING_MODULES_PLATFORM_TRANSPORT
-              value: "HTTP"
+              value: "GRPC"
             - name: TRANSPORT_ROUTING_MODULES_PLATFORM_ENDPOINT
-              value: {{ printf "http://%s-platform:%v" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "grpc://%s-platform:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
             - name: TRANSPORT_ROUTING_MODULES_APPLICATION_TARGET
               value: "SERVER"
             - name: TRANSPORT_ROUTING_MODULES_APPLICATION_TRANSPORT
-              value: "HTTP"
+              value: "GRPC"
             - name: TRANSPORT_ROUTING_MODULES_APPLICATION_ENDPOINT
-              value: {{ printf "http://%s-platform:%v" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "grpc://%s-platform:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
             {{- end }}
             {{- if eq $name "platform" }}
+            {{- /* Break-glass operator credential for the first-boot owner. Supplied
+                   only when platform.bootstrap.ownerInitialCredential is set; the value
+                   resolves from the same secret as the keystore password by convention,
+                   or set platform.bootstrap.ownerInitialCredential to a literal. */}}
+            {{- if $.Values.platform.bootstrap.ownerInitialCredential }}
+            - name: EDK_OWNER_INITIAL_CREDENTIAL
+              value: {{ $.Values.platform.bootstrap.ownerInitialCredential | quote }}
+            {{- end }}
             # The platform is the local licensing authority and is exempt from the
             # deployment license gate.
             - name: LICENSE_DEPLOYMENT_ROLE
@@ -172,10 +287,64 @@ spec:
               value: {{ $.Values.license.installationId | quote }}
             - name: LICENSE_GATE_SERVICE_ROLE
               value: {{ index $.Values.license.serviceRoles $name | quote }}
+            - name: LICENSE_DEPLOYMENT_ID
+              value: {{ $.Values.platform.bootstrap.deploymentId | quote }}
             - name: LICENSE_COMMAND_ENFORCEMENT_ENABLED
               value: {{ $.Values.license.commandEnforcement.enabled | quote }}
             - name: LICENSE_COMMAND_ENFORCEMENT_MISSING_DESCRIPTOR_MODE
               value: {{ $.Values.license.commandEnforcement.missingDescriptorMode | quote }}
+            {{- /* East-west service identity. Each satellite mints a platform-issued
+                   client_credentials service token and attaches it to its command-transport
+                   calls to the platform (config reads + license-state projection) and to
+                   its KMS hop. The platform AS issues the token; the satellite authenticates
+                   as its per-service confidential client with the shared internal secret. */}}
+            {{- if $.Values.serviceIdentity.internalClientExistingSecret }}
+            - name: SERVER_SERVICE_IDENTITY_TOKEN_ENDPOINT
+              value: {{ printf "http://%s-platform:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+            - name: SERVER_SERVICE_IDENTITY_CLIENT_ID
+              value: {{ index $.Values.serviceIdentity.clientIds $name | quote }}
+            - name: SERVER_SERVICE_IDENTITY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
+                  key: {{ $.Values.serviceIdentity.internalClientSecretKey }}
+            {{- /* Workload identity the satellite asserts on its east-west command-transport
+                   calls (gRPC X-Service-Id). The platform header-trust-policy must list it in
+                   trusted_service_ids and bind it to the service token's client id. */}}
+            - name: SPHEREON_SERVICE_ID
+              value: {{ index $.Values.serviceIdentity.serviceIds $name | quote }}
+            {{- end }}
+            {{- /* In-network surfaces the strict-auth gate admits without an operator bearer:
+                   the tenant authorization server validates the platform-issued bearer on its
+                   /internal/provision/signing-key endpoint itself, and the in-network command/
+                   introspection surfaces carry their own service-token validation. The OAuth
+                   protocol surfaces stay open by design. */}}
+            {{- $anon := index $.Values.serviceIdentity.anonymousPathPrefixes $name }}
+            {{- if $anon }}
+            - name: SERVER_REST_AUTH_ANONYMOUS_PATH_PREFIXES
+              value: {{ $anon | quote }}
+            {{- end }}
+            {{- /* Trust anchor for the platform authorization server. Satellites validate
+                   the platform-issued bearer on east-west calls (config reads, the tenant-as
+                   /internal/provision/signing-key endpoint) against the platform token issuer
+                   and fetch its JWKS in-cluster. The issuer must equal the platform AS token
+                   `iss` (its external base URL); the JWKS URI is the in-cluster service. */}}
+            - name: SERVER_REST_AUTH_PLATFORM_ISSUER
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
+              value: {{ printf "http://%s-platform:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+            {{- /* The tenant authorization server and tenant KMS validate tokens against
+                   the tenant AS issuer; tenant-as also stamps it as the token issuer it
+                   provisions. The tenant AS host derives from the installation base
+                   domain. */}}
+            {{- if or (eq $name "tenant-as") (eq $name "tenant-kms") }}
+            - name: EDK_TENANT_AS_PUBLIC_URL
+              value: {{ printf "https://as.%s" $.Values.global.platformBaseDomain | quote }}
+            {{- end }}
+            {{- if eq $name "tenant-as" }}
+            - name: EXTERNAL_BASE_URL
+              value: {{ printf "https://as.%s" $.Values.global.platformBaseDomain | quote }}
+            {{- end }}
             {{- end }}
             {{- end }}
             {{- if $isAdminConsole }}
@@ -203,6 +372,33 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if and (eq $name "platform") $.Values.database.enabled }}
+            # The platform tenant's workload co-locates with the control-plane in the
+            # platform database. This overlay binds the platform tenant's datasource to
+            # the platform database; the tenant id carries angle brackets, which a YAML
+            # key can express and an environment variable name cannot. It merges on top
+            # of the environment configuration as the active-profile config file.
+            - name: platform-db-override
+              mountPath: /app/config/application.yml
+              subPath: application.yml
+              readOnly: true
+            {{- end }}
+            {{- if eq $name "tenant-as" }}
+            # The tenant AS base configuration: the local keyless verify provider,
+            # KMS role algorithms, and the gRPC KMS routing with a LOCAL verify route.
+            - name: tenant-as-config
+              mountPath: /app/config/application.yml
+              subPath: application.yml
+              readOnly: true
+            {{- end }}
+            {{- if eq $name "tenant-kms" }}
+            # The tenant KMS base configuration: the trust policy for east-west
+            # callers (incl. the tenant AS signing-key seed) and the software provider.
+            - name: tenant-kms-config
+              mountPath: /app/config/application.yml
+              subPath: application.yml
+              readOnly: true
+            {{- end }}
             {{- if and (eq $name "platform") $.Values.platformKeystore.enabled }}
             # The platform keystore holds the platform AS cert/user and the
             # license-request instance cert. Mounted only in the platform service.
@@ -216,9 +412,52 @@ spec:
             - name: keystore
               mountPath: /keystore
             {{- end }}
+            {{- if eq $name "platform" }}
+            {{- /* License state is writable: the setup API writes the imported bundle's
+                   root CA to license.trust.rootCaPath here, so the platform trusts the
+                   installed license. Its parent directory is this volume. */}}
+            - name: license-state
+              mountPath: {{ dir $.Values.license.trust.rootCaPath | quote }}
+            {{- end }}
+            {{- if and (not $isAdminConsole) (ne $name "platform") $.Values.license.trust.existingSecret }}
+            {{- /* Satellites only READ the license root CA (their config points at this
+                   path); the platform writes its own copy into the writable license-state
+                   volume above. The installed license chains to this root. */}}
+            - name: license-root-ca
+              mountPath: /app/config/license-root-ca.pem
+              subPath: license-root-ca.pem
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if eq $name "platform" }}
+        - name: license-state
+          emptyDir: {}
+        {{- end }}
+        {{- if eq $name "tenant-as" }}
+        - name: tenant-as-config
+          configMap:
+            name: {{ include "edk-enterprise.fullname" $ }}-tenant-as-config
+        {{- end }}
+        {{- if eq $name "tenant-kms" }}
+        - name: tenant-kms-config
+          configMap:
+            name: {{ include "edk-enterprise.fullname" $ }}-tenant-kms-config
+        {{- end }}
+        {{- if and (not $isAdminConsole) $.Values.license.trust.existingSecret }}
+        - name: license-root-ca
+          secret:
+            secretName: {{ $.Values.license.trust.existingSecret }}
+            items:
+              - key: {{ $.Values.license.trust.rootCaKey }}
+                path: license-root-ca.pem
+        {{- end }}
+        {{- if and (eq $name "platform") $.Values.database.enabled }}
+        - name: platform-db-override
+          configMap:
+            name: {{ include "edk-enterprise.fullname" $ }}-platform-db-override
+        {{- end }}
         {{- if and (eq $name "platform") $.Values.platformKeystore.enabled }}
         - name: keystore
           persistentVolumeClaim:

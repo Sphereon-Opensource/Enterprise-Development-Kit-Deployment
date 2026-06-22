@@ -7,19 +7,38 @@ global:
 database:
   enabled: true
   dialect: postgresql
-  host: edk-postgres.default.svc.cluster.local
-  port: 5432
-  name: edk
-  existingSecret: edk-postgres
-  usernameKey: username
-  passwordKey: password
-  networkPolicy:
-    namespaceSelector:
-      matchLabels:
-        kubernetes.io/metadata.name: default
-    podSelector:
-      matchLabels:
-        app.kubernetes.io/name: postgresql
+  platform:
+    host: edk-platform-postgres.default.svc.cluster.local
+    port: 5432
+    name: platform
+    existingSecret: edk-platform-postgres
+    usernameKey: username
+    passwordKey: password
+    networkPolicy:
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+          app.kubernetes.io/instance: edk-platform-postgres
+  tenant:
+    host: edk-tenant-postgres.default.svc.cluster.local
+    port: 5432
+    name: tenant
+    existingSecret: edk-tenant-postgres
+    usernameKey: username
+    passwordKey: password
+    isolation: schema
+    schemaPattern: "tenant_{id}"
+    networkPolicy:
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+          app.kubernetes.io/instance: edk-tenant-postgres
 
 auth:
   enabled: true

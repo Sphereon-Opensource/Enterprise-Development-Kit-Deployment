@@ -35,7 +35,8 @@ For the private Nexus Docker repository, create a pull secret and reference it w
 | `global.imagePullSecrets` | `[]` | Pull secrets rendered into every service pod. |
 | `global.platformBaseDomain` | `example.com` | Customer-controlled base domain. The platform is `platform.<baseDomain>` and tenants are `<tenant-slug>.<baseDomain>`. |
 | `database.enabled` | `true` | Enables database environment wiring. |
-| `database.existingSecret` | `edk-postgres` | Secret containing database username/password. |
+| `database.platform.existingSecret` | `edk-platform-postgres` | Secret with credentials for the control-plane (platform) database. |
+| `database.tenant.existingSecret` | `edk-tenant-postgres` | Secret with credentials for the tenant workload database. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
 | `grpc.enabled` | `true` | Renders inbound gRPC only for platform and tenant-KMS, and renders gRPC peer endpoints for routed calls to those receivers. |
