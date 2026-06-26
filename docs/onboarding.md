@@ -183,6 +183,8 @@ Both helpers read `postman/EDK-Enterprise-Deployment.customer.postman_environmen
 The file contains Postman/provision variables only, including `baseDomain`,
 `tenantSlug`, `tenantName`, `licenseBundleZipPath`, `operatorEmail`, and
 `operatorPassword`. These are not Docker Compose or Helm startup variables.
+The operator OAuth callback is derived from the platform URL and the hosted
+session during sign-in; do not add or fill any separate callback variable.
 
 ### Provision script
 
@@ -214,7 +216,8 @@ Useful flags:
 
 The script expects the workload containers or pods to be running before tenant
 registration starts. It does not create endpoint bindings manually; it fails if
-tenant setup did not create the required gateway route metadata.
+tenant setup did not create the required gateway route metadata. Use it to
+verify that tenant setup created each protocol endpoint binding.
 
 ### Postman collection
 

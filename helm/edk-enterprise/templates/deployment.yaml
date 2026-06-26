@@ -111,6 +111,17 @@ spec:
               value: {{ $.Values.global.platformBaseDomain | quote }}
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
+            {{- $transportAudience := "" }}
+            {{- if eq $name "platform" }}{{- $transportAudience = (index $.Values.serviceIdentity.audiences "platform") }}{{- end }}
+            {{- if eq $name "tenant-kms" }}{{- $transportAudience = (index $.Values.serviceIdentity.audiences "tenant-kms") }}{{- end }}
+            {{- if $transportAudience }}
+            - name: SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE
+              value: {{ $transportAudience | quote }}
+            {{- end }}
+            {{- if eq $name "platform" }}
+            - name: EXTERNAL_BASE_URL
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            {{- end }}
             {{- /* East-west service identity + keystore secrets shared by the service containers.
                    The platform AS mints the service tokens the satellites present; the
                    satellites authenticate with the same internal client secret and read
@@ -133,7 +144,7 @@ spec:
                    AS stamp as token issuers. The platform host and tenant-AS host derive
                    from the installation base domain. */}}
             - name: EDK_PLATFORM_PUBLIC_URL
-              value: {{ printf "https://platform.%s" $.Values.global.platformBaseDomain | quote }}
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: EDK_PLATFORM_BASE_DOMAIN
               value: {{ $.Values.global.platformBaseDomain | quote }}
             {{- if $.Values.opentelemetry.enabled }}
@@ -245,6 +256,10 @@ spec:
             {{- end }}
             {{- end }}
             {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") }}
+            - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICE_TOKEN_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "tenant-kms" | quote }}
+            - name: TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
+              value: "true"
             {{- range $kmsService := list "key" "keys" "signature" "mac" "encryption" }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_TARGET
               value: "SERVER"
@@ -355,6 +370,11 @@ spec:
               value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
               value: {{ printf "http://%s-platform:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+            {{- $restAudience := index $.Values.serviceIdentity.audiences $name }}
+            {{- if $restAudience }}
+            - name: SERVER_REST_AUTH_EXPECTED_AUDIENCE
+              value: {{ $restAudience | quote }}
+            {{- end }}
             {{- /* Tenant AS issuers are dynamic. The platform writes
                    OAUTH2_AUTHORIZATION_SERVER public endpoint bindings during
                    tenant onboarding, and satellites trust tokens only when the
@@ -372,9 +392,17 @@ spec:
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-kms")) (index $.Values.services "tenant-kms").restPort | quote }}
             - name: TENANT_DID_PROXY_TARGET
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "did")) (index $.Values.services "did").restPort | quote }}
+            - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "platform" | quote }}
+            - name: NEXT_PUBLIC_TENANT_KMS_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "tenant-kms" | quote }}
+            - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "did" | quote }}
             {{- end }}
-            {{- with $svc.env }}
-            {{- toYaml . | nindent 12 }}
+            {{- range $env := $svc.env }}
+            {{- if not (and (eq $name "platform") (eq (get $env "name") "EXTERNAL_BASE_URL")) }}
+            {{- toYaml (list $env) | nindent 12 }}
+            {{- end }}
             {{- end }}
           {{- $probePath := $isAdminConsole | ternary "/admin-console/health" "/health" }}
           livenessProbe:

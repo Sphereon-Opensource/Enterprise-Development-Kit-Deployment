@@ -169,6 +169,7 @@ services:
       REST_ENABLED: "false"
       GRPC_ENABLED: "true"
       GRPC_PORT: "9090"
+      SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE: enterprise-platform
     volumes:
       - ./config/platform.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
@@ -341,6 +342,9 @@ services:
       PLATFORM_PROXY_TARGET: http://enterprise-platform:18080
       TENANT_KMS_PROXY_TARGET: http://enterprise-tenant-kms:8080
       TENANT_DID_PROXY_TARGET: http://enterprise-did:8080
+      NEXT_PUBLIC_PLATFORM_AUDIENCE: enterprise-platform
+      NEXT_PUBLIC_TENANT_KMS_AUDIENCE: enterprise-tenant-kms
+      NEXT_PUBLIC_TENANT_DID_AUDIENCE: enterprise-tenant-did
       PORT: "3000"
     # No host port mapping: reached via the gateway at
     # platform.<base-domain>/admin-console.

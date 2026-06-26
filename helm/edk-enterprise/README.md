@@ -94,6 +94,41 @@ and verifier remain backing workloads behind `platform.<baseDomain>` and
 `<tenant>.<baseDomain>` host/path routes. Runtime probes are Kubernetes
 orchestration concerns and must not be published as customer routes.
 
+## East-West Service Identity
+
+The chart renders internal service identity from one `serviceIdentity` contract:
+
+| Value | Purpose |
+| --- | --- |
+| `serviceIdentity.internalClientExistingSecret` | Secret containing the shared confidential-client secret used by internal service clients. |
+| `serviceIdentity.clientIds.<service>` | OAuth client id each satellite presents to the platform AS for client-credentials service tokens. |
+| `serviceIdentity.serviceIds.<service>` | Workload id the caller asserts as `X-Service-Id` on internal command transport. |
+| `serviceIdentity.audiences.<service>` | JWT audience expected by the receiving service. |
+
+These values drive platform internal OAuth clients, platform and tenant-KMS
+header trust bindings, satellite service-token env, receiver audience env,
+admin-console token-exchange audiences, and STS allowed audiences. Do not change
+one without changing the others.
+
+Internal identity headers are not credentials. A receiver may honor
+`X-Tenant-Id` or `X-Principal-Id` only after a bearer JWT validates, the token is
+a workload token, its client id or subject is bound to the asserted
+`X-Service-Id`, the token audience matches the receiver, and the receiver trust
+policy permits that override.
+
+DID, tenant-AS, issuer, and verifier use this contract for routed KMS commands.
+Their inbound bearer is addressed to the route-only service, so the KMS route
+asks the platform STS for a fresh workload JWT addressed to the tenant-KMS
+receiver audience instead of forwarding that inbound bearer. During tenant-AS
+signing-key provisioning, the inbound platform JWT is addressed to the tenant-AS
+provisioning endpoint and is terminated there; the AS-to-KMS hop uses the
+`tenant-as-service` confidential client to mint the tenant-KMS audience token.
+
+`platform.externalBaseUrl` is the canonical platform public origin and token
+issuer. The chart renders platform `EXTERNAL_BASE_URL` and
+`EDK_PLATFORM_PUBLIC_URL` from that value and fails rendering if
+`platform.bootstrap.issuer` differs.
+
 ## Database Boundary
 
 The platform database and tenant workload database are separate trust
@@ -146,8 +181,10 @@ fronted on the operator/platform host
 server, and authenticates operators against the platform AS via the OAuth
 callback `/admin-console/callback`. The `/admin-console` prefix must NEVER be
 stripped at the proxy - Next emits absolute `/admin-console/_next/...` asset
-URLs. The pod sets `NEXT_PUBLIC_BASE_PATH=/admin-console`, `PORT=3000`, and
-the internal proxy target variables.
+URLs. The pod sets `NEXT_PUBLIC_BASE_PATH=/admin-console`, `PORT=3000`, the
+internal proxy target variables, and the `NEXT_PUBLIC_PLATFORM_AUDIENCE`,
+`NEXT_PUBLIC_TENANT_KMS_AUDIENCE`, and `NEXT_PUBLIC_TENANT_DID_AUDIENCE` values
+from `serviceIdentity.audiences`.
 
 On the Gateway API path the explicit `/admin-console` PathPrefix route is more
 specific than the platform service's `/` catch-all, so `/admin-console/*` routes

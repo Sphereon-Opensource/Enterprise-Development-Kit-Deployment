@@ -56,6 +56,11 @@ data:
       routing:
         modules:
           kms:
+            # Provisioning requests are addressed to tenant-AS, not tenant-KMS,
+            # so this routed KMS hop uses the AS workload token for the KMS
+            # receiver audience instead of forwarding the inbound bearer.
+            serviceTokenAudience: {{ index .Values.serviceIdentity.audiences "tenant-kms" | quote }}
+            preferServiceTokenOverSessionBearer: true
             services:
               key: &tenantKmsGrpcRoute
                 target: SERVER

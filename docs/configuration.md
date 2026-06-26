@@ -286,6 +286,55 @@ the first-run setup binds to (the default is `license`). See
 [Secret backends](secret-backends.md) for choosing and wiring a provider and for
 the secret reference syntax.
 
+## East-west service identity and STS
+
+Internal service-to-service calls use platform-issued JWTs, not public gateway
+routes and not trusted headers alone. The platform authorization server is the
+STS for these workload tokens. Each satellite has a confidential client id, a
+shared internal client secret, an asserted workload service id, and a receiver
+audience. These values must move as one contract:
+
+| Service | STS client id | Asserted service id | Receiver audience |
+| --- | --- | --- | --- |
+| platform | n/a | n/a | `enterprise-platform` |
+| tenant-KMS | `kms-service` | `service-crypto` | `enterprise-tenant-kms` |
+| DID | `did-service` | `service-data` | `enterprise-tenant-did` |
+| issuer | `issuer-service` | `service-oid4vci` | `enterprise-issuer` |
+| verifier | `verifier-service` | `service-oid4vp` | `enterprise-verifier` |
+| tenant-AS | `tenant-as-service` | `service-tenant-as` | outbound workload caller only |
+
+In Helm the contract lives under `serviceIdentity.clientIds`,
+`serviceIdentity.serviceIds`, and `serviceIdentity.audiences`. The chart renders
+the platform internal OAuth clients, platform and tenant-KMS header trust
+bindings, service token endpoints, receiver audiences, admin-console token
+exchange audiences, and NetworkPolicy peer edges from those values. In Docker
+Compose the same contract is represented by the mounted `compose/config/*.yml`
+files and the admin-console environment variables.
+
+The binary/gRPC path is security-sensitive because trusted workload tokens may
+carry tenant context through internal headers. A receiver may honor
+`X-Tenant-Id` or `X-Principal-Id` only after all of these checks succeed:
+
+- the bearer JWT validates cryptographically;
+- the token is a workload token, not a human/operator token;
+- the JWT client id or subject is bound to the asserted `X-Service-Id`;
+- the JWT `aud` contains the receiving service audience;
+- the receiver's header trust policy explicitly allows the internal override.
+
+If any check fails, the request fails closed or the header is ignored. Do not use
+`X-Tenant-Id`, `X-Principal-Id`, or `X-Service-Id` as credentials. They are
+context hints after JWT validation and service binding, never proof of identity
+by themselves.
+
+KMS routing is intentionally a two-token trust flow whenever the inbound bearer
+is addressed to a route-only service. DID, tenant-AS, issuer, and verifier
+validate and terminate the inbound JWT addressed to their own receiver audience,
+then call tenant-KMS with their own workload JWT for the `enterprise-tenant-kms`
+audience. Tenant-AS signing-key provisioning is the strictest example: the
+platform calls tenant-AS with a short-lived provisioning JWT whose audience is
+the tenant provisioning endpoint, and that provisioning JWT must not be
+forwarded to tenant-KMS.
+
 ## gRPC routing between services
 
 DID, tenant-AS, issuer, verifier, and tenant-KMS call the platform service for
@@ -315,7 +364,15 @@ module or narrow a route:
 TRANSPORT_ROUTING_MODULES_<MODULE>_TARGET=SERVER
 TRANSPORT_ROUTING_MODULES_<MODULE>_TRANSPORT=HTTP|GRPC
 TRANSPORT_ROUTING_MODULES_<MODULE>_ENDPOINT=<scheme>://<service-host>:<port>
+TRANSPORT_ROUTING_MODULES_<MODULE>_SERVICE_TOKEN_AUDIENCE=<receiver-audience>
+TRANSPORT_ROUTING_MODULES_<MODULE>_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER=true|false
 ```
+
+For the KMS module on DID, tenant-AS, issuer, and verifier, the deployment sets
+`TRANSPORT_ROUTING_MODULES_KMS_SERVICE_TOKEN_AUDIENCE=enterprise-tenant-kms`
+and `TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER=true`.
+That keeps user/provisioning tokens scoped to their original receiver while the
+KMS hop receives a token addressed to tenant-KMS.
 
 The intended peer call graph:
 
@@ -416,6 +473,9 @@ The container takes these inputs:
 | `PLATFORM_PROXY_TARGET` | Internal platform upstream URL | Internal platform target for the setup gate and `/admin-console/api/platform/*` proxy. |
 | `TENANT_KMS_PROXY_TARGET` | Internal tenant KMS upstream URL | Internal tenant KMS target for `/admin-console/api/kms/*` proxy. |
 | `TENANT_DID_PROXY_TARGET` | Internal DID upstream URL | Internal DID target for `/admin-console/api/did/*` proxy. |
+| `NEXT_PUBLIC_PLATFORM_AUDIENCE` | `enterprise-platform` | STS token-exchange audience used when the console calls platform-config tenant APIs. |
+| `NEXT_PUBLIC_TENANT_KMS_AUDIENCE` | `enterprise-tenant-kms` | STS token-exchange audience used when the console calls tenant-KMS APIs. |
+| `NEXT_PUBLIC_TENANT_DID_AUDIENCE` | `enterprise-tenant-did` | STS token-exchange audience used when the console calls DID APIs. |
 | `PORT` | `3000` | The port the app listens on. |
 
 The platform service also has internal east-west upstreams under
@@ -438,6 +498,11 @@ default to `https://platform.<base-domain>/admin-console/api/*`. The Next.js ser
 proxies those requests to the internal upstreams above. Gateway root `/api/*` routes
 may still be enabled for authenticated automation and diagnostics through the
 gateway, but the console does not depend on them.
+
+Platform-admin and platform-config calls use the operator bearer. Tenant-KMS and
+DID calls use RFC 8693 token exchange against the platform AS with the configured
+tenant service audience; the console must not send tenant identity through
+`X-Tenant-Id` headers.
 
 ### Per-host authorization server
 

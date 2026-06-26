@@ -35,17 +35,17 @@ data:
           tenant_mismatch: header_wins
           principal_mismatch: header_wins
         trusted_service_ids:
-          - service-crypto
-          - service-data
-          - service-oid4vci
-          - service-oid4vp
-          - service-tenant-as
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
         service_client_bindings:
-          "[service-crypto]": kms-service
-          "[service-data]": did-service
-          "[service-oid4vci]": issuer-service
-          "[service-oid4vp]": verifier-service
-          "[service-tenant-as]": tenant-as-service
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
     kms:
       # Internal-only software provider used before tenant platform config has
       # been pulled. It gives tenant-KMS local crypto support for validating

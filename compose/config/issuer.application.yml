@@ -73,6 +73,8 @@ transport:
   routing:
     modules:
       kms:
+        serviceTokenAudience: enterprise-tenant-kms
+        preferServiceTokenOverSessionBearer: true
         services:
           key: &tenantKmsGrpcRoute
             target: SERVER

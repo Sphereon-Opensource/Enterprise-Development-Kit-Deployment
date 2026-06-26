@@ -176,6 +176,15 @@ serviceIdentity:
     did: service-data
     issuer: service-oid4vci
     verifier: service-oid4vp
+  # Token audiences for platform-issued east-west service tokens. Receivers use
+  # these to reject a valid workload token minted for a different service before
+  # considering trusted internal identity headers.
+  audiences:
+    platform: enterprise-platform
+    tenant-kms: enterprise-tenant-kms
+    did: enterprise-tenant-did
+    issuer: enterprise-issuer
+    verifier: enterprise-verifier
   # In-network surfaces each satellite admits without an operator bearer. The
   # tenant-AS signing-key provisioning endpoint is deliberately absent here:
   # it must validate the platform-issued bearer during tenant resolution so the
