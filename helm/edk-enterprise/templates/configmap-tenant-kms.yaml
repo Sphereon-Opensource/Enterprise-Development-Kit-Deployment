@@ -46,25 +46,36 @@ data:
           "[service-oid4vci]": issuer-service
           "[service-oid4vp]": verifier-service
           "[service-tenant-as]": tenant-as-service
-    # Per-tenant software KMS provider. Key material persists in the tenant-kms
-    # keystore volume; the path is derived as <root>/<tenantId>/<providerId>.p12.
     kms:
+      # Internal-only software provider used before tenant platform config has
+      # been pulled. It gives tenant-KMS local crypto support for validating
+      # platform bearer signatures; REST discovery hides providers marked
+      # system=true.
+      providers:
+        internal-token-verifier:
+          type: software
+          id: internal-token-verifier
+          enabled: true
+          system: true
+          role: internal
+          exposePrivateKeysDuringGeneration: false
+          persistKeysDuringGeneration: false
+          keyStore:
+            type: memory
+            id: internal-token-verifier-memory
+            keyVisibility: public
+            overwriteAlias: true
+      # Tenant-specific software KMS providers are authored by the platform during
+      # tenant registration and exposed through platform-config-remote as
+      # kms.providers.<tenant-slug>.*. Tenant-KMS must not define a generic local
+      # provider named software because it would be visible through
+      # /api/kms/v1/providers next to the protected tenant-slug provider. Key
+      # material persists in the tenant-kms keystore volume.
       enterprise:
         lifecycle:
           enabled: true
           interval: PT1H
           run-on-startup: true
-      providers:
-        _tenant_:
-          id: _tenant_
-          type: software
-          enabled: true
-          autoCreateCertificate: true
-          keystore:
-            type: pkcs12
-            id: _tenant_
-            password: ${env:EDK_KEYSTORE_PASSWORD}
-            keystoreRoot: /keystore
     crypto:
       kms:
         roles:

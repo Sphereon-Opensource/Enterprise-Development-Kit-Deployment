@@ -7,7 +7,7 @@
 # Secrets expected in the namespace:
 #   edk-platform-postgres / edk-tenant-postgres : { username, password }
 #   edk-secrets          : { internal-client-secret, keystore-password }
-#   edk-license-root-ca  : { license-root-ca.pem }   (the QA/portal license root)
+#   edk-license-root-ca  : { license-root-ca.pem }   (evaluation license root)
 
 global:
   imageTag: 0.25.0-SNAPSHOT
@@ -53,7 +53,6 @@ platform:
     ownerInitialCredential: operator-initial-Passw0rd
     userProviderMode: local
     deploymentMode: dev
-    deploymentId: deployment-1
     allowLocalHttpAs: true
     # Reached by `kubectl port-forward ... 18080:8080`, so the Host header is
     # localhost:18080; map it directly to the platform tenant.
@@ -68,7 +67,6 @@ keystore:
   passwordKey: keystore-password
 
 license:
-  installationId: 11111111-1111-4111-8111-111111111111
   trust:
     existingSecret: edk-license-root-ca
     rootCaKey: license-root-ca.pem
@@ -98,13 +96,13 @@ services:
       - name: ONBOARDING_UI_BASE_URL
         value: http://localhost:18080
       - name: PLATFORM_SETUP_KMS_PROVIDER_ID
-        value: _license_
+        value: license
       - name: PLATFORM_SETUP_LICENSE_MATERIAL_DEFAULT_ALIAS
         value: license-recipient
       - name: LICENSE_RECIPIENT_KMS_ENABLED
         value: "true"
       - name: LICENSE_RECIPIENT_KMS_PROVIDER_ID
-        value: _license_
+        value: license
       - name: LICENSE_RECIPIENT_KMS_ALIAS
         value: license-recipient
   tenant-as:

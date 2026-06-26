@@ -12,7 +12,7 @@
   Output (compose/gateway/certs/):
     wildcard.crt / wildcard.key   server cert for *.saas.localtest.me, mounted into Traefik
     local-ca.crt                  the local CA; trust this in your OS/browser/wallet
-    local-truststore.p12          JVM truststore holding the CA (password: changeit), mounted
+    local-truststore.p12          PKCS#12 truststore holding the CA (password: changeit), mounted
                                   into the service containers so they trust the gateway when
                                   fetching per-tenant JWKS over TLS
 

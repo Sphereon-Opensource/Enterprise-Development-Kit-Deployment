@@ -1,25 +1,26 @@
 <#
 .SYNOPSIS
   Onboards a freshly deployed Sphereon EDK enterprise platform and its first
-  production tenant by calling the published REST APIs directly.
+  production tenant by calling the published gateway REST APIs.
 
 .DESCRIPTION
   This script runs against a RUNNING deployment (the Docker Compose
   stack or a Kubernetes install). It performs, in order:
 
-    1. Waits for the enterprise services to report healthy.
+    1. Waits for the platform gateway setup-status route to become reachable.
     2. Platform setup (only if the setup gate is still open): bootstraps the
        operator account and imports your protected license bundle.
     3. Signs the operator in through the platform authorization-code flow with
        PKCE, carrying cookies and the login form CSRF tuple like a browser.
     4. Registers the first production tenant.
-    5. Binds the tenant's three public endpoints (issuer, verifier, AS).
-    6. Prints a summary with the operator console URL and the tenant's public
-       metadata URLs.
+    5. Verifies the tenant gateway route bindings created by tenant setup.
+    6. Prints a summary with the operator console URL and the tenant gateway.
 
   Prerequisites:
-    - A running EDK enterprise deployment reachable at platform.<baseDomain>
-      and <tenantSlug>.<baseDomain>, or explicit service URLs in the environment file.
+    - A running EDK enterprise platform reachable at platform.<baseDomain>,
+      or an explicit platformUrl in the environment file. Tenant AS, tenant KMS,
+      and DID must be running before tenant registration, because registration
+      provisions signing material and the tenant DID through east-west services.
     - A Sphereon protected license bundle ZIP (set in the environment file as
       licenseBundleZipPath).
     - Node.js installed (used to parse the environment JSON and compute the
@@ -28,8 +29,9 @@
 
   Configuration is read from the kit's Postman customer environment file
   (..\postman\EDK-Enterprise-Deployment.customer.postman_environment.json by
-  default). The default environment derives public service URLs from baseDomain
-  and tenantSlug. Override individual values with the flags below.
+  default). The default environment derives the platform gateway URL and tenant
+  gateway URL from baseDomain and tenantSlug. Override the tenant gateway only
+  for non-standard gateway deployments.
 
 .EXAMPLE
   .\provision.ps1
@@ -46,6 +48,7 @@ param(
   [string]$TenantName,
   [string]$TenantSlug,
   [switch]$SkipSetup,
+  [switch]$AllowInsecureTls,
   [switch]$Help
 )
 
@@ -54,6 +57,21 @@ $ErrorActionPreference = "Stop"
 if ($Help) {
   Get-Help $MyInvocation.MyCommand.Path -Detailed
   exit 0
+}
+
+if ($AllowInsecureTls) {
+  Write-Host "WARNING: TLS certificate validation is disabled for this local provision run." -ForegroundColor Yellow
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  if (-not ("EdkProvisionTrustAllCertsPolicy" -as [type])) {
+    Add-Type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class EdkProvisionTrustAllCertsPolicy : ICertificatePolicy {
+  public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) { return true; }
+}
+"@
+  }
+  [System.Net.ServicePointManager]::CertificatePolicy = New-Object EdkProvisionTrustAllCertsPolicy
 }
 
 function Fail([string]$message) {
@@ -96,13 +114,20 @@ function Cfg([string]$key) {
   return [string]$val
 }
 
+function New-Base64UrlSecret([int]$Bytes = 32) {
+  $data = New-Object byte[] $Bytes
+  $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $rng.GetBytes($data)
+  } finally {
+    $rng.Dispose()
+  }
+  return [Convert]::ToBase64String($data).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+}
+
 # --- Resolve effective config (flags override the environment file) -----------
 $platformUrl = Cfg 'platformUrl'
-$kmsUrl      = Cfg 'kmsUrl'
-$didUrl      = Cfg 'didUrl'
-$asUrl       = Cfg 'asUrl'
-$issuerUrl   = Cfg 'issuerUrl'
-$verifierUrl = Cfg 'verifierUrl'
+$tenantGatewayUrl = Cfg 'tenantGatewayUrl'
 $baseDomain  = Cfg 'baseDomain'
 
 $operatorEmail        = Cfg 'operatorEmail'
@@ -110,16 +135,17 @@ $operatorDisplayName  = Cfg 'operatorDisplayName'
 if ([string]::IsNullOrWhiteSpace($operatorDisplayName)) { $operatorDisplayName = 'Platform Operator' }
 $operatorPassword     = Cfg 'operatorPassword'
 $operatorRedirectUri  = Cfg 'operatorRedirectUri'
+$adminConsoleUrl      = Cfg 'adminConsoleUrl'
 $operatorCodeVerifier = Cfg 'operatorCodeVerifier'
 $licenseBundleZipPath = Cfg 'licenseBundleZipPath'
+if ([string]::IsNullOrWhiteSpace($operatorCodeVerifier)) {
+  $operatorCodeVerifier = New-Base64UrlSecret 32
+}
 
 if ([string]::IsNullOrWhiteSpace($TenantName)) { $TenantName = Cfg 'tenantName' }
 if ([string]::IsNullOrWhiteSpace($TenantSlug)) { $TenantSlug = Cfg 'tenantSlug' }
 
 $tenantHost = Cfg 'tenantHost'
-$issuerPublicHost   = Cfg 'issuerPublicHost'
-$verifierPublicHost = Cfg 'verifierPublicHost'
-$asPublicHost       = Cfg 'asPublicHost'
 
 if (-not [string]::IsNullOrWhiteSpace($baseDomain)) {
   $baseDomain = $baseDomain -replace '^https?://', ''
@@ -132,23 +158,24 @@ if ([string]::IsNullOrWhiteSpace($platformUrl) -and -not [string]::IsNullOrWhite
   $platformUrl = "https://platform.$baseDomain"
 }
 if (-not [string]::IsNullOrWhiteSpace($tenantHost)) {
-  $tenantUrl = "https://$tenantHost"
-  if ([string]::IsNullOrWhiteSpace($kmsUrl))      { $kmsUrl      = $tenantUrl }
-  if ([string]::IsNullOrWhiteSpace($didUrl))      { $didUrl      = $tenantUrl }
-  if ([string]::IsNullOrWhiteSpace($asUrl))       { $asUrl       = $tenantUrl }
-  if ([string]::IsNullOrWhiteSpace($issuerUrl))   { $issuerUrl   = $tenantUrl }
-  if ([string]::IsNullOrWhiteSpace($verifierUrl)) { $verifierUrl = $tenantUrl }
-  if ([string]::IsNullOrWhiteSpace($issuerPublicHost))   { $issuerPublicHost   = $tenantHost }
-  if ([string]::IsNullOrWhiteSpace($verifierPublicHost)) { $verifierPublicHost = $tenantHost }
-  if ([string]::IsNullOrWhiteSpace($asPublicHost))       { $asPublicHost       = $tenantHost }
+  if ([string]::IsNullOrWhiteSpace($tenantGatewayUrl)) { $tenantGatewayUrl = "https://$tenantHost" }
+}
+if ([string]::IsNullOrWhiteSpace($tenantHost) -and -not [string]::IsNullOrWhiteSpace($tenantGatewayUrl)) {
+  try {
+    $tenantHost = ([System.Uri]$tenantGatewayUrl).Host
+  } catch { }
 }
 if ([string]::IsNullOrWhiteSpace($operatorRedirectUri) -and -not [string]::IsNullOrWhiteSpace($platformUrl)) {
   $operatorRedirectUri = "$($platformUrl.TrimEnd('/'))/admin-console/callback"
+}
+if ([string]::IsNullOrWhiteSpace($adminConsoleUrl) -and -not [string]::IsNullOrWhiteSpace($platformUrl)) {
+  $adminConsoleUrl = "$($platformUrl.TrimEnd('/'))/admin-console"
 }
 
 if ([string]::IsNullOrWhiteSpace($platformUrl)) { Fail "platformUrl is not set in the environment file." }
 if ([string]::IsNullOrWhiteSpace($TenantName))  { Fail "tenantName is not set (use -TenantName or set it in the environment file)." }
 if ([string]::IsNullOrWhiteSpace($TenantSlug))  { Fail "tenantSlug is not set (use -TenantSlug or set it in the environment file)." }
+if ([string]::IsNullOrWhiteSpace($tenantHost))  { Fail "tenant gateway host could not be derived. Set baseDomain and tenantSlug, or set tenantGatewayUrl." }
 
 $platformUrl = $platformUrl.TrimEnd('/')
 
@@ -185,6 +212,7 @@ function Invoke-LicenseBundle {
       '-s', '-o', $tmp, '-w', '%{http_code}', '-X', 'POST', $Uri,
       '-F', "bundle=@$licenseBundleZipPath;type=application/zip"
     )
+    if ($AllowInsecureTls) { $args = @('-k') + $args }
     $code = & curl.exe @args
     $out = Get-Content -Path $tmp -Raw
     if ($LASTEXITCODE -ne 0 -or -not ($code -match '^2')) {
@@ -196,31 +224,39 @@ function Invoke-LicenseBundle {
   }
 }
 
-# --- Step 1: wait for health --------------------------------------------------
-function Wait-Health {
-  param([hashtable]$Services, [int]$Retries = 30, [int]$DelaySeconds = 4)
-  Write-Host "Waiting for services to report healthy..." -ForegroundColor Cyan
-  foreach ($name in $Services.Keys) {
-    $url = $Services[$name]
-    if ([string]::IsNullOrWhiteSpace($url)) { continue }
-    $healthUrl = "$($url.TrimEnd('/'))/health"
-    $ok = $false
-    for ($i = 0; $i -lt $Retries; $i++) {
-      try {
-        $resp = Invoke-WebRequest -Uri $healthUrl -Method Get -UseBasicParsing -TimeoutSec 10
-        if ($resp.StatusCode -eq 200) { $ok = $true; break }
-      } catch { }
-      Start-Sleep -Seconds $DelaySeconds
-    }
-    if ($ok) { Write-Host "  [ok]   $name ($healthUrl)" -ForegroundColor Green }
-    else { Fail "$name did not become healthy at $healthUrl" }
+function Get-LocationHeader {
+  param([object]$Response)
+  if ($null -eq $Response) { return $null }
+  if ($Response -is [System.Net.HttpWebResponse]) {
+    return $Response.GetResponseHeader('Location')
   }
+  return $Response.Headers['Location']
 }
 
-$services = [ordered]@{
-  platform = $platformUrl
+# --- Step 1: wait for platform gateway reachability ---------------------------
+function Wait-PlatformGateway {
+  param([string]$Url, [int]$Retries = 30, [int]$DelaySeconds = 4)
+  $setupStatusUrl = "$($Url.TrimEnd('/'))/api/platform/setup/v1/status"
+  Write-Host "Waiting for the platform gateway route to become reachable..." -ForegroundColor Cyan
+  for ($i = 0; $i -lt $Retries; $i++) {
+    try {
+      $resp = Invoke-WebRequest -Uri $setupStatusUrl -Method Get -UseBasicParsing -TimeoutSec 10
+      if ($resp.StatusCode -eq 200) {
+        Write-Host "  [ok]   platform ($setupStatusUrl)" -ForegroundColor Green
+        return
+      }
+    } catch {
+      if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404) {
+        Write-Host "  [ok]   platform ($setupStatusUrl returned 404: setup already closed)" -ForegroundColor Green
+        return
+      }
+    }
+    Start-Sleep -Seconds $DelaySeconds
+  }
+  Fail "platform did not become reachable at $setupStatusUrl"
 }
-Wait-Health -Services $services
+
+Wait-PlatformGateway -Url $platformUrl
 
 # --- Step 2: platform setup (idempotent) --------------------------------------
 $setupStatusUrl = "$platformUrl/api/platform/setup/v1/status"
@@ -301,24 +337,24 @@ $state = "operator-state-$([guid]::NewGuid().ToString('N').Substring(0,12))"
 
 function UrlEncode([string]$s) { return [System.Uri]::EscapeDataString($s) }
 
-# 3.1 Start the authorization request. Do not follow redirects; read Location.
+# 3.1 Start the authorization request. prompt=login forces a fresh login form
+# even when a previous operator browser session cookie exists. Follow the first
+# redirect to the login page. Windows PowerShell 5.1 can throw InvalidOperationException for
+# -MaximumRedirection 0 redirects without exposing the response, so capture the
+# login page as the stable browser-equivalent step.
 $authorizeUrl = "$platformUrl/authorize?response_type=code&client_id=platform-operator-cli" +
-  "&redirect_uri=$(UrlEncode $operatorRedirectUri)&scope=openid&state=$state" +
+  "&redirect_uri=$(UrlEncode $operatorRedirectUri)&scope=openid&state=$state&prompt=login" +
   "&code_challenge=$codeChallenge&code_challenge_method=S256"
 
 $loginPageUrl = $null
+$loginHtml = ""
 try {
-  $resp = Invoke-WebRequest -Uri $authorizeUrl -Method Get -MaximumRedirection 0 `
+  $resp = Invoke-WebRequest -Uri $authorizeUrl -Method Get -MaximumRedirection 5 `
     -SessionVariable opSession -UseBasicParsing -ErrorAction Stop
-  $loginPageUrl = $resp.Headers['Location']
+  $loginPageUrl = $resp.BaseResponse.ResponseUri.AbsoluteUri
+  $loginHtml = $resp.Content
 } catch {
-  # 5.1: a 302 surfaces as a terminating error when MaximumRedirection is 0.
-  $r = $_.Exception.Response
-  if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
-    $loginPageUrl = $r.Headers['Location']
-  } else {
-    Fail "authorize request did not redirect to the login page: $($_.Exception.Message)"
-  }
+  Fail "authorize request did not reach the login page: $($_.Exception.Message)"
 }
 if ([string]::IsNullOrWhiteSpace($loginPageUrl)) { Fail "authorize did not return a login page Location." }
 if ($loginPageUrl -notmatch '^https?://') { $loginPageUrl = "$platformUrl$loginPageUrl" }
@@ -328,13 +364,15 @@ $sessionId = $null; $returnUrl = $null
 if ($loginPageUrl -match '[?&]session_id=([^&]+)') { $sessionId = [System.Uri]::UnescapeDataString($Matches[1]) }
 if ($loginPageUrl -match '[?&]return_url=([^&]+)') { $returnUrl = [System.Uri]::UnescapeDataString($Matches[1]) }
 
-# 3.2 Load the login page (sets CSRF cookie, embeds tab_id and session_code).
-$loginHtml = ""
-try {
-  $resp = Invoke-WebRequest -Uri $loginPageUrl -Method Get -WebSession $opSession -UseBasicParsing -ErrorAction Stop
-  $loginHtml = $resp.Content
-} catch {
-  Fail "Failed to load operator login page: $($_.Exception.Message)"
+# 3.2 Load the login page if it was not already returned by the authorize
+# redirect chain (sets CSRF cookie, embeds tab_id and session_code).
+if ([string]::IsNullOrWhiteSpace($loginHtml)) {
+  try {
+    $resp = Invoke-WebRequest -Uri $loginPageUrl -Method Get -WebSession $opSession -UseBasicParsing -ErrorAction Stop
+    $loginHtml = $resp.Content
+  } catch {
+    Fail "Failed to load operator login page: $($_.Exception.Message)"
+  }
 }
 $tabId = $null; $sessionCode = $null
 if ($loginHtml -match 'name="tab_id"\s+value="([^"]+)"') { $tabId = $Matches[1] }
@@ -351,34 +389,39 @@ if ($sessionCode) { $loginBody['session_code']  = $sessionCode }
 if ($returnUrl)   { $loginBody['return_url']    = $returnUrl }
 
 $callbackUrl = $null
+$redirectWithCode = $null
 try {
   $resp = Invoke-WebRequest -Uri "$platformUrl/login" -Method Post -Body $loginBody `
-    -WebSession $opSession -MaximumRedirection 0 -UseBasicParsing -ErrorAction Stop
-  $callbackUrl = $resp.Headers['Location']
+    -WebSession $opSession -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
+  $redirectWithCode = $resp.BaseResponse.ResponseUri.AbsoluteUri
 } catch {
   $r = $_.Exception.Response
   if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
-    $callbackUrl = $r.Headers['Location']
+    $callbackUrl = Get-LocationHeader $r
   } else {
     Fail "Operator login failed: $($_.Exception.Message)"
   }
 }
-if ([string]::IsNullOrWhiteSpace($callbackUrl)) { Fail "Login did not return a callback Location." }
-if ($callbackUrl -match 'error=invalid_credentials') { Fail "Operator login rejected: invalid credentials." }
-if ($callbackUrl -notmatch '^https?://') { $callbackUrl = "$platformUrl$callbackUrl" }
+if ([string]::IsNullOrWhiteSpace($redirectWithCode)) {
+  if ([string]::IsNullOrWhiteSpace($callbackUrl)) { Fail "Login did not return a callback Location." }
+  if ($callbackUrl -match 'error=invalid_credentials') { Fail "Operator login rejected: invalid credentials." }
+  if ($callbackUrl -notmatch '^https?://') { $callbackUrl = "$platformUrl$callbackUrl" }
+}
 
-# 3.4 Resume the authorization callback to obtain the authorization code.
-$redirectWithCode = $null
-try {
-  $resp = Invoke-WebRequest -Uri $callbackUrl -Method Get -WebSession $opSession `
-    -MaximumRedirection 0 -UseBasicParsing -ErrorAction Stop
-  $redirectWithCode = $resp.Headers['Location']
-} catch {
-  $r = $_.Exception.Response
-  if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
-    $redirectWithCode = $r.Headers['Location']
-  } else {
-    Fail "Authorization callback failed: $($_.Exception.Message)"
+# 3.4 Resume the authorization callback to obtain the authorization code when
+# the login POST did not already follow through to the final redirect URI.
+if ([string]::IsNullOrWhiteSpace($redirectWithCode)) {
+  try {
+    $resp = Invoke-WebRequest -Uri $callbackUrl -Method Get -WebSession $opSession `
+      -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
+    $redirectWithCode = $resp.BaseResponse.ResponseUri.AbsoluteUri
+  } catch {
+    $r = $_.Exception.Response
+    if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
+      $redirectWithCode = Get-LocationHeader $r
+    } else {
+      Fail "Authorization callback failed: $($_.Exception.Message)"
+    }
   }
 }
 if ([string]::IsNullOrWhiteSpace($redirectWithCode)) { Fail "Callback did not return a redirect with code." }
@@ -412,6 +455,8 @@ $tenantBody = @{
   name          = $TenantName
   description   = "$TenantName issuing and verification tenant"
   slug          = $TenantSlug
+  addIssuer     = $true
+  addVerifier   = $true
   owner         = @{
     type        = 'local'
     email       = "admin@$TenantSlug.example"
@@ -432,7 +477,7 @@ try {
   if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
   if ($status -eq 409) {
     Write-Host "  Tenant '$TenantSlug' already exists; continuing." -ForegroundColor Yellow
-    # Try to resolve its id from the listing so endpoint binding can proceed.
+    # Try to resolve its id from the listing so endpoint verification can proceed.
     try {
       $list = Invoke-RestMethod -Method Get -Uri $tenantsUrl -Headers @{ Authorization = "Bearer $operatorToken" }
       $items = if ($list.items) { $list.items } elseif ($list -is [System.Array]) { $list } else { $list.tenants }
@@ -443,51 +488,36 @@ try {
   }
 }
 if ([string]::IsNullOrWhiteSpace($tenantId)) {
-  Fail "Could not determine tenantId; cannot bind public endpoints."
+  Fail "Could not determine tenantId; cannot verify tenant gateway endpoint bindings."
 }
 
-# --- Step 5: bind the three public endpoints ----------------------------------
-function Bind-Endpoint {
-  param([string]$Kind, [string]$PublicHost)
-  if ([string]::IsNullOrWhiteSpace($PublicHost)) {
-    Write-Host "  Skipping $Kind (no public host configured)." -ForegroundColor Yellow
-    return
-  }
-  $url = "$platformUrl/api/platform/admin/v1/tenants/$tenantId/public-endpoints/$Kind"
-  $null = Invoke-Json -Method Put -Uri $url -BearerToken $operatorToken -Body @{
-    host            = $PublicHost
-    enabled         = $true
-    primaryEndpoint = $true
-  }
-  Write-Host "  Bound $Kind -> $PublicHost" -ForegroundColor Green
-}
-
-Write-Host "Binding public endpoints..." -ForegroundColor Cyan
-Bind-Endpoint -Kind 'OID4VCI_ISSUER' -PublicHost $issuerPublicHost
-Bind-Endpoint -Kind 'OID4VP_VERIFIER' -PublicHost $verifierPublicHost
-Bind-Endpoint -Kind 'OAUTH2_AUTHORIZATION_SERVER' -PublicHost $asPublicHost
-
-# Read the bindings back for confirmation.
+# --- Step 5: verify tenant setup-created gateway endpoint bindings ------------
+Write-Host "Verifying tenant setup-created gateway protocol routes..." -ForegroundColor Cyan
 $bound = Invoke-Json -Method Get -BearerToken $operatorToken `
   -Uri "$platformUrl/api/platform/admin/v1/tenants/$tenantId/public-endpoints"
+$bindingJson = $bound | ConvertTo-Json -Depth 20
+foreach ($kind in @('OID4VCI_ISSUER', 'OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER')) {
+  if ($bindingJson -notmatch [regex]::Escape($kind)) {
+    Fail "Tenant setup did not create required gateway endpoint binding '$kind'."
+  }
+}
+if ($bindingJson -notmatch [regex]::Escape($tenantHost)) {
+  Fail "Tenant setup gateway endpoint bindings do not include expected host '$tenantHost'."
+}
+Write-Host "  Verified platform-created route bindings for $tenantHost." -ForegroundColor Green
 
 # --- Step 6: summary ----------------------------------------------------------
 Write-Host ""
 Write-Host "==================== Tenant onboarded ====================" -ForegroundColor Green
-Write-Host "Operator console : $platformUrl"
+Write-Host "Operator console : $adminConsoleUrl"
 Write-Host "Tenant           : $TenantName [$TenantSlug] ($tenantId)"
+Write-Host "Tenant gateway   : $tenantGatewayUrl"
 Write-Host ""
-if (-not [string]::IsNullOrWhiteSpace($issuerPublicHost)) {
-  Write-Host "Issuer metadata  : https://$issuerPublicHost/.well-known/openid-credential-issuer"
-}
-if (-not [string]::IsNullOrWhiteSpace($asPublicHost)) {
-  Write-Host "AS metadata      : https://$asPublicHost/.well-known/oauth-authorization-server"
-}
-if (-not [string]::IsNullOrWhiteSpace($verifierPublicHost)) {
-  Write-Host "Verifier host    : https://$verifierPublicHost"
-}
-if (-not [string]::IsNullOrWhiteSpace($issuerPublicHost)) {
-  Write-Host "did.json         : https://$issuerPublicHost/.well-known/did.json"
+if (-not [string]::IsNullOrWhiteSpace($tenantGatewayUrl)) {
+  $tenantGatewayBase = $tenantGatewayUrl.TrimEnd('/')
+  Write-Host "OID4VCI metadata : $tenantGatewayBase/.well-known/openid-credential-issuer"
+  Write-Host "OAuth metadata   : $tenantGatewayBase/.well-known/oauth-authorization-server"
+  Write-Host "DID document     : $tenantGatewayBase/.well-known/did.json"
 }
 Write-Host "=========================================================="
 exit 0

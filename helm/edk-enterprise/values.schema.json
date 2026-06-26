@@ -7,7 +7,13 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "imageRegistry": { "type": "string", "minLength": 1 },
+        "imageRegistry": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^(sphereon(?:/|$)|(?:docker\\.io|index\\.docker\\.io|registry-1\\.docker\\.io)(?:/|$))"
+          }
+        },
         "imageTag": { "type": "string", "minLength": 1 },
         "imagePullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
         "imagePullSecrets": {
@@ -24,6 +30,18 @@
         "enabled": { "type": "boolean" },
         "dialect": { "type": "string", "enum": ["postgresql"] },
         "platform": { "$ref": "#/definitions/databaseEndpoint" },
+        "maintenance": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "database": { "type": "string", "minLength": 1 },
+            "existingSecret": { "type": "string" },
+            "usernameKey": { "type": "string", "minLength": 1 },
+            "passwordKey": { "type": "string", "minLength": 1 }
+          }
+        },
         "tenant": {
           "allOf": [
             { "$ref": "#/definitions/databaseEndpoint" },
@@ -32,7 +50,8 @@
               "additionalProperties": true,
               "properties": {
                 "isolation": { "type": "string", "enum": ["schema", "shared", "database", "host"] },
-                "schemaPattern": { "type": "string", "minLength": 1 }
+                "schemaPattern": { "type": "string", "minLength": 1 },
+                "databasePattern": { "type": "string", "minLength": 1 }
               }
             }
           ]
@@ -65,6 +84,32 @@
         "authMode": { "type": "string", "enum": ["service-jwt", "mesh-mtls", "none"] }
       }
     },
+    "config": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "providers": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "platformConfigRemote": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "enabled": { "type": "boolean" }
+              }
+            },
+            "tenantConfigDb": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "enabled": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
     "platformKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "tenantKmsKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "platform": {
@@ -87,8 +132,7 @@
             },
             "ownerInitialCredential": { "type": "string" },
             "userProviderMode": { "type": "string", "minLength": 1 },
-            "deploymentMode": { "type": "string", "enum": ["dev", "prod"] },
-            "deploymentId": { "type": "string", "minLength": 1 }
+            "deploymentMode": { "type": "string", "enum": ["dev", "prod"] }
           }
         }
       }
@@ -113,7 +157,13 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "installationId": { "type": "string", "format": "uuid" },
+        "installationId": {
+          "type": "string",
+          "anyOf": [
+            { "const": "" },
+            { "format": "uuid" }
+          ]
+        },
         "commandEnforcement": {
           "type": "object",
           "additionalProperties": true,

@@ -1,56 +1,195 @@
-# Onboarding the first tenant
+# First-run setup and tenant onboarding
 
-After the stack is up (Docker Compose or Kubernetes), onboard your first tenant.
-A tenant is a self-contained issuer and verifier with its own public endpoints
-for the issuer, verifier, authorization server, and DID document. In the
-single-port gateway model, the tenant is reached at
-`<tenant-slug>.<base-domain>`, while the platform/operator plane is reached at
-`platform.<base-domain>`.
+After the platform control plane is up (Docker Compose or Kubernetes), complete
+first-run setup and then create tenants from the operator admin surface.
 
-The stack must be running the published enterprise images from the private Nexus Docker repository `nexus.sphereon.com/edk-docker`. Kubernetes deployments install the `edk-enterprise` chart from Sphereon's private Nexus Helm repository `https://nexus.sphereon.com/repository/edk-helm`; the enterprise images are private Nexus artifacts only.
+The platform/operator plane is reached at `https://platform.<base-domain>`.
+Tenants are sibling hosts under the same customer-controlled base domain, such
+as `https://<tenant-slug>.<base-domain>`. The tenant slug is chosen during
+tenant creation, not before the stack starts. Tenant registration creates the
+authorization server, issuer, verifier, DID, KMS material, and public endpoint
+bindings for that tenant host.
 
-There are two ways to do it:
+The stack must be running the published enterprise images, for example
+`nexus.sphereon.com/edk-docker/enterprise-platform:0.25.0-SNAPSHOT` and the
+matching `nexus.sphereon.com/edk-docker/enterprise-*` workload images.
+Kubernetes deployments install the `edk-enterprise` chart from the deployment
+repository or your packaged chart repository.
 
-- The `scripts/provision` helper, which calls the REST APIs directly and drives the whole flow.
-- The Postman collection, which walks the same flow request by request so you see every step.
+## Primary customer flow
 
-Both read their configuration from the same Postman customer environment file under `postman/`.
+Use this flow for normal customer installations:
 
-## Before you start
+1. Start the full platform and workload stack.
+2. Open the setup UI at `https://platform.<base-domain>/setup-license`, or open
+   `https://platform.<base-domain>/admin-console` and follow the setup redirect.
+3. Generate the license request. The platform creates the local license
+   recipient key and returns the public license request payload.
+4. Send that license request to the Sphereon license issuer out of band.
+5. Import the protected license bundle ZIP returned by the license issuer.
+6. Bootstrap the first platform operator account. This closes the anonymous
+   setup gate.
+7. Sign in at `https://platform.<base-domain>/admin-console`.
+8. Create the first tenant from the admin console or the platform admin REST
+   API. Choose the tenant slug at this step.
 
-You need:
+Do not configure the operator email, license installation id, deployment id, or
+tenant slug in Docker Compose or Helm just to start the system. The setup UI/API
+collects license and operator inputs during first-run setup. Tenant creation
+collects tenant inputs after the operator is authenticated.
 
-- A running EDK enterprise deployment reachable at `https://platform.<base-domain>` and `https://<tenant-slug>.<base-domain>`.
-- A Sphereon protected license bundle ZIP from the license issuer.
-- Operator account details for the platform. First-run setup creates this account after license activation.
-- Node.js on your PATH. The provision script uses it to read the environment JSON and to compute the PKCE code challenge.
+## Setup API
 
-## Configuration
+The setup UI uses the public setup API on the platform host. Customers can use
+the same API directly when automating the setup flow.
 
-Both onboarding paths read `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`. The file ships with the customer-facing inputs only. Replace each placeholder with your deployment's values:
+Check whether setup is still open:
 
-| Variable | What to set it to |
-| --- | --- |
-| `baseDomain` | The customer-controlled base domain. The platform is `https://platform.<baseDomain>` and the tenant is `https://<tenantSlug>.<baseDomain>` |
-| `tenantSlug` | The first tenant slug. The default is `acme` |
-| `tenantName` | The first tenant display name |
-| `platformUrl`, `issuerUrl`, `verifierUrl`, `asUrl`, `didUrl`, `kmsUrl` | Optional explicit service URLs. Leave empty for the gateway model; set them for local Docker base-stack runs or a custom reverse proxy |
-| `operatorRedirectUri` | Optional operator OAuth callback URL. Leave empty to derive it from `platformUrl` |
-| `licenseBundleZipPath` | Path to the protected Sphereon license bundle ZIP |
-| `operatorEmail`, `operatorPassword` | The operator account credentials. Setup bootstraps the account after license activation; sign-in authenticates with it |
+```http
+GET /api/platform/setup/v1/status
+```
 
-The Postman collection derives `platformUrl`, `issuerUrl`, `verifierUrl`, `asUrl`, `kmsUrl`, `didUrl`, `operatorRedirectUri`, and the public endpoint hosts from `baseDomain` and `tenantSlug`. Explicit URL variables override those derived values for non-standard deployments. The provision scripts use the same rules.
+Generate the license request:
 
-## Option A: the provision script
+```http
+POST /api/platform/setup/v1/license-request/generate
+Content-Type: application/json
 
-The provision script runs against the already-running deployment and onboards the platform and the first tenant by calling the published REST APIs. It performs, in order:
+{
+  "alias": "platform-license-request",
+  "providerId": "license",
+  "algorithm": "ECDSA_SHA256",
+  "use": "sig",
+  "deployment": {
+    "deployment": {
+      "baseDomains": ["<base-domain>"]
+    },
+    "organizationName": "<organization-name>",
+    "organizationUnit": "<organization-unit>",
+    "locality": "<city>",
+    "country": "<ISO-3166-alpha-2-country>",
+    "licenseDeliveryMethod": "MANUAL",
+    "contacts": [
+      {
+        "email": "<technical-contact-email>",
+        "givenName": "<given-name>",
+        "familyName": "<family-name>",
+        "roles": ["TECHNICAL"]
+      },
+      {
+        "email": "<administrator-contact-email>",
+        "givenName": "<given-name>",
+        "familyName": "<family-name>",
+        "roles": ["ADMINISTRATOR"]
+      }
+    ]
+  },
+  "serialNumber": 1
+}
+```
 
-1. Waits for the platform service to report healthy at `https://platform.<base-domain>/health`.
-2. Runs platform setup only if the setup gate is still open: it previews and imports the protected license bundle, then bootstraps the operator account as the final gate-closing setup step. If the gate is already closed, this step is skipped, so the script is safe to re-run.
-3. Signs the operator in through the platform authorization-code flow with PKCE, carrying cookies and the login form CSRF tuple like a browser, and exchanges the authorization code for an operator access token.
-4. Registers the first production tenant. Tenant registration provisions the tenant runtime surfaces for issuer, verifier, authorization server, KMS, and DID routing.
-5. Binds the tenant's three public endpoints: the OID4VCI issuer, the OID4VP verifier, and the OAuth2 authorization server.
-6. Prints a summary with the operator console URL (`https://platform.<base-domain>/admin-console`) and the tenant's public metadata URLs.
+Preview and import the protected license bundle returned by the license issuer:
+
+```http
+POST /api/platform/setup/v1/license/import/preview
+Content-Type: multipart/form-data
+
+bundle=@<protected-license-bundle.zip>
+```
+
+```http
+POST /api/platform/setup/v1/license/import
+Content-Type: multipart/form-data
+
+bundle=@<protected-license-bundle.zip>
+```
+
+Bootstrap the first platform operator account:
+
+```http
+POST /api/platform/setup/v1/bootstrap
+Content-Type: application/json
+
+{
+  "adminEmail": "<operator-email>",
+  "adminDisplayName": "<operator-display-name>",
+  "adminPassword": "<operator-password>"
+}
+```
+
+After bootstrap completes, the setup gate is closed and setup endpoints are no
+longer available anonymously. Sign in through the admin console with the
+operator account created by the bootstrap call.
+
+## Tenant creation API
+
+Create tenants only after first-run setup is complete and an operator is signed
+in. The admin console uses the platform admin API; automation can call it
+directly with an operator access token.
+
+```http
+POST /api/platform/admin/v1/tenants
+Authorization: Bearer <operator-access-token>
+Content-Type: application/json
+
+{
+  "tenantType": "organization",
+  "name": "<tenant-display-name>",
+  "description": "<tenant-description>",
+  "slug": "<tenant-slug>",
+  "addIssuer": true,
+  "addVerifier": true,
+  "owner": {
+    "type": "local",
+    "email": "<tenant-owner-email>",
+    "displayName": "<tenant-owner-display-name>"
+  },
+  "ownerDelivery": {
+    "mode": "none"
+  }
+}
+```
+
+Tenant registration provisions the default authorization server, KMS provider
+and key material, tenant DID, issuer, verifier, and public endpoint bindings for
+`https://<tenant-slug>.<base-domain>`.
+
+Read the onboarding status returned by registration:
+
+```http
+GET /api/platform/admin/v1/tenant-onboarding/<correlation-id>
+Authorization: Bearer <operator-access-token>
+```
+
+Read the tenant and endpoint bindings:
+
+```http
+GET /api/platform/admin/v1/tenants/<tenant-id>
+Authorization: Bearer <operator-access-token>
+```
+
+```http
+GET /api/platform/admin/v1/tenants/<tenant-id>/public-endpoints
+Authorization: Bearer <operator-access-token>
+```
+
+## Optional validation helpers
+
+The repository also includes scripts and a Postman collection. They are not the
+normal customer setup path; they are useful for validation, demos, and repeatable
+API automation.
+
+Both helpers read `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`.
+The file contains Postman/provision variables only, including `baseDomain`,
+`tenantSlug`, `tenantName`, `licenseBundleZipPath`, `operatorEmail`, and
+`operatorPassword`. These are not Docker Compose or Helm startup variables.
+
+### Provision script
+
+The all-in-one provision script drives the same REST APIs against an
+already-running stack. It performs setup if the setup gate is still open, signs
+the operator in, creates the tenant, and verifies the tenant gateway endpoint
+bindings.
 
 Windows:
 
@@ -64,75 +203,36 @@ Linux or macOS:
 ./scripts/provision.sh
 ```
 
-### Flags
+Useful flags:
 
 | Windows | Linux/macOS | Effect |
 | --- | --- | --- |
-| `-EnvFile <path>` | `--env-file <path>` | Use a different Postman customer environment file. Defaults to the one under `postman/` |
-| `-TenantName <name>` | `--tenant-name <name>` | Override the tenant display name from the environment file |
-| `-TenantSlug <slug>` | `--tenant-slug <slug>` | Override the tenant slug from the environment file |
-| `-SkipSetup` | `--skip-setup` | Skip platform setup when the platform is already initialized |
+| `-EnvFile <path>` | `--env-file <path>` | Use a different Postman customer environment file |
+| `-TenantName <name>` | `--tenant-name <name>` | Override the tenant display name |
+| `-TenantSlug <slug>` | `--tenant-slug <slug>` | Override the tenant slug |
+| `-SkipSetup` | `--skip-setup` | Skip setup when the platform is already initialized |
 
-Examples:
+The script expects the workload containers or pods to be running before tenant
+registration starts. It does not create endpoint bindings manually; it fails if
+tenant setup did not create the required gateway route metadata.
 
-```powershell
-.\scripts\provision.ps1 -TenantName "Acme Corporation" -TenantSlug acme
-.\scripts\provision.ps1 -SkipSetup
-```
+### Postman collection
 
-```bash
-./scripts/provision.sh --tenant-name "Acme Corporation" --tenant-slug acme
-./scripts/provision.sh --skip-setup
-```
+The Postman collection walks the same flow request by request, plus later
+issuance and verification examples. Import these files into Postman:
 
-When the run finishes, the script prints the operator console URL, the tenant id, and the tenant's issuer metadata, AS metadata, and `did.json` URLs so you can confirm the tenant is live. Use the operator account created during setup to sign in at `https://platform.<base-domain>/admin-console`.
+- `postman/EDK-Enterprise-Deployment.postman_collection.json`
+- `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-## Option B: the Postman collection
-
-The Postman collection walks the same onboarding flow request by request, plus the later issuance and verification steps, so you can run and inspect each call. Import these two files into Postman:
-
-- `postman/EDK-Enterprise-Deployment.postman_collection.json` (the requests)
-- `postman/EDK-Enterprise-Deployment.customer.postman_environment.json` (the variables you fill in)
-
-Select the imported environment, fill in the variables above, then run the folders in order. The collection derives all public service URLs from `baseDomain` and `tenantSlug`, then passes values from one request to the next through collection variables, so run within a folder top to bottom.
-
-For local Docker base-stack checks, set the explicit URL variables to the loopback
-ports from `compose/.env` and run a folder with Newman:
-
-```bash
-npx newman run postman/EDK-Enterprise-Deployment.postman_collection.json \
-  -e postman/EDK-Enterprise-Deployment.customer.postman_environment.json \
-  --folder "00 Docker Smoke"
-```
-
-The `00 Docker Smoke` folder checks the local service health endpoints and does
-not require a license bundle. Folder `01 Platform Onboarding` requires a real
-protected license bundle when the setup gate is open. If the platform was already
-initialized, setup endpoints return 404 and the collection continues with the
-already-running deployment.
-
-The folders, in order:
+Run folders in order when validating a fresh installation:
 
 | Folder | What it does |
 | --- | --- |
-| `00 Docker Smoke` | Checks local Docker service health endpoints without requiring a license bundle |
-| `01 Platform Onboarding` | Generates the license request, previews and imports your protected license bundle, then bootstraps the operator account and closes the setup gate |
+| `00 Gateway Smoke` | Checks platform gateway reachability without requiring a license bundle |
+| `01 Platform Onboarding` | Generates the license request, previews and imports the protected license bundle, then bootstraps the operator account |
 | `02 Operator Sign-in` | Signs in as the operator and exchanges the authorization code for an operator token |
-| `03 Tenant Onboarding` | Registers the tenant and binds its issuer, verifier, and authorization server public endpoints at `<tenantSlug>.<baseDomain>` |
-| `04 Tenant Federation` | Registers a federation IdP for the tenant |
-| `05 Tenant Service Token` | Obtains a service token for tenant-scoped admin calls |
-| `06 Tenant Keys and DID` | Generates assertion and authentication keys and creates the tenant `did:web` identifier |
-| `07 Issuer Settings` | Creates the issuer design used by credential offers |
-| `08 Credential Designs` | Creates the sample EuPid and Mdl credential designs |
-| `09 Status Lists` | Creates a status list and exercises revoke and reactivate |
-| `10 Hosted Branding Verification` | Checks public metadata and hosted branding assets |
-| `11 Issue Credentials Simple` | Issues credentials with subject data supplied directly in the offer |
-| `12 Issue Credentials Pipeline` | Issues credentials through the attribute pipeline flow |
-| `13 DCQL Queries` | Creates verifier DCQL query definitions |
-| `14 Verification` | Creates and manages a verification session |
-| `15 Authorization Code Offer` | Creates an offer with the authorization code grant |
-
-Run at least `01`, `02`, and `03` to bring a tenant online. The later folders configure and exercise issuance and verification for that tenant.
+| `03 Tenant Onboarding` | Registers the tenant, waits for onboarding completion, and verifies tenant public endpoint bindings |
+| `04 Tenant Federation` and later | Configure and exercise tenant issuance and verification examples |
 
 ## After onboarding
 
@@ -141,8 +241,12 @@ Each tenant is reachable at its own host, normally
 default hosted issuer, the OID4VCI `credential_issuer` identifier is that tenant
 origin, not the platform host. Confirm the tenant is live by fetching:
 
-- `https://<tenant-host>/.well-known/openid-credential-issuer` (issuer metadata)
-- `https://<tenant-host>/.well-known/oauth-authorization-server` (AS metadata)
-- `https://<tenant-host>/.well-known/did.json` (the tenant DID document)
+- `https://<tenant-host>/.well-known/openid-credential-issuer`
+- `https://<tenant-host>/.well-known/oauth-authorization-server`
+- `https://<tenant-host>/.well-known/did.json`
 
-These public endpoints are the issuer, AS, and DID resolver surfaces. The operator UI is `https://platform.<base-domain>/admin-console`. The tenant's administrative REST paths stay internal or controlled by gateway policy and require the operator or tenant service token.
+These are public protocol and resolver surfaces through the gateway, not direct
+container endpoints or runtime probes. The operator UI is
+`https://platform.<base-domain>/admin-console`. Administrative REST paths stay
+internal or controlled by gateway policy and require the operator or tenant
+service token.

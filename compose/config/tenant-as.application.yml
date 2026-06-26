@@ -15,15 +15,14 @@ server:
     auth:
       enabled: true
       # Open prefixes: OAuth protocol surface, login UI, discovery/JWKS, the
-      # internal pre-auth registration channel, the signing-key provisioning
-      # channel (validates a platform-issued bearer — see below), the in-network
-      # command transport, and RFC 7662 introspection. Everything else requires a
-      # bearer this server minted.
-      anonymous-path-prefixes: /authorize,/login,/token,/.well-known,/internal/preauth,/internal/provision,/api/commands,/introspect
+      # internal pre-auth registration channel, the in-network command transport,
+      # and RFC 7662 introspection. The signing-key provisioning endpoint is
+      # intentionally protected: tenant resolution validates the platform-issued
+      # bearer and uses its tenant_id claim before the tenant's public host is active.
+      anonymous-path-prefixes: /authorize,/login,/token,/.well-known,/internal/preauth,/api/commands,/introspect
       # Trust anchor for the platform AS. The /internal/provision/signing-key endpoint validates a
       # short-lived, platform-issued bearer bound to this tenant (per-tenant audience), so it needs the
-      # platform issuer and JWKS — the same anchor the tenant runtime services trust. The path is
-      # anonymous to the strict-auth gate because the endpoint performs this validation itself.
+      # platform issuer and JWKS — the same anchor the tenant runtime services trust.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
   service-identity:
@@ -95,6 +94,9 @@ transport:
           mac: *tenantKmsGrpcRoute
           encryption: *tenantKmsGrpcRoute
       platform:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
         services:
           config: &platformGrpcRoute
             target: SERVER
@@ -108,26 +110,31 @@ config:
   providers:
     platform-config-remote:
       enabled: true
+      bootstrap-required-keyspaces: oauth2.servers,kms.providers
+    tenant-config-db:
+      enabled: false
 database:
   app:
     default:
       dialect: postgresql
-      host: ${env:EDK_DB_HOST}
+      host: ${env:EDK_TENANT_DB_HOST}
       port: 5432
-      database: ${env:EDK_DB_NAME}
-      username: ${env:EDK_DB_USERNAME}
-      password: ${env:EDK_DB_PASSWORD}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
   tenants:
     default:
       dialect: postgresql
-      isolation: shared
-      host: ${env:EDK_DB_HOST}
+      isolation: schema
+      schema-pattern: "tenant_{id}"
+      host: ${env:EDK_TENANT_DB_HOST}
       port: 5432
-      database: ${env:EDK_DB_NAME}
-      username: ${env:EDK_DB_USERNAME}
-      password: ${env:EDK_DB_PASSWORD}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
 tenant:
   resolution:
+    remote: true
     platform:
       base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
       subdomain:
@@ -142,19 +149,19 @@ tenant:
       enabled: true
 kms:
   providers:
-    _tenant_:
-      id: _tenant_
+    software:
+      id: software
       type: software
       enabled: true
       autoCreateCertificate: true
       keystore:
         type: pkcs12
-        id: _tenant_
+        id: software
         password: ${env:EDK_KEYSTORE_PASSWORD}
         path: "{tempDir}/edk-verify-keystore.p12"
 crypto:
   kms:
-    # The AS signing roles resolve against the '_tenant_' provider, which is
+    # The AS signing roles resolve against the tenant-slug provider, which is
     # served remotely by the tenant KMS via the kms routing module above. No key
     # material is held locally.
     roles:
@@ -166,66 +173,11 @@ crypto:
         algorithm: ES256
       verifier-request-object-signing:
         algorithm: ES256
-oauth2:
-  user-provider:
-    mode: local
-  clients:
-    platform-operator-cli:
-      client-id: platform-operator-cli
-      client-name: Platform Operator CLI
-      client-type: public
-      grant-types: authorization_code
-      # Two apps share this operator client, each owning its own callback: the admin console
-      # (/admin-console basePath) -> {host}/admin-console/callback, and the first-run setup wizard
-      # (served at the platform root) -> {host}/onboarding/callback.
-      #
-      # FUTURE tenant console: the tenant-host admin console is disabled until a per-tenant API
-      # authorization proxy enforces tenant isolation (see the gateway routing notes). For multiple
-      # tenant hosts behind a wildcard, each tenant host must be a registered redirect_uri here (or
-      # the AS must be configured to allow the per-tenant host pattern); a single base URL cannot
-      # match every tenant subdomain.
-      redirect-uris:
-        - ${env:EDK_TENANT_AS_PUBLIC_URL}/admin-console/callback
-        - ${env:EDK_TENANT_AS_PUBLIC_URL}/onboarding/callback
-      allowed-scopes: openid
-      token-endpoint-auth-method: none
-  servers:
-    default:
-      mode: HOSTED
-      signing-key:
-        auto-generate: true
-      issuer: ${env:EXTERNAL_BASE_URL}
-      oidc: SUPPORTED
-      pkce: REQUIRED
-      token-format: JWT
-      scopes-supported: "openid,profile,email"
-      grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token"
-      public-clients:
-        allow-any: true
-        permissive-redirect-uri: true
-      internal-clients:
-        issuer:
-          client-id: issuer-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-        kms:
-          client-id: kms-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-        did:
-          client-id: did-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-        verifier:
-          client-id: verifier-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+# AS instances, clients, and grant policy are platform-config rows seeded by
+# tenant setup. Use config.overrides.oauth2.* only for explicit local overrides.
 application:
   bootstrap:
     on-startup: false
-  tenant:
-    hosted-as:
-      issuer: ${env:EXTERNAL_BASE_URL}
-    owner:
-      # TODO: set the platform operator identity for this deployment.
-      email: ${env:EDK_PLATFORM_OPERATOR_EMAIL:operator@example.com}
-      display-name: Platform Operator
 app:
   # TODO: set to prod for a production deployment.
   deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
@@ -234,12 +186,14 @@ auth:
     require-application: false
 license:
   # Installation gate: the tenant AS binds to the platform installation and
-  # declares its service role. The installation-id must match the value the
-  # license is bound to.
+  # declares its service role. Leave installation-id blank for first-run setup;
+  # the verified protected license bundle supplies the installation binding.
+  # Set EDK_INSTALLATION_ID only when intentionally pinning this runtime to a
+  # known installation id; a mismatch fails closed.
   command-enforcement:
     enabled: true
     missing-descriptor-mode: warn
-  installation-id: ${env:EDK_INSTALLATION_ID:11111111-1111-4111-8111-111111111111}
+  installation-id: ${env:EDK_INSTALLATION_ID:}
   gate:
     service-role: enterprise-tenant-as
   trust:

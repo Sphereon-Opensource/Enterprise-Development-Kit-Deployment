@@ -1,13 +1,13 @@
-# Let's Encrypt single-port gateway overlay for the EDK enterprise stack.
+# Public static-certificate single-port gateway overlay for the EDK enterprise stack.
 #
-# This is a template rendered by scripts/start-letsencrypt.(ps1|sh). The rendered
-# file is compose/docker-compose.letsencrypt.yml and is intentionally gitignored.
+# This is a template rendered by scripts/start-letsencrypt.(ps1|sh) when DNS-01
+# is handled manually. The rendered file is compose/docker-compose.public-cert.yml
+# and is intentionally gitignored.
 #
-# Use this overlay instead of docker-compose.gateway.yml when the machine is
-# reachable through a real public base domain and Traefik should obtain public
-# Let's Encrypt certificates. The local CA/truststore mounts are intentionally
-# absent: containers and browsers validate LE certificates with their default
-# truststores.
+# Use this overlay when you already have a publicly trusted wildcard certificate
+# in compose/gateway/certs/wildcard.crt and compose/gateway/certs/wildcard.key.
+# The local CA/truststore mounts are intentionally absent: containers and
+# browsers validate public CA certificates with their default truststores.
 
 services:
   traefik:
@@ -20,15 +20,14 @@ services:
       - "443:443"
       - "80:80"
     volumes:
-      - ./gateway/traefik/traefik.letsencrypt.generated.yml:/etc/traefik/traefik.yml:ro
-      - ./gateway/traefik/dynamic.letsencrypt.generated.yml:/etc/traefik/dynamic/dynamic.yml:ro
-      - edk-acme:/etc/traefik/acme
-__LE_DNS_ENV_SECTION__
+      - ./gateway/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./gateway/traefik/dynamic.public-cert.generated.yml:/etc/traefik/dynamic/dynamic.yml:ro
+      - ./gateway/certs:/etc/traefik/certs:ro
     networks:
       appnet:
         aliases:
           - platform.__BASE_DOMAIN__
-__LE_TENANT_ALIASES__
+__PUBLIC_CERT_TENANT_ALIASES__
 
   enterprise-platform:
     environment:
@@ -110,6 +109,3 @@ __LE_TENANT_ALIASES__
   admin-console:
     networks:
       appnet: {}
-
-volumes:
-  edk-acme:

@@ -1,24 +1,25 @@
 #!/usr/bin/env bash
 #
 # Onboards a freshly deployed Sphereon EDK enterprise platform and its first
-# production tenant by calling the published REST APIs directly.
+# production tenant by calling the published gateway REST APIs.
 #
 # This script runs against a RUNNING deployment (the Docker Compose
 # stack or a Kubernetes install). It performs, in order:
 #
-#   1. Waits for the enterprise services to report healthy.
+#   1. Waits for the platform gateway setup-status route to become reachable.
 #   2. Platform setup (only if the setup gate is still open): bootstraps the
 #      operator account and imports your protected license bundle.
 #   3. Signs the operator in through the platform authorization-code flow with
 #      PKCE, carrying cookies and the login form CSRF tuple like a browser.
 #   4. Registers the first production tenant.
-#   5. Binds the tenant's three public endpoints (issuer, verifier, AS).
-#   6. Prints a summary with the operator console URL and the tenant's public
-#      metadata URLs.
+#   5. Verifies the tenant gateway route bindings created by tenant setup.
+#   6. Prints a summary with the operator console URL and the tenant gateway.
 #
 # Prerequisites:
-#   - A running EDK enterprise deployment reachable at platform.<baseDomain>
-#     and <tenantSlug>.<baseDomain>, or explicit service URLs in the environment file.
+#   - A running EDK enterprise platform reachable at platform.<baseDomain>,
+#     or an explicit platformUrl in the environment file. Tenant AS, tenant KMS,
+#     and DID must be running before tenant registration, because registration
+#     provisions signing material and the tenant DID through east-west services.
 #   - A Sphereon protected license bundle ZIP (set in the environment file as
 #     licenseBundleZipPath).
 #   - curl and node installed. node parses the environment JSON and computes the
@@ -26,8 +27,9 @@
 #
 # Configuration is read from the kit's Postman customer environment file
 # (../postman/EDK-Enterprise-Deployment.customer.postman_environment.json by
-# default). The default environment derives public service URLs from baseDomain
-# and tenantSlug. Override individual values with the flags below.
+# default). The default environment derives the platform gateway URL and tenant
+# gateway URL from baseDomain and tenantSlug. Override the tenant gateway only
+# for non-standard gateway deployments.
 #
 # Example:
 #   ./provision.sh
@@ -95,11 +97,7 @@ cfg() {
 
 # --- Resolve effective config (flags override the environment file) -----------
 PLATFORM_URL="$(cfg platformUrl)"
-KMS_URL="$(cfg kmsUrl)"
-DID_URL="$(cfg didUrl)"
-AS_URL="$(cfg asUrl)"
-ISSUER_URL="$(cfg issuerUrl)"
-VERIFIER_URL="$(cfg verifierUrl)"
+TENANT_GATEWAY_URL="$(cfg tenantGatewayUrl)"
 BASE_DOMAIN="$(cfg baseDomain)"
 
 OPERATOR_EMAIL="$(cfg operatorEmail)"
@@ -107,6 +105,7 @@ OPERATOR_DISPLAY_NAME="$(cfg operatorDisplayName)"
 [ -n "$OPERATOR_DISPLAY_NAME" ] || OPERATOR_DISPLAY_NAME="Platform Operator"
 OPERATOR_PASSWORD="$(cfg operatorPassword)"
 OPERATOR_REDIRECT_URI="$(cfg operatorRedirectUri)"
+ADMIN_CONSOLE_URL="$(cfg adminConsoleUrl)"
 OPERATOR_CODE_VERIFIER="$(cfg operatorCodeVerifier)"
 LICENSE_BUNDLE_ZIP_PATH="$(cfg licenseBundleZipPath)"
 
@@ -114,9 +113,6 @@ LICENSE_BUNDLE_ZIP_PATH="$(cfg licenseBundleZipPath)"
 [ -n "$TENANT_SLUG" ] || TENANT_SLUG="$(cfg tenantSlug)"
 
 TENANT_HOST="$(cfg tenantHost)"
-ISSUER_PUBLIC_HOST="$(cfg issuerPublicHost)"
-VERIFIER_PUBLIC_HOST="$(cfg verifierPublicHost)"
-AS_PUBLIC_HOST="$(cfg asPublicHost)"
 
 BASE_DOMAIN="${BASE_DOMAIN#http://}"
 BASE_DOMAIN="${BASE_DOMAIN#https://}"
@@ -129,23 +125,24 @@ if [ -z "$PLATFORM_URL" ] && [ -n "$BASE_DOMAIN" ]; then
   PLATFORM_URL="https://platform.$BASE_DOMAIN"
 fi
 if [ -n "$TENANT_HOST" ]; then
-  TENANT_URL="https://$TENANT_HOST"
-  [ -n "$KMS_URL" ]      || KMS_URL="$TENANT_URL"
-  [ -n "$DID_URL" ]      || DID_URL="$TENANT_URL"
-  [ -n "$AS_URL" ]       || AS_URL="$TENANT_URL"
-  [ -n "$ISSUER_URL" ]   || ISSUER_URL="$TENANT_URL"
-  [ -n "$VERIFIER_URL" ] || VERIFIER_URL="$TENANT_URL"
-  [ -n "$ISSUER_PUBLIC_HOST" ]   || ISSUER_PUBLIC_HOST="$TENANT_HOST"
-  [ -n "$VERIFIER_PUBLIC_HOST" ] || VERIFIER_PUBLIC_HOST="$TENANT_HOST"
-  [ -n "$AS_PUBLIC_HOST" ]       || AS_PUBLIC_HOST="$TENANT_HOST"
+  [ -n "$TENANT_GATEWAY_URL" ] || TENANT_GATEWAY_URL="https://$TENANT_HOST"
+fi
+if [ -z "$TENANT_HOST" ] && [ -n "$TENANT_GATEWAY_URL" ]; then
+  TENANT_HOST="$(node -e '
+    try { process.stdout.write(new URL(process.argv[1]).hostname); } catch (e) {}
+  ' "$TENANT_GATEWAY_URL")"
 fi
 if [ -z "$OPERATOR_REDIRECT_URI" ] && [ -n "$PLATFORM_URL" ]; then
   OPERATOR_REDIRECT_URI="${PLATFORM_URL%/}/admin-console/callback"
+fi
+if [ -z "$ADMIN_CONSOLE_URL" ] && [ -n "$PLATFORM_URL" ]; then
+  ADMIN_CONSOLE_URL="${PLATFORM_URL%/}/admin-console"
 fi
 
 [ -n "$PLATFORM_URL" ] || fail "platformUrl is not set in the environment file."
 [ -n "$TENANT_NAME" ]  || fail "tenantName is not set (use --tenant-name or set it in the environment file)."
 [ -n "$TENANT_SLUG" ]  || fail "tenantSlug is not set (use --tenant-slug or set it in the environment file)."
+[ -n "$TENANT_HOST" ]  || fail "tenant gateway host could not be derived. Set baseDomain and tenantSlug, or set tenantGatewayUrl."
 
 PLATFORM_URL="${PLATFORM_URL%/}"
 
@@ -171,24 +168,23 @@ json_field() {
   ' "$2" <<<"$1"
 }
 
-# --- Step 1: wait for health --------------------------------------------------
-wait_health() {
-  local name="$1" base="$2" retries=30 delay=4 i code
-  [ -n "$base" ] || return 0
-  local url="${base%/}/health"
+# --- Step 1: wait for platform gateway reachability ---------------------------
+wait_platform_gateway() {
+  local base="$1" retries=30 delay=4 i code
+  local url="${base%/}/api/platform/setup/v1/status"
   for ((i = 0; i < retries; i++)); do
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" || echo 000)"
-    if [ "$code" = "200" ]; then
-      echo "  [ok]   $name ($url)"
+    if [ "$code" = "200" ] || [ "$code" = "404" ]; then
+      echo "  [ok]   platform ($url)"
       return 0
     fi
     sleep "$delay"
   done
-  fail "$name did not become healthy at $url"
+  fail "platform did not become reachable at $url"
 }
 
-echo "Waiting for services to report healthy..."
-wait_health platform "$PLATFORM_URL"
+echo "Waiting for the platform gateway route to become reachable..."
+wait_platform_gateway "$PLATFORM_URL"
 
 # --- Step 2: platform setup (idempotent) --------------------------------------
 SETUP_STATUS_URL="$PLATFORM_URL/api/platform/setup/v1/status"
@@ -301,8 +297,9 @@ abs_url() {
   esac
 }
 
-# 3.1 Start the authorization request; capture the redirect to the login page.
-AUTHORIZE_URL="$PLATFORM_URL/authorize?response_type=code&client_id=platform-operator-cli&redirect_uri=$(urlencode "$OPERATOR_REDIRECT_URI")&scope=openid&state=$STATE&code_challenge=$CODE_CHALLENGE&code_challenge_method=S256"
+# 3.1 Start the authorization request; prompt=login forces a fresh login form
+# even when a previous operator browser session cookie exists.
+AUTHORIZE_URL="$PLATFORM_URL/authorize?response_type=code&client_id=platform-operator-cli&redirect_uri=$(urlencode "$OPERATOR_REDIRECT_URI")&scope=openid&state=$STATE&prompt=login&code_challenge=$CODE_CHALLENGE&code_challenge_method=S256"
 HDR="$(mktemp)"
 curl -s -o /dev/null -D "$HDR" -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$AUTHORIZE_URL"
 LOGIN_PAGE_URL="$(header_value "$HDR" Location)"
@@ -370,6 +367,8 @@ TENANT_BODY="$(node -e '
     name,
     description: name + " issuing and verification tenant",
     slug,
+    addIssuer: true,
+    addVerifier: true,
     owner: { type: "local", email: "admin@" + slug + ".example", displayName: name + " Administrator" },
     ownerDelivery: { mode: "none" }
   }));
@@ -406,47 +405,66 @@ case "$CODE" in
     fail "Tenant registration failed ($CODE): $BODY"
     ;;
 esac
-[ -n "$TENANT_ID" ] || fail "Could not determine tenantId; cannot bind public endpoints."
+[ -n "$TENANT_ID" ] || fail "Could not determine tenantId; cannot verify tenant gateway endpoint bindings."
 
-# --- Step 5: bind the three public endpoints ----------------------------------
-bind_endpoint() {
-  # $1 = endpoint kind, $2 = public host
-  local kind="$1" host="$2"
-  if [ -z "$host" ]; then
-    echo "  Skipping $kind (no public host configured)."
-    return 0
-  fi
-  local url="$PLATFORM_URL/api/platform/admin/v1/tenants/$TENANT_ID/public-endpoints/$kind"
-  local body; body="$(node -e 'process.stdout.write(JSON.stringify({host:process.argv[1],enabled:true,primaryEndpoint:true}))' "$host")"
-  local tmp code; tmp="$(mktemp)"
-  code="$(curl -s -o "$tmp" -w '%{http_code}' -X PUT "$url" \
-    -H 'Content-Type: application/json' -H "Authorization: Bearer $OPERATOR_TOKEN" \
-    --data "$body")"
-  local out; out="$(cat "$tmp")"; rm -f "$tmp"
-  case "$code" in
-    2*) echo "  Bound $kind -> $host" ;;
-    *)  fail "Binding $kind failed ($code): $out" ;;
-  esac
+# --- Step 5: verify tenant setup-created gateway endpoint bindings ------------
+verify_endpoint_bindings() {
+  # $1 = JSON response body, $2 = expected tenant gateway host
+  node -e '
+    let data = "";
+    process.stdin.on("data", c => data += c);
+    process.stdin.on("end", () => {
+      const expectedHost = process.argv[1];
+      let obj;
+      try { obj = JSON.parse(data); } catch (e) {
+        console.error("endpoint binding response is not JSON");
+        process.exit(1);
+      }
+      const endpoints = obj.data || obj.items || obj.endpoints || (Array.isArray(obj) ? obj : []);
+      const serviceTypes = endpoints.map(endpoint => endpoint && endpoint.serviceType).filter(Boolean);
+      const required = ["OAUTH2_AUTHORIZATION_SERVER", "OID4VCI_ISSUER", "OID4VP_VERIFIER"];
+      const missing = required.filter(kind => !serviceTypes.includes(kind));
+      if (missing.length) {
+        console.error("missing endpoint binding(s): " + missing.join(", "));
+        process.exit(1);
+      }
+      const hasHost = endpoints.some(endpoint => {
+        if (!endpoint) return false;
+        return endpoint.host === expectedHost ||
+          String(endpoint.url || "").includes("://" + expectedHost) ||
+          String(endpoint.baseUrl || "").includes("://" + expectedHost) ||
+          String(endpoint.publicUrl || "").includes("://" + expectedHost);
+      });
+      if (!hasHost) {
+        console.error("endpoint bindings do not include expected host " + expectedHost);
+        process.exit(1);
+      }
+    });
+  ' "$2" <<<"$1"
 }
 
-echo "Binding public endpoints..."
-bind_endpoint OID4VCI_ISSUER "$ISSUER_PUBLIC_HOST"
-bind_endpoint OID4VP_VERIFIER "$VERIFIER_PUBLIC_HOST"
-bind_endpoint OAUTH2_AUTHORIZATION_SERVER "$AS_PUBLIC_HOST"
-
-# Read the bindings back for confirmation.
-curl -s "$PLATFORM_URL/api/platform/admin/v1/tenants/$TENANT_ID/public-endpoints" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN" >/dev/null
+echo "Verifying tenant setup-created gateway protocol routes..."
+TMP="$(mktemp)"
+CODE="$(curl -s -o "$TMP" -w '%{http_code}' "$PLATFORM_URL/api/platform/admin/v1/tenants/$TENANT_ID/public-endpoints" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN")"
+ENDPOINTS_BODY="$(cat "$TMP")"; rm -f "$TMP"
+case "$CODE" in
+  2*) ;;
+  *) fail "GET tenant gateway endpoint bindings failed ($CODE): $ENDPOINTS_BODY" ;;
+esac
+verify_endpoint_bindings "$ENDPOINTS_BODY" "$TENANT_HOST" || \
+  fail "Tenant setup did not create the expected gateway endpoint bindings."
+echo "  Verified platform-created route bindings for $TENANT_HOST."
 
 # --- Step 6: summary ----------------------------------------------------------
 echo ""
 echo "==================== Tenant onboarded ===================="
-echo "Operator console : $PLATFORM_URL"
+echo "Operator console : $ADMIN_CONSOLE_URL"
 echo "Tenant           : $TENANT_NAME [$TENANT_SLUG] ($TENANT_ID)"
+echo "Tenant gateway   : $TENANT_GATEWAY_URL"
 echo ""
-[ -n "$ISSUER_PUBLIC_HOST" ]   && echo "Issuer metadata  : https://$ISSUER_PUBLIC_HOST/.well-known/openid-credential-issuer"
-[ -n "$AS_PUBLIC_HOST" ]       && echo "AS metadata      : https://$AS_PUBLIC_HOST/.well-known/oauth-authorization-server"
-[ -n "$VERIFIER_PUBLIC_HOST" ] && echo "Verifier host    : https://$VERIFIER_PUBLIC_HOST"
-[ -n "$ISSUER_PUBLIC_HOST" ]   && echo "did.json         : https://$ISSUER_PUBLIC_HOST/.well-known/did.json"
+[ -n "$TENANT_GATEWAY_URL" ] && echo "OID4VCI metadata : ${TENANT_GATEWAY_URL%/}/.well-known/openid-credential-issuer"
+[ -n "$TENANT_GATEWAY_URL" ] && echo "OAuth metadata   : ${TENANT_GATEWAY_URL%/}/.well-known/oauth-authorization-server"
+[ -n "$TENANT_GATEWAY_URL" ] && echo "DID document     : ${TENANT_GATEWAY_URL%/}/.well-known/did.json"
 echo "========================================================="
 exit 0

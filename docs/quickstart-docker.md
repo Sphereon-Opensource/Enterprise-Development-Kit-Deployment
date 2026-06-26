@@ -6,26 +6,45 @@ Use the files in the public Enterprise Development Kit Deployment repository: <h
 
 There are two run modes:
 
-- Base Compose alone. Each service is published on its own host port over plain HTTP. This is the quickest way to test the platform locally.
-- Base Compose plus the gateway overlay. A Traefik reverse proxy fronts the services on a single TLS port and routes by host and path. This matches the production single-port gateway model.
+- Base Compose plus the gateway overlay. A Traefik reverse proxy fronts the services on a single TLS port and routes by host and path. This is the customer walkthrough model and matches the production single-port gateway model.
+- Base Compose alone. Each service is published on its own host port over plain HTTP. Use this only as a local developer diagnostic mode; it is not a customer URL model.
+
+The platform is the configuration authority for tenant workloads. A clean
+first-run installation starts the platform and all workload containers together:
+tenant AS, tenant KMS, DID, issuer, and verifier must already be present when
+tenant registration later provisions signing material and tenant DID state
+through east-west services. Before the license is imported those workload
+health endpoints can report `licenseStatus: MISSING`; Docker Compose accepts
+that only while the first-run setup gate is still open.
 
 ## Prerequisites
 
 - Docker with Compose v2.
-- Nexus credentials for the private `nexus.sphereon.com/edk-docker` enterprise image repository.
-- Docker Compose starts a local PostgreSQL 16 container for evaluation. For a real single-node deployment, replace it with a managed or operator-run PostgreSQL database and point the service configuration at that database.
-- A Sphereon protected license bundle ZIP, or access to your evaluation license issuer. The setup UI creates the license recipient key in the platform `_license_` KMS when it generates the license request. Evaluation bundles can include the test root CA material when needed.
-- TLS certificates for the operator and tenant hosts when you use the gateway overlay. For local gateway evaluation, use the included wildcard certificate helper. For a real domain, use a publicly trusted wildcard certificate for `*.<base-domain>` plus `platform.<base-domain>`, or individual certificates for each host.
+- Nexus credentials for the published `nexus.sphereon.com/edk-docker/enterprise-*` and `nexus.sphereon.com/edk-docker/admin-console` images for the selected `EDK_TAG`.
+- Docker Compose starts two local PostgreSQL 16 containers for evaluation: one platform/control-plane database and one tenant workload database. For a real single-node deployment, replace them with managed or operator-run PostgreSQL databases and keep platform and tenant state in separate logical databases. Do not put platform tables and tenant schemas in one database.
+- A Sphereon protected license bundle ZIP, or access to your evaluation license issuer. The setup UI creates the license recipient key in the platform `license` KMS when it generates the license request. Evaluation bundles can include the test root CA material when needed.
+- TLS certificates for the operator and tenant hosts when you use the gateway
+  overlay. For local gateway evaluation, use the included wildcard certificate
+  helper. For a real domain, use a publicly trusted wildcard certificate for
+  `*.<base-domain>`, or individual certificates for each host.
 
 ## 1. Authenticate to Nexus
 
-The enterprise images are private. Sign in once so Compose can pull them:
+Sign in once so Compose can pull the enterprise images:
 
 ```bash
 docker login nexus.sphereon.com
 ```
 
-Use the username and password or token Sphereon provides for the private enterprise image repository.
+The Compose file pins enterprise image pulls to `nexus.sphereon.com/edk-docker`; set
+`EDK_TAG` only. Do not reintroduce `sphereon` or `docker.io/sphereon`; those
+values point Compose at public Docker Hub.
+
+Confirm Docker can pull the published images for the tag you plan to deploy:
+
+```bash
+docker pull nexus.sphereon.com/edk-docker/enterprise-platform:0.25.0-SNAPSHOT
+```
 
 ## 2. Configure the stack
 
@@ -38,18 +57,17 @@ cp .env.example .env
 
 Set, at minimum:
 
-- The registry and image tag for the enterprise images.
-- The database password. The default Compose file starts Postgres in the stack; use an external database only when you intentionally replace that service.
+- The image tag for the enterprise images. The image repository is pinned to `nexus.sphereon.com/edk-docker` in the Compose file.
+- The platform and tenant database passwords. The default Compose file starts `platform-postgres` and `tenant-postgres`; use external databases only when you intentionally replace those evaluation services. Keep the two databases separate. They may share a PostgreSQL server, but not a database name, credential, or authorization boundary.
 - The required secrets: keystore password, internal client secret, and the issuer pipeline keys.
-- The installation base domain. For the base file alone, leave the external base URLs on their loopback defaults. For the gateway overlay, tenant protocol URLs are created during onboarding from `<tenant-slug>.<base-domain>`.
-- For a test license that does not chain to the embedded production root, set
-  `EDK_DEPLOYMENT_MODE=dev` and `EDK_LICENSE_TRUST_EMBEDDED=false`. The license
-  portal includes the supplied test root CA bundle in the protected setup bundle.
+- The installation base domain. The platform is published as
+  `https://platform.<base-domain>`. Tenant protocol URLs are created during
+  onboarding from `<tenant-slug>.<base-domain>`.
 
-For customer evaluation test licenses that do not use the embedded production
-trust root, set `EDK_DEPLOYMENT_MODE=dev` and
-`EDK_LICENSE_TRUST_EMBEDDED=false`. The supplied test root CA bundle is delivered
-inside the protected setup bundle and is accepted only in dev/test-license mode.
+When upgrading an older Compose environment, remove the legacy single-database
+keys `EDK_DB_NAME`, `EDK_DB_USERNAME`, `EDK_DB_PASSWORD`, and
+`EDK_POSTGRES_HOST_PORT` from `.env`. Replace them with `EDK_PLATFORM_DB_*` and
+`EDK_TENANT_DB_*`.
 
 For gateway runs, the default base domain `saas.localtest.me` resolves every
 subdomain to `127.0.0.1` with no host-file edits and no local DNS server, so
@@ -57,27 +75,30 @@ subdomain to `127.0.0.1` with no host-file edits and no local DNS server, so
 `https://<tenant>.saas.localtest.me` both reach your machine. For a real domain,
 set `EDK_PLATFORM_BASE_DOMAIN` to the customer-controlled base domain, point DNS
 for `platform.<base-domain>` and `*.<base-domain>` at the gateway host, and bind
-the tenant endpoints to the tenant host during onboarding. Only set the
-per-service `EDK_*_EXTERNAL_BASE_URL` values when you run the base compose file
-behind your own reverse proxy instead of the bundled gateway overlay.
+the tenant endpoints to the tenant host during onboarding.
 
-## 3a. Run the base stack (individual ports, plain HTTP)
+## 3a. Run the base stack (developer diagnostic only)
 
 ```bash
 docker compose -f docker-compose.yml up -d
 ```
 
-Compose pulls the published images and starts them, each on its own loopback host port over plain HTTP. Check that the services are healthy:
+Compose pulls the published images and starts the full backing stack over plain
+HTTP on local host ports. This mode is only for local diagnostics before placing
+a gateway in front of the stack. Check that the containers are running:
 
 ```bash
 docker compose ps
 ```
 
-The stack also starts an OpenTelemetry Collector and Jaeger. The JVM services
-use the `otlp-all` telemetry preset by default, exporting traces and metrics to
-`otel-collector`; traces are available at `http://localhost:16686`.
+The stack also starts an OpenTelemetry Collector and Jaeger. The service
+containers use the `otlp-all` telemetry preset by default, exporting traces and
+metrics to `otel-collector`; traces are available at `http://localhost:16686`.
 
-The base stack is for quick local testing. The administrative REST paths (`/api/.../v1`) are not protected by the base stack, so keep them on the host loopback or a private network.
+The base stack is for local diagnostics only. The administrative REST paths
+(`/api/.../v1`) are not protected by the base stack, so keep them on host
+loopback or a private network and do not use these ports in customer-facing
+instructions, smoke tests, or integrations.
 
 ## 3b. Run behind the single-port gateway (single TLS port)
 
@@ -97,45 +118,90 @@ On Windows:
 
 The script writes to `compose/gateway/certs/`. Trust the generated `local-ca.crt` in your operating system or browser so TLS connections succeed. If `mkcert` is installed, run `mkcert -install` once and its CA is trusted automatically. For a real base domain, supply a publicly trusted wildcard certificate or individual host certificates instead and see [tls-and-gateway.md](tls-and-gateway.md).
 
-Then bring up the base stack and the gateway overlay together:
+For a public Let's Encrypt wildcard such as `*.edk.example.com`, use the
+Let's Encrypt renderer instead of this local-certificate overlay. Set the EDK
+base domain to `edk.example.com` and use DNS-01 validation. Provide DNS API
+credentials when Traefik should automate issuance and renewal, or use the
+manual DNS-01 path when you create the TXT record yourself. See
+[Subdomain wildcard with Let's Encrypt](tls-and-gateway.md#subdomain-wildcard-with-lets-encrypt).
+
+Then start the full enterprise stack behind the gateway.
+
+With the local certificate overlay:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d
 ```
 
-All public traffic now goes through `443`. Traefik terminates TLS, preserves the inbound Host header, and routes by host and path: the operator plane at `https://platform.<base-domain>` and each tenant at `https://<tenant>.<base-domain>`.
+With the Let's Encrypt overlay:
 
-## 4. Where the services listen
+```bash
+docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait
+```
 
-The public surface is limited to protocol and resolver endpoints:
+All public traffic now goes through `443`. Traefik terminates TLS, preserves the inbound Host header, and routes by host and path: the operator plane at `https://platform.<base-domain>` and each tenant at `https://<tenant>.<base-domain>`. Customers and operators call the gateway URLs, not the individual containers.
 
-| Service | Public endpoints |
+On a pristine deployment the setup gate is still open and non-platform
+workloads have not received an activated license yet. They should nevertheless
+be running. Direct workload `/health` probes may show `503` with
+`licenseStatus: MISSING` until first-run setup imports the protected license
+bundle and bootstraps the operator account.
+
+## 4. Gateway Public Routes
+
+The public surface is the gateway route table, not direct container ports. It is
+limited to the platform host and tenant hosts; Traefik maps paths on those hosts
+to the backing containers internally:
+
+| Gateway host | Routed paths |
 | --- | --- |
-| Platform | OAuth/OIDC authorization server metadata, `/authorize`, `/token`, `/userinfo` |
-| Tenant KMS | None. The KMS has no public listener |
-| DID | `/.well-known/did.json`, `/1.0/identifiers`, resolver paths |
-| Tenant AS | OAuth/OIDC metadata, `/authorize`, `/token`, `/userinfo`, `/login` |
-| Issuer | `/.well-known/openid-credential-issuer`, `/oid4vci`, `/credential`, status list paths |
-| Verifier | `/oid4vp`, `/request_uri`, `/direct_post` |
-| Admin console | `/admin-console` on the platform host (gateway overlay only) |
+| `platform.<base-domain>` | Operator OAuth/OIDC metadata, `/authorize`, `/token`, `/userinfo`, `/admin-console` |
+| `<tenant>.<base-domain>` | Public protocol/resolver paths such as `/.well-known/did.json`, tenant OAuth/OIDC metadata and auth paths, OID4VCI issuer paths, OID4VP verifier paths, plus authenticated operator/admin API paths if your gateway policy exposes them |
 
-The administrative REST paths (`/api/.../v1`) are for controlled administrative
-use. Keep them off the open public network and reach them only over the host
-loopback, your private network, or a gateway route protected by JWT and network
-policy.
+Runtime probes are internal Docker Compose or Kubernetes concerns. They are not
+routed as tenant public URLs.
 
-## 5. Admin console
+The administrative REST paths (`/api/.../v1`) are controlled operator/admin
+traffic, not public protocol endpoints. Keep them off the open public network
+and reach them only through an authenticated gateway path or a private network
+path protected by JWT and network policy.
+
+## 5. First-run setup and admin console
 
 The optional `admin-console` service is the Next.js operator admin UI. It comes up with the gateway overlay and is reachable at `https://platform.<base-domain>/admin-console`. The console listens on port `3000` and owns the `/admin-console` path prefix; the gateway routes `/admin-console` to it without stripping the prefix.
 
-First-run setup must activate the license and create the operator account. After that, open `https://platform.<base-domain>/admin-console` and sign in with that operator account. The console authenticates against the platform authorization server for this host, then uses token exchange to act on tenant KMS and DID APIs. The per-tenant console (`https://<tenant>.<base-domain>/admin-console`) is a future capability and is not enabled. For details see [configuration.md](configuration.md) and [tls-and-gateway.md](tls-and-gateway.md).
+On a new installation, open `https://platform.<base-domain>/setup-license`,
+or open `https://platform.<base-domain>/admin-console` and follow the setup
+redirect. First-run setup generates the license request, imports the protected
+license bundle, and creates the first platform operator account. Do not set the
+operator email, license installation id, deployment id, or tenant slug in
+`.env` just to start the stack; setup and tenant creation collect those values
+when they are needed.
+
+After setup closes the anonymous setup gate, open
+`https://platform.<base-domain>/admin-console` and sign in with the operator
+account. The console authenticates against the platform authorization server for
+this host, then uses token exchange to act on tenant KMS and DID APIs. The
+per-tenant console (`https://<tenant>.<base-domain>/admin-console`) is a future
+capability and is not enabled. For details see [configuration.md](configuration.md)
+and [tls-and-gateway.md](tls-and-gateway.md).
 
 ## 6. Onboard the first tenant
 
-With the stack up, onboard a tenant in one of two ways:
+With first-run setup complete, create a tenant from the admin console or the
+platform admin REST API. Tenant registration requires tenant AS, tenant KMS,
+DID, issuer, and verifier to be running, because the platform seeds tenant
+signing material and tenant DID state through those east-west services.
 
-- Run the provision script. It calls the REST APIs against the running deployment: it waits for health, runs platform setup if the gate is still open, signs the operator in, registers the tenant, and binds the tenant's public endpoints. See [onboarding.md](onboarding.md).
-- Import the Postman collection and run it step by step. This is the explicit, request-by-request path through platform setup, operator sign-in, and tenant creation. See [onboarding.md](onboarding.md).
+The tenant workload services fetch their effective configuration from the
+platform and serve the tenant endpoints registered during onboarding. If a
+workload was not running when tenant registration starts, re-run the same
+`up -d` command before registering the tenant.
+
+The `scripts/provision` helper and Postman collection are optional validation
+and automation tools. They call the same setup and tenant admin APIs against the
+running platform, but they are not required for the normal customer setup path.
+See [onboarding.md](onboarding.md).
 
 ## Stop the stack
 
@@ -143,4 +209,11 @@ With the stack up, onboard a tenant in one of two ways:
 docker compose -f docker-compose.yml down -v
 ```
 
-Add `-f docker-compose.gateway.yml` if you brought the stack up with the gateway overlay. The `-v` flag removes the stack volumes. Omit it to keep data between runs.
+Use the same overlay file you used when starting the stack:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml down -v
+```
+
+The `-v` flag removes the stack volumes. Omit it to keep data between runs.

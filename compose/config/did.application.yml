@@ -9,17 +9,14 @@ server:
     port: 8080
     auth:
       enabled: true
-      # The issuer must match the token `iss` (the tenant AS public URL). The
-      # JWKS is fetched over the internal network because the public URL may not
-      # resolve in-cluster.
-      issuer: ${env:EDK_TENANT_AS_PUBLIC_URL}
-      jwks-uri: http://enterprise-tenant-as:18083/.well-known/jwks.json
+      # Tenant bearer issuers are dynamic registry-backed AS endpoints created
+      # during tenant onboarding, not deployment-time URLs.
       # Trust the platform operator AS as a second fixed issuer so operator->tenant
       # STS tokens (RFC 8693) from the admin console are accepted.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
       expected-audience: enterprise-tenant-did
-      trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:false}
+      trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
       # Open prefixes: did.json hosting plus the in-network command transport.
       anonymous-path-prefixes: /.well-known,/api/commands
   service-identity:
@@ -91,6 +88,9 @@ transport:
           mac: *tenantKmsGrpcRoute
           encryption: *tenantKmsGrpcRoute
       platform:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
         services:
           config: &platformGrpcRoute
             target: SERVER
@@ -104,26 +104,31 @@ config:
   providers:
     platform-config-remote:
       enabled: true
+      bootstrap-required-keyspaces: kms.providers
+    tenant-config-db:
+      enabled: false
 database:
   app:
     default:
       dialect: postgresql
-      host: ${env:EDK_DB_HOST}
+      host: ${env:EDK_TENANT_DB_HOST}
       port: 5432
-      database: ${env:EDK_DB_NAME}
-      username: ${env:EDK_DB_USERNAME}
-      password: ${env:EDK_DB_PASSWORD}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
   tenants:
     default:
       dialect: postgresql
-      isolation: shared
-      host: ${env:EDK_DB_HOST}
+      isolation: schema
+      schema-pattern: "tenant_{id}"
+      host: ${env:EDK_TENANT_DB_HOST}
       port: 5432
-      database: ${env:EDK_DB_NAME}
-      username: ${env:EDK_DB_USERNAME}
-      password: ${env:EDK_DB_PASSWORD}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
 tenant:
   resolution:
+    remote: true
     platform:
       base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
       subdomain:
@@ -134,7 +139,9 @@ license:
   command-enforcement:
     enabled: true
     missing-descriptor-mode: warn
-  installation-id: ${env:EDK_INSTALLATION_ID:11111111-1111-4111-8111-111111111111}
+  # Optional explicit pin. Leave blank for first-run setup; the verified
+  # protected license bundle supplies the installation binding.
+  installation-id: ${env:EDK_INSTALLATION_ID:}
   gate:
     service-role: enterprise-did
 did:

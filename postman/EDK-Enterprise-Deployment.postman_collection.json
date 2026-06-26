@@ -2,20 +2,14 @@
   "info": {
     "name": "EDK-Enterprise-Deployment",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Customer walkthrough for an EDK enterprise deployment hosted under one base domain: platform.<baseDomain> for the platform/operator plane and <tenantSlug>.<baseDomain> for tenant issuer, verifier, authorization-server, KMS and DID routes. Run folders in order; later folders consume variables captured by earlier ones."
+    "description": "Customer walkthrough for an EDK enterprise deployment hosted under one base domain: platform.<baseDomain> for the platform/operator plane and <tenantSlug>.<baseDomain> for tenant protocol routes plus protected administrative API paths. Customer inputs are the platform gateway origin and tenant gateway origin. The collection targets gateway host/path routes only; it never calls workload containers or runtime probes directly."
   },
   "variable": [
     {
       "key": "statusListSigningKeyAlias",
-      "value": "{{tenantSlug}}-assertion",
+      "value": "issuer-signing-{{tenantSlug}}",
       "type": "string",
-      "description": "Signing key alias for status-list tokens. Defaults to the tenant's credential signing key."
-    },
-    {
-      "key": "bindAuthorizationServer",
-      "value": "true",
-      "type": "string",
-      "description": "Bind the tenant OAuth2 authorization-server endpoint during tenant onboarding."
+      "description": "Signing key alias for status-list tokens. Defaults to the issuer signing key provisioned during tenant setup."
     },
     {
       "key": "operatorCodeVerifier",
@@ -25,13 +19,13 @@
     },
     {
       "key": "kmsProviderId",
-      "value": "_tenant_",
+      "value": "{{tenantSlug}}",
       "type": "string",
-      "description": "Tenant/runtime KMS provider used by the walkthrough."
+      "description": "Tenant/runtime KMS provider used by the walkthrough. It is derived from tenantSlug by the collection pre-request script."
     },
     {
       "key": "licenseKmsProviderId",
-      "value": "_license_",
+      "value": "license",
       "type": "string",
       "description": "Platform system KMS provider used for setup license-request and recipient material."
     },
@@ -50,15 +44,15 @@
   ],
   "item": [
     {
-      "name": "00 Docker Smoke",
-      "description": "Local Docker smoke checks for the service health endpoints. This folder does not require a license bundle or completed tenant onboarding.",
+      "name": "00 Gateway Smoke",
+      "description": "Gateway-facing platform reachability check. Runtime containers are not addressed directly; tenant protocol and protected API checks run later through the tenant gateway URL after tenant onboarding.",
       "item": [
         {
-          "name": "01 Platform health",
+          "name": "01 Platform setup status",
           "request": {
             "method": "GET",
-            "url": "{{platformUrl}}/health",
-            "description": "Checks the platform service health endpoint."
+            "url": "{{platformUrl}}/api/platform/setup/v1/status",
+            "description": "Checks that the platform host is reachable through the gateway. A 200 means the first-run setup gate is open; a 404 means setup is already closed."
           },
           "event": [
             {
@@ -66,83 +60,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('platform is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "02 DID health",
-          "request": {
-            "method": "GET",
-            "url": "{{didUrl}}/health",
-            "description": "Checks the DID service health endpoint."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('DID service is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "03 Authorization server health",
-          "request": {
-            "method": "GET",
-            "url": "{{asUrl}}/health",
-            "description": "Checks the tenant authorization server health endpoint."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('authorization server is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "04 Issuer health",
-          "request": {
-            "method": "GET",
-            "url": "{{issuerUrl}}/health",
-            "description": "Checks the issuer service health endpoint."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('issuer is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "05 Verifier health",
-          "request": {
-            "method": "GET",
-            "url": "{{verifierUrl}}/health",
-            "description": "Checks the verifier service health endpoint."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('verifier is booted or healthy', () => pm.expect([200, 503]).to.include(pm.response.code));"
+                  "pm.test('platform setup status route is reachable', () => pm.expect([200, 404]).to.include(pm.response.code));"
                 ]
               }
             }
@@ -159,7 +77,7 @@
           "request": {
             "method": "GET",
             "url": "{{platformUrl}}/api/platform/setup/v1/status",
-            "description": "Reads the anonymous setup gate and readiness flags before any operator token exists."
+            "description": "Reads the anonymous setup gate before any operator token exists."
           },
           "event": [
             {
@@ -183,7 +101,7 @@
           ]
         },
         {
-          "name": "02 Get license request readiness",
+          "name": "02 Check license request generator",
           "request": {
             "method": "GET",
             "url": "{{platformUrl}}/api/platform/setup/v1/license-request",
@@ -195,7 +113,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('license request readiness is available or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
+                  "pm.test('license request generator is available or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
                   "if (pm.response.code === 200) {",
                   "  const j = pm.response.json();",
                   "  if (j.defaultAlias) pm.collectionVariables.set('licenseRequestAlias', j.defaultAlias);",
@@ -472,8 +390,8 @@
           },
           "request": {
             "method": "GET",
-            "url": "{{platformUrl}}/authorize?response_type=code&client_id=platform-operator-cli&redirect_uri={{operatorRedirectUri}}&scope=openid&state=qa-operator-state-0001&code_challenge={{operatorCodeChallenge}}&code_challenge_method=S256",
-            "description": "Starts the authorization-code flow for the operator CLI client. The AS answers with a 302 to its hosted login page carrying the pending session id. The S256 code challenge is computed in the pre-request script from the fixed operatorCodeVerifier."
+            "url": "{{platformUrl}}/authorize?response_type=code&client_id=platform-operator-cli&redirect_uri={{operatorRedirectUri}}&scope=openid&state=qa-operator-state-0001&prompt=login&code_challenge={{operatorCodeChallenge}}&code_challenge_method=S256",
+            "description": "Starts the authorization-code flow for the operator CLI client. The request uses standard OIDC prompt=login so an existing Postman or browser session cannot bypass the login form. The AS answers with a 302 to its hosted login page carrying the pending session id. The S256 code challenge is computed in the pre-request script from the fixed operatorCodeVerifier."
           },
           "event": [
             {
@@ -481,6 +399,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "['operatorLoginUrl', 'operatorAuthSessionId', 'operatorReturnUrl', 'operatorTabId', 'operatorSessionCode', 'operatorAuthCode', 'operatorCodeChallenge'].forEach((key) => pm.collectionVariables.unset(key));",
                   "const verifier = pm.variables.replaceIn('{{operatorCodeVerifier}}');",
                   "const challenge = CryptoJS.SHA256(verifier).toString(CryptoJS.enc.Base64)",
                   "  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
@@ -590,7 +509,11 @@
                   "pm.expect(location, 'Location header').to.be.a('string');",
                   "pm.expect(location).to.include('/authorize/callback');",
                   "pm.expect(location).to.not.include('error=invalid_credentials');",
-                  "pm.collectionVariables.set('operatorCallbackUrl', location);"
+                  "const sessionId = pm.collectionVariables.get('operatorAuthSessionId');",
+                  "const expectedPath = '/authorize/callback?session_id=' + encodeURIComponent(sessionId);",
+                  "const expectedUrl = pm.variables.get('platformUrl').replace(/\\/$/, '') + expectedPath;",
+                  "const normalizedLocation = /^https?:\\/\\//.test(location) ? location : pm.variables.get('platformUrl').replace(/\\/$/, '') + location;",
+                  "pm.expect(normalizedLocation, 'authorization callback URL').to.eql(expectedUrl);"
                 ]
               }
             }
@@ -603,10 +526,22 @@
           },
           "request": {
             "method": "GET",
-            "url": "{{operatorCallbackUrl}}",
-            "description": "Resumes the pending authorization with the fresh login session cookie. The AS issues the authorization code and answers 302 to the registered redirect URI with code and state."
+            "url": "{{platformUrl}}/authorize/callback?session_id={{operatorAuthSessionId}}",
+            "description": "Resumes the pending authorization with the fresh login session cookie. The callback URL is deterministic: /authorize/callback?session_id=<session id> from step 01; no customer-provided callback variable is required. The AS issues the authorization code and answers 302 to the registered redirect URI with code and state."
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sessionId = pm.collectionVariables.get('operatorAuthSessionId');",
+                  "if (!sessionId) {",
+                  "  throw new Error('Run \"02 Operator Sign-in / 01 Start authorization request\" first; the callback URL is derived from that authorization session.');",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -686,7 +621,7 @@
     },
     {
       "name": "03 Tenant Onboarding",
-      "description": "Creates the first tenant and binds its issuer, verifier, and authorization server public endpoints to the tenant host derived from baseDomain and tenantSlug.",
+      "description": "Creates the tenant. Tenant setup provisions the default authorization server, KMS provider/material, tenant DID, and the gateway protocol route bindings. Issuer and verifier are included by default but can be skipped and managed manually. The route bindings target the tenant gateway host, not direct container URLs.",
       "item": [
         {
           "name": "01 Register tenant",
@@ -705,7 +640,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tenantType\": \"organization\",\n  \"name\": \"{{tenantName}}\",\n  \"description\": \"{{tenantName}} issuing and verification tenant\",\n  \"slug\": \"{{tenantSlug}}\",\n  \"owner\": {\n    \"type\": \"local\",\n    \"email\": \"admin@{{tenantSlug}}.example\",\n    \"displayName\": \"{{tenantName}} Administrator\"\n  },\n  \"ownerDelivery\": {\n    \"mode\": \"none\"\n  }\n}"
+              "raw": "{\n  \"tenantType\": \"organization\",\n  \"name\": \"{{tenantName}}\",\n  \"description\": \"{{tenantName}} issuing and verification tenant\",\n  \"slug\": \"{{tenantSlug}}\",\n  \"addIssuer\": true,\n  \"addVerifier\": true,\n  \"owner\": {\n    \"type\": \"local\",\n    \"email\": \"admin@{{tenantSlug}}.example\",\n    \"displayName\": \"{{tenantName}} Administrator\"\n  },\n  \"ownerDelivery\": {\n    \"mode\": \"none\"\n  }\n}"
             },
             "description": "Registers a root tenant with a local owner account. Owner credential delivery is disabled here; production deployments use email delivery."
           },
@@ -716,16 +651,95 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('tenant registered', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const requestBody = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+                  "pm.test('tenant registration request matches admin console provisioning payload', () => {",
+                  "  pm.expect(requestBody.tenantType).to.eql('organization');",
+                  "  pm.expect(requestBody.addIssuer).to.eql(true);",
+                  "  pm.expect(requestBody.addVerifier).to.eql(true);",
+                  "  pm.expect(requestBody.owner).to.include({ type: 'local' });",
+                  "  pm.expect(requestBody.owner.email).to.be.a('string').and.not.empty;",
+                  "  pm.expect(requestBody.ownerDelivery).to.deep.include({ mode: 'none' });",
+                  "});",
                   "const j = pm.response.json();",
                   "const tenant = j.tenant || j;",
-                  "if (tenant && tenant.id) pm.collectionVariables.set('tenantId', tenant.id);"
+                  "if (tenant && tenant.id) pm.collectionVariables.set('tenantId', tenant.id);",
+                  "const correlationId = j.correlationId || j.registration?.correlationId || j.registrationLogId || tenant?.correlationId;",
+                  "pm.expect(correlationId, 'tenant onboarding correlation id').to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.set('tenantRegistrationCorrelationId', correlationId);",
+                  "pm.test('registration returned tenant gateway protocol URLs', () => {",
+                  "  pm.expect(j.issuerUrl || j.tenant?.issuerUrl, 'AS issuer URL').to.be.a('string').and.not.empty;",
+                  "  pm.expect(j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl, 'OID4VCI issuer URL').to.be.a('string').and.not.empty;",
+                  "  pm.expect(j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl, 'OID4VP verifier URL').to.be.a('string').and.not.empty;",
+                  "});"
                 ]
               }
             }
           ]
         },
         {
-          "name": "02 Get tenant",
+          "name": "02 Get tenant onboarding status",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/admin/v1/tenant-onboarding/{{tenantRegistrationCorrelationId}}",
+            "description": "Reads the platform tenant-onboarding status row produced by registration and verifies the platform completed every default activation step before customer-facing setup continues.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const correlationId = pm.collectionVariables.get('tenantRegistrationCorrelationId');",
+                  "if (!correlationId) {",
+                  "  throw new Error('Run \"03 Tenant Onboarding / 01 Register tenant\" first; the onboarding status URL is derived from the returned correlationId.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tenant onboarding status returned', () => pm.response.to.have.status(200));",
+                  "const status = pm.response.json();",
+                  "pm.expect(status.correlationId, 'correlation id').to.eql(pm.collectionVariables.get('tenantRegistrationCorrelationId'));",
+                  "pm.expect(status.tenantId, 'tenant id').to.eql(pm.collectionVariables.get('tenantId'));",
+                  "pm.expect(status.status, 'onboarding status').to.eql('COMPLETED');",
+                  "pm.expect(status.completedAt, 'completedAt').to.be.a('string').and.not.empty;",
+                  "pm.expect(status.lastError, 'last error').to.satisfy((value) => value === null || value === undefined);",
+                  "const steps = Array.isArray(status.steps) ? status.steps : [];",
+                  "pm.expect(steps.length, 'onboarding step timeline').to.be.greaterThan(0);",
+                  "const stepId = (record) => typeof record.step === 'string' ? record.step : (record.step && record.step.id) || record.stepId || record.id;",
+                  "const failedSteps = steps.filter((record) => record.error);",
+                  "pm.expect(failedSteps.map((record) => stepId(record) + '=' + record.error), 'failed onboarding steps').to.eql([]);",
+                  "const completedSteps = steps.filter((record) => record.completedAt).map(stepId);",
+                  "[",
+                  "  'routing-inserted',",
+                  "  'isolation-provisioned',",
+                  "  'as-provisioned',",
+                  "  'as-endpoint-bound',",
+                  "  'issuer-provisioned',",
+                  "  'issuer-endpoint-bound',",
+                  "  'verifier-provisioned',",
+                  "  'verifier-endpoint-bound',",
+                  "  'did-provisioned',",
+                  "  'default-settings-applied',",
+                  "  'owner-provisioned'",
+                  "].forEach((step) => pm.expect(completedSteps, step).to.include(step));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Get tenant",
           "request": {
             "method": "GET",
             "url": "{{platformUrl}}/api/platform/admin/v1/tenants/{{tenantId}}",
@@ -750,7 +764,7 @@
           ]
         },
         {
-          "name": "03 List tenants",
+          "name": "04 List tenants",
           "request": {
             "method": "GET",
             "url": "{{platformUrl}}/api/platform/admin/v1/tenants",
@@ -778,136 +792,11 @@
           ]
         },
         {
-          "name": "04 Bind issuer public endpoint",
-          "request": {
-            "method": "PUT",
-            "url": "{{platformUrl}}/api/platform/admin/v1/tenants/{{tenantId}}/public-endpoints/OID4VCI_ISSUER",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{operatorToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"host\": \"{{issuerPublicHost}}\",\n  \"enabled\": true,\n  \"primaryEndpoint\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Binds the public host and path prefix under which this tenant's OID4VCI issuer is reachable. Wallets resolve issuer metadata through this endpoint."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('issuer endpoint bound', () => pm.expect([200, 201]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "05 Bind verifier public endpoint",
-          "request": {
-            "method": "PUT",
-            "url": "{{platformUrl}}/api/platform/admin/v1/tenants/{{tenantId}}/public-endpoints/OID4VP_VERIFIER",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{operatorToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"host\": \"{{verifierPublicHost}}\",\n  \"enabled\": true,\n  \"primaryEndpoint\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Binds the public host and path prefix for this tenant's OID4VP verifier."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('verifier endpoint bound', () => pm.expect([200, 201]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "06 Bind authorization server public endpoint",
-          "request": {
-            "method": "PUT",
-            "url": "{{platformUrl}}/api/platform/admin/v1/tenants/{{tenantId}}/public-endpoints/OAUTH2_AUTHORIZATION_SERVER",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{operatorToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"host\": \"{{asPublicHost}}\",\n  \"enabled\": true,\n  \"primaryEndpoint\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Binds the tenant authorization server to the tenant public host. Wallets use this host for authorization metadata and token requests."
-          },
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (String(pm.variables.get('bindAuthorizationServer') || 'true') === 'false') {",
-                  "  pm.execution.skipRequest();",
-                  "}"
-                ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('verifier endpoint bound', () => pm.expect([200, 201]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "07 List public endpoints",
+          "name": "05 List tenant gateway endpoint bindings",
           "request": {
             "method": "GET",
             "url": "{{platformUrl}}/api/platform/admin/v1/tenants/{{tenantId}}/public-endpoints",
-            "description": "Lists all public endpoint bindings for the tenant.",
+            "description": "Lists the tenant gateway endpoint bindings created by tenant registration. These are route metadata records for the gateway contract, not health checks or direct workload URLs.",
             "header": [
               {
                 "key": "Authorization",
@@ -921,7 +810,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('endpoints listed', () => pm.response.to.have.status(200));"
+                  "pm.test('endpoints listed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "const endpoints = j.data || j.items || j.endpoints || (Array.isArray(j) ? j : []);",
+                  "const serviceTypes = endpoints.map((endpoint) => endpoint.serviceType);",
+                  "pm.test('registration created gateway bindings for AS, issuer, and verifier protocol routes', () => {",
+                  "  ['OAUTH2_AUTHORIZATION_SERVER', 'OID4VCI_ISSUER', 'OID4VP_VERIFIER'].forEach((serviceType) => pm.expect(serviceTypes, serviceType).to.include(serviceType));",
+                  "});"
                 ]
               }
             }
@@ -1100,17 +995,17 @@
           ]
         }
       ],
-      "description": "Exchanges the platform operator token for a tenant runtime token. KMS, DID, issuer, and verifier management calls use this tenant-scoped token."
+      "description": "Exchanges the platform operator token for a tenant runtime token. Authenticated tenant gateway/admin API calls use this tenant-scoped token."
     },
     {
       "name": "06 Tenant Keys and DID",
-      "description": "Checks KMS authentication boundaries, creates tenant signing keys, creates the tenant did:web identifier, adds the assertion method, and verifies the public did.json document.",
+      "description": "Checks authentication boundaries through the tenant gateway, verifies tenant setup KMS material, discovers the tenant did:web identifier created during tenant activation, and verifies the public did.json document.",
       "item": [
         {
           "name": "01 KMS create rejects anonymous",
           "request": {
             "method": "POST",
-            "url": "{{kmsUrl}}/api/kms/v1/keys",
+            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys",
             "description": "Verifies strict auth before any authenticated KMS mutation: anonymous callers must not be able to create keys.",
             "header": [
               {
@@ -1149,7 +1044,7 @@
           "name": "02 KMS import rejects anonymous",
           "request": {
             "method": "POST",
-            "url": "{{kmsUrl}}/api/kms/v1/keys/import",
+            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys/import",
             "description": "Verifies anonymous callers cannot import externally supplied key material into KMS.",
             "header": [
               {
@@ -1188,7 +1083,7 @@
           "name": "03 KMS delete rejects anonymous",
           "request": {
             "method": "DELETE",
-            "url": "{{kmsUrl}}/api/kms/v1/keys/{{tenantSlug}}-anonymous-denied",
+            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys/{{tenantSlug}}-anonymous-denied",
             "description": "Verifies anonymous callers cannot delete KMS keys. The alias is intentionally non-existent; auth must reject before key lookup.",
             "header": [
               {
@@ -1214,7 +1109,7 @@
           "name": "04 KMS register rejects anonymous",
           "request": {
             "method": "POST",
-            "url": "{{kmsUrl}}/api/kms/v1/keys/register",
+            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys/register",
             "description": "Verifies anonymous callers cannot register an existing provider key reference for platform use.",
             "header": [
               {
@@ -1250,93 +1145,11 @@
           ]
         },
         {
-          "name": "05 Generate assertion key",
-          "request": {
-            "method": "POST",
-            "url": "{{kmsUrl}}/api/kms/v1/keys",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"providerId\": \"{{kmsProviderId}}\",\n  \"alias\": \"{{tenantSlug}}-assertion\",\n  \"use\": \"sig\",\n  \"alg\": \"ECDSA_SHA256\",\n  \"keyOperations\": [\"sign\"]\n}"
-            },
-            "description": "Generates a P-256 (ES256) key used for credential signing. The key never leaves the KMS; the response carries the public JWK and the key identifier."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('assertion key generated', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                  "const j = pm.response.json();",
-                  "const kp = j.keyPair || j;",
-                  "if (kp && kp.kid) pm.collectionVariables.set('assertionKid', kp.kid);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "06 Generate authentication key",
-          "request": {
-            "method": "POST",
-            "url": "{{kmsUrl}}/api/kms/v1/keys",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"providerId\": \"{{kmsProviderId}}\",\n  \"alias\": \"{{tenantSlug}}-authentication\",\n  \"use\": \"sig\",\n  \"alg\": \"ECDSA_SHA256\",\n  \"keyOperations\": [\"sign\"]\n}"
-            },
-            "description": "Generates a second ES256 key used for the DID's authentication relationship."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('authentication key generated', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                  "const j = pm.response.json();",
-                  "const kp = j.keyPair || j;",
-                  "if (kp && kp.kid) pm.collectionVariables.set('authKid', kp.kid);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "07 List KMS providers",
+          "name": "05 List KMS providers",
           "request": {
             "method": "GET",
-            "url": "{{kmsUrl}}/api/kms/v1/providers",
-            "description": "Lists configured tenant KMS providers using the tenant bearer token. This is the positive counterpart to the offline auth-boundary negative check.",
+            "url": "{{tenantGatewayUrl}}/api/kms/v1/providers",
+            "description": "Lists configured tenant KMS providers using the tenant bearer token. Exactly one customer-visible provider must be exposed, and its id must be the tenant slug.",
             "header": [
               {
                 "key": "Authorization",
@@ -1356,19 +1169,24 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('kms providers listed', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.text(), 'tenant system provider is present').to.include(pm.variables.get('kmsProviderId'));",
-                  "pm.expect(pm.response.text(), 'license system provider is hidden').to.not.include('_license_');",
-                  "pm.expect(pm.response.text(), 'platform system provider is hidden').to.not.include('_platform_');"
+                  "const body = pm.response.json();",
+                  "const providers = Array.isArray(body) ? body : (body.providers || body.keyProviders || []);",
+                  "const providerIds = providers.map((p) => p.providerId || p.id).filter(Boolean).sort();",
+                  "pm.expect(providerIds, 'only the tenant slug provider is visible').to.eql([pm.variables.get('kmsProviderId')]);",
+                  "pm.expect(providerIds, 'generic local provider is hidden').to.not.include('software');",
+                  "pm.expect(providerIds, 'internal token verifier is hidden').to.not.include('internal-token-verifier');",
+                  "pm.expect(providerIds, 'license provider is hidden').to.not.include('license');",
+                  "pm.expect(providerIds, 'platform provider is hidden').to.not.include('platform');"
                 ]
               }
             }
           ]
         },
         {
-          "name": "08 Get tenant provider capabilities",
+          "name": "06 Get tenant provider capabilities",
           "request": {
             "method": "GET",
-            "url": "{{kmsUrl}}/api/kms/v1/providers/{{kmsProviderId}}/capabilities",
+            "url": "{{tenantGatewayUrl}}/api/kms/v1/providers/{{kmsProviderId}}/capabilities",
             "description": "Reads the selected provider capability report so the suite fails when provider discovery is mounted but provider-specific capability routing is broken.",
             "header": [
               {
@@ -1396,11 +1214,11 @@
           ]
         },
         {
-          "name": "09 List KMS keys",
+          "name": "07 List tenant setup KMS keys",
           "request": {
             "method": "GET",
-            "url": "{{kmsUrl}}/api/kms/v1/keys",
-            "description": "Lists generated keys across providers. The preceding two generated keys should be visible by alias or key identifier.",
+            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys",
+            "description": "Lists keys provisioned by tenant setup. The collection must not generate the default tenant KMS material through KMS APIs.",
             "header": [
               {
                 "key": "Authorization",
@@ -1421,161 +1239,19 @@
                 "exec": [
                   "pm.test('kms keys listed', () => pm.response.to.have.status(200));",
                   "const text = pm.response.text();",
-                  "pm.expect(text, 'assertion key visible').to.include(pm.variables.get('tenantSlug') + '-assertion');",
-                  "pm.expect(text, 'authentication key visible').to.include(pm.variables.get('tenantSlug') + '-authentication');"
+                  "pm.expect(text, 'issuer signing key visible').to.include('issuer-signing-' + pm.variables.get('tenantSlug'));",
+                  "pm.expect(text, 'verifier signing key visible').to.include('oid4vp-verifier-signing-' + pm.variables.get('tenantSlug'));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "10 Create did-web identifier",
-          "request": {
-            "method": "POST",
-            "url": "{{didUrl}}/api/did/v1/identifiers",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"method\": \"web\",\n  \"didAlias\": \"{{tenantSlug}}\",\n  \"keyInfo\": {\n    \"providerId\": \"{{kmsProviderId}}\",\n    \"alias\": \"{{tenantSlug}}-authentication\"\n  },\n  \"options\": {\n    \"domain\": \"{{didWebDomain}}\"\n  }\n}"
-            },
-            "description": "Creates a did:web identifier anchored to the deployment's public domain. The authentication key becomes the initial verification method. did:web identifiers are not key-derived: the domain is the identifier, so it must match the host that serves the DID document."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('did created', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                  "const j = pm.response.json();",
-                  "if (j.did) {",
-                  "  pm.collectionVariables.set('did', j.did);",
-                  "  pm.collectionVariables.set('didEncoded', encodeURIComponent(j.did));",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "11 Add assertion verification method",
-          "request": {
-            "method": "POST",
-            "url": "{{didUrl}}/api/did/v1/identifiers/{{didEncoded}}/verification-methods",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"JsonWebKey2020\",\n  \"controller\": \"{{did}}\",\n  \"keyInfo\": {\n    \"providerId\": \"{{kmsProviderId}}\",\n    \"alias\": \"{{tenantSlug}}-assertion\"\n  },\n  \"purposes\": [\"assertionMethod\"]\n}"
-            },
-            "description": "Adds the assertion key as a verification method with the assertionMethod relationship. Credentials issued by this tenant are signed with this key."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('verification method added', () => pm.expect([200, 201]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "12 List DID verification methods",
+          "name": "08 List activation-created DID identifiers",
           "request": {
             "method": "GET",
-            "url": "{{didUrl}}/api/did/v1/identifiers/{{didEncoded}}/verification-methods",
-            "description": "Lists verification methods on the managed DID, proving the DID sub-resource router and persistence are live after adding the assertion method.",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ]
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('verification methods listed', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.text(), 'did appears in methods response').to.include(pm.collectionVariables.get('did'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "13 Resolve DID",
-          "request": {
-            "method": "GET",
-            "url": "{{didUrl}}/api/did/v1/identifiers/{{didEncoded}}",
-            "description": "Resolves the DID through the management API and returns the full record including the DID document.",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ]
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('did resolved', () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "14 List DID identifiers",
-          "request": {
-            "method": "GET",
-            "url": "{{didUrl}}/api/did/v1/identifiers",
-            "description": "Lists managed DIDs for the tenant. This catches persistence and tenant-resolution regressions that a direct resolve can miss.",
+            "url": "{{tenantGatewayUrl}}/api/did/v1/identifiers",
+            "description": "Lists managed DIDs for the tenant and verifies tenant activation created the default did:web record. This collection must not create the default DID through the management API.",
             "header": [
               {
                 "key": "Authorization",
@@ -1595,18 +1271,126 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('did identifiers listed', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.text(), 'created did visible').to.include(pm.collectionVariables.get('did'));"
+                  "const setPublic = (key, value) => {",
+                  "  pm.collectionVariables.set(key, value);",
+                  "  pm.environment.set(key, value);",
+                  "};",
+                  "const didWebDocumentUrl = (did, gatewayUrl) => {",
+                  "  const prefix = 'did:web:';",
+                  "  if (!String(did || '').startsWith(prefix)) return '';",
+                  "  const parts = String(did).slice(prefix.length).split(':').map((part) => decodeURIComponent(part));",
+                  "  const didHost = parts.shift();",
+                  "  if (!didHost) return '';",
+                  "  let scheme = 'https';",
+                  "  let gatewayAuthority = '';",
+                  "  const gatewayMatch = String(gatewayUrl || '').match(/^([a-z][a-z0-9+.-]*):\\/\\/([^/?#]+)/i);",
+                  "  if (gatewayMatch) {",
+                  "    scheme = gatewayMatch[1].toLowerCase();",
+                  "    gatewayAuthority = gatewayMatch[2];",
+                  "  }",
+                  "  const gatewayHostname = gatewayAuthority.replace(/:\\d+$/, '');",
+                  "  const didHostname = didHost.replace(/:\\d+$/, '');",
+                  "  const useGatewayAuthority = gatewayHostname === didHostname || gatewayAuthority === didHost;",
+                  "  const authority = useGatewayAuthority ? gatewayAuthority : didHost;",
+                  "  const outputScheme = useGatewayAuthority ? scheme : 'https';",
+                  "  const documentPath = parts.length ? '/' + parts.map((part) => encodeURIComponent(part)).join('/') + '/did.json' : '/.well-known/did.json';",
+                  "  return outputScheme + '://' + authority + documentPath;",
+                  "};",
+                  "const collectDids = (value, out) => {",
+                  "  if (typeof value === 'string') {",
+                  "    if (value.indexOf('did:web:') === 0 && value.indexOf('#') < 0) out.push(value);",
+                  "    return out;",
+                  "  }",
+                  "  if (Array.isArray(value)) { value.forEach((item) => collectDids(item, out)); return out; }",
+                  "  if (value && typeof value === 'object') Object.keys(value).forEach((key) => collectDids(value[key], out));",
+                  "  return out;",
+                  "};",
+                  "const body = pm.response.json();",
+                  "const expectedDid = pm.collectionVariables.get('did');",
+                  "const discovered = collectDids(body, []).filter((did, index, all) => all.indexOf(did) === index);",
+                  "const activationDid = discovered.find((did) => did === expectedDid) || discovered[0];",
+                  "pm.expect(activationDid, 'activation-created did discovered from identifiers API').to.eql(expectedDid);",
+                  "setPublic('did', activationDid);",
+                  "setPublic('didEncoded', encodeURIComponent(activationDid));",
+                  "setPublic('didJsonUrl', didWebDocumentUrl(activationDid, pm.variables.get('tenantGatewayUrl')));",
+                  "pm.expect(pm.collectionVariables.get('didJsonUrl'), 'did.json URL discovered from activation-created did:web').to.include('/did.json');"
                 ]
               }
             }
           ]
         },
         {
-          "name": "15 Fetch hosted did.json",
+          "name": "09 Resolve activation-created DID",
           "request": {
             "method": "GET",
-            "url": "{{didUrl}}/.well-known/did.json",
-            "description": "Fetches the DID document from the public did:web hosting surface. External resolvers use exactly this URL; it must be reachable on the domain named in the DID.",
+            "url": "{{tenantGatewayUrl}}/api/did/v1/identifiers/{{didEncoded}}",
+            "description": "Resolves the activation-created DID through the management API and returns the full record including the DID document.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('did resolved', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.text(), 'resolved activation-created did appears').to.include(pm.collectionVariables.get('did'));",
+                  "pm.expect(pm.collectionVariables.get('didJsonUrl'), 'did.json URL is available for hosted discovery').to.include('/did.json');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 List activation-created DID verification methods",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantGatewayUrl}}/api/did/v1/identifiers/{{didEncoded}}/verification-methods",
+            "description": "Lists verification methods on the activation-created managed DID, proving tenant setup attached the verifier authentication key and issuer assertion key.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('verification methods listed', () => pm.response.to.have.status(200));",
+                  "const text = pm.response.text();",
+                  "pm.expect(text, 'did appears in methods response').to.include(pm.collectionVariables.get('did'));",
+                  "pm.expect(text, 'verifier signing key appears').to.include('oid4vp-verifier-signing-' + pm.variables.get('tenantSlug'));",
+                  "pm.expect(text, 'issuer signing key appears').to.include('issuer-signing-' + pm.variables.get('tenantSlug'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Fetch hosted activation did.json",
+          "request": {
+            "method": "GET",
+            "url": "{{didJsonUrl}}",
+            "description": "Fetches the activation-created did:web document from the did.json URL derived from the discovered DID.",
             "header": [
               {
                 "key": "Host",
@@ -1621,7 +1405,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('did document hosted', () => pm.response.to.have.status(200));"
+                  "pm.test('did.json returned', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.variables.get('didJsonUrl'), 'did.json URL derived from activation DID').to.include('/did.json');",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.id, 'hosted did id').to.eql(pm.collectionVariables.get('did'));",
+                  "const methods = Array.isArray(j.verificationMethod) ? j.verificationMethod : [];",
+                  "pm.expect(methods.length, 'hosted did verification methods').to.be.at.least(2);",
+                  "const assertion = Array.isArray(j.assertionMethod) ? j.assertionMethod : [];",
+                  "pm.expect(assertion.length, 'hosted did assertion methods').to.be.at.least(2);",
+                  "pm.expect(JSON.stringify(assertion), 'assertion methods point at activation DID').to.include(pm.collectionVariables.get('did') + '#');"
                 ]
               }
             }
@@ -1637,7 +1429,7 @@
           "name": "01 Create issuer design",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/issuers",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/issuers",
             "header": [
               {
                 "key": "Content-Type",
@@ -1677,7 +1469,7 @@
           "name": "02 Upload issuer logo asset",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/credentials/{{issuerDesignId}}/assets/en/LOGO",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{issuerDesignId}}/assets/en/LOGO",
             "header": [
               {
                 "key": "Content-Type",
@@ -1722,7 +1514,7 @@
           "name": "03 Create issuer render variant",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/render/variants",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/render/variants",
             "header": [
               {
                 "key": "Content-Type",
@@ -1762,7 +1554,7 @@
           "name": "04 Attach render variant to issuer design",
           "request": {
             "method": "PUT",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/issuers/{{issuerDesignId}}",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/issuers/{{issuerDesignId}}",
             "header": [
               {
                 "key": "Content-Type",
@@ -1806,7 +1598,7 @@
           "name": "01 Create EuPid SD-JWT design",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/credentials",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials",
             "header": [
               {
                 "key": "Content-Type",
@@ -1846,7 +1638,7 @@
           "name": "02 Upload EuPid logo asset",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/credentials/{{eupidDesignId}}/assets/en/LOGO",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{eupidDesignId}}/assets/en/LOGO",
             "header": [
               {
                 "key": "Content-Type",
@@ -1891,7 +1683,7 @@
           "name": "03 Create EuPid render variant (en)",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/render/variants",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/render/variants",
             "header": [
               {
                 "key": "Content-Type",
@@ -1931,7 +1723,7 @@
           "name": "04 Create EuPid render variant (nl)",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/render/variants",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/render/variants",
             "header": [
               {
                 "key": "Content-Type",
@@ -1971,7 +1763,7 @@
           "name": "05 Attach render variants to EuPid design",
           "request": {
             "method": "PUT",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/credentials/{{eupidDesignId}}",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{eupidDesignId}}",
             "header": [
               {
                 "key": "Content-Type",
@@ -2009,7 +1801,7 @@
           "name": "06 Create Mdl mdoc design",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/credentials",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials",
             "header": [
               {
                 "key": "Content-Type",
@@ -2049,7 +1841,7 @@
           "name": "07 Upload Mdl logo asset",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/credentials/{{mdlDesignId}}/assets/en/LOGO",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{mdlDesignId}}/assets/en/LOGO",
             "header": [
               {
                 "key": "Content-Type",
@@ -2094,7 +1886,7 @@
           "name": "08 Create Mdl render variant (en)",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/render/variants",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/render/variants",
             "header": [
               {
                 "key": "Content-Type",
@@ -2134,7 +1926,7 @@
           "name": "09 Attach render variant to Mdl design",
           "request": {
             "method": "PUT",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/credentials/{{mdlDesignId}}",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{mdlDesignId}}",
             "header": [
               {
                 "key": "Content-Type",
@@ -2172,7 +1964,7 @@
           "name": "10 List credential designs",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/api/credential-design/v1/designs/credentials",
+            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials",
             "description": "Lists the tenant's credential designs.",
             "header": [
               {
@@ -2208,7 +2000,7 @@
           "name": "01 Create token status list",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/statuslist/v1/statuslists",
+            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists",
             "header": [
               {
                 "key": "Content-Type",
@@ -2226,7 +2018,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correlationId\": \"eupid-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{tenantBaseUrl}}\",\n  \"statusListUri\": \"{{tenantBaseUrl}}/public/statuslists/eupid-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1,\n  \"signingKeyAlias\": \"{{statusListSigningKeyAlias}}\"\n}"
+              "raw": "{\n  \"correlationId\": \"eupid-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{tenantGatewayUrl}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/eupid-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1,\n  \"signingKeyAlias\": \"{{statusListSigningKeyAlias}}\"\n}"
             },
             "description": "Creates the IETF Token Status List the EuPid configuration references, signed with the tenant's credential signing key via the overridable `statusListSigningKeyAlias` collection variable (defaults to the SD-JWT/OID4VCI assertion key `<tenantSlug>-assertion`, so the status list is signed with the same key as the credentials referencing it). The deployment configuration declares the list under the statuslists namespace; this call materializes it. The correlation id is the stable business identifier; the signed token is re-issued whenever entries change, and indexes are allocated randomly at issuance time, never sequentially. Issuance refuses to mint when a configured list cannot be resolved."
           },
@@ -2250,7 +2042,7 @@
           "name": "02 List status lists",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/api/statuslist/v1/statuslists",
+            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists",
             "description": "Lists status lists for the tenant after materializing the EuPid revocation list.",
             "header": [
               {
@@ -2281,7 +2073,7 @@
           "name": "03 Get token status list",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/api/statuslist/v1/statuslists/{{statusListId}}",
+            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists/{{statusListId}}",
             "description": "Reads back the created status list through the management API before checking the hosted token.",
             "header": [
               {
@@ -2315,7 +2107,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               }
             ],
             "url": "{{statusListUri}}",
@@ -2337,7 +2129,7 @@
           "name": "05 Revoke a status entry",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/status",
+            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/status",
             "header": [
               {
                 "key": "Content-Type",
@@ -2375,7 +2167,7 @@
           "name": "06 Reactivate the status entry",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/status",
+            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/status",
             "header": [
               {
                 "key": "Content-Type",
@@ -2413,7 +2205,7 @@
           "name": "07 Read status entry",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/entries/42",
+            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/entries/42",
             "description": "Reads the status-list entry that was revoked and reactivated by index. This verifies the non-leaking upsert/read path for allocated and previously unallocated indexes.",
             "header": [
               {
@@ -2450,11 +2242,11 @@
           "name": "01 Fetch hosted VCT metadata",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/public/schema/vct/EuPid",
+            "url": "{{tenantGatewayUrl}}/public/schema/vct/EuPid",
             "header": [
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               }
             ],
             "description": "Public SD-JWT VC Type Metadata for EuPid. Asserts localized displays (en/nl with lang), rendering.simple logo + colors, content-addressed uri#integrity when hosted, and lowercase claims[].sd."
@@ -2548,11 +2340,11 @@
           "name": "02 Fetch issuer well-known metadata",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/.well-known/openid-credential-issuer",
+            "url": "{{tenantGatewayUrl}}/.well-known/openid-credential-issuer",
             "header": [
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               }
             ],
             "description": "Public OID4VCI issuer metadata. Asserts top-level issuer display (name + logo, en/nl) and the EuPid configuration credential_metadata display (logo, colors, claims) using the locale key."
@@ -2605,11 +2397,11 @@
           "name": "03 Fetch content-addressed asset",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/public/assets/design/{{eupidLogoHashLeaf}}",
+            "url": "{{tenantGatewayUrl}}/public/assets/design/{{eupidLogoHashLeaf}}",
             "header": [
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               }
             ],
             "description": "Fetches the public branding asset by its content-addressed path. This verifies that wallet-facing metadata points to a reachable image."
@@ -2644,7 +2436,7 @@
           "name": "01 Generate wallet holder key",
           "request": {
             "method": "POST",
-            "url": "{{kmsUrl}}/api/kms/v1/keys",
+            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys",
             "header": [
               {
                 "key": "Content-Type",
@@ -2687,7 +2479,7 @@
           "name": "02 Create EuPid offer",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/credential/offers",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/credential/offers",
             "header": [
               {
                 "key": "Content-Type",
@@ -2719,16 +2511,16 @@
                   "const j = pm.response.json();",
                   "const trimBase = (base) => base && base.endsWith('/') ? base.slice(0, -1) : base;",
                   "const rewritePublicUrl = (url, base) => {",
-                  "  const publicHost = pm.variables.get('issuerPublicHost');",
-                  "  const directBase = trimBase(base || pm.variables.get('issuerUrl'));",
+                  "  const publicHost = pm.variables.get('tenantHost');",
+                  "  const gatewayBase = trimBase(base || pm.variables.get('tenantGatewayUrl'));",
                   "  const m = String(url || '').match(/^(https?:\\/\\/([^/]+))(.*)$/);",
-                  "  if (m && publicHost && m[2] === publicHost && directBase) return directBase + (m[3] || '');",
+                  "  if (m && publicHost && m[2] === publicHost && gatewayBase) return gatewayBase + (m[3] || '');",
                   "  return url;",
                   "};",
                   "if (j.offer_uri) {",
                   "  pm.collectionVariables.set('offerUri', j.offer_uri);",
                   "  const m = j.offer_uri.match(/credential_offer_uri=([^&]+)/);",
-                  "  if (m) pm.collectionVariables.set('credentialOfferUri', rewritePublicUrl(decodeURIComponent(m[1]), pm.variables.get('issuerUrl')));",
+                  "  if (m) pm.collectionVariables.set('credentialOfferUri', rewritePublicUrl(decodeURIComponent(m[1]), pm.variables.get('tenantGatewayUrl')));",
                   "}"
                 ]
               }
@@ -2742,7 +2534,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               }
             ],
             "url": "{{credentialOfferUri}}",
@@ -2757,10 +2549,10 @@
                   "pm.test('offer resolved', () => pm.response.to.have.status(200));",
                   "const trimBase = (base) => base && base.endsWith('/') ? base.slice(0, -1) : base;",
                   "const rewritePublicUrl = (url, base) => {",
-                  "  const publicHost = pm.variables.get('issuerPublicHost');",
-                  "  const directBase = trimBase(base || pm.variables.get('issuerUrl'));",
+                  "  const publicHost = pm.variables.get('tenantHost');",
+                  "  const gatewayBase = trimBase(base || pm.variables.get('tenantGatewayUrl'));",
                   "  const m = String(url || '').match(/^(https?:\\/\\/([^/]+))(.*)$/);",
-                  "  if (m && publicHost && m[2] === publicHost && directBase) return directBase + (m[3] || '');",
+                  "  if (m && publicHost && m[2] === publicHost && gatewayBase) return gatewayBase + (m[3] || '');",
                   "  return url;",
                   "};",
                   "const j = pm.response.json();",
@@ -2772,7 +2564,7 @@
                   "  pm.collectionVariables.set('credentialIssuerPublic', j.credential_issuer);",
                   "  pm.collectionVariables.set('credentialIssuer', j.credential_issuer);",
                   "  const m = j.credential_issuer.match(/^(https?:\\/\\/[^/]+)(\\/.*)?$/);",
-                  "  if (m) pm.collectionVariables.set('issuerMetadataUrl', rewritePublicUrl(m[1] + '/.well-known/openid-credential-issuer' + (m[2] || ''), pm.variables.get('issuerUrl')));",
+                  "  if (m) pm.collectionVariables.set('issuerMetadataUrl', rewritePublicUrl(m[1] + '/.well-known/openid-credential-issuer' + (m[2] || ''), pm.variables.get('tenantGatewayUrl')));",
                   "}"
                 ]
               }
@@ -2780,17 +2572,17 @@
           ]
         },
         {
-          "name": "04 Fetch issuer metadata",
+          "name": "04 Fetch OID4VCI metadata",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               }
             ],
             "url": "{{issuerMetadataUrl}}",
-            "description": "Issuer metadata: credential configurations, endpoints, and the authorization servers the issuer trusts. The URL derives from the offer's credential_issuer per OID4VCI 1.0 (the well-known segment goes between host and issuer path)."
+            "description": "OID4VCI metadata: credential configurations, endpoints, and authorization-server references served through the tenant gateway. The URL derives from the offer's credential_issuer per OID4VCI 1.0 (the well-known segment goes between host and issuer path)."
           },
           "event": [
             {
@@ -2798,22 +2590,22 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('issuer metadata served', () => pm.response.to.have.status(200));",
+                  "pm.test('OID4VCI metadata served', () => pm.response.to.have.status(200));",
                   "const trimBase = (base) => base && base.endsWith('/') ? base.slice(0, -1) : base;",
                   "const rewritePublicUrl = (url, base) => {",
-                  "  const issuerHost = pm.variables.get('issuerPublicHost');",
-                  "  const asHost = pm.variables.get('asPublicHost') || issuerHost;",
-                  "  const directBase = trimBase(base || pm.variables.get('issuerUrl'));",
+                  "  const issuerHost = pm.variables.get('tenantHost');",
+                  "  const asHost = pm.variables.get('tenantHost') || issuerHost;",
+                  "  const gatewayBase = trimBase(base || pm.variables.get('tenantGatewayUrl'));",
                   "  const m = String(url || '').match(/^(https?:\\/\\/([^/]+))(.*)$/);",
-                  "  if (m && issuerHost && m[2] === issuerHost && directBase) return directBase + (m[3] || '');",
-                  "  if (m && asHost && m[2] === asHost && directBase) return directBase + (m[3] || '');",
+                  "  if (m && issuerHost && m[2] === issuerHost && gatewayBase) return gatewayBase + (m[3] || '');",
+                  "  if (m && asHost && m[2] === asHost && gatewayBase) return gatewayBase + (m[3] || '');",
                   "  return url;",
                   "};",
                   "const j = pm.response.json();",
-                  "if (j.credential_endpoint) pm.collectionVariables.set('credentialEndpoint', rewritePublicUrl(j.credential_endpoint, pm.variables.get('issuerUrl')));",
-                  "const tokenEndpoint = rewritePublicUrl(j.token_endpoint || (pm.variables.get('asUrl') + '/token'), pm.variables.get('asUrl'));",
+                  "if (j.credential_endpoint) pm.collectionVariables.set('credentialEndpoint', rewritePublicUrl(j.credential_endpoint, pm.variables.get('tenantGatewayUrl')));",
+                  "const tokenEndpoint = rewritePublicUrl(j.token_endpoint || (pm.variables.get('tenantGatewayUrl') + '/token'), pm.variables.get('tenantGatewayUrl'));",
                   "pm.collectionVariables.set('tokenEndpoint', tokenEndpoint);",
-                  "if (j.nonce_endpoint) pm.collectionVariables.set('nonceEndpoint', rewritePublicUrl(j.nonce_endpoint, pm.variables.get('issuerUrl')));"
+                  "if (j.nonce_endpoint) pm.collectionVariables.set('nonceEndpoint', rewritePublicUrl(j.nonce_endpoint, pm.variables.get('tenantGatewayUrl')));"
                 ]
               }
             }
@@ -2877,7 +2669,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               },
               {
                 "key": "Authorization",
@@ -2900,11 +2692,11 @@
                   "const jwk = JSON.parse(pm.collectionVariables.get('walletJwk') || '{}');",
                   "function buildAndSign(nonce) {",
                   "  const header = { alg: 'ES256', typ: 'openid4vci-proof+jwt', jwk: jwk };",
-                  "  const payload = { aud: pm.collectionVariables.get('credentialIssuer') || pm.variables.get('issuerUrl'), iat: Math.floor(Date.now() / 1000), nonce: nonce };",
+                  "  const payload = { aud: pm.collectionVariables.get('credentialIssuer') || pm.variables.get('tenantGatewayUrl'), iat: Math.floor(Date.now() / 1000), nonce: nonce };",
                   "  const signingInput = b64u(header) + '.' + b64u(payload);",
                   "  const inputB64 = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(signingInput));",
                   "  pm.sendRequest({",
-                  "    url: pm.variables.get('kmsUrl') + '/api/kms/v1/signatures/raw/create',",
+                  "    url: pm.variables.get('tenantGatewayUrl') + '/api/kms/v1/signatures/raw/create',",
                   "    method: 'POST',",
                   "    header: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (pm.collectionVariables.get('tenantToken') || pm.variables.get('tenantToken')) },",
                   "    body: { mode: 'raw', raw: JSON.stringify({ keyInfo: { providerId: pm.variables.get('kmsProviderId'), alias: 'wallet-holder' }, input: inputB64 }) }",
@@ -2922,7 +2714,7 @@
                   "if (tokenNonce) {",
                   "  buildAndSign(tokenNonce);",
                   "} else if (nonceEndpoint) {",
-                  "  pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { 'Host': pm.variables.get('issuerPublicHost') } }, (err, res) => {",
+                  "  pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { 'Host': pm.variables.get('tenantHost') } }, (err, res) => {",
                   "    if (err) { console.error('nonce fetch failed', err); return; }",
                   "    buildAndSign(res.json().c_nonce);",
                   "  });",
@@ -2950,7 +2742,7 @@
           "name": "07 Check EuPid offer status",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/credential/offers/e2e-eupid-001",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/credential/offers/e2e-eupid-001",
             "description": "Backend session status after issuance: the lifecycle ends in credential_issued.",
             "header": [
               {
@@ -2980,7 +2772,7 @@
           "name": "08 Create Mdl offer",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/credential/offers",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/credential/offers",
             "header": [
               {
                 "key": "Content-Type",
@@ -3012,15 +2804,15 @@
                   "const j = pm.response.json();",
                   "const trimBase = (base) => base && base.endsWith('/') ? base.slice(0, -1) : base;",
                   "const rewritePublicUrl = (url, base) => {",
-                  "  const publicHost = pm.variables.get('issuerPublicHost');",
-                  "  const directBase = trimBase(base || pm.variables.get('issuerUrl'));",
+                  "  const publicHost = pm.variables.get('tenantHost');",
+                  "  const gatewayBase = trimBase(base || pm.variables.get('tenantGatewayUrl'));",
                   "  const m = String(url || '').match(/^(https?:\\/\\/([^/]+))(.*)$/);",
-                  "  if (m && publicHost && m[2] === publicHost && directBase) return directBase + (m[3] || '');",
+                  "  if (m && publicHost && m[2] === publicHost && gatewayBase) return gatewayBase + (m[3] || '');",
                   "  return url;",
                   "};",
                   "if (j.offer_uri) {",
                   "  const m = j.offer_uri.match(/credential_offer_uri=([^&]+)/);",
-                  "  if (m) pm.collectionVariables.set('mdlCredentialOfferUri', rewritePublicUrl(decodeURIComponent(m[1]), pm.variables.get('issuerUrl')));",
+                  "  if (m) pm.collectionVariables.set('mdlCredentialOfferUri', rewritePublicUrl(decodeURIComponent(m[1]), pm.variables.get('tenantGatewayUrl')));",
                   "}"
                 ]
               }
@@ -3034,7 +2826,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               }
             ],
             "url": "{{mdlCredentialOfferUri}}",
@@ -3113,7 +2905,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{issuerPublicHost}}"
+                "value": "{{tenantHost}}"
               },
               {
                 "key": "Authorization",
@@ -3136,11 +2928,11 @@
                   "const jwk = JSON.parse(pm.collectionVariables.get('walletJwk') || '{}');",
                   "function buildAndSign(nonce) {",
                   "  const header = { alg: 'ES256', typ: 'openid4vci-proof+jwt', jwk: jwk };",
-                  "  const payload = { aud: pm.collectionVariables.get('credentialIssuer') || pm.variables.get('issuerUrl'), iat: Math.floor(Date.now() / 1000), nonce: nonce };",
+                  "  const payload = { aud: pm.collectionVariables.get('credentialIssuer') || pm.variables.get('tenantGatewayUrl'), iat: Math.floor(Date.now() / 1000), nonce: nonce };",
                   "  const signingInput = b64u(header) + '.' + b64u(payload);",
                   "  const inputB64 = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(signingInput));",
                   "  pm.sendRequest({",
-                  "    url: pm.variables.get('kmsUrl') + '/api/kms/v1/signatures/raw/create',",
+                  "    url: pm.variables.get('tenantGatewayUrl') + '/api/kms/v1/signatures/raw/create',",
                   "    method: 'POST',",
                   "    header: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (pm.collectionVariables.get('tenantToken') || pm.variables.get('tenantToken')) },",
                   "    body: { mode: 'raw', raw: JSON.stringify({ keyInfo: { providerId: pm.variables.get('kmsProviderId'), alias: 'wallet-holder' }, input: inputB64 }) }",
@@ -3158,7 +2950,7 @@
                   "if (tokenNonce) {",
                   "  buildAndSign(tokenNonce);",
                   "} else if (nonceEndpoint) {",
-                  "  pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { 'Host': pm.variables.get('issuerPublicHost') } }, (err, res) => {",
+                  "  pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { 'Host': pm.variables.get('tenantHost') } }, (err, res) => {",
                   "    if (err) { console.error('nonce fetch failed', err); return; }",
                   "    buildAndSign(res.json().c_nonce);",
                   "  });",
@@ -3192,7 +2984,7 @@
           "name": "01 Initialize pipeline session",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/sessions",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions",
             "header": [
               {
                 "key": "Content-Type",
@@ -3230,7 +3022,7 @@
           "name": "02 Contribute attributes",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
             "header": [
               {
                 "key": "Content-Type",
@@ -3268,7 +3060,7 @@
           "name": "03 Read accumulated attributes",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
             "description": "Reads the attributes accumulated so far across all sources.",
             "header": [
               {
@@ -3298,7 +3090,7 @@
           "name": "04 Evaluate completeness",
           "request": {
             "method": "GET",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/completeness",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/completeness",
             "description": "Evaluates whether the accumulated attributes satisfy each credential binding's mandatory claims, and whether deferral or approval is recommended.",
             "header": [
               {
@@ -3328,7 +3120,7 @@
           "name": "05 Approve issuance",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/approve",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/approve",
             "header": [
               {
                 "key": "Content-Type",
@@ -3372,7 +3164,7 @@
           "name": "01 Create EuPid query",
           "request": {
             "method": "POST",
-            "url": "{{verifierUrl}}/api/dcql/v1/queries",
+            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries",
             "header": [
               {
                 "key": "Content-Type",
@@ -3390,7 +3182,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"queryId\": \"eupid-sdjwt\",\n  \"name\": \"EuPid identity check\",\n  \"description\": \"Requests name and age attestation from the EU Personal ID\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{issuerUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] },\n          { \"path\": [\"age_over_18\"] }\n        ]\n      }\n    ]\n  }\n}"
+              "raw": "{\n  \"queryId\": \"eupid-sdjwt\",\n  \"name\": \"EuPid identity check\",\n  \"description\": \"Requests name and age attestation from the EU Personal ID\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] },\n          { \"path\": [\"age_over_18\"] }\n        ]\n      }\n    ]\n  }\n}"
             },
             "description": "Selects only family_name, given_name, and age_over_18 from the EuPid. The other claims stay undisclosed."
           },
@@ -3410,7 +3202,7 @@
           "name": "02 Create Mdl query",
           "request": {
             "method": "POST",
-            "url": "{{verifierUrl}}/api/dcql/v1/queries",
+            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries",
             "header": [
               {
                 "key": "Content-Type",
@@ -3448,7 +3240,7 @@
           "name": "03 Create combined query",
           "request": {
             "method": "POST",
-            "url": "{{verifierUrl}}/api/dcql/v1/queries",
+            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries",
             "header": [
               {
                 "key": "Content-Type",
@@ -3466,7 +3258,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"queryId\": \"eupid-and-mdl\",\n  \"name\": \"Identity and driving licence\",\n  \"description\": \"Requests the EuPid and the mobile driving licence in one presentation\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{issuerUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] }\n        ]\n      },\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"driving_privileges\"] }\n        ]\n      }\n    ]\n  }\n}"
+              "raw": "{\n  \"queryId\": \"eupid-and-mdl\",\n  \"name\": \"Identity and driving licence\",\n  \"description\": \"Requests the EuPid and the mobile driving licence in one presentation\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] }\n        ]\n      },\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"driving_privileges\"] }\n        ]\n      }\n    ]\n  }\n}"
             },
             "description": "Requests both credentials in a single presentation, each with its own claim selection."
           },
@@ -3486,7 +3278,7 @@
           "name": "04 List queries",
           "request": {
             "method": "GET",
-            "url": "{{verifierUrl}}/api/dcql/v1/queries",
+            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries",
             "description": "Lists the tenant's stored DCQL query configurations.",
             "header": [
               {
@@ -3516,7 +3308,7 @@
           "name": "05 List combined query versions",
           "request": {
             "method": "GET",
-            "url": "{{verifierUrl}}/api/dcql/v1/queries/eupid-and-mdl/versions",
+            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries/eupid-and-mdl/versions",
             "description": "Lists version history for the combined DCQL query. This exercises the versioned DCQL store packaged in the verifier image.",
             "header": [
               {
@@ -3554,7 +3346,7 @@
           "name": "01 Create verification request",
           "request": {
             "method": "POST",
-            "url": "{{verifierUrl}}/oid4vp/backend/auth/requests",
+            "url": "{{tenantGatewayUrl}}/oid4vp/backend/auth/requests",
             "header": [
               {
                 "key": "Content-Type",
@@ -3572,7 +3364,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"query_id\": \"eupid-and-mdl\",\n  \"client_id\": \"redirect_uri:{{verifierUrl}}/callback\",\n  \"correlation_id\": \"e2e-verify-001\"\n}"
+              "raw": "{\n  \"query_id\": \"eupid-and-mdl\",\n  \"client_id\": \"redirect_uri:{{tenantGatewayUrl}}/callback\",\n  \"correlation_id\": \"e2e-verify-001\"\n}"
             },
             "description": "Creates a verifier session for the combined DCQL query. The response includes the authorization request URI a wallet would open."
           },
@@ -3595,7 +3387,7 @@
           "name": "02 Poll verification status",
           "request": {
             "method": "GET",
-            "url": "{{verifierUrl}}/oid4vp/backend/auth/requests/{{verifyCorrelationId}}",
+            "url": "{{tenantGatewayUrl}}/oid4vp/backend/auth/requests/{{verifyCorrelationId}}",
             "description": "Polls the session. With no wallet attached, the session stays in authorization_request_created; after a wallet presents, it ends in authorization_response_verified with the disclosed claims.",
             "header": [
               {
@@ -3625,7 +3417,7 @@
           "name": "03 Cancel verification session",
           "request": {
             "method": "DELETE",
-            "url": "{{verifierUrl}}/oid4vp/backend/auth/requests/{{verifyCorrelationId}}",
+            "url": "{{tenantGatewayUrl}}/oid4vp/backend/auth/requests/{{verifyCorrelationId}}",
             "description": "Cleans up the verification session.",
             "header": [
               {
@@ -3661,7 +3453,7 @@
           "name": "01 Create offer with authorization code grant",
           "request": {
             "method": "POST",
-            "url": "{{issuerUrl}}/api/oid4vci/v1/backend/credential/offers",
+            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/credential/offers",
             "header": [
               {
                 "key": "Content-Type",
@@ -3699,7 +3491,7 @@
           "name": "02 Fetch authorization server metadata",
           "request": {
             "method": "GET",
-            "url": "{{asUrl}}/.well-known/oauth-authorization-server",
+            "url": "{{tenantGatewayUrl}}/.well-known/oauth-authorization-server",
             "description": "Authorization server metadata the wallet uses to drive the flow: authorization endpoint, token endpoint, supported grants, and PKCE methods.",
             "header": [
               {
@@ -3730,35 +3522,84 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "const set = (key, value) => {",
+          "const setPublic = (key, value) => {",
           "  if (value !== undefined && value !== null && String(value).trim()) {",
           "    const normalized = String(value).trim().replace(/\\/$/, '');",
           "    pm.collectionVariables.set(key, normalized);",
           "    pm.environment.set(key, normalized);",
           "  }",
           "};",
-          "const baseDomain = String(pm.variables.get('baseDomain') || '').trim().replace(/^https?:\\/\\//, '').replace(/\\/$/, '');",
-          "const tenantSlug = String(pm.variables.get('tenantSlug') || 'acme').trim();",
-          "const tenantName = String(pm.variables.get('tenantName') || 'Acme Corporation').trim();",
-          "set('tenantSlug', tenantSlug);",
-          "set('tenantName', tenantName);",
+          "const didWebDocumentUrl = (did, gatewayUrl) => {",
+          "  const prefix = 'did:web:';",
+          "  if (!String(did || '').startsWith(prefix)) return '';",
+          "  const parts = String(did).slice(prefix.length).split(':').map((part) => decodeURIComponent(part));",
+          "  const didHost = parts.shift();",
+          "  if (!didHost) return '';",
+          "  let scheme = 'https';",
+          "  let gatewayAuthority = '';",
+          "  const gatewayMatch = String(gatewayUrl || '').match(/^([a-z][a-z0-9+.-]*):\\/\\/([^/?#]+)/i);",
+          "  if (gatewayMatch) {",
+          "    scheme = gatewayMatch[1].toLowerCase();",
+          "    gatewayAuthority = gatewayMatch[2];",
+          "  }",
+          "  const gatewayHostname = gatewayAuthority.replace(/:\\d+$/, '');",
+          "  const didHostname = didHost.replace(/:\\d+$/, '');",
+          "  const useGatewayAuthority = gatewayHostname === didHostname || gatewayAuthority === didHost;",
+          "  const authority = useGatewayAuthority ? gatewayAuthority : didHost;",
+          "  const outputScheme = useGatewayAuthority ? scheme : 'https';",
+          "  const documentPath = parts.length ? '/' + parts.map((part) => encodeURIComponent(part)).join('/') + '/did.json' : '/.well-known/did.json';",
+          "  return outputScheme + '://' + authority + documentPath;",
+          "};",
+          "const configuredPlatformUrl = String(pm.environment.get('platformUrl') || pm.collectionVariables.get('platformUrl') || '').trim().replace(/\\/$/, '');",
+          "let tenantGatewayUrl = String(pm.environment.get('tenantGatewayUrl') || '').trim().replace(/\\/$/, '');",
+          "let publicScheme = 'https';",
+          "let publicPort = '';",
+          "const platformUrlParts = configuredPlatformUrl.match(/^([a-z][a-z0-9+.-]*):\\/\\/([^/?#]+)/i);",
+          "if (platformUrlParts) {",
+          "  const scheme = platformUrlParts[1].toLowerCase();",
+          "  if (scheme === 'http' || scheme === 'https') publicScheme = scheme;",
+          "  const portMatch = platformUrlParts[2].match(/:(\\d+)$/);",
+          "  if (portMatch) publicPort = ':' + portMatch[1];",
+          "}",
+          "let baseDomain = String(pm.environment.get('baseDomain') || pm.collectionVariables.get('baseDomain') || '').trim().replace(/^https?:\\/\\//, '').replace(/\\/$/, '');",
+          "if (baseDomain) {",
+          "  const basePortMatch = baseDomain.match(/:(\\d+)$/);",
+          "  if (!publicPort && basePortMatch) publicPort = ':' + basePortMatch[1];",
+          "  baseDomain = baseDomain.replace(/:\\d+$/, '');",
+          "}",
+          "const tenantSlug = String(pm.environment.get('tenantSlug') || pm.collectionVariables.get('tenantSlug') || 'acme').trim();",
+          "const tenantName = String(pm.environment.get('tenantName') || pm.collectionVariables.get('tenantName') || 'Acme Corporation').trim();",
+          "setPublic('tenantSlug', tenantSlug);",
+          "setPublic('tenantName', tenantName);",
+          "setPublic('kmsProviderId', tenantSlug);",
+          "const statusListSigningKeyAlias = String(pm.environment.get('statusListSigningKeyAlias') || pm.collectionVariables.get('statusListSigningKeyAlias') || '').trim();",
+          "if (!statusListSigningKeyAlias || statusListSigningKeyAlias.includes('{{tenantSlug}}')) setPublic('statusListSigningKeyAlias', 'issuer-signing-' + tenantSlug);",
           "if (baseDomain) {",
           "  const tenantHost = tenantSlug + '.' + baseDomain;",
-          "  const tenantBaseUrl = 'https://' + tenantHost;",
-          "  const platformUrl = 'https://platform.' + baseDomain;",
-          "  set('tenantHost', tenantHost);",
-          "  set('tenantBaseUrl', tenantBaseUrl);",
-          "  set('platformUrl', platformUrl);",
-          "  set('adminConsoleUrl', platformUrl + '/admin-console');",
-          "  set('operatorRedirectUri', platformUrl + '/admin-console/callback');",
-          "  for (const key of ['kmsUrl', 'didUrl', 'asUrl', 'issuerUrl', 'verifierUrl']) set(key, tenantBaseUrl);",
-          "  for (const key of ['issuerPublicHost', 'verifierPublicHost', 'asPublicHost', 'didWebDomain']) set(key, tenantHost);",
-          "  if (!pm.variables.get('bindAuthorizationServer')) set('bindAuthorizationServer', 'true');",
+          "  const derivedTenantGatewayUrl = publicScheme + '://' + tenantHost + publicPort;",
+          "  const platformUrl = publicScheme + '://platform.' + baseDomain + publicPort;",
+          "  tenantGatewayUrl = derivedTenantGatewayUrl;",
+          "  setPublic('tenantHost', tenantHost);",
+          "  setPublic('platformUrl', platformUrl);",
+          "  setPublic('adminConsoleUrl', platformUrl + '/admin-console');",
+          "  setPublic('operatorRedirectUri', platformUrl + '/admin-console/callback');",
           "}",
-          "for (const key of ['platformUrl', 'adminConsoleUrl', 'operatorRedirectUri', 'kmsUrl', 'didUrl', 'asUrl', 'issuerUrl', 'verifierUrl', 'tenantHost', 'tenantBaseUrl', 'issuerPublicHost', 'verifierPublicHost', 'asPublicHost', 'didWebDomain']) {",
-          "  set(key, pm.environment.get(key));",
+          "if (tenantGatewayUrl) {",
+          "  setPublic('tenantGatewayUrl', tenantGatewayUrl);",
+          "  const hostMatch = tenantGatewayUrl.match(/^[a-z][a-z0-9+.-]*:\\/\\/([^/?#]+)/i);",
+          "  if (hostMatch && !pm.collectionVariables.get('tenantHost')) setPublic('tenantHost', hostMatch[1].replace(/:\\d+$/, ''));",
           "}",
-          "if (!pm.collectionVariables.get('operatorRedirectUri') && pm.collectionVariables.get('platformUrl')) set('operatorRedirectUri', pm.collectionVariables.get('platformUrl') + '/admin-console/callback');"
+          "for (const key of ['platformUrl', 'adminConsoleUrl', 'operatorRedirectUri', 'tenantGatewayUrl', 'tenantHost']) {",
+          "  setPublic(key, pm.environment.get(key));",
+          "}",
+          "if (!pm.collectionVariables.get('operatorRedirectUri') && pm.collectionVariables.get('platformUrl')) setPublic('operatorRedirectUri', pm.collectionVariables.get('platformUrl') + '/admin-console/callback');",
+          "if (pm.collectionVariables.get('tenantHost')) {",
+          "  const didHost = String(pm.collectionVariables.get('tenantHost')).replace(/:\\d+$/, '');",
+          "  const did = 'did:web:' + didHost.replace(/:/g, '%3A');",
+          "  setPublic('did', did);",
+          "  setPublic('didEncoded', encodeURIComponent(did));",
+          "  setPublic('didJsonUrl', didWebDocumentUrl(did, pm.collectionVariables.get('tenantGatewayUrl')));",
+          "}"
         ]
       }
     }

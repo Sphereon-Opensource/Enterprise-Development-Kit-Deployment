@@ -29,14 +29,14 @@ data:
     # backs the LOCAL verify route below, with an ephemeral keystore under temp.
     kms:
       providers:
-        _tenant_:
-          id: _tenant_
+        software:
+          id: software
           type: software
           enabled: true
           autoCreateCertificate: true
           keystore:
             type: pkcs12
-            id: _tenant_
+            id: software
             password: ${env:EDK_KEYSTORE_PASSWORD}
             path: "{tempDir}/edk-verify-keystore.p12"
     crypto:

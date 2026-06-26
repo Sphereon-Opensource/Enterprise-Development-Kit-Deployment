@@ -44,6 +44,6 @@ auth:
   enabled: true
   jwt:
     enabled: true
-    issuer: https://as.example.com
-    jwksUri: https://as.example.com/.well-known/jwks.json
+    issuer: https://acme.example.com
+    jwksUri: https://acme.example.com/.well-known/jwks.json
     audience: edk-enterprise

@@ -2,13 +2,15 @@
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
 {{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+{{- $tenantGatewayPaths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
+{{- $gatewayRouted := and $.Values.gateway.enabled (or (eq $name "platform") (eq $name "admin-console") (ne $tenantGatewayPaths "")) }}
 {{- $peersIn := list }}
-{{- if eq $name "tenant-kms" }}{{- $peersIn = list "did" "issuer" "verifier" }}{{- end }}
+{{- if eq $name "tenant-kms" }}{{- $peersIn = list "tenant-as" "did" "issuer" "verifier" }}{{- end }}
 {{- if eq $name "platform" }}{{- $peersIn = list "tenant-as" "did" "issuer" "verifier" }}{{- end }}
 {{- if eq $name "tenant-as" }}{{- $peersIn = list "tenant-kms" "did" "issuer" "verifier" }}{{- end }}
-{{- if eq $name "did" }}{{- $peersIn = list "verifier" }}{{- end }}
+{{- if eq $name "did" }}{{- $peersIn = list "platform" "verifier" }}{{- end }}
 {{- $peersOut := list }}
-{{- if eq $name "platform" }}{{- $peersOut = list }}{{- end }}
+{{- if eq $name "platform" }}{{- $peersOut = list "tenant-as" "tenant-kms" "did" }}{{- end }}
 {{- if eq $name "tenant-kms" }}{{- $peersOut = list "tenant-as" "platform" }}{{- end }}
 {{- if eq $name "did" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
 {{- if eq $name "tenant-as" }}{{- $peersOut = list "platform" }}{{- end }}
@@ -29,7 +31,7 @@ spec:
     - Ingress
     - Egress
   ingress:
-    {{- if and $.Values.networkPolicy.ingressController.enabled (or $svc.publicIngress.enabled $svc.internalIngress.enabled) }}
+    {{- if and $.Values.networkPolicy.ingressController.enabled (or $svc.publicIngress.enabled $svc.internalIngress.enabled $gatewayRouted) }}
     - from:
         - namespaceSelector:
             {{- toYaml ($.Values.networkPolicy.ingressController.namespaceSelector | default dict) | nindent 12 }}
@@ -81,8 +83,8 @@ spec:
     {{- end }}
     {{- if $.Values.database.enabled }}
     {{- /* Database egress reflects the platform/tenant split. The platform service
-           reaches BOTH the control-plane (platform) database and the tenant workload
-           database; every runtime service reaches ONLY the tenant database. */}}
+           reaches ONLY the control-plane (platform) database; every runtime
+           service reaches ONLY the tenant workload database. */}}
     {{- if eq $name "platform" }}
     - to:
         - {{- if $.Values.database.platform.networkPolicy.ipBlock }}
@@ -104,7 +106,7 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $.Values.database.platform.port }}
-    {{- end }}
+    {{- else }}
     - to:
         - {{- if $.Values.database.tenant.networkPolicy.ipBlock }}
           ipBlock:
@@ -125,6 +127,7 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $.Values.database.tenant.port }}
+    {{- end }}
     {{- end }}
     {{- range $peer := $peersOut }}
     {{- $peerSvc := index $.Values.services $peer }}

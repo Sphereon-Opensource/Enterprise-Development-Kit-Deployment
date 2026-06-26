@@ -2,19 +2,26 @@
 #
 # The pristine manual stack deliberately starts before a deployment license is
 # installed. In that state /health and /ready can report 503 because the product
-# gate is open. For this local-only harness Docker health means "container has
-# booted far enough for manual onboarding", not "licensed runtime ready".
+# gate is open. After setup closes, the setup status route returns 404 and
+# /health becomes the runtime readiness signal. For this local-only harness
+# Docker health accepts either phase.
+#
+# Tenant workloads read their effective configuration from the platform. The
+# manual/localtest runtime profile may be started before first-run setup closes;
+# health accepts the license-gated 503 phase so the containers are present for
+# tenant registration's east-west signing-key provisioning.
 
 services:
   enterprise-platform:
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q 200"]
+      test: ["CMD", "bash", "-c", "(exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) ') || (exec 4<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -Eq ' (200|404) ')"]
       interval: 5s
       timeout: 5s
       retries: 30
       start_period: 20s
 
   enterprise-tenant-as:
+    profiles: ["runtime"]
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
@@ -23,6 +30,7 @@ services:
       start_period: 20s
 
   enterprise-tenant-kms:
+    profiles: ["runtime"]
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
@@ -31,6 +39,7 @@ services:
       start_period: 20s
 
   enterprise-did:
+    profiles: ["runtime"]
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
@@ -39,6 +48,7 @@ services:
       start_period: 20s
 
   enterprise-issuer:
+    profiles: ["runtime"]
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
@@ -47,8 +57,17 @@ services:
       start_period: 20s
 
   enterprise-verifier:
+    profiles: ["runtime"]
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  admin-console:
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/admin-console/health"]
       interval: 5s
       timeout: 5s
       retries: 30

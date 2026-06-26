@@ -14,10 +14,9 @@ database:
   # public-endpoint bindings, platform configuration, the platform tenant, and the
   # platform authorization server. Only the platform service connects to it.
   #
-  # The tenant workload database holds per-tenant runtime data, with one schema per
-  # tenant (schema-per-tenant isolation). The platform writes tenant-scope data here,
-  # and every runtime service (issuer, verifier, DID, tenant authorization server,
-  # tenant KMS) reads and writes its tenant's schema here.
+  # The tenant workload data plane holds per-tenant runtime data. By default this
+  # is one schema per tenant in the tenant database. `database` isolation creates
+  # one database per tenant on the tenant PostgreSQL server.
   platform:
     host: edk-platform-postgres
     port: 5432
@@ -39,9 +38,8 @@ database:
     existingSecret: edk-tenant-postgres
     usernameKey: username
     passwordKey: password
-    # Schema-per-tenant isolation: each tenant's workload lives in its own schema.
-    # The platform creates the schema (CREATE SCHEMA) when a tenant is registered;
-    # the database router sets search_path to the same name at request time.
+    # Tenant workload isolation. The enterprise deployment uses one PostgreSQL
+    # schema per tenant inside the tenant database.
     isolation: schema
     schemaPattern: "tenant_{id}"
     # Egress target for the tenant database NetworkPolicy. Leave empty to allow
@@ -66,6 +64,18 @@ grpc:
   enabled: true
   port: 9090
   authMode: service-jwt
+
+config:
+  providers:
+    # Applied to every satellite/workload service. The platform remains the
+    # configuration authority; satellites fetch tenant/service config from the
+    # platform over the routed command transport.
+    platformConfigRemote:
+      enabled: true
+    # Keep the direct tenant-config database source disabled on satellites so the
+    # tenant workload DB is not treated as the authoritative config backend.
+    tenantConfigDb:
+      enabled: false
 
 # Keystore persistence is split per the per-tenant KMS keystore separation: the
 # platform holds the platform AS cert/user plus the license-request instance
@@ -93,7 +103,7 @@ tenantKmsKeystore:
   existingClaim: ""
 
 # Control-plane bootstrap for the platform service. The platform provisions its
-# `<platform>` tenant, hosted authorization server, and operator owner on first
+# `platform` tenant, hosted authorization server, and operator owner on first
 # boot. These inputs carry hyphenated keys that an environment variable name
 # cannot express, so they are rendered into the platform config overlay
 # (templates/configmap.yaml -> application-container.yml) and the steps are
@@ -105,7 +115,7 @@ platform:
   # platform service stamps on the tokens it mints.
   externalBaseUrl: https://platform.example.com
   bootstrap:
-    # Hosted authorization-server issuer URL for the `<platform>` tenant. The
+    # Hosted authorization-server issuer URL for the `platform` tenant. The
     # operator signs in here and the admin console exchanges operator tokens for
     # tenant tokens against it. Set to the platform's external base URL.
     issuer: https://platform.example.com
@@ -128,14 +138,11 @@ platform:
     # `dev` unlocks the break-glass operator credential and the dev license-trust
     # file override. Set to `prod` for production installations.
     deploymentMode: dev
-    # Installation deployment id the license is minted against. Matches
-    # license.deploymentId consumed by the satellites.
-    deploymentId: deployment-1
     # Permit the platform to serve its hosted authorization server over loopback
     # HTTP. Production keeps the SSRF guard strict; enable only for a local
     # cluster reached over http://localhost.
     allowLocalHttpAs: false
-    # Extra hosts that resolve directly to the `<platform>` tenant, appended to
+    # Extra hosts that resolve directly to the `platform` tenant, appended to
     # the in-container service name and the platform gateway host. Use it to add
     # a port-forward host (e.g. `,localhost:18080`) for a local cluster reached by
     # `kubectl port-forward`. Leading comma required.
@@ -170,13 +177,14 @@ serviceIdentity:
     issuer: service-oid4vci
     verifier: service-oid4vp
   # In-network surfaces each satellite admits without an operator bearer. The
-  # tenant authorization server validates the platform-issued bearer on its
-  # /internal/provision/signing-key endpoint itself; the OAuth protocol surfaces
-  # (authorize/login/token/discovery) and the in-network command/introspection
-  # channels stay open by design (each enforces its own validation). Empty leaves
-  # the service's baked default.
+  # tenant-AS signing-key provisioning endpoint is deliberately absent here:
+  # it must validate the platform-issued bearer during tenant resolution so the
+  # target tenant can be taken from the token before the public host is active.
+  # The OAuth protocol surfaces (authorize/login/token/discovery) and the
+  # in-network command/introspection channels stay open by design (each enforces
+  # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
-    tenant-as: "/authorize,/login,/token,/.well-known,/internal/preauth,/internal/provision,/api/commands,/introspect"
+    tenant-as: "/authorize,/login,/token,/.well-known,/internal/preauth,/api/commands,/introspect"
     tenant-kms: ""
     did: ""
     issuer: ""
@@ -190,12 +198,13 @@ keystore:
   passwordKey: keystore-password
 
 license:
-  # Installation binding for the license gate. The non-platform services fail closed unless they
-  # bind to this installation and declare their service role. It must match the
-  # installation id the platform license is minted with. The platform itself is the
-  # local licensing authority and is exempt via deployment-role=platform (set in
-  # the deployment template, not here).
-  installationId: 11111111-1111-4111-8111-111111111111
+  # Optional explicit installation pin for the license gate. Leave empty during
+  # first-run setup; the protected license bundle supplies the installation id.
+  # If set, it must match the installed license claims or the non-platform
+  # services fail closed. The platform itself is the local licensing authority
+  # and is exempt via deployment-role=platform (set in the deployment template,
+  # not here).
+  installationId: ""
   commandEnforcement:
     enabled: true
     missingDescriptorMode: warn
@@ -213,7 +222,7 @@ license:
   # bundle itself is imported through the setup API after the platform boots.
   trust:
     # Mount a license root-CA PEM from a Secret into the platform (and the
-    # satellites) so the platform trusts the QA/portal-minted license that
+    # satellites) so the platform trusts an evaluation license that
     # chains to it. The Secret's `rootCaKey` entry is mounted at `rootCaPath`.
     # Leave existingSecret empty to rely on the embedded production roots only.
     existingSecret: ""
@@ -286,10 +295,10 @@ opentelemetry:
 
 ingress:
   legacy:
-    # Render the classic per-service public and internal Ingress objects. Set to
-    # false when adopting the single-port Gateway below so only the Gateway and
-    # HTTPRoutes front public traffic.
-    enabled: true
+    # Legacy per-service Ingress is off by default. Customer deployments use the
+    # single-port Gateway below so the public contract is only
+    # platform.<baseDomain> and <tenant>.<baseDomain>.
+    enabled: false
   public:
     annotations: {}
   internal:
@@ -299,7 +308,7 @@ gateway:
   # Single-port multi-tenant Gateway API front door. One wildcard HTTPS listener
   # terminates TLS for both the operator host and tenant hosts; HTTPRoutes fan
   # out by host and path to each service per the routing contract.
-  enabled: false
+  enabled: true
   className: cilium
   # Operator host = {operatorHost}.{baseDomain} (the platform plane).
   operatorHost: platform
@@ -314,6 +323,10 @@ gateway:
   # Add a :80 HTTP listener and a redirect HTTPRoute that 301s to https.
   httpRedirect: true
 
+# Backing workload configuration. These entries create Kubernetes Deployments
+# and Services; they do not define customer-facing hosts. Customer traffic enters
+# through the single-port Gateway (`platform.<baseDomain>` and
+# `<tenant>.<baseDomain>`). Runtime probes stay internal to Kubernetes.
 services:
   platform:
     enabled: true
@@ -361,13 +374,13 @@ services:
       - name: ONBOARDING_UI_BASE_URL
         value: https://platform.example.com
       - name: PLATFORM_SETUP_KMS_PROVIDER_ID
-        value: _license_
+        value: license
       - name: PLATFORM_SETUP_LICENSE_MATERIAL_DEFAULT_ALIAS
         value: license-recipient
       - name: LICENSE_RECIPIENT_KMS_ENABLED
         value: "true"
       - name: LICENSE_RECIPIENT_KMS_PROVIDER_ID
-        value: _license_
+        value: license
       - name: LICENSE_RECIPIENT_KMS_ALIAS
         value: license-recipient
 
@@ -400,18 +413,18 @@ services:
     replicas: 1
     restPort: 8080
     publicIngress:
-      enabled: true
-      className: public
-      host: did.example.com
+      enabled: false
+      className: ""
+      host: ""
       paths:
         - /1.0/identifiers
         - /.well-known/did.json
         - /api/did/v1
       annotations: {}
     internalIngress:
-      enabled: true
+      enabled: false
       className: internal
-      host: did.internal.example.com
+      host: ""
       paths:
         - /api/did/v1
         - /1.0/create
@@ -433,9 +446,9 @@ services:
     replicas: 1
     restPort: 8080
     publicIngress:
-      enabled: true
-      className: public
-      host: as.example.com
+      enabled: false
+      className: ""
+      host: ""
       paths:
         - /.well-known/oauth-authorization-server
         - /.well-known/openid-configuration
@@ -447,9 +460,9 @@ services:
         - /login
       annotations: {}
     internalIngress:
-      enabled: true
+      enabled: false
       className: internal
-      host: as.internal.example.com
+      host: ""
       paths:
         - /authorize
         - /token
@@ -472,9 +485,9 @@ services:
     replicas: 1
     restPort: 8080
     publicIngress:
-      enabled: true
-      className: public
-      host: issuer.example.com
+      enabled: false
+      className: ""
+      host: ""
       paths:
         - /.well-known/openid-credential-issuer
         - /oid4vci
@@ -488,9 +501,9 @@ services:
         - /api/statuslist/v1
       annotations: {}
     internalIngress:
-      enabled: true
+      enabled: false
       className: internal
-      host: issuer.internal.example.com
+      host: ""
       paths:
         - /api/oid4vci/v1
         - /api/credential-design/v1
@@ -511,9 +524,9 @@ services:
     replicas: 1
     restPort: 8080
     publicIngress:
-      enabled: true
-      className: public
-      host: verifier.example.com
+      enabled: false
+      className: ""
+      host: ""
       paths:
         - /oid4vp
         - /request_uri
@@ -521,9 +534,9 @@ services:
         - /api/dcql/v1
       annotations: {}
     internalIngress:
-      enabled: true
+      enabled: false
       className: internal
-      host: verifier.internal.example.com
+      host: ""
       paths:
         - /api/dcql/v1
       annotations: {}

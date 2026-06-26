@@ -2,8 +2,8 @@
 {{- if $svc.enabled }}
 {{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
 {{- /* admin-console is a Next.js standalone web app, not an EDK Java service:
-       it carries no DB/JWT/gRPC/KMS-routing/license-gate wiring and is probed on
-       its /admin-console basePath rather than /health. */}}
+       it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
+       /admin-console/health route rather than the EDK /health endpoint. */}}
 {{- $isAdminConsole := eq $name "admin-console" }}
 apiVersion: apps/v1
 kind: Deployment
@@ -76,9 +76,27 @@ spec:
               value: "container"
             # Configuration directory the service reads: application.yml plus the
             # active-profile overlay (application-container.yml). The platform's
-            # <platform> tenant datasource override is delivered here.
+            # platform tenant datasource override is delivered here.
             - name: SPHEREON_CONFIG_LOCATION
               value: "/app/config"
+            {{- if ne $name "platform" }}
+            # Satellites use platform-owned configuration as their primary config
+            # source. Local file/env config remains bootstrap and explicit override.
+            - name: CONFIG_PROVIDERS_PLATFORM_CONFIG_REMOTE_ENABLED
+              value: {{ $.Values.config.providers.platformConfigRemote.enabled | quote }}
+            - name: CONFIG_PROVIDERS_PLATFORM_CONFIG_REMOTE_BOOTSTRAP_REQUIRED_KEYSPACES
+              {{- $remoteKeyspaces := "kms.providers" -}}
+              {{- if eq $name "tenant-as" -}}
+              {{- $remoteKeyspaces = "oauth2.servers,kms.providers" -}}
+              {{- else if eq $name "issuer" -}}
+              {{- $remoteKeyspaces = "kms.providers,oid4vci,credential-design,statuslists" -}}
+              {{- else if eq $name "verifier" -}}
+              {{- $remoteKeyspaces = "kms.providers,oid4vp" -}}
+              {{- end }}
+              value: {{ $remoteKeyspaces | quote }}
+            - name: CONFIG_PROVIDERS_TENANT_CONFIG_DB_ENABLED
+              value: {{ $.Values.config.providers.tenantConfigDb.enabled | quote }}
+            {{- end }}
             - name: PORT
               value: {{ $svc.restPort | quote }}
             - name: REST_PORT
@@ -93,7 +111,7 @@ spec:
               value: {{ $.Values.global.platformBaseDomain | quote }}
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
-            {{- /* East-west service identity + keystore secrets shared by the JVM services.
+            {{- /* East-west service identity + keystore secrets shared by the service containers.
                    The platform AS mints the service tokens the satellites present; the
                    satellites authenticate with the same internal client secret and read
                    their software keystore with the keystore password. */}}
@@ -141,39 +159,13 @@ spec:
             {{- if $.Values.database.enabled }}
             {{- $platformDb := $.Values.database.platform }}
             {{- $tenantDb := $.Values.database.tenant }}
-            # Tenant workload datasource: per-tenant schemas in the tenant database
-            # (schema-per-tenant isolation). Every service reads and writes its
-            # tenant's schema here. The platform also provisions the schema at
-            # tenant registration.
-            - name: DATABASE_TENANTS_DEFAULT_DIALECT
-              value: {{ $.Values.database.dialect | quote }}
-            - name: DATABASE_TENANTS_DEFAULT_HOST
-              value: {{ $tenantDb.host | quote }}
-            - name: DATABASE_TENANTS_DEFAULT_PORT
-              value: {{ $tenantDb.port | quote }}
-            - name: DATABASE_TENANTS_DEFAULT_DATABASE
-              value: {{ $tenantDb.name | quote }}
-            - name: DATABASE_TENANTS_DEFAULT_ISOLATION
-              value: {{ $tenantDb.isolation | quote }}
-            - name: DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN
-              value: {{ $tenantDb.schemaPattern | quote }}
-            - name: DATABASE_TENANTS_DEFAULT_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $tenantDb.existingSecret }}
-                  key: {{ $tenantDb.usernameKey }}
-            - name: DATABASE_TENANTS_DEFAULT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $tenantDb.existingSecret }}
-                  key: {{ $tenantDb.passwordKey }}
             {{- if eq $name "platform" }}
             # Control-plane datasource: the tenant registry, routing, public-endpoint
             # bindings, and platform configuration live in the platform database. The
-            # platform service owns this connection. The platform tenant's own workload
-            # also co-locates here via the database.tenants override mounted from the
-            # platform config (the angle-bracketed tenant id cannot be expressed as an
-            # environment variable name, so it is supplied as a YAML overlay).
+            # platform service owns this connection. The system platform tenant is
+            # control-plane state and is bound here via the database.tenants override
+            # mounted from the platform config. Customer tenant workload state remains
+            # in the separate tenant workload database.
             - name: DATABASE_APP_DEFAULT_DIALECT
               value: {{ $.Values.database.dialect | quote }}
             - name: DATABASE_APP_DEFAULT_HOST
@@ -205,6 +197,30 @@ spec:
                   name: {{ $platformDb.existingSecret }}
                   key: {{ $platformDb.passwordKey }}
             {{- else }}
+            # Tenant workload datasource. Runtime services own tenant workload
+            # persistence and never receive platform database credentials.
+            - name: DATABASE_TENANTS_DEFAULT_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_ISOLATION
+              value: {{ $tenantDb.isolation | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN
+              value: {{ $tenantDb.schemaPattern | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: DATABASE_TENANTS_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
             # Runtime services keep their app-scope datasource on the tenant database,
             # so any app-scope access stays in the tenant data plane. The control-plane
             # platform database is reachable only by the platform service.
@@ -250,6 +266,11 @@ spec:
               value: "GRPC"
             - name: TRANSPORT_ROUTING_MODULES_PLATFORM_ENDPOINT
               value: {{ printf "grpc://%s-platform:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
+            # Satellites never read tenant routing/public-endpoint metadata from
+            # a local tenant DB. They resolve it through the platform service so
+            # anonymous public Host routes work across namespaces/clusters.
+            - name: TENANT_RESOLUTION_REMOTE
+              value: "true"
             - name: TRANSPORT_ROUTING_MODULES_APPLICATION_TARGET
               value: "SERVER"
             - name: TRANSPORT_ROUTING_MODULES_APPLICATION_TRANSPORT
@@ -281,14 +302,15 @@ spec:
             - name: KMS_ENTERPRISE_LIFECYCLE_RUN_ON_STARTUP
               value: {{ $.Values.kmsLifecycle.runOnStartup | quote }}
             {{- else }}
-            # Non-platform services fail closed unless they bind to the platform installation
-            # and declare their service role.
+            # Non-platform services declare their service role and validate the protected
+            # license bundle. LICENSE_INSTALLATION_ID is an optional explicit pin; leave
+            # empty for first-run setup so the verified bundle supplies the installation id.
+            {{- if $.Values.license.installationId }}
             - name: LICENSE_INSTALLATION_ID
               value: {{ $.Values.license.installationId | quote }}
+            {{- end }}
             - name: LICENSE_GATE_SERVICE_ROLE
               value: {{ index $.Values.license.serviceRoles $name | quote }}
-            - name: LICENSE_DEPLOYMENT_ID
-              value: {{ $.Values.platform.bootstrap.deploymentId | quote }}
             - name: LICENSE_COMMAND_ENFORCEMENT_ENABLED
               value: {{ $.Values.license.commandEnforcement.enabled | quote }}
             - name: LICENSE_COMMAND_ENFORCEMENT_MISSING_DESCRIPTOR_MODE
@@ -314,47 +336,47 @@ spec:
             - name: SPHEREON_SERVICE_ID
               value: {{ index $.Values.serviceIdentity.serviceIds $name | quote }}
             {{- end }}
-            {{- /* In-network surfaces the strict-auth gate admits without an operator bearer:
-                   the tenant authorization server validates the platform-issued bearer on its
-                   /internal/provision/signing-key endpoint itself, and the in-network command/
-                   introspection surfaces carry their own service-token validation. The OAuth
-                   protocol surfaces stay open by design. */}}
+            {{- /* In-network surfaces the strict-auth gate admits without an operator bearer.
+                   The tenant-AS signing-key provisioning endpoint is intentionally omitted:
+                   tenant resolution must validate the platform-issued bearer and use its
+                   tenant_id claim before the tenant's public host is active. The in-network
+                   command/introspection surfaces carry their own service-token validation,
+                   and OAuth protocol surfaces stay open by design. */}}
             {{- $anon := index $.Values.serviceIdentity.anonymousPathPrefixes $name }}
             {{- if $anon }}
             - name: SERVER_REST_AUTH_ANONYMOUS_PATH_PREFIXES
               value: {{ $anon | quote }}
             {{- end }}
             {{- /* Trust anchor for the platform authorization server. Satellites validate
-                   the platform-issued bearer on east-west calls (config reads, the tenant-as
-                   /internal/provision/signing-key endpoint) against the platform token issuer
-                   and fetch its JWKS in-cluster. The issuer must equal the platform AS token
-                   `iss` (its external base URL); the JWKS URI is the in-cluster service. */}}
+                   platform-issued bearers on east-west calls against this token issuer and
+                   fetch its JWKS in-cluster. The issuer must equal the platform AS token `iss`
+                   (its external base URL); the JWKS URI is the in-cluster service. */}}
             - name: SERVER_REST_AUTH_PLATFORM_ISSUER
               value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
               value: {{ printf "http://%s-platform:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
-            {{- /* The tenant authorization server and tenant KMS validate tokens against
-                   the tenant AS issuer; tenant-as also stamps it as the token issuer it
-                   provisions. The tenant AS host derives from the installation base
-                   domain. */}}
-            {{- if or (eq $name "tenant-as") (eq $name "tenant-kms") }}
-            - name: EDK_TENANT_AS_PUBLIC_URL
-              value: {{ printf "https://as.%s" $.Values.global.platformBaseDomain | quote }}
-            {{- end }}
-            {{- if eq $name "tenant-as" }}
-            - name: EXTERNAL_BASE_URL
-              value: {{ printf "https://as.%s" $.Values.global.platformBaseDomain | quote }}
+            {{- /* Tenant AS issuers are dynamic. The platform writes
+                   OAUTH2_AUTHORIZATION_SERVER public endpoint bindings during
+                   tenant onboarding, and satellites trust tokens only when the
+                   issuer maps to an active binding. */}}
+            {{- if ne $name "tenant-as" }}
+            - name: SERVER_REST_AUTH_TRUST_TENANT_REGISTRY_ISSUERS
+              value: "true"
             {{- end }}
             {{- end }}
             {{- end }}
             {{- if $isAdminConsole }}
             - name: PLATFORM_PROXY_TARGET
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            - name: TENANT_KMS_PROXY_TARGET
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-kms")) (index $.Values.services "tenant-kms").restPort | quote }}
+            - name: TENANT_DID_PROXY_TARGET
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "did")) (index $.Values.services "did").restPort | quote }}
             {{- end }}
             {{- with $svc.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- $probePath := $isAdminConsole | ternary "/admin-console" "/health" }}
+          {{- $probePath := $isAdminConsole | ternary "/admin-console/health" "/health" }}
           livenessProbe:
             httpGet:
               path: {{ $probePath }}
@@ -373,11 +395,10 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- if and (eq $name "platform") $.Values.database.enabled }}
-            # The platform tenant's workload co-locates with the control-plane in the
-            # platform database. This overlay binds the platform tenant's datasource to
-            # the platform database; the tenant id carries angle brackets, which a YAML
-            # key can express and an environment variable name cannot. It merges on top
-            # of the environment configuration as the active-profile config file.
+            # The system platform tenant is control-plane state. This overlay binds its
+            # datasource to the platform database while customer tenant workload state
+            # remains in the separate tenant workload database. It merges on top of the
+            # environment configuration as the active-profile config file.
             - name: platform-db-override
               mountPath: /app/config/application.yml
               subPath: application.yml

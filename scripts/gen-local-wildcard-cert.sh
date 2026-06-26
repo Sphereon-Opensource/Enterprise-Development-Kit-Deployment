@@ -11,7 +11,7 @@
 # Output (compose/gateway/certs/):
 #   wildcard.crt / wildcard.key   - server cert for *.saas.localtest.me, mounted into Traefik
 #   local-ca.crt                  - the local CA; trust this in your OS/browser/wallet
-#   local-truststore.p12          - JVM truststore holding the CA (password: changeit),
+#   local-truststore.p12          - PKCS#12 truststore holding the CA (password: changeit),
 #                                   mounted into the service containers so they trust the
 #                                   gateway when fetching per-tenant JWKS over TLS
 #
@@ -68,7 +68,7 @@ EOF
   rm -f "$CERT_DIR/.wildcard.csr" "$CERT_DIR/.san.cnf" "$CERT_DIR/local-ca.srl"
 fi
 
-# JVM truststore with the CA so the service containers trust per-tenant JWKS over TLS.
+# PKCS#12 truststore with the CA so the service containers trust per-tenant JWKS over TLS.
 if command -v keytool >/dev/null 2>&1; then
   rm -f "$CERT_DIR/local-truststore.p12"
   keytool -importcert -noprompt -trustcacerts \

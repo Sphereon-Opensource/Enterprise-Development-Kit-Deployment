@@ -1,5 +1,7 @@
 /.idea/
 /compose/docker-compose.letsencrypt.yml
+/compose/docker-compose.public-cert.yml
 /compose/gateway/traefik/traefik.letsencrypt.generated.yml
 /compose/gateway/traefik/dynamic.letsencrypt.generated.yml
+/compose/gateway/traefik/dynamic.public-cert.generated.yml
 /build/

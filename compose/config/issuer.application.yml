@@ -10,12 +10,12 @@ server:
     port: 8080
     auth:
       enabled: true
-      issuer: ${env:EDK_TENANT_AS_PUBLIC_URL}
-      jwks-uri: http://enterprise-tenant-as:18083/.well-known/jwks.json
+      # Tenant bearer issuers are dynamic registry-backed AS endpoints created
+      # during tenant onboarding, not deployment-time URLs.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
       expected-audience: enterprise-issuer
-      trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:false}
+      trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
       anonymous-path-prefixes: /oid4vci,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers
   # Wallet-driven issuance signs credentials by routing KMS commands, but the
   # wallet session carries no operator bearer. The issuer presents its own token
@@ -93,6 +93,9 @@ transport:
         transport: HTTP
         endpoint: http://enterprise-tenant-as:18083
       platform:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
         services:
           config: &platformGrpcRoute
             target: SERVER
@@ -106,35 +109,40 @@ config:
   providers:
     platform-config-remote:
       enabled: true
+      bootstrap-required-keyspaces: kms.providers,oid4vci,credential-design,statuslists
     tenant-config-db:
       enabled: false
 license:
   command-enforcement:
     enabled: true
     missing-descriptor-mode: warn
-  installation-id: ${env:EDK_INSTALLATION_ID:11111111-1111-4111-8111-111111111111}
+  # Optional explicit pin. Leave blank for first-run setup; the verified
+  # protected license bundle supplies the installation binding.
+  installation-id: ${env:EDK_INSTALLATION_ID:}
   gate:
     service-role: enterprise-issuer
 database:
   app:
     default:
       dialect: postgresql
-      host: ${env:EDK_DB_HOST}
+      host: ${env:EDK_TENANT_DB_HOST}
       port: 5432
-      database: ${env:EDK_DB_NAME}
-      username: ${env:EDK_DB_USERNAME}
-      password: ${env:EDK_DB_PASSWORD}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
   tenants:
     default:
       dialect: postgresql
-      isolation: shared
-      host: ${env:EDK_DB_HOST}
+      isolation: schema
+      schema-pattern: "tenant_{id}"
+      host: ${env:EDK_TENANT_DB_HOST}
       port: 5432
-      database: ${env:EDK_DB_NAME}
-      username: ${env:EDK_DB_USERNAME}
-      password: ${env:EDK_DB_PASSWORD}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
 tenant:
   resolution:
+    remote: true
     platform:
       base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
       subdomain:
@@ -184,176 +192,8 @@ kv:
         type: KvStoreConfig
         backendId: database
         scopeBinding: TENANT
-# Public base URL for content-addressed credential-design asset hosting
-# (/public/assets/design/*). Mirrors statuslists.hosting.external-base-url so all
-# absolute public URLs originate from the same EXTERNAL_BASE_URL.
-credential-design:
-  external-base-url: ${env:EXTERNAL_BASE_URL}
-# Issuer identifier (path-bearing) plus the bare endpoint base the wallet-facing
-# protocol endpoints are advertised under in issuer metadata.
-oid4vci:
-  rest:
-    externalBaseUrl: ${env:EXTERNAL_BASE_URL}
-  issuer:
-    identifier: ${env:EXTERNAL_BASE_URL}
-    credential-configuration-ids: EuPid,Mdl
-    authorization-servers: ${env:EDK_TENANT_AS_PUBLIC_URL}
-    # Issuer-level display fallback: shown in wallets when no issuer design has been
-    # configured yet. The primary source is the credential design; this entry only
-    # applies until a design is created.
-    display:
-      - name: "Sphereon Issuer"
-        locale: en
-    as-bridge:
-      internal-url: http://enterprise-tenant-as:18083
-      client-id: issuer-service
-      client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-    # OCA completeness gate for pipeline issuance: the mandatory set the
-    # pipeline's contribute/evaluate steps are measured against.
-    oca:
-      "[EuPid]":
-        mandatory: family_name,given_name,birth_date
-        sensitive: birth_date
-    # Sample credential configurations. Replace or extend these with the
-    # credential types this deployment issues.
-    credentials:
-      "[EuPid]":
-        format: "dc+sd-jwt"
-        vct: "${env:EXTERNAL_BASE_URL}/public/schema/vct/EuPid"
-        scope: eu_pid
-        status-list-id: eupid-revocation
-        signing-key-alias: ${env:EDK_TENANT_SLUG:acme}-assertion
-        signing-key-mode: did:jwk
-        signing-algorithms: ES256
-        expiration-in-days: 365
-        binding-methods: jwk,did:jwk,did:key
-        proof-types:
-          jwt:
-            signing-algorithms: ES256
-        claims:
-          "[family_name]":
-            mandatory: true
-            sd: "allowed"
-            display:
-              "[en-US]":
-                label: "Family Name"
-          "[given_name]":
-            mandatory: true
-            sd: "allowed"
-            display:
-              "[en-US]":
-                label: "Given Name"
-          "[birth_date]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Date of Birth"
-          "[age_over_18]":
-            display:
-              "[en-US]":
-                label: "Age Over 18"
-          "[nationality]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Nationality"
-          "[issuing_authority]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Issuing Authority"
-          "[issuing_country]":
-            mandatory: true
-            sd: "allowed"
-            display:
-              "[en-US]":
-                label: "Issuing Country"
-          "[document_number]":
-            display:
-              "[en-US]":
-                label: "Document Number"
-      "[Mdl]":
-        format: "mso_mdoc"
-        doctype: "org.iso.18013.5.1.mDL"
-        scope: mdl
-        signing-key-alias: ${env:EDK_TENANT_SLUG:acme}-assertion
-        signing-algorithms: ES256
-        expiration-in-days: 365
-        binding-methods: cose_key
-        proof-types:
-          jwt:
-            signing-algorithms: ES256
-        claims:
-          "[org.iso.18013.5.1.family_name]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Family Name"
-          "[org.iso.18013.5.1.given_name]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Given Name"
-          "[org.iso.18013.5.1.birth_date]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Date of Birth"
-          "[org.iso.18013.5.1.issue_date]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Issue Date"
-          "[org.iso.18013.5.1.expiry_date]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Expiry Date"
-          "[org.iso.18013.5.1.issuing_country]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Issuing Country"
-          "[org.iso.18013.5.1.issuing_authority]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Issuing Authority"
-          "[org.iso.18013.5.1.document_number]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Document Number"
-          "[org.iso.18013.5.1.portrait]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Portrait"
-          "[org.iso.18013.5.1.driving_privileges]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "Driving Privileges"
-          "[org.iso.18013.5.1.un_distinguishing_sign]":
-            mandatory: true
-            display:
-              "[en-US]":
-                label: "UN Distinguishing Sign"
-
-# Status list referenced by the EuPid configuration. Issuance fails closed when a
-# configured list cannot be resolved, so the list definition ships with the
-# deployment; the management REST surface operates on the same store.
-statuslists:
-  hosting:
-    base-path: /public/statuslists
-    management-base-path: /api/statuslist/v1
-    external-base-url: ${env:EXTERNAL_BASE_URL}
-  ids: eupid-revocation
-  "[eupid-revocation]":
-    publisher: rest
-    spec: token_status_list
-    proof-format: jwt
-    purposes: revocation
-    signing-key-alias: ${env:EDK_TENANT_SLUG:acme}-assertion
-    signing-key-mode: did:jwk
-    ttl-seconds: 300
+# Issuer business config (issuer metadata, credential configurations, OCA gates,
+# status-list definitions, credential-design public URLs, and AS bridge settings)
+# is seeded into platform config during tenant setup and refreshed through the
+# platform-config-remote provider. Use config.overrides.* for explicit local
+# deployment overrides only.
