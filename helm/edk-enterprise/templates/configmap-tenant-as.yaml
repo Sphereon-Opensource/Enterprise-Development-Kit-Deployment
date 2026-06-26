@@ -1,0 +1,79 @@
+{{- /*
+Tenant authorization-server configuration overlay.
+
+The tenant AS holds no persistent key material: it routes signing, MAC, and
+encryption to the tenant KMS over gRPC. Local signature verification stays
+in-process and keyless, so it needs a local software provider whose ephemeral
+keystore lives under the writable temp directory. This file delivers that
+provider plus the KMS role algorithms and the one LOCAL verify route the AS
+needs to validate the platform-issued bearer on its provisioning endpoint.
+
+Delivered as the tenant AS base application.yml; the image bakes no
+application.yml, so this is the AS file configuration and it merges over the
+environment configuration.
+
+Rendered only for the tenant authorization server.
+*/ -}}
+{{- if (index .Values.services "tenant-as").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-tenant-as-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tenant-as
+data:
+  application.yml: |
+    # Local, keyless software provider for in-process signature verification.
+    # Signing/MAC/encryption route to the tenant KMS over gRPC; this provider only
+    # backs the LOCAL verify route below, with an ephemeral keystore under temp.
+    kms:
+      providers:
+        software:
+          id: software
+          type: software
+          enabled: true
+          autoCreateCertificate: true
+          keystore:
+            type: pkcs12
+            id: software
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            path: "{tempDir}/edk-verify-keystore.p12"
+    crypto:
+      kms:
+        roles:
+          oauth2-as:
+            algorithm: ES256
+          issuer-signing:
+            algorithm: ES256
+          issuer-request-decryption:
+            algorithm: ES256
+          verifier-request-object-signing:
+            algorithm: ES256
+    # Route KMS to the tenant KMS over gRPC; keep signature verify LOCAL so the AS
+    # validates the platform bearer in-process against the keyless software provider.
+    transport:
+      routing:
+        modules:
+          kms:
+            services:
+              key: &tenantKmsGrpcRoute
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s-tenant-kms:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+              keys: *tenantKmsGrpcRoute
+              signature:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s-tenant-kms:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+                commands:
+                  "[kms.signature.verify]":
+                    target: LOCAL
+              mac: *tenantKmsGrpcRoute
+              encryption: *tenantKmsGrpcRoute
+    # The AS holds no application-tenant bootstrap of its own; the platform owns the
+    # control-plane ceremony, so the AS skips it on startup.
+    application:
+      bootstrap:
+        on-startup: false
+{{- end }}

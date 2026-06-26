@@ -15,10 +15,12 @@ tenant-AS, issuer, and verifier. Choose the provider that matches your key
 custody requirements:
 
 - Software keystore. Keys live in a PKCS#12 keystore the KMS service manages.
-  This is the tenant KMS config default (`kms.providers._tenant_`, type `software`). It is the
-  right choice for evaluation and for deployments where a software keystore meets
-  your custody policy. No external secret system is required, but you still
-  supply the keystore password as a reference.
+  The platform writes the tenant-specific provider config during tenant
+  registration (`kms.providers.<tenant-slug>`, type `software`), and tenant-KMS
+  reads it through platform-config-remote. It is the right choice for evaluation
+  and for deployments where a software keystore meets your custody policy. No
+  external secret system is required, but you still supply the keystore password
+  as a reference.
 - Managed vault (for example HashiCorp Vault). Keys and credentials live in the
   vault. The service references them; the vault performs storage and access
   control.
@@ -26,13 +28,13 @@ custody requirements:
   and key references live in the cloud provider's secret store. The service
   resolves a reference at use time.
 
-Select the KMS provider through configuration. The platform first-run setup binds
-to the provider named by `PLATFORM_SETUP_KMS_PROVIDER_ID` (default `_license_`).
-The license recipient key used for setup activation is also KMS-backed in
-interactive deployments (`license.recipient.kms.enabled=true`) and defaults to
-the platform system license provider with alias `license-recipient`; non-platform
-services consume the platform's effective license projection rather than mounting
-that private key.
+Select KMS provider policy through platform-owned configuration. The platform
+first-run setup binds to the provider named by `PLATFORM_SETUP_KMS_PROVIDER_ID`
+(default `license`). The license recipient key used for setup activation is also
+KMS-backed in interactive deployments (`license.recipient.kms.enabled=true`) and
+defaults to the platform system license provider with alias `license-recipient`;
+non-platform services consume the platform's effective license projection rather
+than mounting that private key.
 The admin and onboarding secret backend is selected by
 `application.admin.secret-backend.type` in the platform config template (env
 `EDK_SECRET_BACKEND`); choose a production backend before going live.
@@ -45,9 +47,14 @@ way to bind a credential from a Secret already in the cluster.
 
 ```yaml
 database:
-  existingSecret: edk-postgres
-  usernameKey: username
-  passwordKey: password
+  platform:
+    existingSecret: edk-platform-postgres
+    usernameKey: username
+    passwordKey: password
+  tenant:
+    existingSecret: edk-tenant-postgres
+    usernameKey: username
+    passwordKey: password
 
 services:
   tenant-as:
@@ -75,7 +82,8 @@ services:
 
 This is the form in `examples/secret-backed-credentials-values.yaml`. The
 database username and password always come from the Secret named in
-`database.existingSecret`; the chart never renders a database password literal.
+`database.platform.existingSecret` or `database.tenant.existingSecret`; the chart
+never renders a database password literal.
 
 ## Secrets as references
 

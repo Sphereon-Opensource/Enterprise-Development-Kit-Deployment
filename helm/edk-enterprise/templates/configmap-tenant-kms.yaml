@@ -1,0 +1,90 @@
+{{- /*
+Tenant KMS configuration overlay.
+
+The tenant KMS holds the per-tenant software key material and serves the
+east-west signing, MAC, and encryption hops over gRPC. It must trust the
+workload identities that call it — including the tenant authorization server,
+which seeds its signing key here during tenant registration — and must let a
+trusted caller assert the target tenant via the request header so the seed lands
+in the right tenant's key space.
+
+Delivered as the tenant KMS base application.yml; the image bakes no
+application.yml, so this is the KMS file configuration and it merges over the
+environment configuration.
+
+Rendered only for the tenant KMS.
+*/ -}}
+{{- if (index .Values.services "tenant-kms").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-tenant-kms-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tenant-kms
+data:
+  application.yml: |
+    # Workload identities the tenant KMS trusts on east-west command-transport
+    # calls, each bound to the client id of the service token the caller presents.
+    # A trusted caller may assert the target tenant via the request header
+    # (header_wins) so the tenant AS can seed its signing key into the right
+    # tenant's key space; untrusted callers keep the fail-closed reject default.
+    security:
+      header-trust-policy:
+        internal:
+          tenant_mismatch: header_wins
+          principal_mismatch: header_wins
+        trusted_service_ids:
+          - service-crypto
+          - service-data
+          - service-oid4vci
+          - service-oid4vp
+          - service-tenant-as
+        service_client_bindings:
+          "[service-crypto]": kms-service
+          "[service-data]": did-service
+          "[service-oid4vci]": issuer-service
+          "[service-oid4vp]": verifier-service
+          "[service-tenant-as]": tenant-as-service
+    kms:
+      # Internal-only software provider used before tenant platform config has
+      # been pulled. It gives tenant-KMS local crypto support for validating
+      # platform bearer signatures; REST discovery hides providers marked
+      # system=true.
+      providers:
+        internal-token-verifier:
+          type: software
+          id: internal-token-verifier
+          enabled: true
+          system: true
+          role: internal
+          exposePrivateKeysDuringGeneration: false
+          persistKeysDuringGeneration: false
+          keyStore:
+            type: memory
+            id: internal-token-verifier-memory
+            keyVisibility: public
+            overwriteAlias: true
+      # Tenant-specific software KMS providers are authored by the platform during
+      # tenant registration and exposed through platform-config-remote as
+      # kms.providers.<tenant-slug>.*. Tenant-KMS must not define a generic local
+      # provider named software because it would be visible through
+      # /api/kms/v1/providers next to the protected tenant-slug provider. Key
+      # material persists in the tenant-kms keystore volume.
+      enterprise:
+        lifecycle:
+          enabled: true
+          interval: PT1H
+          run-on-startup: true
+    crypto:
+      kms:
+        roles:
+          oauth2-as:
+            algorithm: ES256
+          issuer-signing:
+            algorithm: ES256
+          issuer-request-decryption:
+            algorithm: ES256
+          verifier-request-object-signing:
+            algorithm: ES256
+{{- end }}

@@ -12,6 +12,12 @@ server:
     port: 18080
     auth:
       enabled: true
+      # The platform AS issues tokens with the public gateway issuer, but
+      # validates them by fetching JWKS over the compose network. This avoids
+      # making self-validation depend on the customer gateway's TLS trust path
+      # and matches the split used by the tenant workload services below.
+      issuer: ${env:EXTERNAL_BASE_URL}
+      jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
       # Open paths: first-run setup UI/API, OAuth protocol surface, discovery/JWKS,
       # the internal pre-auth registration channel (own Basic auth), and the
       # in-network command transport. Everything else requires an operator bearer.
@@ -71,32 +77,43 @@ database:
   app:
     default:
       dialect: postgresql
-      host: ${env:EDK_DB_HOST}
+      host: ${env:EDK_PLATFORM_DB_HOST}
       port: 5432
-      database: ${env:EDK_DB_NAME}
-      username: ${env:EDK_DB_USERNAME}
-      password: ${env:EDK_DB_PASSWORD}
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: ${env:EDK_PLATFORM_DB_USERNAME}
+      password: ${env:EDK_PLATFORM_DB_PASSWORD}
   tenants:
+    # The platform process creates tenant registry/control-plane rows during
+    # registration. It does not join the tenant workload DB network, so dynamic
+    # tenant ids must resolve to the platform DB inside this process.
     default:
       dialect: postgresql
       isolation: shared
-      host: ${env:EDK_DB_HOST}
+      host: ${env:EDK_PLATFORM_DB_HOST}
       port: 5432
-      database: ${env:EDK_DB_NAME}
-      username: ${env:EDK_DB_USERNAME}
-      password: ${env:EDK_DB_PASSWORD}
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: ${env:EDK_PLATFORM_DB_USERNAME}
+      password: ${env:EDK_PLATFORM_DB_PASSWORD}
+    platform:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_PLATFORM_DB_HOST}
+      port: 5432
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: ${env:EDK_PLATFORM_DB_USERNAME}
+      password: ${env:EDK_PLATFORM_DB_PASSWORD}
 tenant:
   resolution:
     platform:
       # Tenants resolve by subdomain under this base domain. TODO: set to your
-      # public base domain (for example saas.example.com).
+      # public base domain (for example edk.example.com).
       base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
       subdomain:
         enabled: true
     custom-domain:
       enabled: true
     self:
-      tenant-id: "<platform>"
+      tenant-id: "platform"
       hosts: "enterprise-platform,localhost,platform.${env:EDK_PLATFORM_BASE_DOMAIN}"
   platform:
     owner:
@@ -123,23 +140,23 @@ kms:
         # mounted at /keystore. The file path is derived as
         # /keystore/<tenantId>/<providerId>.p12.
         keystoreRoot: /keystore
-    _license_:
-      id: _license_
+    license:
+      id: license
       type: software
       enabled: true
       autoCreateCertificate: true
       keystore:
         type: pkcs12
-        id: _license_
+        id: license
         password: ${env:EDK_KEYSTORE_PASSWORD}
-    _platform_:
-      id: _platform_
+    platform:
+      id: platform
       type: software
       enabled: true
       autoCreateCertificate: true
       keystore:
         type: pkcs12
-        id: _platform_
+        id: platform
         password: ${env:EDK_KEYSTORE_PASSWORD}
 crypto:
   kms:
@@ -219,6 +236,13 @@ oauth2:
         tenantas:
           client-id: tenant-as-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    platform:
+      # Application bootstrap provisions the control-plane AS with slug `platform`
+      # (ApplicationTenants.AS_SLUG), so the materialization flag must exist on
+      # this instance too. The `default` server config above remains the runtime
+      # policy surface for the platform AS endpoints.
+      signing-key:
+        auto-generate: true
 application:
   admin:
     secret-backend:
@@ -248,13 +272,10 @@ platform:
     mount-path: /app/config
   onboarding:
     installation-base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
-    installation-id: ${env:EDK_INSTALLATION_ID:11111111-1111-4111-8111-111111111111}
-    # Interactive setup-screen mode: no license-token-path is configured here.
-    # The anonymous setup surface remains open until the operator installs a
-    # license through /setup-license and completes bootstrap. The setup service
-    # creates the license recipient key in the platform _license_ system KMS on first
-    # license-request generation. Offline pre-provisioning is opt-in through
-    # config/offline/application.yml.
+    # Interactive setup-screen mode. The anonymous setup surface remains open
+    # until the operator imports a protected license bundle and completes
+    # bootstrap. The setup service creates the license recipient key in the
+    # platform license system KMS on first license-request generation.
     trust-bundle-path: /app/license/license-root-ca.pem
     operator:
       # TODO: set the platform operator identity for this deployment.
@@ -263,15 +284,21 @@ platform:
       initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
   setup:
     kms:
-      tenant-id: "<platform>"
+      tenant-id: "platform"
       principal-id: platform-setup
     license-request:
       default-alias: platform-license-request
       default-algorithm: ECDSA_SHA256
       default-use: sig
 east-west:
+  platform:
+    base-url: http://enterprise-platform:18080
   tenant-as:
     base-url: http://enterprise-tenant-as:18083
+  tenant-kms:
+    base-url: http://enterprise-tenant-kms:8080
+  tenant-did:
+    base-url: http://enterprise-did:8080
 license:
   # This is the local licensing authority: it owns the deployment and is exempt
   # from the deployment license gate.

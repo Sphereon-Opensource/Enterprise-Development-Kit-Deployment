@@ -1,57 +1,17 @@
-# Single-port multi-tenant front door on AWS. Two options exist:
-#
-#   (a) AWS Gateway API controller. Set gateway.enabled true and
-#       gateway.className to the GatewayClass published by the AWS Gateway API
-#       controller (for example the Application Load Balancer Gateway class).
-#       The Gateway and HTTPRoutes then fan out by host and path exactly as the
-#       Cilium and GKE examples do, and ingress.legacy.enabled is set false.
-#
-#   (b) Classic Ingress with the AWS Load Balancer Controller (ALB). This is the
-#       common path and is the option configured below. One internet-facing ALB
-#       terminates TLS on 443 with a single ACM wildcard certificate and routes
-#       by host and path to each service.
-#
-# ALB preserves the inbound Host header and sets X-Forwarded-Proto by default,
-# so it satisfies the contract without extra tuning. Use one ACM wildcard
-# certificate for *.example.com (covers the operator host platform.example.com
-# and every tenant host); reference it by ARN in certificate-arn below.
-#
-# The ALB controller groups Ingress objects sharing the same group name into a
-# single load balancer, so all the public hosts below land on one ALB and one
-# port.
+# Single-port multi-tenant front door on AWS. Use the Gateway API controller or
+# another AWS front door that terminates TLS once, preserves the inbound Host
+# header, and routes to the chart's HTTPRoutes. Replace className with the
+# GatewayClass installed in your cluster.
 gateway:
-  enabled: false
+  enabled: true
+  className: REPLACE-WITH-AWS-GATEWAY-CLASS
+  operatorHost: platform
+  baseDomain: example.com
+  tls:
+    mode: secret
+    secretName: edk-wildcard-tls
+  httpRedirect: true
 
 ingress:
   legacy:
-    enabled: true
-  public:
-    annotations:
-      alb.ingress.kubernetes.io/scheme: internet-facing
-      alb.ingress.kubernetes.io/target-type: ip
-      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-      alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:123456789012:certificate/REPLACE-WITH-WILDCARD-CERT
-      alb.ingress.kubernetes.io/ssl-redirect: "443"
-      alb.ingress.kubernetes.io/group.name: edk-enterprise
-
-services:
-  platform:
-    publicIngress:
-      className: alb
-      host: platform.example.com
-  did:
-    publicIngress:
-      className: alb
-      host: did.example.com
-  tenant-as:
-    publicIngress:
-      className: alb
-      host: as.example.com
-  issuer:
-    publicIngress:
-      className: alb
-      host: issuer.example.com
-  verifier:
-    publicIngress:
-      className: alb
-      host: verifier.example.com
+    enabled: false

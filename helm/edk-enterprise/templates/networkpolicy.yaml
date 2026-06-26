@@ -2,13 +2,15 @@
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
 {{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+{{- $tenantGatewayPaths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
+{{- $gatewayRouted := and $.Values.gateway.enabled (or (eq $name "platform") (eq $name "admin-console") (ne $tenantGatewayPaths "")) }}
 {{- $peersIn := list }}
-{{- if eq $name "tenant-kms" }}{{- $peersIn = list "did" "issuer" "verifier" }}{{- end }}
+{{- if eq $name "tenant-kms" }}{{- $peersIn = list "tenant-as" "did" "issuer" "verifier" }}{{- end }}
 {{- if eq $name "platform" }}{{- $peersIn = list "tenant-as" "did" "issuer" "verifier" }}{{- end }}
 {{- if eq $name "tenant-as" }}{{- $peersIn = list "tenant-kms" "did" "issuer" "verifier" }}{{- end }}
-{{- if eq $name "did" }}{{- $peersIn = list "verifier" }}{{- end }}
+{{- if eq $name "did" }}{{- $peersIn = list "platform" "verifier" }}{{- end }}
 {{- $peersOut := list }}
-{{- if eq $name "platform" }}{{- $peersOut = list }}{{- end }}
+{{- if eq $name "platform" }}{{- $peersOut = list "tenant-as" "tenant-kms" "did" }}{{- end }}
 {{- if eq $name "tenant-kms" }}{{- $peersOut = list "tenant-as" "platform" }}{{- end }}
 {{- if eq $name "did" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
 {{- if eq $name "tenant-as" }}{{- $peersOut = list "platform" }}{{- end }}
@@ -29,7 +31,7 @@ spec:
     - Ingress
     - Egress
   ingress:
-    {{- if and $.Values.networkPolicy.ingressController.enabled (or $svc.publicIngress.enabled $svc.internalIngress.enabled) }}
+    {{- if and $.Values.networkPolicy.ingressController.enabled (or $svc.publicIngress.enabled $svc.internalIngress.enabled $gatewayRouted) }}
     - from:
         - namespaceSelector:
             {{- toYaml ($.Values.networkPolicy.ingressController.namespaceSelector | default dict) | nindent 12 }}
@@ -80,18 +82,22 @@ spec:
           port: 53
     {{- end }}
     {{- if $.Values.database.enabled }}
+    {{- /* Database egress reflects the platform/tenant split. The platform service
+           reaches ONLY the control-plane (platform) database; every runtime
+           service reaches ONLY the tenant workload database. */}}
+    {{- if eq $name "platform" }}
     - to:
-        - {{- if $.Values.database.networkPolicy.ipBlock }}
+        - {{- if $.Values.database.platform.networkPolicy.ipBlock }}
           ipBlock:
-            {{- toYaml $.Values.database.networkPolicy.ipBlock | nindent 12 }}
-          {{- else if or $.Values.database.networkPolicy.podSelector $.Values.database.networkPolicy.namespaceSelector }}
-          {{- if $.Values.database.networkPolicy.namespaceSelector }}
+            {{- toYaml $.Values.database.platform.networkPolicy.ipBlock | nindent 12 }}
+          {{- else if or $.Values.database.platform.networkPolicy.podSelector $.Values.database.platform.networkPolicy.namespaceSelector }}
+          {{- if $.Values.database.platform.networkPolicy.namespaceSelector }}
           namespaceSelector:
-            {{- toYaml $.Values.database.networkPolicy.namespaceSelector | nindent 12 }}
+            {{- toYaml $.Values.database.platform.networkPolicy.namespaceSelector | nindent 12 }}
           {{- end }}
-          {{- if $.Values.database.networkPolicy.podSelector }}
+          {{- if $.Values.database.platform.networkPolicy.podSelector }}
           podSelector:
-            {{- toYaml $.Values.database.networkPolicy.podSelector | nindent 12 }}
+            {{- toYaml $.Values.database.platform.networkPolicy.podSelector | nindent 12 }}
           {{- end }}
           {{- else }}
           ipBlock:
@@ -99,7 +105,29 @@ spec:
           {{- end }}
       ports:
         - protocol: TCP
-          port: {{ $.Values.database.port }}
+          port: {{ $.Values.database.platform.port }}
+    {{- else }}
+    - to:
+        - {{- if $.Values.database.tenant.networkPolicy.ipBlock }}
+          ipBlock:
+            {{- toYaml $.Values.database.tenant.networkPolicy.ipBlock | nindent 12 }}
+          {{- else if or $.Values.database.tenant.networkPolicy.podSelector $.Values.database.tenant.networkPolicy.namespaceSelector }}
+          {{- if $.Values.database.tenant.networkPolicy.namespaceSelector }}
+          namespaceSelector:
+            {{- toYaml $.Values.database.tenant.networkPolicy.namespaceSelector | nindent 12 }}
+          {{- end }}
+          {{- if $.Values.database.tenant.networkPolicy.podSelector }}
+          podSelector:
+            {{- toYaml $.Values.database.tenant.networkPolicy.podSelector | nindent 12 }}
+          {{- end }}
+          {{- else }}
+          ipBlock:
+            cidr: 0.0.0.0/0
+          {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.database.tenant.port }}
+    {{- end }}
     {{- end }}
     {{- range $peer := $peersOut }}
     {{- $peerSvc := index $.Values.services $peer }}

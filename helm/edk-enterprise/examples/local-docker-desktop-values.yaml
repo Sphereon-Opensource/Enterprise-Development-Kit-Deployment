@@ -1,0 +1,119 @@
+# Local docker-desktop install used to bring up the platform plus the tenant
+# authorization server and tenant KMS, bootstrap the control plane, and perform a
+# real tenant registration. Reached over a port-forward to the platform REST port
+# at http://localhost:18080, so the platform AS issuer is the loopback origin and
+# the hosted AS serves over loopback HTTP.
+#
+# Secrets expected in the namespace:
+#   edk-platform-postgres / edk-tenant-postgres : { username, password }
+#   edk-secrets          : { internal-client-secret, keystore-password }
+#   edk-license-root-ca  : { license-root-ca.pem }   (evaluation license root)
+
+global:
+  imageTag: 0.25.0-SNAPSHOT
+  platformBaseDomain: saas.localtest.me
+
+database:
+  enabled: true
+  dialect: postgresql
+  platform:
+    host: edk-platform-postgres
+    port: 5432
+    name: platform
+    existingSecret: edk-platform-postgres
+    usernameKey: username
+    passwordKey: password
+  tenant:
+    host: edk-tenant-postgres
+    port: 5432
+    name: tenant
+    existingSecret: edk-tenant-postgres
+    usernameKey: username
+    passwordKey: password
+    isolation: schema
+    schemaPattern: "tenant_{id}"
+
+auth:
+  enabled: true
+  jwt:
+    enabled: false
+
+# Reached over a port-forward, so the platform AS issuer and onboarding UI origin
+# are the loopback origin and the hosted AS serves over loopback HTTP.
+platform:
+  # The platform AS stamps EXTERNAL_BASE_URL (http://localhost:18080, reached over
+  # the port-forward) as its token issuer; the satellites trust it as platform-issuer.
+  externalBaseUrl: http://localhost:18080
+  bootstrap:
+    issuer: http://localhost:18080
+    owner:
+      email: operator@acme.example
+      displayName: Platform Operator
+      roles: platform-admin
+    ownerInitialCredential: operator-initial-Passw0rd
+    userProviderMode: local
+    deploymentMode: dev
+    allowLocalHttpAs: true
+    # Reached by `kubectl port-forward ... 18080:8080`, so the Host header is
+    # localhost:18080; map it directly to the platform tenant.
+    selfHostsExtra: ",localhost:18080"
+
+serviceIdentity:
+  internalClientExistingSecret: edk-secrets
+  internalClientSecretKey: internal-client-secret
+
+keystore:
+  existingSecret: edk-secrets
+  passwordKey: keystore-password
+
+license:
+  trust:
+    existingSecret: edk-license-root-ca
+    rootCaKey: license-root-ca.pem
+    rootCaPath: /license-state/license-root-ca.pem
+    embeddedEnabled: false
+    # The QA license fixture mints the recipient under this kid.
+    recipientKeyId: qa-license-recipient
+    recipientKmsAlias: license-recipient
+
+# No external gateway/ingress for the local run; reach services by port-forward.
+ingress:
+  legacy:
+    enabled: false
+networkPolicy:
+  enabled: false
+
+services:
+  platform:
+    enabled: true
+    # The platform listens on 18080 so the loopback external URL the platform
+    # self-fetches JWKS from (and stamps as its AS issuer) resolves in-container.
+    # Port-forward with `kubectl port-forward ... 18080:18080`.
+    restPort: 18080
+    env:
+      - name: EXTERNAL_BASE_URL
+        value: http://localhost:18080
+      - name: ONBOARDING_UI_BASE_URL
+        value: http://localhost:18080
+      - name: PLATFORM_SETUP_KMS_PROVIDER_ID
+        value: license
+      - name: PLATFORM_SETUP_LICENSE_MATERIAL_DEFAULT_ALIAS
+        value: license-recipient
+      - name: LICENSE_RECIPIENT_KMS_ENABLED
+        value: "true"
+      - name: LICENSE_RECIPIENT_KMS_PROVIDER_ID
+        value: license
+      - name: LICENSE_RECIPIENT_KMS_ALIAS
+        value: license-recipient
+  tenant-as:
+    enabled: true
+  tenant-kms:
+    enabled: true
+  did:
+    enabled: false
+  issuer:
+    enabled: false
+  verifier:
+    enabled: false
+  admin-console:
+    enabled: false

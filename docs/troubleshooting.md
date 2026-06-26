@@ -25,52 +25,59 @@ Confirm the pull secret is valid by describing a failing pod and reading the
 events. A `401`/`403` from the registry or an `unauthorized` message means the
 pull secret is missing, misnamed, or lacks access to one of the repositories.
 
-## License token rejected
+## License bundle rejected
 
-The non-platform services fail closed unless the platform license claims the installation
-they bind to. If a service refuses to start with a license or gate error:
+The non-platform services fail closed unless they can validate the protected
+license bundle and their service role. If a service refuses to start with a
+license or gate error:
 
-- Confirm `license.installationId` matches across all non-platform services and
-  the installed license claims. This value is only the runtime service binding
-  to the activated installation; it is not used as a bundle password or request
-  input.
-- If using the setup screen, confirm the license was installed successfully
-  before bootstrapping the first operator. Until install completes, the setup
-  gate stays open and non-platform services may fail closed.
-- If using the setup screen, confirm the platform `_license_` KMS contains the
-  `license.recipient.kms.alias` key created during license-request generation.
-  A missing key means the platform cannot decrypt the issued license token and
-  the non-platform services will mirror that failed state.
-- If using the offline mounted-token overlay, confirm the platform can read the
-  token from `platform.onboarding.license-token-path` and that the platform
-  platform `_license_` KMS contains the `license.recipient.kms.alias` key bound to the token.
-  A missing or unreadable token leaves the gate unclaimed and the non-platform
-  services stay down.
+- If you explicitly set `license.installationId`, confirm it matches the
+  installed license claims. For normal first-run setup, leave it unset; the
+  protected bundle supplies the installation id.
+- If using the setup screen, confirm the protected license bundle was imported
+  successfully before bootstrapping the first operator. Until import completes,
+  the setup gate stays open and non-platform services may fail closed.
+- If using the setup screen after generating a license request, confirm the
+  platform `license` KMS contains the `license.recipient.kms.alias` key created
+  during license-request generation. A missing key means the platform cannot
+  decrypt the issued license material and the non-platform services will mirror
+  that failed state.
+- If the license operator returned a complete setup bundle, confirm the import
+  preview shows the expected bundle entries before Apply.
 - Confirm `license.recipient.key-id` matches the recipient key id the license is
   bound to. A mismatch means the platform cannot read the license and the gate is
   never claimed.
 
 The platform is the local licensing authority and is exempt from the license
-gate. If only the non-platform services fail while the platform is healthy, check
-the installation id/service-role binding and the internal route from the service
-to the platform command endpoint.
+gate. If only the non-platform services fail while the platform setup/status
+route is reachable through the gateway, check the service role, any optional
+installation-id pin, and the internal route from the service to the platform
+command endpoint.
 
 ## Database connectivity
 
-Readiness fails when PostgreSQL is unreachable. Check the connection inputs and
-network path:
+Kubernetes readiness or Docker Compose health can fail when PostgreSQL is
+unreachable. Check the connection inputs and network path from inside the
+deployment:
 
-- `database.host`, `database.port`, `database.name`.
-- `database.existingSecret`, `database.usernameKey`, `database.passwordKey`. A
+- `database.platform.host`, `database.platform.port`, `database.platform.name`.
+- `database.tenant.host`, `database.tenant.port`, `database.tenant.name`.
+- `database.platform.existingSecret` and `database.tenant.existingSecret`,
+  plus their `usernameKey` and `passwordKey` values. A
   wrong key name produces an empty credential and an authentication failure.
 - NetworkPolicy egress. If you enabled `networkPolicy`, the database egress is
-  restricted by `database.networkPolicy.podSelector`, `namespaceSelector`, or
-  `ipBlock`. A managed external Postgres needs an `ipBlock` CIDR that covers the
-  database host; an in-cluster Postgres needs a selector that matches its pods.
+  restricted by `database.platform.networkPolicy.*` and
+  `database.tenant.networkPolicy.*`. A managed external Postgres needs an
+  `ipBlock` CIDR that covers the database host; an in-cluster Postgres needs a
+  selector that matches its pods.
 
 A pod that is `Running` but never becomes `Ready`, with database connection
-errors in its logs, points at one of these. Both the APP and TENANT scopes use
-the same connection, so a credential or host error affects both.
+errors in its logs, points at one of these. Do not diagnose this by publishing
+`/health` or `/ready` through the customer gateway; those probes are internal
+orchestration signals. The platform connects only to the control-plane
+database. Satellite services connect only to the tenant workload database and
+fetch platform-owned configuration from the platform over the internal command
+route.
 
 ## Issuer-trust and admin REST 401s
 
@@ -105,27 +112,30 @@ see [TLS and gateway](tls-and-gateway.md) for the per-platform settings.
 Other ingress and TLS symptoms:
 
 - Certificate warnings or TLS handshake failures on a tenant host. The wildcard
-  certificate must cover `*.<base-domain>` and the operator host
-  `platform.<base-domain>`. A certificate scoped to a single host fails for
-  tenant subdomains. Let's Encrypt wildcard certificates require DNS-01
-  validation.
+  certificate must cover `*.<base-domain>`, which includes
+  `platform.<base-domain>` and first-level tenant hosts. A certificate scoped to
+  a single host fails for tenant subdomains. Let's Encrypt wildcard certificates
+  require DNS-01 validation and DNS control over
+  `_acme-challenge.<base-domain>`.
 - The apex domain works but tenant hosts do not. A wildcard certificate for
   `*.example.com` does not cover `example.com`, and a certificate for
   `example.com` does not cover `acme.example.com`. Publish and test the
   actual subdomains the platform uses.
-- KMS reachable on public ingress when you did not intend it. Inspect your values
-  and gateway overlays; the Kubernetes chart does not publish KMS by default.
-- Public hosts not resolving. `global.platformBaseDomain` and the per-service
-  `publicIngress.host` values must match the DNS names that point at your public
-  ingress. In the single-port gateway model, DNS must point both
-  `platform.<base-domain>` and `*.<base-domain>` at the gateway or load balancer.
+- A tenant administrative API route is reachable more broadly than intended.
+  Inspect your values and gateway overlays; customer traffic should enter only
+  through the platform host or tenant gateway host, and administrative routes
+  must remain authenticated or internal.
+- Public hosts not resolving. `global.platformBaseDomain` must match the DNS
+  zone routed to the public gateway. DNS must point both
+  `platform.<base-domain>` and `*.<base-domain>` at the gateway or load
+  balancer.
 
 ## Platform and KMS connectivity between services
 
-DID, tenant-AS, issuer, verifier, and tenant-KMS call the platform service for
-platform configuration and control-plane data. DID, tenant-AS, issuer, and
-verifier call the KMS service for key operations over internal service DNS. If
-platform-config or signing operations fail with a connection error:
+The backing workloads call the platform service for platform configuration and
+control-plane data. Workloads that need key operations call tenant-KMS over
+internal service DNS. If platform-config or signing operations fail with a
+connection error:
 
 - With `grpc.enabled=false`, routes use internal HTTP where supported. With
   `grpc.enabled=true`, the chart renders gRPC ports for platform and tenant-KMS

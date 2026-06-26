@@ -1,0 +1,138 @@
+# Traefik dynamic routing table for the EDK single-port gateway, Let's Encrypt mode.
+#
+# Rendered by scripts/start-letsencrypt.(ps1|sh) to
+# dynamic.letsencrypt.generated.yml. The generated file is gitignored.
+
+http:
+  routers:
+    platform:
+      rule: "Host(`platform.__BASE_DOMAIN__`)"
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 1000
+      tls:
+        certResolver: le
+__LE_TLS_DOMAINS__
+
+    platform-admin-console:
+      rule: "Host(`platform.__BASE_DOMAIN__`) && PathPrefix(`/admin-console`)"
+      entryPoints: ["websecure"]
+      service: svc-admin-console
+      priority: 1100
+      tls:
+        certResolver: le
+
+    api-kms:
+      rule: "PathPrefix(`/api/kms/v1`)"
+      entryPoints: ["websecure"]
+      service: svc-kms
+      priority: 1100
+      tls:
+        certResolver: le
+
+    api-did:
+      rule: "PathPrefix(`/api/did/v1`)"
+      entryPoints: ["websecure"]
+      service: svc-did
+      priority: 1100
+      tls:
+        certResolver: le
+
+    tenant-issuer:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/oid4vci`) || PathPrefix(`/credential`) ||
+         PathPrefix(`/credential_deferred`) || PathPrefix(`/nonce`) ||
+         PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
+         PathPrefix(`/.well-known/openid-credential-issuer`) ||
+         PathPrefix(`/public/schema`) || PathPrefix(`/public/assets`) ||
+         PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
+         PathPrefix(`/api/statuslist/v1`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 200
+      tls:
+        certResolver: le
+
+    tenant-verifier:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/oid4vp`) || PathPrefix(`/request_uri`) ||
+         PathPrefix(`/direct_post`) || PathPrefix(`/api/dcql/v1`))
+      entryPoints: ["websecure"]
+      service: svc-verifier
+      priority: 200
+      tls:
+        certResolver: le
+
+    tenant-did:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/1.0/identifiers`) || PathPrefix(`/.well-known/did.json`) ||
+         PathPrefix(`/api/did/v1`))
+      entryPoints: ["websecure"]
+      service: svc-did
+      priority: 200
+      tls:
+        certResolver: le
+
+    tenant-kms:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/kms/v1`)
+      entryPoints: ["websecure"]
+      service: svc-kms
+      priority: 200
+      tls:
+        certResolver: le
+
+    tenant-as:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/authorize`) || PathPrefix(`/token`) ||
+         PathPrefix(`/userinfo`) || PathPrefix(`/oauth2`) || PathPrefix(`/login`) ||
+         PathPrefix(`/.well-known/oauth-authorization-server`) ||
+         PathPrefix(`/.well-known/openid-configuration`) ||
+         PathPrefix(`/.well-known/jwks.json`))
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 100
+      tls:
+        certResolver: le
+
+  services:
+    svc-platform:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-platform:18080"
+    svc-admin-console:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://admin-console:3000"
+    svc-as:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-as:18083"
+    svc-issuer:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-issuer:8080"
+    svc-verifier:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-verifier:8080"
+    svc-did:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-did:8080"
+    svc-kms:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-kms:8080"

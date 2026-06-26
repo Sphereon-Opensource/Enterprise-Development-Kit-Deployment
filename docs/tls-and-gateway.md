@@ -13,15 +13,16 @@ contract.
 
 ![EDK single-port gateway routing](assets/gateway-routing.svg)
 
-Use a wildcard certificate for `*.<base-domain>` plus
-`platform.<base-domain>`, or individual certificates for the operator host and
-every tenant host. The wildcard model is recommended because new tenants are
-hosted as `<tenant-slug>.<base-domain>` and otherwise require certificate
-automation before they can go live.
+Use one wildcard certificate for `*.<base-domain>`, or individual certificates
+for the operator host and every tenant host. The wildcard model is recommended
+because new tenants are hosted as `<tenant-slug>.<base-domain>` and otherwise
+require certificate automation before they can go live. The wildcard covers
+`platform.<base-domain>` and first-level tenant hosts; it does not cover the
+apex/base domain.
 
 This page covers the single-port front door in both Docker and Kubernetes, and
-the public versus internal split. For the configuration inputs (base domain and
-per-service hosts), see [configuration.md](configuration.md).
+the public versus internal split. For the configuration inputs such as the base
+domain and internal service wiring, see [configuration.md](configuration.md).
 
 ## Host preservation
 
@@ -34,32 +35,40 @@ sees the original Host, not a pod or service name.
 
 ## Public versus internal split
 
-Public exposure is limited to the protocol and resolver surfaces:
+Public exposure is limited to host/path routes through the gateway:
 
-- DID resolver paths on the DID service.
-- OAuth/OIDC discovery and protocol paths on the platform and tenant-AS.
-- OID4VCI issuer paths on the issuer service.
-- OID4VP verifier paths on the verifier service.
+- `platform.<base-domain>` for the operator/admin plane and platform OAuth/OIDC
+  paths.
+- `<tenant>.<base-domain>` for DID resolver paths, tenant OAuth/OIDC paths,
+  OID4VCI issuer paths, OID4VP verifier paths, and authenticated operator/admin
+  API paths when your policy intentionally exposes them.
 - The optional admin console at `/admin-console` on the platform host only.
 
+Those are gateway or ingress routes. Customers and operators do not call the
+workload containers directly. Runtime probes are for Docker Compose or
+Kubernetes orchestration only and must not be exposed as tenant public routes.
+
 Administrative REST under `/api/.../v1` is not anonymous public traffic. In
-Kubernetes the chart enforces a public/internal split: internal administrative
-paths are rendered on internal ingress and KMS is not published publicly by
-default. `helm/edk-enterprise/examples/public-protocol-internal-kms-values.yaml`
-shows the split with separate public and internal hosts per service and KMS
-ingress disabled. In Docker, the gateway overlay routes only the paths it lists;
-do not publish the KMS host port, and protect any management route you expose
-with JWT and network policy.
+Kubernetes the chart can enforce a public/internal split with separate ingress
+classes, or route selected management paths through the single-port Gateway API.
+In Docker, the gateway overlay routes only the paths it lists; do not publish
+workload host ports. Any management route must be operator-authenticated and
+protected by network policy.
 
 ## Docker single-port gateway
 
-The Compose stack ships a gateway overlay at `compose/docker-compose.gateway.yml` that puts a Traefik reverse proxy in front of the services. Bring the base stack and the overlay up together:
+The Compose stack ships a gateway overlay at `compose/docker-compose.gateway.yml` that puts a Traefik reverse proxy in front of the services. Bring the full base stack and the overlay up together:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d
 ```
 
 Traefik terminates TLS on `443`, redirects `80` to `443`, and fans out to the services by host and path with `passHostHeader: true`, so the inbound Host reaches the backend unchanged. The static configuration is in `compose/gateway/traefik/traefik.yml` and the routing table is in `compose/gateway/traefik/dynamic.yml`.
+
+This starts the platform and all workload containers. On a pristine deployment,
+tenant AS, tenant KMS, DID, issuer, and verifier may report license-gated health
+until first-run setup imports the protected license bundle, but they should be
+present before tenant onboarding starts.
 
 ### Local evaluation certificate
 
@@ -73,7 +82,7 @@ On Windows use `scripts\gen-local-wildcard-cert.ps1`. The script writes to `comp
 
 - `wildcard.crt` and `wildcard.key`. The server certificate for `*.saas.localtest.me` (the default base domain) and the operator host, mounted into Traefik.
 - `local-ca.crt`. The local CA. Trust it in your operating system, browser, and wallet to avoid certificate warnings.
-- `local-truststore.p12`. A JVM truststore holding the CA (password `changeit`), mounted into the containers so they trust the gateway when fetching per-tenant JWKS over TLS.
+- `local-truststore.p12`. A PKCS#12 truststore holding the CA (password `changeit`), mounted into the containers so they trust the gateway when fetching per-tenant JWKS over TLS.
 
 The script uses `mkcert` when available (run `mkcert -install` once so your browser trusts the CA) and otherwise falls back to a self-signed openssl CA you trust manually. Override the base domain with `EDK_PLATFORM_BASE_DOMAIN` and the truststore password with `EDK_TRUSTSTORE_PASSWORD`. Re-run any time; it overwrites the cert material.
 
@@ -85,18 +94,24 @@ to `127.0.0.1` with no DNS setup, so
 ### A real base domain in production
 
 For a real base domain, supply publicly trusted certificate material instead of
-the local-evaluation material. The recommended form is a wildcard certificate
-for `*.<your-base>` plus `platform.<your-base>`. The certificate can come from
-Let's Encrypt or any other public CA; with Let's Encrypt, use DNS-01 validation
-for wildcard issuance. Place the certificate and key in
+the local-evaluation material. The recommended form is one wildcard certificate
+for `*.<your-base>`, which covers `platform.<your-base>` and first-level tenant
+hosts. The certificate can come from Let's Encrypt or any other public CA; with
+Let's Encrypt, use DNS-01 validation for wildcard issuance. Place the
+certificate and key in
 `compose/gateway/certs/` as `wildcard.crt` and `wildcard.key`, and remove the
 local-evaluation truststore mounts from the overlay, since a publicly trusted
-certificate is validated against the default JVM truststore. If you use
+certificate is validated against the default runtime truststore. If you use
 individual certificates instead, update the Traefik TLS configuration to load
 the certificate for every tenant host and the platform host before exposing
 those hosts.
 
-The Traefik routing table reads the base domain literally; its file provider does not interpolate environment variables. Set `EDK_PLATFORM_BASE_DOMAIN` to your domain and replace `saas.localtest.me` throughout `compose/gateway/traefik/dynamic.yml` with your base domain so the host rules match. Point public DNS for `platform.<base-domain>` and `*.<base-domain>` at the machine that runs the gateway.
+The Traefik routing table reads the base domain literally; its file provider
+does not interpolate environment variables. For a public static certificate,
+render the public-cert overlay with the same base domain so the generated
+Traefik routing table matches the certificate and DNS. Point public DNS for
+`platform.<base-domain>` and `*.<base-domain>` at the machine that runs the
+gateway.
 
 ### Let's Encrypt gateway for public evaluation
 
@@ -111,8 +126,7 @@ Render the overlay on Windows:
 .\scripts\start-letsencrypt.ps1 `
   -BaseDomain edk.example.com `
   -Email admin@example.com `
-  -Challenge tls-alpn `
-  -Staging
+  -Challenge tls-alpn
 ```
 
 Render it on Linux or macOS:
@@ -121,8 +135,7 @@ Render it on Linux or macOS:
 scripts/start-letsencrypt.sh \
   --base-domain edk.example.com \
   --email admin@example.com \
-  --challenge tls-alpn \
-  --staging
+  --challenge tls-alpn
 ```
 
 The script writes these generated files:
@@ -138,18 +151,17 @@ cd compose
 docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait
 ```
 
-Run once with `-Staging` / `--staging` first to validate DNS and routing without
-using Let's Encrypt production rate limits. After the staging run works, render
-again without staging and restart the stack so Traefik obtains production
-certificates.
+The default renderer uses the Let's Encrypt production ACME endpoint.
 
 `tls-alpn` validation is the simplest mode and only requires inbound TCP `443`.
 It can issue only concrete DNS names, not `*.<base-domain>`. The renderer requests
 one certificate for `platform.<base-domain>` plus the comma-separated tenant
-aliases passed through `-TenantAliases` / `--tenant-aliases` (`acme,globex,initech`
-by default). Add every tenant hostname you want covered before starting Traefik,
-or rerender and restart before exposing a new tenant host. For an actual wildcard
-certificate that covers arbitrary future tenants, use DNS-01. Cloudflare example:
+aliases passed through `-TenantAliases` / `--tenant-aliases`. No tenant aliases
+are rendered by default. Add every tenant hostname you want covered before
+starting Traefik, or rerender and restart before exposing a new tenant host. For
+an actual wildcard certificate that covers arbitrary future tenants, use DNS-01.
+With an automated DNS provider, Traefik can request and renew the certificate
+itself. Cloudflare example:
 
 ```powershell
 $env:CF_DNS_API_TOKEN = "<token>"
@@ -157,22 +169,121 @@ $env:CF_DNS_API_TOKEN = "<token>"
   -BaseDomain edk.example.com `
   -Email admin@example.com `
   -Challenge dns `
-  -DnsProvider cloudflare `
-  -Staging
+  -DnsProvider cloudflare
 ```
+
+### Subdomain wildcard with Let's Encrypt
+
+Use the installation subdomain as the EDK base domain when the desired
+certificate is scoped below a parent domain. For example, to run EDK under
+`*.edk.example.com`, set the base domain to `edk.example.com`. The platform host
+becomes `platform.edk.example.com` and tenants become
+`<tenant>.edk.example.com`.
+
+This mode must use DNS-01. Let's Encrypt cannot issue wildcard certificates with
+HTTP-01 or TLS-ALPN-01 validation. The ACME client must be able to create TXT
+records at `_acme-challenge.<base-domain>` in the authoritative DNS zone. This
+ACME challenge record is separate from the normal traffic records that point
+`platform.<base-domain>` and `*.<base-domain>` at the gateway host or load
+balancer. Keep the traffic wildcard DNS record in place. A deliberate
+`_acme-challenge` delegation can also work, but the direct manual-DNS path uses
+an explicit TXT record at `_acme-challenge.<base-domain>`.
+
+For Cloudflare-managed DNS, create a scoped token with zone read and DNS edit
+rights for the zone that contains the EDK base domain, then render with:
+
+```powershell
+$env:CF_DNS_API_TOKEN = "<cloudflare-token>"
+.\scripts\start-letsencrypt.ps1 `
+  -BaseDomain edk.example.com `
+  -Email admin@example.com `
+  -Challenge dns `
+  -DnsProvider cloudflare
+```
+
+```bash
+export CF_DNS_API_TOKEN="<cloudflare-token>"
+scripts/start-letsencrypt.sh \
+  --base-domain edk.example.com \
+  --email admin@example.com \
+  --challenge dns \
+  --dns-provider cloudflare
+```
+
+The generated Traefik configuration requests only `*.<base-domain>` by default.
+That wildcard covers `platform.<base-domain>` and first-level tenant hosts such
+as `acme.<base-domain>`. It does not cover the base domain itself or nested
+names such as `api.acme.<base-domain>`. If you also expose the base domain for
+some separate purpose, pass `-IncludeBaseDomain` or `--include-base-domain` to
+request both the base domain and the wildcard.
+
+The `-Email` / `--email` value registers the Let's Encrypt ACME account and is
+used for certificate expiry or operational notices. It does not have to be a
+mailbox on the base domain, but it should be a monitored operational address.
+
+### Manual DNS-01
+
+If you can edit DNS manually but do not have an API token for an automated DNS
+provider, use an external ACME client to obtain the wildcard certificate first.
+Traefik cannot complete or renew manual DNS-01 interactively during Compose
+startup.
+
+Render the public static-certificate overlay:
+
+```powershell
+.\scripts\start-letsencrypt.ps1 `
+  -BaseDomain edk.example.com `
+  -Email admin@example.com `
+  -Challenge dns
+```
+
+The script prints an external ACME command such as:
+
+```powershell
+certbot certonly --manual --preferred-challenges dns --agree-tos --no-eff-email --email admin@example.com -d "*.edk.example.com"
+```
+
+When the ACME client prompts for DNS-01 validation, create the TXT value at
+`_acme-challenge.<base-domain>`, wait for propagation, and continue the ACME
+client. Do not remove the normal `*.<base-domain>` traffic wildcard record; it
+is unrelated. If DNS lookup shows a CNAME at `_acme-challenge.<base-domain>`
+only because the traffic wildcard is being expanded, creating the explicit TXT
+record at `_acme-challenge.<base-domain>` stops that wildcard expansion for the
+challenge name. Remove a CNAME only when it is an explicit record at the exact
+`_acme-challenge.<base-domain>` owner and it is not an intentional ACME
+delegation managed by your DNS team. Then copy the issued certificate files into
+the Compose cert directory:
+
+```text
+fullchain.pem -> compose/gateway/certs/wildcard.crt
+privkey.pem   -> compose/gateway/certs/wildcard.key
+```
+
+Start with the rendered public static-certificate overlay:
+
+```bash
+cd compose
+docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait
+```
+
+Manual DNS-01 does not give Traefik automated renewals. Before the certificate
+expires, renew with the external ACME client, replace `wildcard.crt` and
+`wildcard.key`, and restart Traefik or the stack.
+The DNS token is the sensitive part: prefer a narrowly scoped API token and do
+not commit it to `.env`, Compose files, shell history, or support bundles.
 
 The Let's Encrypt overlay replaces `docker-compose.gateway.yml`; do not combine
 both gateway overlays. Because the certificate is publicly trusted, this overlay
-does not mount `compose/gateway/certs` into the containers and does not set a JVM
-truststore override.
+does not mount `compose/gateway/certs` into the containers and does not set a
+runtime truststore override.
 
 ## Kubernetes single-port gateway
 
 In Kubernetes the single-port front door uses the Gateway API. One wildcard
 HTTPS listener terminates TLS for the operator host and all tenant hosts;
-HTTPRoutes fan out by host and path. When you adopt the gateway, disable the
-classic per-service Ingress objects so the gateway is the only public entry
-point. The ready-to-copy examples live under `helm/edk-enterprise/examples/`.
+HTTPRoutes fan out by host and path. Legacy Ingress objects are disabled so the
+gateway is the only public entry point. The ready-to-copy examples live under
+`helm/edk-enterprise/examples/`.
 
 Common gateway settings under `gateway`:
 
@@ -231,38 +342,55 @@ See `helm/edk-enterprise/examples/gateway-gke-values.yaml`.
 
 ### AWS
 
-Two options exist. With the AWS Gateway API controller, set `gateway.enabled` true and `gateway.className` to the published GatewayClass, exactly as the Cilium and GKE examples. The common path uses classic Ingress with the AWS Load Balancer Controller (ALB): one internet-facing ALB terminates TLS on 443 with a single ACM wildcard certificate and routes by host and path. The ALB controller groups Ingress objects that share a group name onto one load balancer, so all public hosts land on one ALB and one port.
+Use the AWS Gateway API controller or another AWS front door that presents one
+public HTTPS listener and preserves the inbound Host header. Set
+`gateway.enabled` true, use the GatewayClass published in your cluster, and
+disable legacy per-service Ingress rendering.
 
 ```yaml
 gateway:
-  enabled: false
+  enabled: true
+  className: REPLACE-WITH-AWS-GATEWAY-CLASS
+  operatorHost: platform
+  baseDomain: example.com
+  tls:
+    mode: secret
+    secretName: edk-wildcard-tls
+  httpRedirect: true
 
 ingress:
   legacy:
-    enabled: true
-  public:
-    annotations:
-      alb.ingress.kubernetes.io/scheme: internet-facing
-      alb.ingress.kubernetes.io/target-type: ip
-      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-      alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:123456789012:certificate/REPLACE-WITH-WILDCARD-CERT
-      alb.ingress.kubernetes.io/ssl-redirect: "443"
-      alb.ingress.kubernetes.io/group.name: edk-enterprise
+    enabled: false
 ```
 
-Use one ACM wildcard certificate for `*.<base-domain>`; it covers the operator host and every tenant host. See `helm/edk-enterprise/examples/gateway-aws-alb-values.yaml` for the per-service host entries.
+Use one wildcard certificate for `*.<base-domain>`; it covers the operator host
+and every tenant host.
 
 ### Azure
 
-The Application Gateway Ingress Controller (AGIC) terminates TLS on 443 and routes by host and path. AGIC rewrites the Host header to the backend pool address by default, which breaks tenant resolution. Preserve the original public Host on every route: set `appgw.ingress.kubernetes.io/backend-hostname` per service to the public host, or disable host override on the Application Gateway HTTP setting so the inbound Host passes through unchanged.
+Use an Azure Gateway API implementation or an Application Gateway configuration
+that presents one public HTTPS listener and preserves the inbound Host header.
+Host preservation is mandatory: if the gateway rewrites Host to the backend pool
+or service name, tenant resolution breaks.
 
-Supply the wildcard certificate to the Application Gateway either from Azure Key Vault (`appgw.ingress.kubernetes.io/appgw-ssl-certificate` referencing a pre-uploaded cert) or from a Kubernetes TLS Secret in the Ingress tls block.
+```yaml
+gateway:
+  enabled: true
+  className: REPLACE-WITH-AZURE-GATEWAY-CLASS
+  operatorHost: platform
+  baseDomain: example.com
+  tls:
+    mode: secret
+    secretName: edk-wildcard-tls
+  httpRedirect: true
 
-See `helm/edk-enterprise/examples/gateway-azure-agic-values.yaml` for the full per-service `backend-hostname` annotations.
+ingress:
+  legacy:
+    enabled: false
+```
 
-### Classic per-service ingress
-
-When you do not use the single-port gateway, keep `ingress.legacy.enabled: true` (the chart default). The chart renders a public Ingress for the protocol and resolver paths and an internal Ingress for the admin paths, per service. Set TLS, redirect, and certificate annotations under `ingress.public.annotations` and `ingress.internal.annotations`, and the per-service hosts under `services.<name>.publicIngress.host` and `services.<name>.internalIngress.host`. `helm/edk-enterprise/examples/public-protocol-internal-kms-values.yaml` shows this with cert-manager issuing the public certificates.
+Supply the wildcard certificate through the gateway implementation you use, for
+example from Azure Key Vault or a Kubernetes TLS Secret.
 
 ## Admin console routing
 

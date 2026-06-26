@@ -1,16 +1,26 @@
 # EDK Enterprise Helm Chart
 
-This chart deploys the EDK enterprise services:
+This chart deploys the EDK enterprise backing workloads:
 
 - Platform setup/admin/config and platform authorization server
-- KMS
-- DID
-- Tenant OAuth2 Authorization Server
-- OID4VCI Issuer
-- OID4VP Verifier
+- Tenant KMS backing workload
+- DID resolver and `did:web` hosting backing workload
+- Tenant OAuth2 authorization-server backing workload
+- OID4VCI issuer backing workload
+- OID4VP verifier backing workload
 - Admin console (operator web UI served at `platform.<baseDomain>/admin-console`)
 
-The chart does not deploy Postgres. Provide an existing database and credentials Secret.
+These workload names are deployment components, not public service hosts. The
+customer-facing contract is the Gateway route table: `platform.<baseDomain>`
+for the operator/platform plane and `<tenant>.<baseDomain>` for tenant protocol
+and authenticated API routes.
+
+The chart does not deploy Postgres. Provide two existing PostgreSQL databases:
+one platform/control-plane database and one tenant workload database, each with
+its own credentials Secret. Never point the platform and tenant database values
+at the same database in an enterprise deployment. Separate schemas inside one
+database are not sufficient; tenant schemas belong inside the tenant workload
+database, while platform state must live in its own logical database.
 
 ## Install
 
@@ -23,24 +33,32 @@ helm upgrade --install edk-enterprise .\helm\edk-enterprise `
 Customer deployments install this chart from the public Enterprise Development Kit
 Deployment repository: <https://github.com/Sphereon-Opensource/Enterprise-Development-Kit-Deployment>.
 
-For the private Nexus Docker repository, create a pull secret and reference it with `global.imagePullSecrets`.
+Create a Nexus pull secret and reference it with `global.imagePullSecrets`.
+Leave `global.imageRegistry` at `nexus.sphereon.com/edk-docker` unless Sphereon gives you a
+private mirror. Do not set it to `sphereon` or `docker.io/sphereon`; that points
+Kubernetes at public Docker Hub, not the EDK enterprise registry.
 
 ## Main Values
 
 | Value | Default | Purpose |
 | --- | --- | --- |
-| `global.imageRegistry` | `nexus.sphereon.com/edk-docker` | Registry and namespace for all service images. |
+| `global.imageRegistry` | `nexus.sphereon.com/edk-docker` | Registry root for all service images. Must not be `sphereon` or `docker.io/sphereon`. |
 | `global.imageTag` | `0.25.0-SNAPSHOT` | Image tag used for all enterprise services. |
 | `global.imagePullPolicy` | `IfNotPresent` | Kubernetes image pull policy. |
 | `global.imagePullSecrets` | `[]` | Pull secrets rendered into every service pod. |
 | `global.platformBaseDomain` | `example.com` | Customer-controlled base domain. The platform is `platform.<baseDomain>` and tenants are `<tenant-slug>.<baseDomain>`. |
 | `database.enabled` | `true` | Enables database environment wiring. |
-| `database.existingSecret` | `edk-postgres` | Secret containing database username/password. |
+| `database.platform.existingSecret` | `edk-platform-postgres` | Secret with credentials for the control-plane (platform) database. |
+| `database.tenant.existingSecret` | `edk-tenant-postgres` | Secret with credentials for the tenant workload database. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
 | `grpc.enabled` | `true` | Renders inbound gRPC only for platform and tenant-KMS, and renders gRPC peer endpoints for routed calls to those receivers. |
-| `license.installationId` | `11111111-1111-4111-8111-111111111111` | Runtime service binding to the activated installation id. Must match across non-platform services and installed license claims; not a bundle password or request input. |
+| `config.providers.platformConfigRemote.enabled` | `true` | Enables platform-owned remote config reads for every satellite/workload service. |
+| `config.providers.tenantConfigDb.enabled` | `false` | Disables direct tenant-config DB reads on satellites so platform remains the config authority. |
+| `license.installationId` | `""` | Optional explicit runtime pin to a known installation id. Leave empty for first-run setup; the protected bundle supplies the installation id. If set, it must match the installed license claims. |
 | `networkPolicy.enabled` | `true` | Renders service ingress/egress NetworkPolicies. |
+| `gateway.enabled` | `true` | Renders the single-port customer Gateway and HTTPRoutes. |
+| `ingress.legacy.enabled` | `false` | Keeps legacy per-service Ingress off by default. |
 | `serviceMonitor.enabled` | `false` | Renders Prometheus Operator ServiceMonitors. |
 | `opentelemetry.enabled` | `false` | Renders OTLP exporter environment variables. |
 
@@ -53,25 +71,43 @@ Each service is configured under `services.<name>` where `<name>` is `platform`,
 | `enabled` | Enable or disable the service. |
 | `image` | Image repository name under `global.imageRegistry`. |
 | `replicas` | Deployment replica count. |
-| `restPort` | Container and service REST port. |
-| `publicIngress` | Public ingress settings for wallet/protocol/resolver endpoints. |
-| `internalIngress` | Internal ingress settings for administrative/API endpoints. |
+| `restPort` | Internal container and Kubernetes Service REST port. Leave the default unless Sphereon supplies an override; it is not a customer endpoint. |
+| `publicIngress` | Legacy per-service ingress settings. Disabled by default; customer deployments use the Gateway. |
+| `internalIngress` | Legacy internal ingress settings for private administrative/API endpoints. Disabled by default. |
 | `resources` | Container requests and limits. |
 | `env` | Extra container environment variables. |
 
-Default per-service values:
+Default backing components:
 
-| Service | enabled | image | replicas | restPort |
-| --- | --- | --- | --- | --- |
-| `platform` | `true` | `enterprise-platform` | `1` | `8080` |
-| `tenant-kms` | `true` | `enterprise-tenant-kms` | `1` | `8080` |
-| `did` | `true` | `enterprise-did` | `1` | `8080` |
-| `tenant-as` | `true` | `enterprise-tenant-as` | `1` | `8080` |
-| `issuer` | `true` | `enterprise-issuer` | `1` | `8080` |
-| `verifier` | `true` | `enterprise-verifier` | `1` | `8080` |
-| `admin-console` | `true` | `admin-console` | `1` | `3000` |
+| Component | enabled | image | Backing responsibility |
+| --- | --- | --- | --- |
+| `platform` | `true` | `enterprise-platform` | Setup, license activation, platform admin/config, and platform authorization server |
+| `tenant-kms` | `true` | `enterprise-tenant-kms` | Tenant key material and KMS command handling |
+| `did` | `true` | `enterprise-did` | DID resolver and `did:web` hosting behind the tenant gateway |
+| `tenant-as` | `true` | `enterprise-tenant-as` | Tenant OAuth2 authorization server behind the tenant gateway |
+| `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
+| `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
+| `admin-console` | `true` | `admin-console` | Operator UI behind `platform.<baseDomain>/admin-console` |
 
-Tenant KMS public ingress is disabled by default. The platform service exposes only AS protocol metadata/auth paths publicly; `/api/platform/*` is internal. Other services expose only public protocol/resolver paths on public ingress; API paths are internal.
+Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS, issuer,
+and verifier remain backing workloads behind `platform.<baseDomain>` and
+`<tenant>.<baseDomain>` host/path routes. Runtime probes are Kubernetes
+orchestration concerns and must not be published as customer routes.
+
+## Database Boundary
+
+The platform database and tenant workload database are separate trust
+boundaries. The platform database contains tenant registry, routing, public
+endpoint, license/setup, platform configuration, and platform-AS state. The
+tenant database contains runtime tenant workload state, with the default chart
+using one schema per tenant inside that tenant database.
+
+It is acceptable for both databases to run on the same managed PostgreSQL server
+or database operator, but only as two database names with separate Secrets and
+separately constrained access. Do not configure `database.platform.name` and
+`database.tenant.name` to the same value. Do not mount platform database
+credentials into tenant-KMS, DID, tenant-AS, issuer, or verifier pods. Do not
+mount tenant database credentials into the platform pod.
 
 ## Domain, Gateway, and TLS
 
@@ -92,27 +128,32 @@ registration, not per-tenant certificate issuance. Public CAs such as Let's
 Encrypt can be used; for cert-manager and Let's Encrypt wildcard certificates,
 configure DNS-01 validation.
 
-The single-port Gateway API model is enabled with `gateway.enabled=true` and
-`ingress.legacy.enabled=false`. The classic per-service Ingress model remains
-available, but public ingress must remain limited to protocol/resolver paths and
-admin REST must stay internal or protected.
+The single-port Gateway API model is enabled by default with
+`gateway.enabled=true` and `ingress.legacy.enabled=false`. Customer-visible
+ingress is limited to platform and tenant host/path routes; admin REST and
+runtime probes must stay internal or protected.
 
 ### Admin console
 
 The `admin-console` service is a Next.js standalone web UI served under the
 `/admin-console` basePath (the root `/` returns 404). It is a single
-host-agnostic build: it resolves the API and OIDC authorization-server origin
-from the request host at runtime, so there is no per-host pod config. It is
+host-agnostic build: the OIDC authorization-server origin resolves from the
+request host behind the gateway, while platform-admin, platform-config, tenant-KMS,
+and DID API calls default to `/admin-console/api/*`. The chart injects
+internal platform, tenant KMS, and DID upstreams for that server-side proxy. It is
 fronted on the operator/platform host
 (`platform.<baseDomain>/admin-console`) alongside the platform authorization
 server, and authenticates operators against the platform AS via the OAuth
 callback `/admin-console/callback`. The `/admin-console` prefix must NEVER be
 stripped at the proxy - Next emits absolute `/admin-console/_next/...` asset
-URLs. The pod sets `NEXT_PUBLIC_BASE_PATH=/admin-console` and `PORT=3000`.
+URLs. The pod sets `NEXT_PUBLIC_BASE_PATH=/admin-console`, `PORT=3000`, and
+the internal proxy target variables.
 
 On the Gateway API path the explicit `/admin-console` PathPrefix route is more
 specific than the platform service's `/` catch-all, so `/admin-console/*` routes
-to the console while everything else falls through to the platform.
+to the console while everything else falls through to the platform. Root `/api/*`
+routes may still be enabled for authenticated automation and diagnostics through
+the gateway, but the console does not depend on them.
 
 | Value | Default | Purpose |
 | --- | --- | --- |
@@ -144,4 +185,8 @@ helm template edk-enterprise .\helm\edk-enterprise `
   -f .\helm\edk-enterprise\examples\shared-postgres-values.yaml
 ```
 
-The render suite covers default REST deployment, pull secrets, ingress split, KMS internal-only behavior, platform/KMS-only gRPC receiver rendering, external Postgres secret wiring, resource/security defaults, NetworkPolicies, ServiceMonitor, and OpenTelemetry values.
+The render suite covers default REST deployment, pull secrets, single-port
+Gateway/HTTPRoute rendering, no legacy public service hosts, KMS internal-only
+behavior, platform/KMS-only gRPC receiver rendering, external Postgres secret
+wiring, resource/security defaults, NetworkPolicies, ServiceMonitor, and
+OpenTelemetry values.

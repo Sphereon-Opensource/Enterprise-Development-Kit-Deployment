@@ -1,0 +1,302 @@
+{{- /*
+Platform active-profile configuration overlay.
+
+The platform service reads this file as its container-profile overlay
+(application-container.yml). It merges on top of the image's baked-in
+configuration and the environment configuration, supplying the keys an
+environment variable name cannot express, including the platform tenant
+datasource and the hyphenated control-plane bootstrap keys.
+
+Two concerns live here:
+
+  1. Platform tenant datasource - the system platform tenant is control-plane
+     state and is bound to the platform database. Customer tenant workload state
+     stays in the separate tenant workload database. Credentials resolve from
+     the platform database Secret through the EDK_PLATFORM_DB_* values injected
+     into the platform container.
+
+  2. Control-plane bootstrap — the platform provisions its `platform` tenant,
+     hosted authorization server, and operator owner on first boot. These inputs
+     are hyphenated keys, so they are supplied here rather than as environment
+     variables. The license root-CA trust anchor path is set here too so the
+     platform trusts the installed license bundle.
+
+Rendered only for the platform service.
+*/ -}}
+{{- if .Values.database.enabled }}
+{{- $platformDb := .Values.database.platform }}
+{{- $bootstrap := .Values.platform.bootstrap }}
+{{- $licenseTrust := .Values.license.trust }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-platform-db-override
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: platform
+data:
+  # Delivered as the platform's base application.yml. The image bakes no
+  # application.yml, so this is the platform's authoritative file configuration;
+  # it merges over the environment configuration and supplies the keys an
+  # environment variable name cannot express (the platform tenant datasource
+  # and the hyphenated control-plane bootstrap keys).
+  application.yml: |
+    database:
+      tenants:
+        # The platform process creates tenant registry/control-plane rows during
+        # registration. It does not receive tenant workload DB credentials, so
+        # dynamic tenant ids must resolve to the platform DB inside this process.
+        default:
+          dialect: {{ .Values.database.dialect }}
+          isolation: shared
+          host: {{ $platformDb.host }}
+          port: {{ $platformDb.port }}
+          database: {{ $platformDb.name }}
+          username: ${env:EDK_PLATFORM_DB_USERNAME}
+          password: ${env:EDK_PLATFORM_DB_PASSWORD}
+        platform:
+          dialect: {{ .Values.database.dialect }}
+          isolation: shared
+          host: {{ $platformDb.host }}
+          port: {{ $platformDb.port }}
+          database: {{ $platformDb.name }}
+          username: ${env:EDK_PLATFORM_DB_USERNAME}
+          password: ${env:EDK_PLATFORM_DB_PASSWORD}
+    # Control-plane bootstrap inputs for the `platform` tenant, its hosted
+    # authorization server, and the operator owner. The platform provisions
+    # these on first boot and the steps are idempotent across restarts.
+    application:
+      tenant:
+        hosted-as:
+          issuer: {{ $bootstrap.issuer | quote }}
+        owner:
+          email: {{ $bootstrap.owner.email | quote }}
+          display-name: {{ $bootstrap.owner.displayName | quote }}
+          {{- with $bootstrap.owner.roles }}
+          roles: {{ . | quote }}
+          {{- end }}
+    # The platform hosts its own authorization server for operator sign-in and
+    # the operator->tenant token exchange the admin console drives.
+    server:
+      rest:
+        auth:
+          # The platform AS stamps tokens with the public issuer, but validates
+          # them by fetching JWKS through the in-cluster service. This keeps
+          # operator token validation independent from external gateway TLS
+          # trust inside the service containers.
+          issuer: ${env:EXTERNAL_BASE_URL}
+          jwks-uri: {{ printf "http://%s:%v/.well-known/jwks.json" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+    oauth2:
+      user-provider:
+        mode: {{ $bootstrap.userProviderMode | quote }}
+      servers:
+        default:
+          mode: HOSTED
+          signing-key:
+            auto-generate: true
+          issuer: ${env:EXTERNAL_BASE_URL}
+          oidc: SUPPORTED
+          logout: SUPPORTED
+          pkce: REQUIRED
+          token-format: JWT
+          scopes-supported: "openid,profile,email"
+          grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
+          public-clients:
+            allow-any: true
+            permissive-redirect-uri: true
+          {{- if .Values.serviceIdentity.internalClientExistingSecret }}
+          internal-clients:
+            issuer:
+              client-id: issuer-service
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+            kms:
+              client-id: kms-service
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+            did:
+              client-id: did-service
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+            verifier:
+              client-id: verifier-service
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+            tenantas:
+              client-id: tenant-as-service
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          {{- end }}
+        platform:
+          # Application bootstrap provisions the control-plane AS with slug
+          # `platform`; keep key materialization enabled for that instance as well.
+          signing-key:
+            auto-generate: true
+      clients:
+        platform-operator-cli:
+          client-id: platform-operator-cli
+          client-name: Platform Operator CLI
+          client-type: public
+          grant-types: "authorization_code,urn:ietf:params:oauth:grant-type:token-exchange"
+          redirect-uris:
+            - ${env:ONBOARDING_UI_BASE_URL}/admin-console/callback
+            - ${env:ONBOARDING_UI_BASE_URL}/onboarding/callback
+          post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/admin-console"
+          allowed-scopes: openid
+          token-endpoint-auth-method: none
+    # The platform AS itself is the operator sign-in surface; an operator signs
+    # in without an application binding and is resolved tenant-wide.
+    auth:
+      login:
+        require-application: false
+    {{- if $bootstrap.allowLocalHttpAs }}
+    # The platform serves its hosted AS over loopback HTTP for a local cluster.
+    # Production keeps the SSRF guard strict; opt in only for local testing.
+    vdx:
+      hosted-as-readiness:
+        allow-local-http: true
+    {{- end }}
+    # Workload identities the platform trusts on east-west command-transport calls
+    # (the gRPC X-Service-Id), each bound to the client id of the service token the
+    # caller presents. The satellites read config and the license-state projection
+    # through these, so the platform must recognise them.
+    security:
+      header-trust-policy:
+        trusted_service_ids:
+          - service-crypto
+          - service-data
+          - service-oid4vci
+          - service-oid4vp
+          - service-tenant-as
+        service_client_bindings:
+          "[service-crypto]": kms-service
+          "[service-data]": did-service
+          "[service-oid4vci]": issuer-service
+          "[service-oid4vp]": verifier-service
+          "[service-tenant-as]": tenant-as-service
+    # First-boot operator owner and installation identity for the control-plane.
+    app:
+      deployment-mode: {{ $bootstrap.deploymentMode | quote }}
+    platform:
+      onboarding:
+        installation-base-domain: {{ .Values.global.platformBaseDomain | quote }}
+        {{- if $licenseTrust.rootCaPath }}
+        trust-bundle-path: {{ $licenseTrust.rootCaPath | quote }}
+        {{- end }}
+        operator:
+          email: {{ $bootstrap.owner.email | quote }}
+          display-name: {{ $bootstrap.owner.displayName | quote }}
+          {{- if $bootstrap.ownerInitialCredential }}
+          initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+          {{- end }}
+      config:
+        mount-path: /app/config
+    # Software KMS providers. The platform holds its own keystore, the
+    # license-request instance cert, and the platform signing material. The owner
+    # bootstrap derives a blind index for the operator's email through the
+    # software provider, so it must be present.
+    kms:
+      providers:
+        software:
+          id: software
+          type: software
+          enabled: true
+          autoCreateCertificate: true
+          keystore:
+            type: pkcs12
+            id: software
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            keystoreRoot: /keystore
+        license:
+          id: license
+          type: software
+          enabled: true
+          autoCreateCertificate: true
+          keystore:
+            type: pkcs12
+            id: license
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            keystoreRoot: /keystore
+        platform:
+          id: platform
+          type: software
+          enabled: true
+          autoCreateCertificate: true
+          keystore:
+            type: pkcs12
+            id: platform
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            keystoreRoot: /keystore
+    # KMS role bindings the hosted-AS provisioning and credential signing resolve
+    # signing keys through (JOSE algorithm names).
+    crypto:
+      kms:
+        roles:
+          oauth2-as:
+            algorithm: ES256
+            default:
+              algorithm: ES256
+          issuer-signing:
+            algorithm: ES256
+          issuer-request-decryption:
+            algorithm: ES256
+          verifier-request-object-signing:
+            algorithm: ES256
+    # Tenant resolution. The platform host resolves through the installation base
+    # domain; the platform's own in-container and loopback hosts map directly to
+    # the `platform` tenant so operator and east-west surfaces resolve without a
+    # registry lookup.
+    tenant:
+      resolution:
+        platform:
+          base-domain: {{ .Values.global.platformBaseDomain | quote }}
+          subdomain:
+            enabled: true
+        custom-domain:
+          enabled: true
+        self:
+          tenant-id: "platform"
+          hosts: {{ printf "%s,%s:%v,localhost,platform.%s%s" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) .Values.global.platformBaseDomain (.Values.platform.bootstrap.selfHostsExtra | default "") | quote }}
+      {{- if $bootstrap.ownerInitialCredential }}
+      platform:
+        owner:
+          initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+      {{- end }}
+      onboarding:
+        operator:
+          enabled: true
+    # East-west reachability for registration-time signing-key provisioning. The
+    # platform connects to the tenant services at these internal addresses and
+    # carries the public tenant host in the Host header, so a freshly created
+    # tenant is provisioned without resolving its public {tenant}.{base} subdomain
+    # from inside the cluster network. The tenant AS seeds its own AS signing key;
+    # the platform provisions the issuer/verifier signing keys directly in the
+    # tenant KMS over its REST API.
+    east-west:
+      platform:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+      {{- if (index .Values.services "tenant-as").enabled }}
+      tenant-as:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+      {{- end }}
+      {{- if (index .Values.services "tenant-kms").enabled }}
+      tenant-kms:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) ((index .Values.services "tenant-kms").restPort) | quote }}
+      {{- end }}
+      {{- if (index .Values.services "did").enabled }}
+      tenant-did:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
+      {{- end }}
+    # License trust anchor and recipient binding. The platform is the local
+    # licensing authority; it trusts the installed license bundle's root CA via
+    # this path, and decrypts the license envelope with the recipient key it
+    # imports from the bundle into the named KMS provider.
+    license:
+      deployment-role: platform
+      recipient:
+        key-id: {{ $licenseTrust.recipientKeyId | quote }}
+        kms:
+          enabled: true
+          alias: {{ $licenseTrust.recipientKmsAlias | quote }}
+      trust:
+        embedded:
+          enabled: {{ $licenseTrust.embeddedEnabled }}
+        {{- if $licenseTrust.rootCaPath }}
+        root-ca-bundle-path: {{ $licenseTrust.rootCaPath | quote }}
+        {{- end }}
+{{- end }}

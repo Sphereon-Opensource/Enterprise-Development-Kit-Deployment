@@ -1,7 +1,7 @@
 # Single-port multi-tenant front door on GKE via the Gateway API. One wildcard
 # HTTPS listener terminates TLS for the operator host and all tenant hosts;
-# HTTPRoutes fan out by host and path. The classic per-service Ingress objects
-# are disabled so the Gateway is the only public entry point.
+# HTTPRoutes fan out by host and path. Legacy Ingress objects are disabled so
+# the Gateway is the only public entry point.
 #
 # GKE Gateway preserves the inbound Host header and sets X-Forwarded-Proto by
 # default, so it satisfies the contract without extra tuning.

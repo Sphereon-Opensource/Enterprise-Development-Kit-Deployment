@@ -1,12 +1,11 @@
 # Single-port gateway overlay for the EDK enterprise stack.
 #
 # Merge this with the base compose to run the whole stack behind one TLS port.
-# The base file alone publishes each service on its own host port. This overlay
+# The base file's loopback host ports are local diagnostics only. This overlay
 # adds a Traefik v3 reverse proxy that terminates TLS on 443, redirects 80 to
-# 443, preserves the inbound Host header, and fans the services out by host
-# and path. Tenant identity is the Host, so a tenant is reached at
-# https://{tenant}.<base-domain> and the operator plane at
-# https://platform.<base-domain>.
+# 443, preserves the inbound Host header, and fans backing workloads out by host
+# and path. Tenant identity is the Host, so the customer-facing origins are
+# https://{tenant}.<base-domain> and https://platform.<base-domain>.
 #
 # Usage:
 #   1. scripts/gen-local-wildcard-cert.(sh|ps1)   # one time, for local evaluation
@@ -16,7 +15,8 @@
 # saas.localtest.me, which resolves every subdomain to 127.0.0.1 for local
 # evaluation). The per-service external base URLs below are derived from it so
 # every advertised issuer URL, metadata document, and redirect flows through the
-# gateway over https.
+# gateway over https. Workload healthchecks remain internal orchestration
+# signals; they are not routed as customer checks.
 #
 # Note: the Traefik file provider (gateway/traefik/dynamic.yml) does not
 # interpolate environment variables. For a base domain other than the default,
@@ -25,11 +25,10 @@
 
 x-edk-gateway-public-env: &edk-gateway-public-env
   EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
-  # The platform AS is the fixed operator issuer. The tenant AS advertises
-  # per-tenant issuers from public-endpoint bindings after onboarding; this
-  # operator origin is the bootstrap/fallback issuer all services agree on.
+  # The platform AS is the fixed operator issuer. Tenant AS issuers are not
+  # configured at deployment time; tenant onboarding creates registry-backed
+  # public endpoint bindings such as https://<tenant>.<base-domain>.
   EDK_PLATFORM_PUBLIC_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
-  EDK_TENANT_AS_PUBLIC_URL: https://tenant-as.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
   EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
 
 services:
@@ -49,7 +48,7 @@ services:
       - ./gateway/traefik/dynamic.yml:/etc/traefik/dynamic/dynamic.yml:ro
       - ./gateway/certs:/etc/traefik/certs:ro
     networks:
-      default:
+      appnet:
         # In-network aliases so service-to-service calls to the operator host
         # over TLS (for example resolving the platform AS JWKS) reach the gateway
         # instead of a container's own loopback. The platform host is always
@@ -77,15 +76,19 @@ services:
     volumes:
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       - ./gateway/certs:/app/certs:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "(exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) ') || (exec 4<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -Eq ' (200|404) ')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
 
-  # Tenant authorization server. The external URL is the gateway operator host,
-  # which is the fallback issuer for the platform tenant; per-tenant issuers come
-  # from the active registry bindings. It validates bearer tokens, so it carries
-  # the local CA truststore for evaluation.
+  # Tenant authorization server backing workload. Public tenant issuers are
+  # created as tenant public-endpoint bindings during onboarding. It validates
+  # bearer tokens, so it carries the local CA truststore for evaluation.
   enterprise-tenant-as:
     environment:
       <<: *edk-gateway-public-env
-      EXTERNAL_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/app/certs/local-truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12"
     volumes:
@@ -103,40 +106,43 @@ services:
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       - ./gateway/certs:/app/certs:ro
 
-  # DID service. Reached at https://{tenant}.<base-domain>/ for resolution and did.json.
+  # DID backing workload. Tenant DID resolution and did.json are reached through
+  # https://{tenant}.<base-domain>/ gateway routes, not by calling this
+  # container directly.
   enterprise-did:
     environment:
       <<: *edk-gateway-public-env
-      # Fallback before tenant public-endpoint bindings exist. Runtime tenant
-      # protocol URLs are resolved from the inbound Host and active bindings.
-      EXTERNAL_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+      # Clear the direct-port fallback in gateway mode. Tenant public URLs are
+      # resolved from the inbound Host and active public-endpoint bindings.
+      EXTERNAL_BASE_URL: ""
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/app/certs/local-truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12"
     volumes:
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       - ./gateway/certs:/app/certs:ro
 
-  # OID4VCI issuer. Reached at https://{tenant}.<base-domain>/ for the protocol surface.
+  # OID4VCI issuer backing workload. The protocol surface is reached through
+  # https://{tenant}.<base-domain>/ gateway routes.
   enterprise-issuer:
     environment:
       <<: *edk-gateway-public-env
-      # Fallback before tenant public-endpoint bindings exist. Runtime issuer
-      # metadata and offer URLs are resolved from the tenant binding.
-      EXTERNAL_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+      # Clear the direct-port fallback in gateway mode. Runtime issuer metadata
+      # and offer URLs are resolved from the tenant public-endpoint binding.
+      EXTERNAL_BASE_URL: ""
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/app/certs/local-truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12"
     volumes:
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       - ./gateway/certs:/app/certs:ro
 
-  # OID4VP verifier. Reached at https://{tenant}.<base-domain>/ for the presentation
-  # surface.
+  # OID4VP verifier backing workload. The presentation surface is reached
+  # through https://{tenant}.<base-domain>/ gateway routes.
   enterprise-verifier:
     environment:
       <<: *edk-gateway-public-env
-      # Fallback before tenant public-endpoint bindings exist. Runtime verifier
-      # request URLs are resolved from the tenant binding.
-      EXTERNAL_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+      # Clear the direct-port fallback in gateway mode. Runtime verifier request
+      # URLs are resolved from the tenant public-endpoint binding.
+      EXTERNAL_BASE_URL: ""
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       JAVA_TOOL_OPTIONS: "-Djavax.net.ssl.trustStore=/app/certs/local-truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12"
     volumes:
@@ -150,4 +156,4 @@ services:
   # joins the gateway network so Traefik can reach it as http://admin-console:3000.
   admin-console:
     networks:
-      default: {}
+      appnet: {}

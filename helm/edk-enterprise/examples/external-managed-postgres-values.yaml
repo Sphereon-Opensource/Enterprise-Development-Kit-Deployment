@@ -7,15 +7,28 @@ global:
 database:
   enabled: true
   dialect: postgresql
-  host: edk-prod.postgres.database.example.net
-  port: 5432
-  name: edk
-  existingSecret: edk-managed-postgres
-  usernameKey: username
-  passwordKey: password
-  networkPolicy:
-    ipBlock:
-      cidr: 10.42.16.20/32
+  platform:
+    host: edk-platform.postgres.database.example.net
+    port: 5432
+    name: platform
+    existingSecret: edk-managed-platform-postgres
+    usernameKey: username
+    passwordKey: password
+    networkPolicy:
+      ipBlock:
+        cidr: 10.42.16.20/32
+  tenant:
+    host: edk-tenant.postgres.database.example.net
+    port: 5432
+    name: tenant
+    existingSecret: edk-managed-tenant-postgres
+    usernameKey: username
+    passwordKey: password
+    isolation: schema
+    schemaPattern: "tenant_{id}"
+    networkPolicy:
+      ipBlock:
+        cidr: 10.42.16.21/32
 
 networkPolicy:
   enabled: true

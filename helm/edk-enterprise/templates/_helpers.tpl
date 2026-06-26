@@ -83,3 +83,13 @@ name, or an empty list for services that are not tenant-routed.
 {{- default "default" .Values.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "edk-enterprise.validateImageRegistry" -}}
+{{- $registry := trimSuffix "/" (lower (default "" .Values.global.imageRegistry)) -}}
+{{- if or (eq $registry "sphereon") (hasPrefix "sphereon/" $registry) (regexMatch "^(docker\\.io|index\\.docker\\.io|registry-1\\.docker\\.io)(/|$)" $registry) -}}
+{{- fail "global.imageRegistry must not point at public Docker Hub. Use nexus.sphereon.com/edk-docker for EDK enterprise images." -}}
+{{- end -}}
+{{- if eq $registry "nexus.sphereon.com" -}}
+{{- fail "global.imageRegistry must include the EDK Docker repository. Use nexus.sphereon.com/edk-docker, not host-only nexus.sphereon.com." -}}
+{{- end -}}
+{{- end -}}

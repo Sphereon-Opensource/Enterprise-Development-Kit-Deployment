@@ -1,0 +1,37 @@
+# Traefik static configuration for the EDK single-port gateway, Let's Encrypt mode.
+#
+# Rendered by scripts/start-letsencrypt.(ps1|sh) to
+# traefik.letsencrypt.generated.yml. The generated file is gitignored.
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic/dynamic.yml
+    watch: true
+
+certificatesResolvers:
+  le:
+    acme:
+      email: __LE_EMAIL__
+      storage: /etc/traefik/acme/acme.json
+      caServer: __LE_CASERVER__
+__LE_CHALLENGE_BLOCK__
+
+log:
+  level: INFO
+
+accessLog: {}
+
+api:
+  dashboard: false

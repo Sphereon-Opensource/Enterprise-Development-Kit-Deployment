@@ -26,10 +26,12 @@ Configuration files are read from the config location the images set to
 section described here. Use it as the reference for the YAML keys; the Helm
 chart binds the same keys through environment variables.
 
-The shipped config keeps REST on port `8080` with REST auth enabled for the JVM
-services. The admin console listens on port `3000`. Platform and tenant-KMS
-enable the inbound gRPC command receiver; DID, tenant-AS, issuer, and verifier
-do not expose an inbound gRPC server.
+The shipped config keeps REST on port `8080` with REST auth enabled for the
+native service containers. The admin console listens on port `3000`. Platform
+and tenant-KMS enable the inbound gRPC command receiver; DID, tenant-AS, issuer,
+and verifier do not expose an inbound gRPC server. These are container/service
+ports only. The customer-facing TLS connection terminates at the gateway or
+ingress front door, which then routes internally by host and path.
 
 ```yaml
 server:
@@ -60,8 +62,8 @@ For example, with `global.platformBaseDomain=example.com`:
 | Host | Purpose |
 | --- | --- |
 | `platform.example.com` | Platform/operator host: setup, platform admin APIs, platform authorization server, and admin console. |
-| `<tenant-slug>.example.com` | Tenant host: issuer, verifier, tenant authorization server, DID resolver, and tenant-scoped protocol endpoints. For the default hosted issuer, the OID4VCI `credential_issuer` identifier is this tenant origin, for example `https://acme.example.com`. |
-| Internal service DNS names | East-west calls between services. Do not route internal gRPC or KMS traffic through the public gateway. |
+| `<tenant-slug>.example.com` | Tenant host: public protocol, resolver, and tenant-scoped authenticated API routes. For the default hosted issuer, the OID4VCI `credential_issuer` identifier is this tenant origin, for example `https://acme.example.com`. |
+| Internal service DNS names | East-west calls between backing services. These names, ports, and probes are not customer URLs. Do not route internal gRPC or KMS traffic through the public gateway. |
 
 Tenant resolution is host-based. Tenants receive subdomains under the base
 domain (`<slug>.<base-domain>`), and each service receives
@@ -77,12 +79,11 @@ your public gateway or ingress. In Docker Compose, the matching input is
 ### TLS coverage for the base domain
 
 Terminate public TLS before traffic reaches the services. The recommended
-certificate shape is:
+certificate shape is one wildcard:
 
 | Name on certificate | Why it is needed |
 | --- | --- |
-| `*.<base-domain>` | Covers every first-level tenant host, for example `acme.example.com`. |
-| `platform.<base-domain>` | Covers the operator/platform host. This is also covered by the wildcard when it is a first-level subdomain, but list it explicitly when your CA, gateway, or audit policy expects the operator host as a named SAN. |
+| `*.<base-domain>` | Covers the operator/platform host and every first-level tenant host, for example `platform.example.com` and `acme.example.com`. |
 
 A wildcard certificate can be issued by any public CA, including Let's Encrypt.
 For Kubernetes, use cert-manager with a DNS-01 issuer, or import an existing
@@ -91,35 +92,100 @@ poor fit for tenant wildcards because the challenge cannot validate `*.<base-dom
 For Docker Compose, place the certificate and key where the Traefik gateway
 expects them. See [TLS and gateway](tls-and-gateway.md) for the exact steps.
 
+When the EDK base domain is itself a subdomain, such as `edk.example.com`, the
+wildcard is `*.edk.example.com` and the DNS-01 challenge record is
+`_acme-challenge.edk.example.com`. The DNS operator must be able to create or
+delegate that challenge record in the authoritative DNS zone. This challenge
+record is separate from traffic DNS such as `*.edk.example.com` pointing to the
+gateway. For manual DNS-01, the normal setup is an explicit TXT record directly
+at the challenge name. Remove only an explicit non-delegation CNAME at that same
+challenge name; do not remove the traffic wildcard record.
+
 A wildcard certificate for `*.example.com` does not cover the apex
 `example.com` and does not cover nested names such as
 `api.acme.example.com`. Keep tenant hosts one label below the base domain.
 
 ## Public hostnames
 
-Each service has a public hostname and, where applicable, a separate internal
-hostname. In Helm these come from `services.<name>.publicIngress.host` and
-`services.<name>.internalIngress.host`. The classic per-service ingress model
-can publish separate service hosts. The recommended single-port gateway model
-instead publishes one platform host and one tenant wildcard, then routes by host
-and path. In Docker Compose gateway mode, keep the per-service
-`EDK_*_EXTERNAL_BASE_URL` values on their local defaults; the overlay sets the
-operator/bootstrap origins and onboarding creates the tenant public-endpoint
-bindings, normally all on `https://<tenant-slug>.<base-domain>`.
+The recommended public model publishes one platform host and one tenant
+wildcard, then routes by host and path. Customers do not call individual
+workload containers or per-service host ports. In Docker Compose gateway mode,
+the customer's only public hostname input is the base domain. The overlay
+publishes the platform/operator origin as `https://platform.<base-domain>`, and
+onboarding creates tenant public-endpoint bindings, normally all on
+`https://<tenant-slug>.<base-domain>`. Direct container origins and internal
+service DNS names are deployment mechanics, not the customer URL contract.
 
-Public exposure is limited to the DID resolver, the OAuth/OIDC protocol surface,
-the OID4VCI issuer paths, the OID4VP verifier paths, and the operator admin
-console on the platform host. Administrative REST under `/api/.../v1` is served
-on the internal hostname only in Kubernetes and must sit behind JWT auth or a
-service mesh. See [TLS and gateway](tls-and-gateway.md) for the public/internal
-split and how the single-port gateway routes by host and path.
+Public exposure is limited to host/path routes through the gateway: public
+protocol metadata and interaction paths on the tenant host, the operator admin
+console on the platform host, and selected operator/admin API routes that are
+authenticated before use. Backing-service health/readiness probes are not
+published customer routes. Administrative REST under `/api/.../v1` must sit
+behind JWT auth or a service mesh. See
+[TLS and gateway](tls-and-gateway.md) for the public/internal split and how the
+single-port gateway routes by host and path.
+
+## Platform-owned service configuration
+
+The platform is the configuration authority for tenant and service-instance
+business settings. During onboarding and administration, the platform stores
+issuer, verifier, tenant-AS, public-endpoint, KMS, secret-provider, and related
+settings in its control-plane configuration backend. Satellite workloads read
+that materialized tenant/service slice from the platform over the internal
+command route.
+
+Local `application.yml`, Helm values, and Docker Compose environment variables
+remain part of the deployment, but they are bootstrap and override inputs. Use
+them for process mechanics such as the platform endpoint, service identity,
+tenant workload database connection, ports, probes, telemetry, trust mounts, and
+emergency overrides. Do not treat satellite-local YAML as the normal place to
+author tenant issuer/verifier/AS behavior.
+
+The customer deployment defaults enforce this split:
+
+```yaml
+config:
+  providers:
+    platform-config-remote:
+      enabled: true
+    tenant-config-db:
+      enabled: false
+```
+
+In Helm the same defaults are rendered as
+`CONFIG_PROVIDERS_PLATFORM_CONFIG_REMOTE_ENABLED=true` and
+`CONFIG_PROVIDERS_TENANT_CONFIG_DB_ENABLED=false` for every non-platform
+service. The platform service still owns the control-plane configuration
+repository; satellites do not connect to the platform database.
 
 ## Database
 
-The deployment requires PostgreSQL. Two database scopes are rendered from the
-same connection values: the TENANT scope holds per-tenant data, and the APP
-scope holds control-plane tables including the tenant registry that host-based
-tenant resolution reads. Both scopes are required.
+The deployment uses two PostgreSQL databases. This is a hard enterprise
+boundary, not just a sizing recommendation:
+
+- The **platform** (control-plane) database holds the tenant registry, routing and
+  public-endpoint bindings, platform configuration, the platform tenant, and the
+  platform authorization server. Only the platform service connects to it.
+- The **tenant** (workload) database holds per-tenant runtime data. The default
+  enterprise deployment uses one schema per tenant inside this tenant database.
+
+Enterprise deployments must keep these as two separate logical databases. Do not
+point `database.platform.*` and `database.tenant.*` at the same database name.
+Do not emulate the split by putting platform tables and tenant schemas in one
+database. Schemas are the tenant isolation mechanism inside the tenant workload
+database only; they are not an acceptable boundary between platform state and
+tenant workload state.
+They may be hosted by the same managed PostgreSQL server or operator only when
+the platform database and tenant database are separate databases with separate
+credentials and network access can still be constrained by role.
+
+For schema-per-tenant, runtime services select the tenant schema through their
+tenant DB routing configuration and set `search_path` at request time. Tenant
+schema lifecycle belongs to the tenant workload data plane; do not give the
+platform service a tenant DB connection for workload schema or database DDL. The
+system platform tenant is control-plane state and is bound to the platform
+database; customer tenant workload data is never written to the platform
+database.
 
 In Helm, set these under `database`:
 
@@ -127,25 +193,51 @@ In Helm, set these under `database`:
 | --- | --- |
 | `database.enabled` | Render database configuration. Keep `true`. |
 | `database.dialect` | Database dialect. Use `postgresql`. |
-| `database.host` | PostgreSQL host. |
-| `database.port` | PostgreSQL port (typically `5432`). |
-| `database.name` | Database name. |
-| `database.existingSecret` | Name of a Kubernetes Secret holding the credentials. |
-| `database.usernameKey` | Key in the Secret that holds the username. |
-| `database.passwordKey` | Key in the Secret that holds the password. |
+| `database.platform.host` | Control-plane PostgreSQL host. |
+| `database.platform.port` | Control-plane PostgreSQL port (typically `5432`). |
+| `database.platform.name` | Control-plane database name. |
+| `database.platform.existingSecret` | Secret holding the control-plane database credentials. |
+| `database.platform.usernameKey` / `passwordKey` | Keys in the platform Secret. |
+| `database.tenant.host` | Tenant workload PostgreSQL host. |
+| `database.tenant.port` | Tenant workload PostgreSQL port (typically `5432`). |
+| `database.tenant.name` | Tenant workload database name. |
+| `database.tenant.existingSecret` | Secret holding the tenant database credentials. |
+| `database.tenant.usernameKey` / `passwordKey` | Keys in the tenant Secret. |
+| `database.tenant.isolation` | Tenant isolation strategy. Keep `schema` for the enterprise deployment. |
+| `database.tenant.schemaPattern` | Schema name template used when `isolation=schema`, for example `tenant_{id}`. |
 
-These render to `DATABASE_TENANTS_DEFAULT_*` and `DATABASE_APP_DEFAULT_*`
-environment variables. The chart never renders a database password as a literal
-value; the username and password are always read from the named Secret.
-`examples/external-managed-postgres-values.yaml` shows a managed Postgres host
-with an egress NetworkPolicy, and `examples/shared-postgres-values.yaml` shows an
-in-cluster Postgres with selector-based policy.
+The platform service binds its control-plane datasource to the platform database
+only. The runtime services bind both app-scope and tenant-scope datasources to
+the tenant database, so the platform database is reachable only by the platform
+service and the tenant database is reachable only by tenant workload services.
+The chart never renders a database password as a literal value; the username and
+password are always read from the named Secret.
+`examples/external-managed-postgres-values.yaml` shows managed Postgres hosts with
+egress NetworkPolicies, and `examples/shared-postgres-values.yaml` shows in-cluster
+Postgres with selector-based policies. In that example, "shared" means the chart
+targets environment-owned in-cluster Postgres endpoints; it does not mean the
+platform and tenant state share one database.
 
-Under Docker Compose the default stack starts a local `postgres` service and the
-same values come from environment variables the config template references:
-`EDK_DB_HOST`, `EDK_DB_NAME`, `EDK_DB_USERNAME`, `EDK_DB_PASSWORD`. Override
-`EDK_DB_HOST` only when you intentionally replace the bundled evaluation
-database with an external PostgreSQL instance.
+Under Docker Compose the default stack starts two local PostgreSQL services:
+`platform-postgres` for the control plane and `tenant-postgres` for tenant
+workload state. The service configuration reads:
+
+- `EDK_PLATFORM_DB_NAME`, `EDK_PLATFORM_DB_USERNAME`,
+  `EDK_PLATFORM_DB_PASSWORD`
+- `EDK_TENANT_DB_NAME`, `EDK_TENANT_DB_USERNAME`, `EDK_TENANT_DB_PASSWORD`
+
+Override the corresponding host/name/credential values only when you
+intentionally replace the bundled evaluation databases with external PostgreSQL
+databases. Keep the platform database and tenant database separate in every
+enterprise deployment.
+
+Operationally, treat the two database credentials as separate trust boundaries:
+platform credentials must not be mounted into satellite workloads, and tenant
+workload credentials must not grant access to the platform database. The platform
+service must not receive or use the tenant workload database connection; tenant
+schema or database lifecycle is handled by the workload data plane. Tenant
+workloads obtain platform-owned configuration through the platform service
+rather than by connecting to the platform database.
 
 ## Issuer trust and REST auth
 
@@ -179,17 +271,18 @@ platform config template lists them under
 The KMS service holds signing key material and serves signing operations to the
 other services. Select the provider that backs key storage:
 
-- Software keystore. Keys live in a PKCS#12 keystore managed by the service. This is
-  the default in the platform config template
-  (`kms.providers._tenant_`, `type: software`, `autoCreateCertificate: true`). Use it for
-  evaluation and for deployments where a software keystore meets your key
-  custody requirements.
+- Software keystore. Keys live in a PKCS#12 keystore managed by tenant-KMS. The
+  platform writes the tenant-specific provider config during tenant registration
+  (`kms.providers.<tenant-slug>`, `type: software`,
+  `autoCreateCertificate: true`), and tenant-KMS reads it through
+  platform-config-remote. Use it for evaluation and for deployments where a
+  software keystore meets your key custody requirements.
 - A managed vault or cloud KMS. The provider holds keys in an external system
   and the service references them. Select the backend through configuration and
   supply credentials as references, never as literals.
 
 The platform setup uses `PLATFORM_SETUP_KMS_PROVIDER_ID` to name the provider
-the first-run setup binds to (the default is `_license_`). See
+the first-run setup binds to (the default is `license`). See
 [Secret backends](secret-backends.md) for choosing and wiring a provider and for
 the secret reference syntax.
 
@@ -263,40 +356,42 @@ services:
 
 ## License binding
 
-The non-platform services bind to an installation and a service role and fail
-closed unless the platform license claims that installation. The platform itself
-is the local licensing authority and is exempt.
+The non-platform services declare a service role and validate the protected
+license bundle imported during first-run setup. The installation id comes from
+the signed license claims in that bundle; customers do not need to know it before
+starting the platform. The platform itself is the local licensing authority and
+is exempt.
 
 In Helm these are under `license`:
 
 | Key | Purpose |
 | --- | --- |
-| `license.installationId` | Runtime service binding to the activated platform installation id. Must match across non-platform services and the installed license claims. This is not a bundle password, security token, or license-request input. |
+| `license.installationId` | Optional explicit runtime pin to a known installation id. Leave empty for first-run setup. If set, it must match the installed license claims or the non-platform services fail closed. |
 | `license.serviceRoles.<service>` | Per-service gate role advertised by each service. |
 
-By default the platform starts with the setup gate open. The operator installs
-the license through `/setup-license`. When the operator generates a license
-request, the setup service creates the license recipient key in the platform
-system KMS (`license.recipient.kms.*`, provider `_license_`) and copies only the public JWK into the
-request artifact. The setup UI also creates the platform CSR key and CSR at that
-point; the recipient key is separate and is used only by the platform license
-authority to decrypt the issued license token. Non-platform services do not mount
-the recipient private key; they fetch the platform-evaluated license status and
-entitlement projection over the internal command route and fail closed when that
-projection is missing, expired, or unreachable.
+By default the platform starts with the setup gate open. The operator imports a
+protected license bundle through `/setup-license`. When the operator generates a
+license request, the setup service creates the license recipient key in the
+platform system KMS (`license.recipient.kms.*`, provider `license`) and copies
+only the public JWK into the request artifact. The setup UI also creates the
+platform CSR key and CSR at that point; the recipient key is separate and is used
+only by the platform licensing authority to decrypt the issued license material
+inside the protected bundle.
 
-A mounted license-token bootstrap is an explicit offline mode: add
-`docker-compose.offline.yml`, which enables `platform.onboarding.license-token-path`
-and closes the setup gate at boot. In that mode the mounted token must already
-match the recipient key in the platform system KMS (`license.recipient.kms.*`).
-Do not mount a recipient private JWK into the services; the platform decrypts
-the token through KMS and satellites consume only the platform-evaluated license
-projection.
+Submit the generated license request to your Sphereon license operator. The
+operator generates the license with Sphereon's internal license tooling and
+returns a protected bundle. The customer deployment imports only that protected
+bundle. Non-platform services do not mount
+recipient private keys or license material; they fetch the platform-evaluated
+license status and entitlement projection over the internal command route and
+fail closed when that projection is missing, expired, or unreachable. If an
+operator explicitly pins `license.installationId`, a pin mismatch also fails
+closed. Do not set that value during normal first-run setup; the protected
+bundle supplies the installation id.
 
-For non-production/evaluation test-license roots, set
-`EDK_DEPLOYMENT_MODE=dev` and `EDK_LICENSE_TRUST_EMBEDDED=false`, then paste the
-supplied test root CA bundle in `/setup-license`. File-based trust is intentionally
-rejected in production/on-prem mode.
+Evaluation bundles that carry non-production trust material are accepted only in
+dev/test-license mode. Production and on-prem deployments reject file-based test
+trust material.
 
 ## Observability
 
@@ -309,16 +404,27 @@ optionally `opentelemetry.protocol`, `opentelemetry.headers`,
 ## Admin Console
 
 The optional admin console is a separate Next.js app, image
-`${EDK_REGISTRY:-nexus.sphereon.com/edk-docker}/admin-console`, built and published by Sphereon. It is
+`nexus.sphereon.com/edk-docker/admin-console`, built and published by Sphereon. It is
 not built by this kit. The console is served under the `/admin-console` path prefix and
 listens on port `3000`.
 
-The container takes two inputs:
+The container takes these inputs:
 
 | Variable | Value | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_BASE_PATH` | `/admin-console` | The path prefix the app is served under. The app owns the prefix and emits assets at `/admin-console/_next/...`. |
+| `PLATFORM_PROXY_TARGET` | Internal platform upstream URL | Internal platform target for the setup gate and `/admin-console/api/platform/*` proxy. |
+| `TENANT_KMS_PROXY_TARGET` | Internal tenant KMS upstream URL | Internal tenant KMS target for `/admin-console/api/kms/*` proxy. |
+| `TENANT_DID_PROXY_TARGET` | Internal DID upstream URL | Internal DID target for `/admin-console/api/did/*` proxy. |
 | `PORT` | `3000` | The port the app listens on. |
+
+The platform service also has internal east-west upstreams under
+`east-west.tenant-as.base-url`, `east-west.tenant-kms.base-url`, and
+`east-west.tenant-did.base-url`. Tenant activation uses these service URLs with
+the public tenant host in the HTTP `Host` header. The DID upstream is required
+for platform-driven tenant DID provisioning and hosted verification at
+`https://<tenant>.<base-domain>/.well-known/did.json`; the platform does not
+connect to the tenant database or write DID rows directly.
 
 In Helm this is the `services.admin-console` block (`enabled`, `image`,
 `replicas`, `restPort: 3000`), with an `enableTenantConsole: false` flag that
@@ -326,6 +432,12 @@ gates the future per-tenant route. In Docker Compose it is the `admin-console`
 service, reached through the gateway overlay. The gateway routes
 `https://platform.<base-domain>/admin-console` to the container without stripping the prefix;
 see [TLS and gateway](tls-and-gateway.md).
+
+The console's platform-admin, platform-config, tenant-KMS, and DID browser API calls
+default to `https://platform.<base-domain>/admin-console/api/*`. The Next.js server
+proxies those requests to the internal upstreams above. Gateway root `/api/*` routes
+may still be enabled for authenticated automation and diagnostics through the
+gateway, but the console does not depend on them.
 
 ### Per-host authorization server
 
