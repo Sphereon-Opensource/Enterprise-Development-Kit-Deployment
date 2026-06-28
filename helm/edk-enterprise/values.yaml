@@ -59,8 +59,8 @@ auth:
     audience: edk-enterprise
 
 grpc:
-  # Platform and tenant KMS carry the gRPC server transport. The other services use
-  # routed command clients and route KMS commands to tenant-kms over gRPC.
+  # Platform, tenant KMS, wallet-unit, and wallet-interaction carry the gRPC
+  # server transport. The other services use routed command clients.
   enabled: true
   port: 9090
   authMode: service-jwt
@@ -100,6 +100,15 @@ tenantKmsKeystore:
   # Empty uses the cluster default StorageClass.
   storageClass: ""
   # Reference an existing PVC instead of creating one. When set, no PVC is rendered.
+  existingClaim: ""
+
+walletInteractionKeystore:
+  # PVC mounted at /keystore in the wallet-interaction service only. This holds
+  # server-side headless wallet holder/proof key material. Mobile/IDK wallet apps
+  # do not use this VDX volume.
+  enabled: true
+  size: 1Gi
+  storageClass: ""
   existingClaim: ""
 
 # Control-plane bootstrap for the platform service. The platform provisions its
@@ -167,6 +176,8 @@ serviceIdentity:
     did: did-service
     issuer: issuer-service
     verifier: verifier-service
+    wallet-unit: wallet-unit-service
+    wallet-interaction: wallet-interaction-service
   # Workload identity each satellite asserts on its east-west command-transport
   # calls (the gRPC X-Service-Id). The platform header-trust-policy lists these in
   # trusted_service_ids and binds each to its service token's client id.
@@ -176,6 +187,8 @@ serviceIdentity:
     did: service-data
     issuer: service-oid4vci
     verifier: service-oid4vp
+    wallet-unit: service-wallet-unit
+    wallet-interaction: service-wallet-interaction
   # Token audiences for platform-issued east-west service tokens. Receivers use
   # these to reject a valid workload token minted for a different service before
   # considering trusted internal identity headers.
@@ -185,6 +198,8 @@ serviceIdentity:
     did: enterprise-tenant-did
     issuer: enterprise-issuer
     verifier: enterprise-verifier
+    wallet-unit: enterprise-wallet-unit
+    wallet-interaction: enterprise-wallet-interaction
   # In-network surfaces each satellite admits without an operator bearer. The
   # tenant-AS signing-key provisioning endpoint is deliberately absent here:
   # it must validate the platform-issued bearer during tenant resolution so the
@@ -198,6 +213,8 @@ serviceIdentity:
     did: ""
     issuer: ""
     verifier: ""
+    wallet-unit: ""
+    wallet-interaction: ""
 
 # Keystore password for the software KMS providers. Provide it through a Secret;
 # the platform and tenant-kms read it as EDK_KEYSTORE_PASSWORD.
@@ -226,6 +243,8 @@ license:
     tenant-as: enterprise-tenant-as
     issuer: enterprise-issuer
     verifier: enterprise-verifier
+    wallet-unit: enterprise-wallet-unit
+    wallet-interaction: enterprise-wallet-interaction
   # License trust anchor and bundle delivery. The platform is the local
   # licensing authority; it trusts the installed license bundle's root CA. The
   # bundle itself is imported through the setup API after the platform boots.
@@ -487,6 +506,60 @@ services:
         cpu: "1"
         memory: 1Gi
     env: []
+
+  wallet-unit:
+    enabled: true
+    image: enterprise-wallet-unit
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: false
+      className: ""
+      host: ""
+      paths: []
+      annotations: {}
+    internalIngress:
+      enabled: false
+      className: internal
+      host: ""
+      paths: []
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    env: []
+
+  wallet-interaction:
+    enabled: true
+    image: enterprise-wallet-interaction
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: false
+      className: ""
+      host: ""
+      paths: []
+      annotations: {}
+    internalIngress:
+      enabled: false
+      className: internal
+      host: ""
+      paths: []
+      annotations: {}
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 1536Mi
+    env:
+      - name: WALLET_INTERACTION_KEYSTORE_ROOT
+        value: /keystore
 
   issuer:
     enabled: true

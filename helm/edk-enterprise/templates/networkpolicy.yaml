@@ -1,21 +1,25 @@
 {{- if .Values.networkPolicy.enabled }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
-{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
 {{- $tenantGatewayPaths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
 {{- $gatewayRouted := and $.Values.gateway.enabled (or (eq $name "platform") (eq $name "admin-console") (ne $tenantGatewayPaths "")) }}
 {{- $peersIn := list }}
 {{- if eq $name "tenant-kms" }}{{- $peersIn = list "platform" "tenant-as" "did" "issuer" "verifier" }}{{- end }}
-{{- if eq $name "platform" }}{{- $peersIn = list "tenant-kms" "tenant-as" "did" "issuer" "verifier" }}{{- end }}
+{{- if eq $name "platform" }}{{- $peersIn = list "tenant-kms" "tenant-as" "did" "issuer" "verifier" "wallet-unit" "wallet-interaction" }}{{- end }}
 {{- if eq $name "tenant-as" }}{{- $peersIn = list "platform" "tenant-kms" "did" "issuer" "verifier" }}{{- end }}
 {{- if eq $name "did" }}{{- $peersIn = list "platform" "verifier" }}{{- end }}
+{{- if eq $name "wallet-unit" }}{{- $peersIn = list "wallet-interaction" }}{{- end }}
+{{- if eq $name "wallet-interaction" }}{{- $peersIn = list "issuer" "verifier" }}{{- end }}
 {{- $peersOut := list }}
 {{- if eq $name "platform" }}{{- $peersOut = list "tenant-as" "tenant-kms" "did" }}{{- end }}
 {{- if eq $name "tenant-kms" }}{{- $peersOut = list "tenant-as" "platform" }}{{- end }}
 {{- if eq $name "did" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
 {{- if eq $name "tenant-as" }}{{- $peersOut = list "platform" }}{{- end }}
-{{- if eq $name "issuer" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
-{{- if eq $name "verifier" }}{{- $peersOut = list "tenant-kms" "tenant-as" "did" "platform" }}{{- end }}
+{{- if eq $name "wallet-unit" }}{{- $peersOut = list "platform" }}{{- end }}
+{{- if eq $name "wallet-interaction" }}{{- $peersOut = list "wallet-unit" "platform" }}{{- end }}
+{{- if eq $name "issuer" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" "wallet-interaction" }}{{- end }}
+{{- if eq $name "verifier" }}{{- $peersOut = list "tenant-kms" "tenant-as" "did" "platform" "wallet-interaction" }}{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -131,7 +135,7 @@ spec:
     {{- end }}
     {{- range $peer := $peersOut }}
     {{- $peerSvc := index $.Values.services $peer }}
-    {{- $peerGrpcReceiver := or (eq $peer "platform") (eq $peer "tenant-kms") }}
+    {{- $peerGrpcReceiver := or (eq $peer "platform") (eq $peer "tenant-kms") (eq $peer "wallet-unit") (eq $peer "wallet-interaction") }}
     {{- if $peerSvc.enabled }}
     - to:
         - podSelector:

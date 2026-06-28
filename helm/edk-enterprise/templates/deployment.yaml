@@ -1,6 +1,6 @@
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
-{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
 {{- /* admin-console is a Next.js standalone web app, not an EDK Java service:
        it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
        /admin-console/health route rather than the EDK /health endpoint. */}}
@@ -112,8 +112,7 @@ spec:
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
             {{- $transportAudience := "" }}
-            {{- if eq $name "platform" }}{{- $transportAudience = (index $.Values.serviceIdentity.audiences "platform") }}{{- end }}
-            {{- if eq $name "tenant-kms" }}{{- $transportAudience = (index $.Values.serviceIdentity.audiences "tenant-kms") }}{{- end }}
+            {{- if $grpcReceiver }}{{- $transportAudience = (index $.Values.serviceIdentity.audiences $name) }}{{- end }}
             {{- if $transportAudience }}
             - name: SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE
               value: {{ $transportAudience | quote }}
@@ -255,7 +254,7 @@ spec:
                   key: {{ $tenantDb.passwordKey }}
             {{- end }}
             {{- end }}
-            {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") }}
+            {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICE_TOKEN_AUDIENCE
               value: {{ index $.Values.serviceIdentity.audiences "tenant-kms" | quote }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
@@ -268,6 +267,22 @@ spec:
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_ENDPOINT
               value: {{ printf "grpc://%s-tenant-kms:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
             {{- end }}
+            {{- end }}
+            {{- if or (eq $name "issuer") (eq $name "verifier") }}
+            - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "wallet-interaction" | quote }}
+            - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
+              value: "true"
+            - name: WALLET_INTERACTION_GRPC_ENDPOINT
+              value: {{ printf "grpc://%s-wallet-interaction:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
+            {{- end }}
+            {{- if eq $name "wallet-interaction" }}
+            - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "wallet-unit" | quote }}
+            - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
+              value: "true"
+            - name: WALLET_UNIT_GRPC_ENDPOINT
+              value: {{ printf "grpc://%s-wallet-unit:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
             {{- end }}
             {{- if ne $name "platform" }}
             {{- /* The satellites route the platform and application command modules to the
@@ -461,6 +476,12 @@ spec:
             - name: keystore
               mountPath: /keystore
             {{- end }}
+            {{- if and (eq $name "wallet-interaction") $.Values.walletInteractionKeystore.enabled }}
+            # The wallet-interaction keystore holds server-side headless wallet
+            # proof material. Mobile/IDK wallet apps do not use this VDX volume.
+            - name: wallet-interaction-keystore
+              mountPath: /keystore
+            {{- end }}
             {{- if eq $name "platform" }}
             {{- /* License state is writable: the setup API writes the imported bundle's
                    root CA to license.trust.rootCaPath here, so the platform trusts the
@@ -516,6 +537,11 @@ spec:
         - name: keystore
           persistentVolumeClaim:
             claimName: {{ $.Values.tenantKmsKeystore.existingClaim | default (printf "%s-tenant-kms-keystore" (include "edk-enterprise.fullname" $)) }}
+        {{- end }}
+        {{- if and (eq $name "wallet-interaction") $.Values.walletInteractionKeystore.enabled }}
+        - name: wallet-interaction-keystore
+          persistentVolumeClaim:
+            claimName: {{ $.Values.walletInteractionKeystore.existingClaim | default (printf "%s-wallet-interaction-keystore" (include "edk-enterprise.fullname" $)) }}
         {{- end }}
       {{- with $.Values.nodeSelector }}
       nodeSelector:

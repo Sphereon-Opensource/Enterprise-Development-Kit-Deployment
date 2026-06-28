@@ -241,6 +241,66 @@ services:
       - "9090"
     healthcheck: *edk-runtime-healthcheck-8080
 
+  # Wallet Unit: owns server-side wallet-unit lifecycle, activation, attestation,
+  # and policy-gated wallet-key commands over the shared gRPC command transport.
+  # No public ingress. Uses the tenant PostgreSQL data plane.
+  enterprise-wallet-unit:
+    image: nexus.sphereon.com/edk-docker/enterprise-wallet-unit:${EDK_TAG:-0.25.0-SNAPSHOT}
+    depends_on:
+      tenant-postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      enterprise-platform:
+        condition: service_healthy
+    networks:
+      - appnet
+      - tenant-db-net
+    environment:
+      <<: [*edk-common-env, *edk-tenant-db-env]
+      EXTERNAL_BASE_URL: ${EDK_WALLET_UNIT_INTERNAL_BASE_URL:-http://enterprise-wallet-unit:8080}
+      REST_ENABLED: "false"
+      GRPC_ENABLED: "true"
+      GRPC_PORT: "9090"
+    volumes:
+      - ./config/wallet-unit.application.yml:/app/config/application.yml:ro
+    expose:
+      - "8080"
+      - "9090"
+    healthcheck: *edk-runtime-healthcheck-8080
+
+  # Wallet Interaction: headless wallet interaction runtime. Internal command
+  # callers use gRPC; the REST surface remains a public/API projection only when
+  # explicitly exposed by deployment policy.
+  enterprise-wallet-interaction:
+    image: nexus.sphereon.com/edk-docker/enterprise-wallet-interaction:${EDK_TAG:-0.25.0-SNAPSHOT}
+    depends_on:
+      tenant-postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-wallet-unit:
+        condition: service_healthy
+    networks:
+      - appnet
+      - tenant-db-net
+    environment:
+      <<: [*edk-common-env, *edk-tenant-db-env]
+      EXTERNAL_BASE_URL: ${EDK_WALLET_INTERACTION_INTERNAL_BASE_URL:-http://enterprise-wallet-interaction:8080}
+      REST_ENABLED: "false"
+      GRPC_ENABLED: "true"
+      GRPC_PORT: "9090"
+      WALLET_INTERACTION_KEYSTORE_ROOT: /keystore
+    volumes:
+      - ./config/wallet-interaction.application.yml:/app/config/application.yml:ro
+      - wallet-interaction-keystore:/keystore
+    expose:
+      - "8080"
+      - "9090"
+    healthcheck: *edk-runtime-healthcheck-8080
+
   # DID resolver and did.json hosting; routes KMS commands to tenant KMS.
   enterprise-did:
     image: nexus.sphereon.com/edk-docker/enterprise-did:${EDK_TAG:-0.25.0-SNAPSHOT}
@@ -280,6 +340,8 @@ services:
         condition: service_healthy
       enterprise-tenant-as:
         condition: service_healthy
+      enterprise-wallet-interaction:
+        condition: service_healthy
     networks:
       - appnet
       - tenant-db-net
@@ -310,6 +372,8 @@ services:
       enterprise-did:
         condition: service_healthy
       enterprise-tenant-as:
+        condition: service_healthy
+      enterprise-wallet-interaction:
         condition: service_healthy
     networks:
       - appnet
@@ -366,6 +430,9 @@ volumes:
   platform-keystore:
   # Tenant-KMS keystore: per-tenant key material (software now; AWS/Key Vault later).
   tenant-kms-keystore:
+  # Wallet-interaction keystore: server-side holder/proof keys for the headless
+  # interaction runtime. Mobile/IDK wallet apps do not use this VDX volume.
+  wallet-interaction-keystore:
 
 networks:
   appnet:

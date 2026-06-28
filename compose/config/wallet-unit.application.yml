@@ -1,0 +1,118 @@
+# enterprise-wallet-unit runtime config.
+#
+# Server-side wallet-unit state is PostgreSQL-backed. This service has no public
+# ingress in the customer stack; callers use the shared gRPC command transport.
+server:
+  rest:
+    port: 8080
+    auth:
+      enabled: true
+      platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
+      platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      expected-audience: enterprise-wallet-unit
+      trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
+  service-identity:
+    token-endpoint: http://enterprise-platform:18080/token
+    client-id: wallet-unit-service
+    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+sphereon:
+  telemetry:
+    enabled: true
+    tracing:
+      enabled: true
+    metrics:
+      enabled: true
+    sampling:
+      rate: 1.0
+    export:
+      preset: otlp-all
+  service:
+    id: service-wallet-unit
+otel:
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+  exporter:
+    otlp:
+      endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
+security:
+  header-trust-policy:
+    trusted_service_ids:
+      - service-wallet-interaction
+      - service-oid4vci
+      - service-oid4vp
+      - service-monolith
+    service_client_bindings:
+      "[service-wallet-interaction]": wallet-interaction-service
+      "[service-oid4vci]": issuer-service
+      "[service-oid4vp]": verifier-service
+transport:
+  grpc:
+    enabled: true
+    port: 9090
+  routing:
+    modules:
+      platform:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        services:
+          config: &platformGrpcRoute
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+      application:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+config:
+  providers:
+    platform-config-remote:
+      enabled: true
+      bootstrap-required-keyspaces: kms.providers
+    tenant-config-db:
+      enabled: false
+license:
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
+  installation-id: ${env:EDK_INSTALLATION_ID:}
+  gate:
+    service-role: enterprise-wallet-unit
+database:
+  app:
+    default:
+      dialect: postgresql
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+  tenants:
+    default:
+      dialect: postgresql
+      isolation: schema
+      schema-pattern: "tenant_{id}"
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+tenant:
+  resolution:
+    remote: true
+    platform:
+      base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+      subdomain:
+        enabled: true
+    custom-domain:
+      enabled: true
+did:
+  persistence:
+    type: postgresql
+kv-stores:
+  blob.metadata:
+    type: database
+    scope-binding: TENANT
