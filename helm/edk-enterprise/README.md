@@ -52,7 +52,7 @@ Kubernetes at public Docker Hub, not the EDK enterprise registry.
 | `database.tenant.existingSecret` | `edk-tenant-postgres` | Secret with credentials for the tenant workload database. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
-| `grpc.enabled` | `true` | Renders inbound gRPC only for platform and tenant-KMS, and renders gRPC peer endpoints for routed calls to those receivers. |
+| `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, and renders gRPC peer endpoints for routed calls to those receivers. |
 | `config.providers.platformConfigRemote.enabled` | `true` | Enables platform-owned remote config reads for every satellite/workload service. |
 | `config.providers.tenantConfigDb.enabled` | `false` | Disables direct tenant-config DB reads on satellites so platform remains the config authority. |
 | `license.installationId` | `""` | Optional explicit runtime pin to a known installation id. Leave empty for first-run setup; the protected bundle supplies the installation id. If set, it must match the installed license claims. |
@@ -64,7 +64,7 @@ Kubernetes at public Docker Hub, not the EDK enterprise registry.
 
 ## Service Values
 
-Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `issuer`, `verifier`, or `admin-console`.
+Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `wallet-unit`, `wallet-interaction`, `issuer`, `verifier`, or `admin-console`.
 
 | Value | Purpose |
 | --- | --- |
@@ -85,14 +85,17 @@ Default backing components:
 | `tenant-kms` | `true` | `enterprise-tenant-kms` | Tenant key material and KMS command handling |
 | `did` | `true` | `enterprise-did` | DID resolver and `did:web` hosting behind the tenant gateway |
 | `tenant-as` | `true` | `enterprise-tenant-as` | Tenant OAuth2 authorization server behind the tenant gateway |
+| `wallet-unit` | `true` | `enterprise-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
+| `wallet-interaction` | `true` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
 | `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
 | `admin-console` | `true` | `admin-console` | Operator UI behind `platform.<baseDomain>/admin-console` |
 
-Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS, issuer,
-and verifier remain backing workloads behind `platform.<baseDomain>` and
-`<tenant>.<baseDomain>` host/path routes. Runtime probes are Kubernetes
-orchestration concerns and must not be published as customer routes.
+Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
+wallet-unit, wallet-interaction, issuer, and verifier remain backing workloads
+behind `platform.<baseDomain>` and `<tenant>.<baseDomain>` host/path routes.
+Runtime probes are Kubernetes orchestration concerns and must not be published
+as customer routes.
 
 ## East-West Service Identity
 
@@ -105,7 +108,7 @@ The chart renders internal service identity from one `serviceIdentity` contract:
 | `serviceIdentity.serviceIds.<service>` | Workload id the caller asserts as `X-Service-Id` on internal command transport. |
 | `serviceIdentity.audiences.<service>` | JWT audience expected by the receiving service. |
 
-These values drive platform internal OAuth clients, platform and tenant-KMS
+These values drive platform internal OAuth clients, platform and receiver
 header trust bindings, satellite service-token env, receiver audience env,
 admin-console token-exchange audiences, and STS allowed audiences. Do not change
 one without changing the others.
@@ -117,12 +120,14 @@ a workload token, its client id or subject is bound to the asserted
 policy permits that override.
 
 DID, tenant-AS, issuer, and verifier use this contract for routed KMS commands.
-Their inbound bearer is addressed to the route-only service, so the KMS route
-asks the platform STS for a fresh workload JWT addressed to the tenant-KMS
-receiver audience instead of forwarding that inbound bearer. During tenant-AS
-signing-key provisioning, the inbound platform JWT is addressed to the tenant-AS
-provisioning endpoint and is terminated there; the AS-to-KMS hop uses the
-`tenant-as-service` confidential client to mint the tenant-KMS audience token.
+Issuer and verifier use it for wallet-interaction calls, and wallet-interaction
+uses it for wallet-unit calls. Their inbound bearer is addressed to the
+route-only service, so the route asks the platform STS for a fresh workload JWT
+addressed to the peer receiver audience instead of forwarding that inbound
+bearer. During tenant-AS signing-key provisioning, the inbound platform JWT is
+addressed to the tenant-AS provisioning endpoint and is terminated there; the
+AS-to-KMS hop uses the `tenant-as-service` confidential client to mint the
+tenant-KMS audience token.
 
 `platform.externalBaseUrl` is the canonical platform public origin and token
 issuer. The chart renders platform `EXTERNAL_BASE_URL` and

@@ -27,11 +27,12 @@ section described here. Use it as the reference for the YAML keys; the Helm
 chart binds the same keys through environment variables.
 
 The shipped config keeps REST on port `8080` with REST auth enabled for the
-native service containers. The admin console listens on port `3000`. Platform
-and tenant-KMS enable the inbound gRPC command receiver; DID, tenant-AS, issuer,
-and verifier do not expose an inbound gRPC server. These are container/service
-ports only. The customer-facing TLS connection terminates at the gateway or
-ingress front door, which then routes internally by host and path.
+native service containers. The admin console listens on port `3000`. Platform,
+tenant-KMS, wallet-unit, and wallet-interaction enable the inbound gRPC command
+receiver; DID, tenant-AS, issuer, and verifier use routed outbound clients for
+their internal command hops. These are container/service ports only. The
+customer-facing TLS connection terminates at the gateway or ingress front door,
+which then routes internally by host and path.
 
 ```yaml
 server:
@@ -63,7 +64,7 @@ For example, with `global.platformBaseDomain=example.com`:
 | --- | --- |
 | `platform.example.com` | Platform/operator host: setup, platform admin APIs, platform authorization server, and admin console. |
 | `<tenant-slug>.example.com` | Tenant host: public protocol, resolver, and tenant-scoped authenticated API routes. For the default hosted issuer, the OID4VCI `credential_issuer` identifier is this tenant origin, for example `https://acme.example.com`. |
-| Internal service DNS names | East-west calls between backing services. These names, ports, and probes are not customer URLs. Do not route internal gRPC or KMS traffic through the public gateway. |
+| Internal service DNS names | East-west calls between backing services. These names, ports, and probes are not customer URLs. Do not route internal gRPC or KMS command traffic through the public gateway; the authenticated KMS API remains `/api/kms/v1` on the tenant gateway. |
 
 Tenant resolution is host-based. Tenants receive subdomains under the base
 domain (`<slug>.<base-domain>`), and each service receives
@@ -133,6 +134,41 @@ issuer, verifier, tenant-AS, public-endpoint, KMS, secret-provider, and related
 settings in its control-plane configuration backend. Satellite workloads read
 that materialized tenant/service slice from the platform over the internal
 command route.
+
+For bootstrap and discovery, the platform also exposes a small runtime
+projection:
+
+- satellite workloads use the internal `platform.bootstrap.get` command, or the
+  protected `GET /api/platform/bootstrap/v1/consumer-config/{consumerId}` REST
+  endpoint, before fetching detailed platform config slices. This internal
+  bootstrap response may include Kubernetes or Docker service DNS names, ports,
+  namespaces, and gRPC URLs;
+- browser applications read
+  `GET /api/platform/bootstrap/v1/runtime-config/{applicationId}` for
+  browser-safe URLs, OAuth metadata, client id/scope, service audiences, and
+  feature/capability hints. The REST response is an envelope with `metadata`
+  for revision/cache diagnostics and `data.services` for service objects. Each
+  service object owns its browser-facing `baseUrl`, optional token `audience`,
+  and named `endpoints`.
+
+Browser runtime config derives the platform public base URL from the incoming
+request origin unless an explicit platform external base URL is configured.
+Platform APIs remain on the platform origin, for example
+`https://platform.<base-domain>/api/platform/admin/v1`. Tenant APIs are not
+platform APIs: tenant-KMS and DID resolve to tenant origins such as
+`https://<tenant>.<base-domain>/api/kms/v1` and
+`https://<tenant>.<base-domain>/api/did/v1`, or are omitted until a tenant
+selector/public base is known. Protocol metadata is the exception: OAuth/OIDC,
+OID4VCI, OID4VP, DID, and other `.well-known` documents must keep advertising
+the canonical public endpoint binding for the resolved tenant/service.
+
+This bootstrap projection is not a general configuration API. It must not carry
+secrets, database settings, secret-backend coordinates, KMS credentials, or
+business-authored artifact bodies. Service definitions and service settings stay
+in platform config. Credential designs, issuer/verifier designs, DCQL query
+bodies, render assets, and other operational artifacts stay in their dedicated
+credential-design, issuer, verifier, and DCQL APIs, with platform config
+referencing them by id/version where required.
 
 Local `application.yml`, Helm values, and Docker Compose environment variables
 remain part of the deployment, but they are bootstrap and override inputs. Use
@@ -261,9 +297,10 @@ audience values. `examples/service-jwt-auth-values.yaml` shows the full block
 together with per-service `SPHEREON_APP_SERVER_REST_ADMIN_AUTH_REQUIRED=true`
 overrides that force admin REST to require a bearer on every service.
 
-A subset of paths is intentionally anonymous: first-run setup, the OAuth
-protocol surface, discovery and JWKS, and the in-network command transport. The
-platform config template lists them under
+A subset of paths is intentionally anonymous: first-run setup, the browser-safe
+runtime bootstrap API (`/api/platform/bootstrap/v1`), the OAuth protocol
+surface, discovery and JWKS, and the in-network command transport. The platform
+config template lists them under
 `server.rest.auth.anonymous-path-prefixes`. Everything else requires a bearer.
 
 ## KMS provider
@@ -301,11 +338,13 @@ audience. These values must move as one contract:
 | DID | `did-service` | `service-data` | `enterprise-tenant-did` |
 | issuer | `issuer-service` | `service-oid4vci` | `enterprise-issuer` |
 | verifier | `verifier-service` | `service-oid4vp` | `enterprise-verifier` |
+| wallet-unit | `wallet-unit-service` | `service-wallet-unit` | `enterprise-wallet-unit` |
+| wallet-interaction | `wallet-interaction-service` | `service-wallet-interaction` | `enterprise-wallet-interaction` |
 | tenant-AS | `tenant-as-service` | `service-tenant-as` | outbound workload caller only |
 
 In Helm the contract lives under `serviceIdentity.clientIds`,
 `serviceIdentity.serviceIds`, and `serviceIdentity.audiences`. The chart renders
-the platform internal OAuth clients, platform and tenant-KMS header trust
+the platform internal OAuth clients, platform and receiver header trust
 bindings, service token endpoints, receiver audiences, admin-console token
 exchange audiences, and NetworkPolicy peer edges from those values. In Docker
 Compose the same contract is represented by the mounted `compose/config/*.yml`
@@ -326,35 +365,46 @@ If any check fails, the request fails closed or the header is ignored. Do not us
 context hints after JWT validation and service binding, never proof of identity
 by themselves.
 
-KMS routing is intentionally a two-token trust flow whenever the inbound bearer
-is addressed to a route-only service. DID, tenant-AS, issuer, and verifier
-validate and terminate the inbound JWT addressed to their own receiver audience,
-then call tenant-KMS with their own workload JWT for the `enterprise-tenant-kms`
-audience. Tenant-AS signing-key provisioning is the strictest example: the
-platform calls tenant-AS with a short-lived provisioning JWT whose audience is
-the tenant provisioning endpoint, and that provisioning JWT must not be
-forwarded to tenant-KMS.
+KMS and wallet routing are intentionally two-token trust flows whenever the
+inbound bearer is addressed to a route-only service. DID, tenant-AS, issuer, and
+verifier validate and terminate the inbound JWT addressed to their own receiver
+audience, then call tenant-KMS with their own workload JWT for the
+`enterprise-tenant-kms` audience. Issuer and verifier use the same pattern for
+wallet operations by calling wallet-interaction with an
+`enterprise-wallet-interaction` token; wallet-interaction calls wallet-unit with
+an `enterprise-wallet-unit` token. Tenant-AS signing-key provisioning is the
+strictest example: the platform calls tenant-AS with a short-lived provisioning
+JWT whose audience is the tenant provisioning endpoint, and that provisioning
+JWT must not be forwarded to tenant-KMS.
 
 ## gRPC routing between services
 
-DID, tenant-AS, issuer, verifier, and tenant-KMS call the platform service for
-platform configuration and control-plane data. DID, tenant-AS, issuer, and
-verifier call the KMS service for key generation, signing, verification, and
-public-key lookup. Platform and tenant-KMS run the inbound gRPC command
-receiver; the other runtime services use a routing-aware command client for
-outbound calls and do not listen on an inbound gRPC port.
+DID, tenant-AS, issuer, verifier, tenant-KMS, wallet-unit, and
+wallet-interaction call the platform service for platform configuration and
+control-plane data. DID, tenant-AS, issuer, and verifier call the KMS service
+for key generation, signing, verification, and public-key lookup. Issuer and
+verifier call wallet-interaction for headless wallet protocol operations, and
+wallet-interaction calls wallet-unit for policy-gated wallet-key commands.
+Platform, tenant-KMS, wallet-unit, and wallet-interaction run the inbound gRPC
+command receiver; the other runtime services use a routing-aware command client
+for outbound calls and do not listen on an inbound gRPC port.
 
 Set the transport globally in Helm under `grpc`:
 
 | Key | Purpose |
 | --- | --- |
-| `grpc.enabled` | Whether KMS routing uses gRPC. `true` renders gRPC ports and a `grpc://` KMS endpoint; `false` routes KMS over internal HTTP. |
+| `grpc.enabled` | Whether internal command routing uses gRPC. The shipped default is `true`: platform, tenant-KMS, wallet-unit, and wallet-interaction expose internal gRPC receivers and the chart renders `grpc://` peer endpoints for routes to those services. |
 | `grpc.port` | gRPC port (default `9090`). |
 | `grpc.authMode` | Auth mode for peer gRPC traffic. Use `service-jwt` for token-based service identity, or `mesh-mtls` when a service mesh provides mutual TLS. |
 
-With `grpc.enabled=true` the chart renders platform and tenant-KMS gRPC receivers
-and points internal routes at those services. With `grpc.enabled=false`, routes
-fall back to internal HTTP where supported.
+With `grpc.enabled=true` the chart renders platform, tenant-KMS, wallet-unit,
+and wallet-interaction gRPC receivers and points internal routes at those
+services. Tenant operators and automation use the protected tenant REST API at
+`https://<tenant>.<base-domain>/api/kms/v1` for provider and key
+administration. Runtime DID, tenant-AS, issuer, and verifier services do not use
+that REST/admin surface for signing or key operations; they route KMS service
+commands over the internal east-west gRPC route to tenant-KMS with a workload
+token for the `enterprise-tenant-kms` audience.
 
 The underlying routing settings follow the pattern below, which you can set as
 per-service environment overrides when a deployment must route an additional
@@ -362,7 +412,7 @@ module or narrow a route:
 
 ```text
 TRANSPORT_ROUTING_MODULES_<MODULE>_TARGET=SERVER
-TRANSPORT_ROUTING_MODULES_<MODULE>_TRANSPORT=HTTP|GRPC
+TRANSPORT_ROUTING_MODULES_<MODULE>_TRANSPORT=<transport>
 TRANSPORT_ROUTING_MODULES_<MODULE>_ENDPOINT=<scheme>://<service-host>:<port>
 TRANSPORT_ROUTING_MODULES_<MODULE>_SERVICE_TOKEN_AUDIENCE=<receiver-audience>
 TRANSPORT_ROUTING_MODULES_<MODULE>_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER=true|false
@@ -374,21 +424,32 @@ and `TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER=true
 That keeps user/provisioning tokens scoped to their original receiver while the
 KMS hop receives a token addressed to tenant-KMS.
 
+For the wallet module on issuer and verifier, the deployment sets
+`TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE=enterprise-wallet-interaction`
+and routes `WALLET_INTERACTION_GRPC_ENDPOINT` to wallet-interaction. The
+wallet-interaction service sets the same wallet module audience to
+`enterprise-wallet-unit` for its wallet-unit hop.
+
 The intended peer call graph:
 
 | Calling service | Peer | Module key | Endpoint |
 | --- | --- | --- | --- |
-| tenant-KMS | platform | `PLATFORM` / platform config | Platform service over HTTP or gRPC |
-| DID | KMS | `KMS` | KMS service over HTTP or gRPC |
-| DID | platform | `PLATFORM` / platform config | Platform service over HTTP or gRPC |
-| tenant-AS | KMS | `KMS` | KMS service over HTTP or gRPC |
-| tenant-AS | platform | `PLATFORM` / platform config | Platform service over HTTP or gRPC |
-| issuer | KMS | `KMS` | KMS service over HTTP or gRPC |
-| issuer | platform | `PLATFORM` / platform config | Platform service over HTTP or gRPC |
+| tenant-KMS | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
+| DID | KMS | `KMS` | Tenant-KMS service over internal gRPC |
+| DID | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
+| tenant-AS | KMS | `KMS` | Tenant-KMS service over internal gRPC |
+| tenant-AS | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
+| issuer | KMS | `KMS` | Tenant-KMS service over internal gRPC |
+| issuer | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
 | issuer | tenant-AS | `OAUTH2` | tenant-AS service over HTTP |
-| verifier | KMS | `KMS` | KMS service over HTTP or gRPC |
-| verifier | platform | `PLATFORM` / platform config | Platform service over HTTP or gRPC |
+| issuer | wallet-interaction | `WALLET` | Wallet interaction service over gRPC |
+| verifier | KMS | `KMS` | Tenant-KMS service over internal gRPC |
+| verifier | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
 | verifier | DID | `DID` | DID service over HTTP |
+| verifier | wallet-interaction | `WALLET` | Wallet interaction service over gRPC |
+| wallet-interaction | wallet-unit | `WALLET` | Wallet unit service over gRPC |
+| wallet-unit | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
+| wallet-interaction | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
 
 For mTLS between peers, set `grpc.authMode=mesh-mtls` and inject your mesh
 sidecar through `podAnnotations`; `examples/mesh-mtls-values.yaml` shows the
@@ -465,18 +526,31 @@ The optional admin console is a separate Next.js app, image
 not built by this kit. The console is served under the `/admin-console` path prefix and
 listens on port `3000`.
 
-The container takes these inputs:
+The admin console loads most browser runtime values from
+`/api/platform/bootstrap/v1/runtime-config/admin-console` at startup. The
+response body is shaped as `{ metadata, data }`; the console reads API wiring
+from `data.services.<service>.baseUrl` and `data.services.<service>.endpoints`.
+The container still takes these inputs for explicit server-side proxying and for
+bootstrap fallbacks. The proxy variables are not the canonical API topology; use
+them only when the deployment intentionally runs the admin console as a BFF for
+browser calls:
 
 | Variable | Value | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_BASE_PATH` | `/admin-console` | The path prefix the app is served under. The app owns the prefix and emits assets at `/admin-console/_next/...`. |
-| `PLATFORM_PROXY_TARGET` | Internal platform upstream URL | Internal platform target for the setup gate and `/admin-console/api/platform/*` proxy. |
-| `TENANT_KMS_PROXY_TARGET` | Internal tenant KMS upstream URL | Internal tenant KMS target for `/admin-console/api/kms/*` proxy. |
-| `TENANT_DID_PROXY_TARGET` | Internal DID upstream URL | Internal DID target for `/admin-console/api/did/*` proxy. |
-| `NEXT_PUBLIC_PLATFORM_AUDIENCE` | `enterprise-platform` | STS token-exchange audience used when the console calls platform-config tenant APIs. |
-| `NEXT_PUBLIC_TENANT_KMS_AUDIENCE` | `enterprise-tenant-kms` | STS token-exchange audience used when the console calls tenant-KMS APIs. |
-| `NEXT_PUBLIC_TENANT_DID_AUDIENCE` | `enterprise-tenant-did` | STS token-exchange audience used when the console calls DID APIs. |
+| `PLATFORM_PROXY_TARGET` | Internal platform upstream URL | Optional internal platform target for an explicit `/admin-console/api/platform/*` BFF proxy mode. |
+| `TENANT_KMS_PROXY_TARGET` | Internal tenant KMS upstream URL | Optional internal tenant KMS target for an explicit `/admin-console/api/kms/*` BFF proxy mode. |
+| `TENANT_DID_PROXY_TARGET` | Internal DID upstream URL | Optional internal DID target for an explicit `/admin-console/api/did/*` BFF proxy mode. |
+| `NEXT_PUBLIC_PLATFORM_AUDIENCE` | `enterprise-platform` | Fallback STS audience if runtime bootstrap is unavailable. |
+| `NEXT_PUBLIC_TENANT_KMS_AUDIENCE` | `enterprise-tenant-kms` | Fallback tenant-KMS audience if runtime bootstrap is unavailable. |
+| `NEXT_PUBLIC_TENANT_DID_AUDIENCE` | `enterprise-tenant-did` | Fallback DID audience if runtime bootstrap is unavailable. |
 | `PORT` | `3000` | The port the app listens on. |
+
+The license portal and first-run onboarding UI use the same runtime bootstrap
+surface with application ids `license-portal` and `platform-onboarding`. In a
+normal deployment, public OAuth URLs, browser API base paths, service audiences,
+and license-portal API URLs should come from the platform projection rather than
+from build-time `NEXT_PUBLIC_*` values.
 
 The platform service also has internal east-west upstreams under
 `east-west.tenant-as.base-url`, `east-west.tenant-kms.base-url`, and
@@ -493,11 +567,14 @@ service, reached through the gateway overlay. The gateway routes
 `https://platform.<base-domain>/admin-console` to the container without stripping the prefix;
 see [TLS and gateway](tls-and-gateway.md).
 
-The console's platform-admin, platform-config, tenant-KMS, and DID browser API calls
-default to `https://platform.<base-domain>/admin-console/api/*`. The Next.js server
-proxies those requests to the internal upstreams above. Gateway root `/api/*` routes
-may still be enabled for authenticated automation and diagnostics through the
-gateway, but the console does not depend on them.
+The console's canonical browser API calls come from runtime bootstrap. Platform
+admin/config calls use the platform host at `/api/platform/admin/v1` and
+`/api/platform/config/v1`. Tenant-KMS and DID calls use tenant gateway roots such
+as `https://<tenant>.<base-domain>/api/kms/v1` and
+`https://<tenant>.<base-domain>/api/did/v1` when a tenant public base is known,
+or same-origin `/api/kms/v1` and `/api/did/v1` when the frontend is served on
+the tenant host. `/admin-console/api/*` remains an optional Next.js proxy mode
+only; do not treat it as the service base URL returned by platform bootstrap.
 
 Platform-admin and platform-config calls use the operator bearer. Tenant-KMS and
 DID calls use RFC 8693 token exchange against the platform AS with the configured

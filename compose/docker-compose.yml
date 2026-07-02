@@ -1,8 +1,8 @@
 # EDK enterprise stack, single-node Docker Compose deployment.
 #
-# This file runs the six EDK enterprise services plus separate platform and
-# tenant PostgreSQL databases from published container images. It pulls images
-# only; nothing is built locally.
+# This file runs the EDK enterprise services plus separate platform and tenant
+# PostgreSQL databases from published container images. It pulls images only;
+# nothing is built locally.
 #
 # Prerequisites:
 #   1. docker login nexus.sphereon.com so the enterprise image pulls succeed.
@@ -26,8 +26,9 @@
 #   - Tenant KMS has no public ingress. It is reachable only on the internal
 #     compose network.
 #
-# The platform and tenant KMS run the gRPC server transport (inbound). The other
-# services route KMS commands outbound to enterprise-tenant-kms:9090.
+# The platform, tenant KMS, wallet unit, and wallet interaction services run the
+# gRPC server transport (inbound). The other services route KMS and wallet
+# commands over internal gRPC only.
 
 name: edk-enterprise
 
@@ -65,6 +66,14 @@ x-edk-runtime-healthcheck-8080: &edk-runtime-healthcheck-8080
 
 x-edk-runtime-healthcheck-18083: &edk-runtime-healthcheck-18083
   test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && line=$$(head -n1 <&3) && echo \"$$line\" | grep -Eq ' (200|204) ' && exit 0; echo \"$$line\" | grep -q ' 503 ' || exit 1; exec 4<>/dev/tcp/enterprise-platform/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -q ' 200 '"]
+  interval: 5s
+  timeout: 5s
+  retries: 30
+  start_period: 20s
+
+x-edk-runtime-healthcheck-9090: &edk-runtime-healthcheck-9090
+  # Wallet runtimes are intentionally gRPC-only in this stack; REST is disabled.
+  test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090"]
   interval: 5s
   timeout: 5s
   retries: 30
@@ -130,14 +139,15 @@ services:
       - "127.0.0.1:${EDK_JAEGER_UI_HOST_PORT:-16686}:16686"
 
   # One-shot: the keystore volumes mount root-owned, but the service containers
-  # run as uid 10001 and need write access to their keystore. This grants both,
-  # then exits. The platform and tenant-kms wait for it to complete.
+  # run as uid 10001 and need write access to their keystore. This grants those
+  # volumes, then exits. The writable-keystore services wait for it to complete.
   keystore-init:
     image: busybox:1.36
-    command: ["sh", "-c", "chown 10001:10001 /platform-keystore /tenant-kms-keystore"]
+    command: ["sh", "-c", "chown 10001:10001 /platform-keystore /tenant-kms-keystore /wallet-interaction-keystore"]
     volumes:
       - platform-keystore:/platform-keystore
       - tenant-kms-keystore:/tenant-kms-keystore
+      - wallet-interaction-keystore:/wallet-interaction-keystore
     networks:
       - appnet
 
@@ -267,7 +277,7 @@ services:
     expose:
       - "8080"
       - "9090"
-    healthcheck: *edk-runtime-healthcheck-8080
+    healthcheck: *edk-runtime-healthcheck-9090
 
   # Wallet Interaction: headless wallet interaction runtime. Internal command
   # callers use gRPC; the REST surface remains a public/API projection only when
@@ -279,6 +289,8 @@ services:
         condition: service_healthy
       otel-collector:
         condition: service_started
+      keystore-init:
+        condition: service_completed_successfully
       enterprise-platform:
         condition: service_healthy
       enterprise-wallet-unit:
@@ -299,7 +311,7 @@ services:
     expose:
       - "8080"
       - "9090"
-    healthcheck: *edk-runtime-healthcheck-8080
+    healthcheck: *edk-runtime-healthcheck-9090
 
   # DID resolver and did.json hosting; routes KMS commands to tenant KMS.
   enterprise-did:
@@ -433,7 +445,6 @@ volumes:
   # Wallet-interaction keystore: server-side holder/proof keys for the headless
   # interaction runtime. Mobile/IDK wallet apps do not use this VDX volume.
   wallet-interaction-keystore:
-
 networks:
   appnet:
   platform-db-net:

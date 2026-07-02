@@ -42,7 +42,7 @@ __LE_TLS_DOMAINS__
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         (PathPrefix(`/oid4vci`) || PathPrefix(`/credential`) ||
-         PathPrefix(`/credential_deferred`) || PathPrefix(`/nonce`) ||
+         PathPrefix(`/deferredCredential`) || PathPrefix(`/nonce`) ||
          PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
          PathPrefix(`/.well-known/openid-credential-issuer`) ||
          PathPrefix(`/public/schema`) || PathPrefix(`/public/assets`) ||

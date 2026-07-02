@@ -96,10 +96,11 @@ an admin call usually means the token failed verification:
   means the request hit an admin path, not a protocol path. Check that you are
   calling the right host and path for the operation.
 
-If admin REST is reachable publicly when it should not be, review the
-public/internal ingress split: admin paths belong on the internal hostname behind
-JWT auth or a mesh, never on public ingress. See
-[TLS and gateway](tls-and-gateway.md).
+If a control-plane REST route is reachable publicly when it should not be, review
+the public/internal ingress split. Selected tenant APIs such as authenticated KMS
+REST at `/api/kms/v1` are intentionally exposed through the tenant gateway, while
+other administrative paths belong on the internal hostname behind JWT auth or a
+mesh. See [TLS and gateway](tls-and-gateway.md).
 
 ## Ingress, TLS, and tenant routing
 
@@ -130,23 +131,27 @@ Other ingress and TLS symptoms:
   `platform.<base-domain>` and `*.<base-domain>` at the gateway or load
   balancer.
 
-## Platform and KMS connectivity between services
+## Platform, KMS, and wallet connectivity between services
 
 The backing workloads call the platform service for platform configuration and
-control-plane data. Workloads that need key operations call tenant-KMS over
-internal service DNS. If platform-config or signing operations fail with a
-connection error:
+control-plane data. Workloads that need key operations route KMS service
+commands to tenant-KMS over internal gRPC with a workload token for the
+`enterprise-tenant-kms` audience; tenant operators use `/api/kms/v1` only for
+the protected tenant REST administration surface. Issuer and verifier call
+wallet-interaction, and wallet-interaction calls wallet-unit, over internal
+service DNS for wallet protocol work. If platform-config, signing, or wallet
+operations fail with a connection error:
 
-- With `grpc.enabled=false`, routes use internal HTTP where supported. With
-  `grpc.enabled=true`, the chart renders gRPC ports for platform and tenant-KMS
-  and switches the matching route endpoints to `grpc://`. A port or scheme
-  mismatch between the caller's route and the peer service breaks the call.
+- With the shipped `grpc.enabled=true` default, the chart renders gRPC ports for
+  platform, tenant-KMS, wallet-unit, and wallet-interaction and switches the
+  matching route endpoints to `grpc://`. A port or scheme mismatch between the
+  caller's route and the peer service breaks the call.
 - Confirm `grpc.authMode` matches how peer traffic is secured. With
   `service-jwt`, the caller presents a service token; with `mesh-mtls`, the mesh
   provides mutual TLS and the sidecar must be injected on both peers.
-- NetworkPolicy must allow the caller to reach platform and tenant-KMS. If you
-  enabled `networkPolicy`, confirm intra-release traffic to those peers is
-  permitted.
+- NetworkPolicy must allow the caller to reach platform, tenant-KMS,
+  wallet-interaction, and wallet-unit as appropriate. If you enabled
+  `networkPolicy`, confirm intra-release traffic to those peers is permitted.
 
 ## Admin console routing and sign-in
 
@@ -162,6 +167,19 @@ listens on port `3000`. If it does not load or you cannot sign in:
   the gateway prefix handling is wrong. The container must run with
   `NEXT_PUBLIC_BASE_PATH=/admin-console`, and the route must forward the full path
   **without** a StripPrefix. See [TLS and gateway](tls-and-gateway.md).
+- Runtime config request `404` or `401` on
+  `/api/platform/bootstrap/v1/runtime-config/admin-console`. The platform
+  bootstrap route is missing from the gateway or from
+  `server.rest.auth.anonymous-path-prefixes`. This route is browser-safe and
+  intentionally anonymous; it does not expose secrets or business artifact
+  bodies. A successful response is shaped as `{ metadata, data }`, with
+  service base URLs, audiences, and named endpoints under `data.services`.
+- Tenant KMS or DID requests are sent to `platform.<base-domain>` or
+  `/admin-console/api/*`. Runtime bootstrap is not returning a tenant service
+  base URL, or the deployment has intentionally enabled the optional Next.js BFF
+  proxy. Canonical tenant service calls use
+  `https://<tenant>.<base-domain>/api/kms/v1` and
+  `https://<tenant>.<base-domain>/api/did/v1` with tenant-scoped service tokens.
 - `401` or a failed sign-in. The operator token failed, or the redirect URI is
   not registered. The console's redirect URI
   `{host}/admin-console/callback` must be registered for the operator

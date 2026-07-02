@@ -16,7 +16,7 @@ server:
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
       expected-audience: enterprise-issuer
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
-      anonymous-path-prefixes: /oid4vci,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers
+      anonymous-path-prefixes: /oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers
   # Wallet-driven issuance signs credentials by routing KMS commands, but the
   # wallet session carries no operator bearer. The issuer presents its own token
   # for those system calls, obtained from the tenant AS via client_credentials.

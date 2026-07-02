@@ -81,8 +81,8 @@ config:
 # platform holds the platform AS cert/user plus the license-request instance
 # cert, and tenant-kms holds the per-tenant software KMS key material. Each is a
 # dedicated PVC mounted at /keystore in its own service only. The route-only
-# services (issuer/verifier/did/tenant-as) route KMS to tenant-kms and mount no
-# keystore at all.
+# EDK services (issuer/verifier/did/tenant-as) route KMS to tenant-kms and mount
+# no keystore at all.
 platformKeystore:
   # PVC mounted at /keystore in the platform service only.
   enabled: true
@@ -374,6 +374,7 @@ services:
         - /userinfo
         - /oauth2
         - /api/platform/setup/v1
+        - /api/platform/bootstrap/v1
         - /api/platform/admin/v1
       annotations: {}
     internalIngress:
@@ -382,6 +383,7 @@ services:
       host: platform.internal.example.com
       paths:
         - /api/platform/setup/v1
+        - /api/platform/bootstrap/v1
         - /api/platform/admin/v1
       annotations: {}
     resources:

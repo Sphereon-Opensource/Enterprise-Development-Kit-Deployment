@@ -955,6 +955,16 @@
                   "type": "text"
                 },
                 {
+                  "key": "audience",
+                  "value": "enterprise-wallet-unit",
+                  "type": "text"
+                },
+                {
+                  "key": "audience",
+                  "value": "enterprise-wallet-interaction",
+                  "type": "text"
+                },
+                {
                   "key": "client_id",
                   "value": "platform-operator-cli",
                   "type": "text"
@@ -986,7 +996,7 @@
                   "const aud = tenantAccessTokenPayload.aud;",
                   "const audiences = Array.isArray(aud) ? aud : (aud ? [aud] : []);",
                   "pm.test('tenant runtime token is scoped to runtime audiences', () => {",
-                  "  ['enterprise-tenant-kms', 'enterprise-tenant-did', 'enterprise-issuer', 'enterprise-verifier'].forEach((expected) => pm.expect(audiences, expected).to.include(expected));",
+                  "  ['enterprise-tenant-kms', 'enterprise-tenant-did', 'enterprise-issuer', 'enterprise-verifier', 'enterprise-wallet-unit', 'enterprise-wallet-interaction'].forEach((expected) => pm.expect(audiences, expected).to.include(expected));",
                   "});",
                   "pm.collectionVariables.set('tenantToken', tenantAccessToken);"
                 ]
@@ -1616,7 +1626,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"EuPid\",\n      \"vctHostingMode\": \"HOSTED\",\n      \"credentialConfigurationId\": \"EuPid\"\n    }\n  ],\n  \"alias\": \"eu-pid\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
+              "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"EuPid\",\n      \"vctHostingMode\": \"HOSTED\",\n      \"credentialConfigurationId\": \"EuPid\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\"\n    }\n  ],\n  \"alias\": \"eu-pid\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"SD_JWT_VC\",\n    \"vct\": \"EuPid\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
             },
             "description": "EuPid credential design with English and Dutch displays, per-locale claim labels, and the en/nl render variants attached (both at the design level and as per-display preferred variants). family_name, given_name, and issuing_country are always selectively disclosable."
           },
@@ -1819,7 +1829,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bindings\": [\n    {\n      \"docType\": \"org.iso.18013.5.1.mDL\",\n      \"credentialConfigurationId\": \"Mdl\"\n    }\n  ],\n  \"alias\": \"mdl\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"Mobile Driving Licence\",\n      \"description\": \"ISO 18013-5 mobile driving licence\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"Mobiel Rijbewijs\",\n      \"description\": \"ISO 18013-5 mobiel rijbewijs\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issue_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issue date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Datum van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"expiry_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Expiry date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Vervaldatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 8\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"portrait\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Portrait\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Portret\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 9\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"driving_privileges\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Driving privileges\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Rijbevoegdheden\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 10\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"un_distinguishing_sign\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"UN distinguishing sign\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"VN-onderscheidingsteken\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 11\n    }\n  ]\n}"
+              "raw": "{\n  \"bindings\": [\n    {\n      \"docType\": \"org.iso.18013.5.1.mDL\",\n      \"credentialConfigurationId\": \"Mdl\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\"\n    }\n  ],\n  \"alias\": \"mdl\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"MSO_MDOC\",\n    \"docType\": \"org.iso.18013.5.1.mDL\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"Mobile Driving Licence\",\n      \"description\": \"ISO 18013-5 mobile driving licence\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"Mobiel Rijbewijs\",\n      \"description\": \"ISO 18013-5 mobiel rijbewijs\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issue_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issue date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Datum van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"expiry_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Expiry date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Vervaldatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 8\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"portrait\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Portrait\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Portret\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 9\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"driving_privileges\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Driving privileges\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Rijbevoegdheden\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 10\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"un_distinguishing_sign\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"UN distinguishing sign\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"VN-onderscheidingsteken\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 11\n    }\n  ]\n}"
             },
             "description": "Mdl credential design with English and Dutch displays, per-locale claim labels under the org.iso.18013.5.1 namespace, and the en render variant attached."
           },
@@ -2032,7 +2042,34 @@
                   "const j = pm.response.json();",
                   "if (j.id) pm.collectionVariables.set('statusListId', j.id);",
                   "if (j.statusListUri) pm.collectionVariables.set('statusListUri', j.statusListUri);",
-                  "if (!pm.collectionVariables.get('statusListUri')) pm.collectionVariables.set('statusListUri', 'https://' + pm.variables.get('tenantHost') + '/public/statuslists/eupid-revocation');"
+                  "if (!pm.collectionVariables.get('statusListUri')) pm.collectionVariables.set('statusListUri', 'https://' + pm.variables.get('tenantHost') + '/public/statuslists/eupid-revocation');",
+                  "const decodeJwtPart = (jwt, index) => {",
+                  "  const compact = String(jwt || '').split('~')[0];",
+                  "  const segment = compact.split('.')[index];",
+                  "  pm.expect(segment, 'jwt segment ' + index).to.be.a('string').and.not.empty;",
+                  "  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "pm.test('status list response matches EuPid revocation contract', () => {",
+                  "  pm.expect(j.correlationId).to.eql('eupid-revocation');",
+                  "  pm.expect(j.spec).to.eql('token_status_list');",
+                  "  pm.expect(j.proofFormat).to.eql('jwt');",
+                  "  pm.expect(j.bitsPerStatus).to.eql(1);",
+                  "  pm.expect(j.statusListUri).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation');",
+                  "  pm.expect(j.contentType).to.eql('application/statuslist+jwt');",
+                  "});",
+                  "if (j.signedToken) {",
+                  "  const header = decodeJwtPart(j.signedToken, 0);",
+                  "  const payload = decodeJwtPart(j.signedToken, 1);",
+                  "  pm.test('status list signed token claims match hosted list', () => {",
+                  "    pm.expect(header.typ).to.eql('statuslist+jwt');",
+                  "    pm.expect(payload.iss).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "    pm.expect(payload.sub).to.eql(pm.collectionVariables.get('statusListUri'));",
+                  "    pm.expect(payload.status_list && payload.status_list.bits).to.eql(1);",
+                  "    pm.expect(payload.status_list && payload.status_list.lst).to.be.a('string').and.not.empty;",
+                  "  });",
+                  "}"
                 ]
               }
             }
@@ -2119,7 +2156,26 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status list hosted', () => pm.response.to.have.status(200));"
+                  "pm.test('status list hosted', () => pm.response.to.have.status(200));",
+                  "const decodeJwtPart = (jwt, index) => {",
+                  "  const compact = String(jwt || '').split('~')[0];",
+                  "  const segment = compact.split('.')[index];",
+                  "  pm.expect(segment, 'jwt segment ' + index).to.be.a('string').and.not.empty;",
+                  "  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "const hostedStatusToken = pm.response.text().trim();",
+                  "const hostedHeader = decodeJwtPart(hostedStatusToken, 0);",
+                  "const hostedPayload = decodeJwtPart(hostedStatusToken, 1);",
+                  "pm.test('hosted status list has statuslist JWT media type and claims', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type') || '', 'content type').to.include('application/statuslist+jwt');",
+                  "  pm.expect(hostedHeader.typ).to.eql('statuslist+jwt');",
+                  "  pm.expect(hostedPayload.iss).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "  pm.expect(hostedPayload.sub).to.eql(pm.collectionVariables.get('statusListUri'));",
+                  "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.bits).to.eql(1);",
+                  "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.lst).to.be.a('string').and.not.empty;",
+                  "});"
                 ]
               }
             }
@@ -2226,7 +2282,13 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status entry returned', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.text(), 'entry index').to.include('42');"
+                  "const entry = pm.response.json();",
+                  "pm.test('reactivated status entry is readable without allocation leak', () => {",
+                  "  pm.expect(entry.statusListId).to.eql(pm.collectionVariables.get('statusListId'));",
+                  "  pm.expect(entry.statusListIndex).to.eql(42);",
+                  "  pm.expect(entry.value).to.eql(0);",
+                  "  pm.expect(entry.purpose).to.eql('revocation');",
+                  "});"
                 ]
               }
             }
@@ -2556,6 +2618,10 @@
                   "  return url;",
                   "};",
                   "const j = pm.response.json();",
+                  "pm.test('resolved EuPid offer carries exact credential configuration id', () => {",
+                  "  pm.expect(j.credential_issuer).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "  pm.expect(j.credential_configuration_ids).to.eql(['EuPid']);",
+                  "});",
                   "const grant = j.grants && j.grants['urn:ietf:params:oauth:grant-type:pre-authorized_code'];",
                   "if (grant && grant['pre-authorized_code']) pm.collectionVariables.set('preAuthCode', grant['pre-authorized_code']);",
                   "// OID4VCI 1.0: for a path-bearing issuer identifier the metadata URL inserts",
@@ -2650,6 +2716,12 @@
                 "exec": [
                   "pm.test('token issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
+                  "pm.test('EuPid token response is bound to requested credential configuration', () => {",
+                  "  const detail = (j.authorization_details || []).find((entry) => entry.type === 'openid_credential');",
+                  "  pm.expect(detail, 'openid credential authorization detail').to.be.an('object');",
+                  "  pm.expect(detail.credential_configuration_id).to.eql('EuPid');",
+                  "  pm.expect(detail.credential_identifiers || []).to.have.length.greaterThan(0);",
+                  "});",
                   "if (j.access_token) pm.collectionVariables.set('walletAccessToken', j.access_token);",
                   "pm.collectionVariables.set('cNonce', j.c_nonce || '');"
                 ]
@@ -2732,7 +2804,21 @@
                   "pm.test('eupid credential issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
                   "const cred = (j.credentials && j.credentials[0] && j.credentials[0].credential) || j.credential;",
-                  "if (cred) pm.collectionVariables.set('eupidCredential', cred);"
+                  "if (cred) pm.collectionVariables.set('eupidCredential', cred);",
+                  "const decodeJwtPart = (jwt, index) => {",
+                  "  const compact = String(jwt || '').split('~')[0];",
+                  "  const segment = compact.split('.')[index];",
+                  "  pm.expect(segment, 'jwt segment ' + index).to.be.a('string').and.not.empty;",
+                  "  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "const eupidPayload = decodeJwtPart(cred, 1);",
+                  "pm.test('EuPid credential carries expected VCT and status-list reference', () => {",
+                  "  pm.expect(eupidPayload.vct).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid');",
+                  "  pm.expect(eupidPayload.status && eupidPayload.status.status_list && eupidPayload.status.status_list.uri).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation');",
+                  "  pm.expect(eupidPayload.status.status_list.idx).to.be.a('number');",
+                  "});"
                 ]
               }
             }
@@ -2840,6 +2926,10 @@
                 "exec": [
                   "pm.test('mdl offer resolved', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
+                  "pm.test('resolved mDL offer carries exact credential configuration id', () => {",
+                  "  pm.expect(j.credential_issuer).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "  pm.expect(j.credential_configuration_ids).to.eql(['Mdl']);",
+                  "});",
                   "const grant = j.grants && j.grants['urn:ietf:params:oauth:grant-type:pre-authorized_code'];",
                   "if (grant && grant['pre-authorized_code']) pm.collectionVariables.set('mdlPreAuthCode', grant['pre-authorized_code']);"
                 ]
@@ -2886,6 +2976,12 @@
                 "exec": [
                   "pm.test('mdl token issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
+                  "pm.test('mDL token response is bound to requested credential configuration', () => {",
+                  "  const detail = (j.authorization_details || []).find((entry) => entry.type === 'openid_credential');",
+                  "  pm.expect(detail, 'openid credential authorization detail').to.be.an('object');",
+                  "  pm.expect(detail.credential_configuration_id).to.eql('Mdl');",
+                  "  pm.expect(detail.credential_identifiers || []).to.have.length.greaterThan(0);",
+                  "});",
                   "if (j.access_token) pm.collectionVariables.set('walletAccessToken', j.access_token);",
                   "pm.collectionVariables.set('cNonce', j.c_nonce || '');"
                 ]
@@ -2968,6 +3064,7 @@
                   "pm.test('mdl credential issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
                   "const cred = (j.credentials && j.credentials[0] && j.credentials[0].credential) || j.credential;",
+                  "pm.test('mDL credential response contains an opaque mdoc payload', () => pm.expect(cred).to.be.a('string').and.not.empty);",
                   "if (cred) pm.collectionVariables.set('mdlCredential', cred);"
                 ]
               }
@@ -3192,7 +3289,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('eupid query stored', () => pm.expect([200, 201]).to.include(pm.response.code));"
+                  "pm.test('eupid query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const q = pm.response.json();",
+                  "pm.test('EuPid DCQL query content is versioned and enabled', () => {",
+                  "  pm.expect(q.queryId).to.eql('eupid-sdjwt');",
+                  "  pm.expect(q.enabled).to.eql(true);",
+                  "  pm.expect(q.currentVersion).to.eql(1);",
+                  "  const credential = q.dcqlQuery.credentials[0];",
+                  "  pm.expect(credential.format).to.eql('dc+sd-jwt');",
+                  "  pm.expect(credential.meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
+                  "});"
                 ]
               }
             }
@@ -3230,7 +3336,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('mdl query stored', () => pm.expect([200, 201]).to.include(pm.response.code));"
+                  "pm.test('mdl query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const q = pm.response.json();",
+                  "pm.test('mDL DCQL query content is versioned and enabled', () => {",
+                  "  pm.expect(q.queryId).to.eql('mdl-mdoc');",
+                  "  pm.expect(q.enabled).to.eql(true);",
+                  "  pm.expect(q.currentVersion).to.eql(1);",
+                  "  const credential = q.dcqlQuery.credentials[0];",
+                  "  pm.expect(credential.format).to.eql('mso_mdoc');",
+                  "  pm.expect(credential.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
+                  "});"
                 ]
               }
             }
@@ -3268,7 +3383,18 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('combined query stored', () => pm.expect([200, 201]).to.include(pm.response.code));"
+                  "pm.test('combined query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const q = pm.response.json();",
+                  "pm.test('combined DCQL query contains EuPid and mDL credentials', () => {",
+                  "  pm.expect(q.queryId).to.eql('eupid-and-mdl');",
+                  "  pm.expect(q.enabled).to.eql(true);",
+                  "  pm.expect(q.currentVersion).to.eql(1);",
+                  "  const byId = Object.fromEntries(q.dcqlQuery.credentials.map((credential) => [credential.id, credential]));",
+                  "  pm.expect(byId.eupid.format).to.eql('dc+sd-jwt');",
+                  "  pm.expect(byId.eupid.meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
+                  "  pm.expect(byId.mdl.format).to.eql('mso_mdoc');",
+                  "  pm.expect(byId.mdl.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
+                  "});"
                 ]
               }
             }
@@ -3298,7 +3424,20 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('queries listed', () => pm.response.to.have.status(200));"
+                  "pm.test('queries listed', () => pm.response.to.have.status(200));",
+                  "const queries = pm.response.json();",
+                  "const byId = Object.fromEntries(queries.map((query) => [query.queryId, query]));",
+                  "pm.test('query list includes exact enabled EuPid, mDL, and combined definitions', () => {",
+                  "  ['eupid-sdjwt', 'mdl-mdoc', 'eupid-and-mdl'].forEach((id) => pm.expect(byId[id], id).to.be.an('object'));",
+                  "  pm.expect(byId['eupid-sdjwt'].enabled).to.eql(true);",
+                  "  pm.expect(byId['eupid-sdjwt'].dcqlQuery.credentials[0].format).to.eql('dc+sd-jwt');",
+                  "  pm.expect(byId['eupid-sdjwt'].dcqlQuery.credentials[0].meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
+                  "  pm.expect(byId['mdl-mdoc'].enabled).to.eql(true);",
+                  "  pm.expect(byId['mdl-mdoc'].dcqlQuery.credentials[0].format).to.eql('mso_mdoc');",
+                  "  pm.expect(byId['mdl-mdoc'].dcqlQuery.credentials[0].meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
+                  "  pm.expect(byId['eupid-and-mdl'].enabled).to.eql(true);",
+                  "  pm.expect(byId['eupid-and-mdl'].dcqlQuery.credentials.map((credential) => credential.id).sort()).to.eql(['eupid', 'mdl']);",
+                  "});"
                 ]
               }
             }
@@ -3330,7 +3469,10 @@
                 "exec": [
                   "pm.test('query versions listed', () => pm.response.to.have.status(200));",
                   "const versions = pm.response.json();",
-                  "pm.test('query version history is not empty', () => pm.expect(Array.isArray(versions) ? versions.length : 0).to.be.greaterThan(0));"
+                  "pm.test('combined query version history starts at version 1', () => {",
+                  "  pm.expect(Array.isArray(versions) ? versions.length : 0).to.be.greaterThan(0);",
+                  "  pm.expect(versions[0].version).to.eql(1);",
+                  "});"
                 ]
               }
             }

@@ -16,10 +16,12 @@ gateway maps host/path routes to the backing containers internally.
 | `nexus.sphereon.com/edk-docker/enterprise-tenant-kms` | Key management for all services |
 | `nexus.sphereon.com/edk-docker/enterprise-did` | DID resolver and `did:web` hosting |
 | `nexus.sphereon.com/edk-docker/enterprise-tenant-as` | Tenant OAuth2 authorization server |
+| `nexus.sphereon.com/edk-docker/enterprise-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
+| `nexus.sphereon.com/edk-docker/enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
 | `nexus.sphereon.com/edk-docker/enterprise-issuer` | OID4VCI credential issuer |
 | `nexus.sphereon.com/edk-docker/enterprise-verifier` | OID4VP credential verifier |
 
-The platform and tenant-KMS containers also run internal gRPC receivers. DID, tenant-AS, issuer, verifier, and tenant-KMS call the platform service over internal gRPC for platform configuration and control-plane data. DID, tenant-AS, issuer, and verifier call tenant-KMS over internal gRPC for KMS operations. gRPC is east-west only and must never be routed through the public gateway.
+The platform, tenant-KMS, wallet-unit, and wallet-interaction containers also run internal gRPC receivers. Runtime services call the platform service over internal gRPC for platform configuration and control-plane data. DID, tenant-AS, issuer, and verifier call tenant-KMS over internal gRPC for KMS operations. Issuer and verifier call wallet-interaction, and wallet-interaction calls wallet-unit, over internal gRPC for headless wallet operations. gRPC is east-west only and must never be routed through the public gateway.
 
 The customer-visible surface is the gateway route table, not backing services or
 container ports. It is limited to `platform.<base-domain>` for the
