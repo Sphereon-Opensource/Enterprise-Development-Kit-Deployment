@@ -530,20 +530,26 @@ The admin console loads most browser runtime values from
 `/api/platform/bootstrap/v1/runtime-config/admin-console` at startup. The
 response body is shaped as `{ metadata, data }`; the console reads API wiring
 from `data.services.<service>.baseUrl` and `data.services.<service>.endpoints`.
-The container still takes these inputs for explicit server-side proxying and for
-bootstrap fallbacks. The proxy variables are not the canonical API topology; use
-them only when the deployment intentionally runs the admin console as a BFF for
-browser calls:
+The browser signs in through same-origin BFF auth endpoints and receives only an
+HttpOnly SameSite session cookie. OAuth access and refresh tokens stay server-side
+in the BFF, which performs token exchange and tenant STS exchange. The platform
+public-endpoints API remains the source for tenant issuer/verifier/authorization-
+server public origins. Browser resource API calls stay same-origin through
+`/admin-console/api/*` to avoid exposing internal service URLs or relying on CORS.
 
 | Variable | Value | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_BASE_PATH` | `/admin-console` | The path prefix the app is served under. The app owns the prefix and emits assets at `/admin-console/_next/...`. |
-| `PLATFORM_PROXY_TARGET` | Internal platform upstream URL | Optional internal platform target for an explicit `/admin-console/api/platform/*` BFF proxy mode. |
-| `TENANT_KMS_PROXY_TARGET` | Internal tenant KMS upstream URL | Optional internal tenant KMS target for an explicit `/admin-console/api/kms/*` BFF proxy mode. |
-| `TENANT_DID_PROXY_TARGET` | Internal DID upstream URL | Optional internal DID target for an explicit `/admin-console/api/did/*` BFF proxy mode. |
+| `ADMIN_CONSOLE_PLATFORM_BASE_URL` | Internal platform upstream URL | Server-side platform base used by the BFF for setup-status, runtime-config bootstrap lookups, platform-admin, platform-config, and token exchange. |
+| `ADMIN_CONSOLE_TENANT_KMS_BASE_URL` | Internal tenant-KMS upstream URL | Server-side tenant-KMS API upstream for BFF resource calls. |
+| `ADMIN_CONSOLE_TENANT_DID_BASE_URL` | Internal DID upstream URL | Server-side DID API upstream for BFF resource calls. |
+| `ADMIN_CONSOLE_ISSUER_BASE_URL` | Internal issuer upstream URL | Server-side issuer-owned API upstream for status-list, credential-design, and OID4VCI BFF calls. |
+| `ADMIN_CONSOLE_VERIFIER_BASE_URL` | Internal verifier upstream URL | Server-side verifier-owned API upstream for DCQL and OID4VP BFF calls. |
 | `NEXT_PUBLIC_PLATFORM_AUDIENCE` | `enterprise-platform` | Fallback STS audience if runtime bootstrap is unavailable. |
 | `NEXT_PUBLIC_TENANT_KMS_AUDIENCE` | `enterprise-tenant-kms` | Fallback tenant-KMS audience if runtime bootstrap is unavailable. |
 | `NEXT_PUBLIC_TENANT_DID_AUDIENCE` | `enterprise-tenant-did` | Fallback DID audience if runtime bootstrap is unavailable. |
+| `NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE` | `enterprise-issuer` | Fallback issuer audience for status-list and credential-design APIs if runtime bootstrap is unavailable. |
+| `NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE` | `enterprise-verifier` | Fallback verifier audience for DCQL APIs if runtime bootstrap is unavailable. |
 | `PORT` | `3000` | The port the app listens on. |
 
 The license portal and first-run onboarding UI use the same runtime bootstrap
@@ -553,10 +559,11 @@ and license-portal API URLs should come from the platform projection rather than
 from build-time `NEXT_PUBLIC_*` values.
 
 The platform service also has internal east-west upstreams under
-`east-west.tenant-as.base-url`, `east-west.tenant-kms.base-url`, and
-`east-west.tenant-did.base-url`. Tenant activation uses these service URLs with
-the public tenant host in the HTTP `Host` header. The DID upstream is required
-for platform-driven tenant DID provisioning and hosted verification at
+`east-west.tenant-as.base-url`, `east-west.tenant-kms.base-url`,
+and `east-west.tenant-did.base-url`. Tenant activation uses these service URLs
+with the public tenant host in the HTTP `Host` header. Runtime-config service
+URLs exposed to browser applications and customer tooling remain public tenant
+URLs. The DID upstream is required for platform-driven tenant DID provisioning and hosted verification at
 `https://<tenant>.<base-domain>/.well-known/did.json`; the platform does not
 connect to the tenant database or write DID rows directly.
 
@@ -567,14 +574,19 @@ service, reached through the gateway overlay. The gateway routes
 `https://platform.<base-domain>/admin-console` to the container without stripping the prefix;
 see [TLS and gateway](tls-and-gateway.md).
 
-The console's canonical browser API calls come from runtime bootstrap. Platform
-admin/config calls use the platform host at `/api/platform/admin/v1` and
-`/api/platform/config/v1`. Tenant-KMS and DID calls use tenant gateway roots such
-as `https://<tenant>.<base-domain>/api/kms/v1` and
-`https://<tenant>.<base-domain>/api/did/v1` when a tenant public base is known,
-or same-origin `/api/kms/v1` and `/api/did/v1` when the frontend is served on
-the tenant host. `/admin-console/api/*` remains an optional Next.js proxy mode
-only; do not treat it as the service base URL returned by platform bootstrap.
+The console uses runtime bootstrap and the platform public-endpoints API to
+resolve topology and service audiences. Browser-facing admin API calls go through
+the same-origin `/admin-console/api/*` BFF route. The BFF keeps OAuth tokens
+server-side, uses the `ADMIN_CONSOLE_*_BASE_URL` values for server-side platform
+and tenant service API calls, and attaches the appropriate operator or tenant
+service bearer. For tenant-owned internal calls, it still preserves the public
+tenant Host and forwarded scheme so tenant resolution and generated links remain
+tenant-bound. Runtime-config service `baseUrl` values stay public and are not
+used as container-internal BFF hops when a matching server-side upstream is
+configured.
+External automation may still call tenant gateway API roots directly, but the
+browser console should not assume `issuer.<base-domain>` or
+`verifier.<base-domain>` hosts.
 
 Platform-admin and platform-config calls use the operator bearer. Tenant-KMS and
 DID calls use RFC 8693 token exchange against the platform AS with the configured

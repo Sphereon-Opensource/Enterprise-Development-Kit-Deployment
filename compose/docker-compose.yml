@@ -415,12 +415,16 @@ services:
     environment:
       # basePath: the app serves under /admin-console; the root / returns 404.
       NEXT_PUBLIC_BASE_PATH: /admin-console
-      PLATFORM_PROXY_TARGET: http://enterprise-platform:18080
-      TENANT_KMS_PROXY_TARGET: http://enterprise-tenant-kms:8080
-      TENANT_DID_PROXY_TARGET: http://enterprise-did:8080
+      ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
+      ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
+      ADMIN_CONSOLE_ISSUER_BASE_URL: http://enterprise-issuer:8080
+      ADMIN_CONSOLE_VERIFIER_BASE_URL: http://enterprise-verifier:8080
       NEXT_PUBLIC_PLATFORM_AUDIENCE: enterprise-platform
       NEXT_PUBLIC_TENANT_KMS_AUDIENCE: enterprise-tenant-kms
       NEXT_PUBLIC_TENANT_DID_AUDIENCE: enterprise-tenant-did
+      NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE: enterprise-issuer
+      NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE: enterprise-verifier
       PORT: "3000"
     # No host port mapping: reached via the gateway at
     # platform.<base-domain>/admin-console.

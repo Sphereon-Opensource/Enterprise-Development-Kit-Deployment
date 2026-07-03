@@ -24,6 +24,10 @@ server:
     token-endpoint: http://enterprise-platform:18080/token
     client-id: issuer-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+oid4vci:
+  issuer:
+    protocol:
+      base-path: /oid4vci
 sphereon:
   telemetry:
     enabled: true

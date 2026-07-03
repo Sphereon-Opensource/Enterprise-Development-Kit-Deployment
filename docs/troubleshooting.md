@@ -174,12 +174,17 @@ listens on port `3000`. If it does not load or you cannot sign in:
   intentionally anonymous; it does not expose secrets or business artifact
   bodies. A successful response is shaped as `{ metadata, data }`, with
   service base URLs, audiences, and named endpoints under `data.services`.
-- Tenant KMS or DID requests are sent to `platform.<base-domain>` or
-  `/admin-console/api/*`. Runtime bootstrap is not returning a tenant service
-  base URL, or the deployment has intentionally enabled the optional Next.js BFF
-  proxy. Canonical tenant service calls use
-  `https://<tenant>.<base-domain>/api/kms/v1` and
-  `https://<tenant>.<base-domain>/api/did/v1` with tenant-scoped service tokens.
+- Browser tenant resource requests fail under `/admin-console/api/*`. The
+  admin-console BFF cannot resolve runtime-config services or exchange a tenant
+  service token. Confirm the container has `ADMIN_CONSOLE_PLATFORM_BASE_URL`
+  pointing at the internal platform service, and has the server-side tenant
+  upstreams (`ADMIN_CONSOLE_TENANT_KMS_BASE_URL`,
+  `ADMIN_CONSOLE_TENANT_DID_BASE_URL`, `ADMIN_CONSOLE_ISSUER_BASE_URL`,
+  `ADMIN_CONSOLE_VERIFIER_BASE_URL`) pointing at the internal REST services.
+  The runtime-config response must still include the expected `data.services`
+  entries and matching service audiences for STS exchange. External automation
+  may still call tenant gateway API roots directly, but the browser console
+  should stay same-origin through `/admin-console/api/*`.
 - `401` or a failed sign-in. The operator token failed, or the redirect URI is
   not registered. The console's redirect URI
   `{host}/admin-console/callback` must be registered for the operator

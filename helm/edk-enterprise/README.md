@@ -179,17 +179,22 @@ The `admin-console` service is a Next.js standalone web UI served under the
 `/admin-console` basePath (the root `/` returns 404). It is a single
 host-agnostic build: the OIDC authorization-server origin resolves from the
 request host behind the gateway, while platform-admin, platform-config, tenant-KMS,
-and DID API calls default to `/admin-console/api/*`. The chart injects
-internal platform, tenant KMS, and DID upstreams for that server-side proxy. It is
+DID, issuer-owned, and verifier-owned browser API calls default to
+`/admin-console/api/*`. The chart injects internal platform, tenant KMS, DID,
+issuer, and verifier upstreams for that server-side route proxy. It is
 fronted on the operator/platform host
 (`platform.<baseDomain>/admin-console`) alongside the platform authorization
 server, and authenticates operators against the platform AS via the OAuth
 callback `/admin-console/callback`. The `/admin-console` prefix must NEVER be
 stripped at the proxy - Next emits absolute `/admin-console/_next/...` asset
 URLs. The pod sets `NEXT_PUBLIC_BASE_PATH=/admin-console`, `PORT=3000`, the
-internal proxy target variables, and the `NEXT_PUBLIC_PLATFORM_AUDIENCE`,
-`NEXT_PUBLIC_TENANT_KMS_AUDIENCE`, and `NEXT_PUBLIC_TENANT_DID_AUDIENCE` values
-from `serviceIdentity.audiences`.
+server-only `ADMIN_CONSOLE_*_BASE_URL` upstream variables, and the
+`NEXT_PUBLIC_PLATFORM_AUDIENCE`,
+`NEXT_PUBLIC_TENANT_KMS_AUDIENCE`, `NEXT_PUBLIC_TENANT_DID_AUDIENCE`,
+`NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE`, and `NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE`
+values from `serviceIdentity.audiences`. OAuth access and refresh tokens stay
+server-side in the BFF; the browser receives only the HttpOnly SameSite session
+cookie and uses same-origin `/admin-console/api/*` calls.
 
 On the Gateway API path the explicit `/admin-console` PathPrefix route is more
 specific than the platform service's `/` catch-all, so `/admin-console/*` routes
