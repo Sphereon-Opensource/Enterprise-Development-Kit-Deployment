@@ -1,6 +1,6 @@
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
-{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
 {{- /* admin-console is a Next.js standalone web app, not an EDK Java service:
        it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
        /admin-console/health route rather than the EDK /health endpoint. */}}
@@ -111,6 +111,16 @@ spec:
               value: {{ $.Values.global.platformBaseDomain | quote }}
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
+            {{- $transportAudience := "" }}
+            {{- if $grpcReceiver }}{{- $transportAudience = (index $.Values.serviceIdentity.audiences $name) }}{{- end }}
+            {{- if $transportAudience }}
+            - name: SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE
+              value: {{ $transportAudience | quote }}
+            {{- end }}
+            {{- if eq $name "platform" }}
+            - name: EXTERNAL_BASE_URL
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            {{- end }}
             {{- /* East-west service identity + keystore secrets shared by the service containers.
                    The platform AS mints the service tokens the satellites present; the
                    satellites authenticate with the same internal client secret and read
@@ -133,7 +143,7 @@ spec:
                    AS stamp as token issuers. The platform host and tenant-AS host derive
                    from the installation base domain. */}}
             - name: EDK_PLATFORM_PUBLIC_URL
-              value: {{ printf "https://platform.%s" $.Values.global.platformBaseDomain | quote }}
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: EDK_PLATFORM_BASE_DOMAIN
               value: {{ $.Values.global.platformBaseDomain | quote }}
             {{- if $.Values.opentelemetry.enabled }}
@@ -244,7 +254,11 @@ spec:
                   key: {{ $tenantDb.passwordKey }}
             {{- end }}
             {{- end }}
-            {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") }}
+            {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") }}
+            - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICE_TOKEN_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "tenant-kms" | quote }}
+            - name: TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
+              value: "true"
             {{- range $kmsService := list "key" "keys" "signature" "mac" "encryption" }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_TARGET
               value: "SERVER"
@@ -253,6 +267,22 @@ spec:
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_ENDPOINT
               value: {{ printf "grpc://%s-tenant-kms:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
             {{- end }}
+            {{- end }}
+            {{- if or (eq $name "issuer") (eq $name "verifier") }}
+            - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "wallet-interaction" | quote }}
+            - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
+              value: "true"
+            - name: WALLET_INTERACTION_GRPC_ENDPOINT
+              value: {{ printf "grpc://%s-wallet-interaction:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
+            {{- end }}
+            {{- if eq $name "wallet-interaction" }}
+            - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "wallet-unit" | quote }}
+            - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
+              value: "true"
+            - name: WALLET_UNIT_GRPC_ENDPOINT
+              value: {{ printf "grpc://%s-wallet-unit:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
             {{- end }}
             {{- if ne $name "platform" }}
             {{- /* The satellites route the platform and application command modules to the
@@ -355,6 +385,11 @@ spec:
               value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
               value: {{ printf "http://%s-platform:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+            {{- $restAudience := index $.Values.serviceIdentity.audiences $name }}
+            {{- if $restAudience }}
+            - name: SERVER_REST_AUTH_EXPECTED_AUDIENCE
+              value: {{ $restAudience | quote }}
+            {{- end }}
             {{- /* Tenant AS issuers are dynamic. The platform writes
                    OAUTH2_AUTHORIZATION_SERVER public endpoint bindings during
                    tenant onboarding, and satellites trust tokens only when the
@@ -366,15 +401,31 @@ spec:
             {{- end }}
             {{- end }}
             {{- if $isAdminConsole }}
-            - name: PLATFORM_PROXY_TARGET
+            - name: ADMIN_CONSOLE_PLATFORM_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
-            - name: TENANT_KMS_PROXY_TARGET
+            - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-kms")) (index $.Values.services "tenant-kms").restPort | quote }}
-            - name: TENANT_DID_PROXY_TARGET
+            - name: ADMIN_CONSOLE_TENANT_DID_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "did")) (index $.Values.services "did").restPort | quote }}
+            - name: ADMIN_CONSOLE_ISSUER_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "issuer")) (index $.Values.services "issuer").restPort | quote }}
+            - name: ADMIN_CONSOLE_VERIFIER_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "verifier")) (index $.Values.services "verifier").restPort | quote }}
+            - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "platform" | quote }}
+            - name: NEXT_PUBLIC_TENANT_KMS_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "tenant-kms" | quote }}
+            - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "did" | quote }}
+            - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "issuer" | quote }}
+            - name: NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "verifier" | quote }}
             {{- end }}
-            {{- with $svc.env }}
-            {{- toYaml . | nindent 12 }}
+            {{- range $env := $svc.env }}
+            {{- if not (and (eq $name "platform") (eq (get $env "name") "EXTERNAL_BASE_URL")) }}
+            {{- toYaml (list $env) | nindent 12 }}
+            {{- end }}
             {{- end }}
           {{- $probePath := $isAdminConsole | ternary "/admin-console/health" "/health" }}
           livenessProbe:
@@ -433,6 +484,12 @@ spec:
             - name: keystore
               mountPath: /keystore
             {{- end }}
+            {{- if and (eq $name "wallet-interaction") $.Values.walletInteractionKeystore.enabled }}
+            # The wallet-interaction keystore holds server-side headless wallet
+            # proof material. Mobile/IDK wallet apps do not use this VDX volume.
+            - name: wallet-interaction-keystore
+              mountPath: /keystore
+            {{- end }}
             {{- if eq $name "platform" }}
             {{- /* License state is writable: the setup API writes the imported bundle's
                    root CA to license.trust.rootCaPath here, so the platform trusts the
@@ -488,6 +545,11 @@ spec:
         - name: keystore
           persistentVolumeClaim:
             claimName: {{ $.Values.tenantKmsKeystore.existingClaim | default (printf "%s-tenant-kms-keystore" (include "edk-enterprise.fullname" $)) }}
+        {{- end }}
+        {{- if and (eq $name "wallet-interaction") $.Values.walletInteractionKeystore.enabled }}
+        - name: wallet-interaction-keystore
+          persistentVolumeClaim:
+            claimName: {{ $.Values.walletInteractionKeystore.existingClaim | default (printf "%s-wallet-interaction-keystore" (include "edk-enterprise.fullname" $)) }}
         {{- end }}
       {{- with $.Values.nodeSelector }}
       nodeSelector:

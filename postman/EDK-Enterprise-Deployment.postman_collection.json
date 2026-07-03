@@ -2,14 +2,20 @@
   "info": {
     "name": "EDK-Enterprise-Deployment",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Customer walkthrough for an EDK enterprise deployment hosted under one base domain: platform.<baseDomain> for the platform/operator plane and <tenantSlug>.<baseDomain> for tenant protocol routes plus protected administrative API paths. Customer inputs are the platform gateway origin and tenant gateway origin. The collection targets gateway host/path routes only; it never calls workload containers or runtime probes directly."
+    "description": "Post-provisioning customer walkthrough for an EDK enterprise deployment hosted under one base domain: platform.<baseDomain> for the platform/operator plane and <tenantSlug>.<baseDomain> for tenant protocol routes plus protected administrative API paths. Install the license and complete platform setup in the Admin Console UI before running this collection; those setup steps are intentionally not modeled as Postman API calls. The collection targets gateway host/path routes only and never calls workload containers or runtime probes directly."
   },
   "variable": [
     {
       "key": "statusListSigningKeyAlias",
       "value": "issuer-signing-{{tenantSlug}}",
       "type": "string",
-      "description": "Signing key alias for status-list tokens. Defaults to the issuer signing key provisioned during tenant setup."
+      "description": "Runtime status-list signing key alias. The collection refreshes this to issuer-signing-<tenantSlug> for the active tenant unless statusListSigningKeyAliasOverride is set."
+    },
+    {
+      "key": "statusListSigningKeyAliasOverride",
+      "value": "",
+      "type": "string",
+      "description": "Optional explicit status-list signing key alias. Leave empty to use issuer-signing-<tenantSlug> for the active tenant."
     },
     {
       "key": "operatorCodeVerifier",
@@ -24,360 +30,27 @@
       "description": "Tenant/runtime KMS provider used by the walkthrough. It is derived from tenantSlug by the collection pre-request script."
     },
     {
-      "key": "licenseKmsProviderId",
-      "value": "license",
-      "type": "string",
-      "description": "Platform system KMS provider used for setup license-request and recipient material."
-    },
-    {
       "key": "verifierId",
-      "value": "default",
+      "value": "",
       "type": "string",
-      "description": "Default verifier identifier."
+      "description": "Resolved from the platform OID4VP verifier instance list after tenant onboarding."
     },
     {
       "key": "idpClientSecretRef",
       "value": "${secret:@env:IDP_CLIENT_SECRET}",
       "type": "string",
       "description": "Secret reference used when the optional federation IdP request is run."
+    },
+    {
+      "key": "issuerId",
+      "value": ""
     }
   ],
   "item": [
     {
-      "name": "00 Gateway Smoke",
-      "description": "Gateway-facing platform reachability check. Runtime containers are not addressed directly; tenant protocol and protected API checks run later through the tenant gateway URL after tenant onboarding.",
-      "item": [
-        {
-          "name": "01 Platform setup status",
-          "request": {
-            "method": "GET",
-            "url": "{{platformUrl}}/api/platform/setup/v1/status",
-            "description": "Checks that the platform host is reachable through the gateway. A 200 means the first-run setup gate is open; a 404 means setup is already closed."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('platform setup status route is reachable', () => pm.expect([200, 404]).to.include(pm.response.code));"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "01 Platform Onboarding",
-      "description": "Platform onboarding covers the setup gate, license request, license activation, platform operator bootstrap, and admin console checks. Run this group first on a new installation. If setup is already complete, setup endpoints return 404 and the checks continue.",
-      "item": [
-        {
-          "name": "01 Get setup status",
-          "request": {
-            "method": "GET",
-            "url": "{{platformUrl}}/api/platform/setup/v1/status",
-            "description": "Reads the anonymous setup gate before any operator token exists."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('setup gate is open or already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
-                  "if (pm.response.code === 200) {",
-                  "  const j = pm.response.json();",
-                  "  pm.test('setup reports gateOpen', () => pm.expect(j.gateOpen).to.eql(true));",
-                  "  pm.collectionVariables.set('licenseRequestAlias', j.licenseRequestDefaultAlias || 'platform-license-request');",
-                  "  pm.collectionVariables.set('setupGateClosed', 'false');",
-                  "} else {",
-                  "  pm.collectionVariables.set('licenseRequestAlias', 'platform-license-request');",
-                  "  pm.collectionVariables.set('setupGateClosed', 'true');",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "02 Check license request generator",
-          "request": {
-            "method": "GET",
-            "url": "{{platformUrl}}/api/platform/setup/v1/license-request",
-            "description": "Checks the local KMS-backed request generator without exposing key or secret material."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('license request generator is available or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
-                  "if (pm.response.code === 200) {",
-                  "  const j = pm.response.json();",
-                  "  if (j.defaultAlias) pm.collectionVariables.set('licenseRequestAlias', j.defaultAlias);",
-                  "}",
-                  "pm.collectionVariables.set('licenseRequestAlias', pm.collectionVariables.get('licenseRequestAlias') || 'platform-license-request');"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "03 Generate installation certificate license request",
-          "request": {
-            "method": "POST",
-            "url": "{{platformUrl}}/api/platform/setup/v1/license-request/generate",
-            "description": "Generates the signed local installation certificate / license request that is sent to the license issuer out of band. The readable installation id stays on the platform; the CSR carries the opaque installation binding.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"alias\": \"{{licenseRequestAlias}}\",\n  \"providerId\": \"{{licenseKmsProviderId}}\",\n  \"algorithm\": \"ECDSA_SHA256\",\n  \"use\": \"sig\",\n  \"deployment\": {\n    \"deployment\": {\n      \"baseDomains\": [\"{{baseDomain}}\"]\n    },\n    \"organizationName\": \"{{tenantName}}\",\n    \"organizationUnit\": \"Platform Operations\",\n    \"locality\": \"Amsterdam\",\n    \"country\": \"NL\",\n    \"licenseDeliveryMethod\": \"MANUAL\",\n    \"contacts\": [\n      {\n        \"email\": \"{{operatorEmail}}\",\n        \"givenName\": \"Platform\",\n        \"familyName\": \"Operator\",\n        \"roles\": [\"TECHNICAL\"]\n      },\n      {\n        \"email\": \"{{operatorEmail}}\",\n        \"givenName\": \"Platform\",\n        \"familyName\": \"Operator\",\n        \"roles\": [\"ADMINISTRATOR\"]\n      }\n    ]\n  },\n  \"serialNumber\": 1\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('license request generated or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
-                  "if (pm.response.code === 200) {",
-                  "  const j = pm.response.json();",
-                  "  const request = j.request || {};",
-                  "  const requestJson = j.requestJson || JSON.stringify(request);",
-                  "  const parsedRequest = JSON.parse(requestJson);",
-                  "  const expectedFields = ['version', 'requestId', 'generatedAt', 'deployment', 'platformIssuer', 'tenant', 'owner', 'contacts', 'organizationName', 'organizationUnit', 'licenseDeliveryMethod', 'localCertificate', 'localPublicKey', 'certificateSigningRequest', 'licenseRecipient'];",
-                  "  pm.test('license request payload returned', () => pm.expect(j.request || j.requestJson).to.exist);",
-                  "  pm.test('license request exposes only the public request fields', () => {",
-                  "    pm.expect(Object.keys(parsedRequest).sort()).to.eql(expectedFields.sort());",
-                  "  });",
-                  "  pm.test('license request does not expose the readable installation id', () => {",
-                  "    pm.expect(request).to.not.have.property('installationId');",
-                  "    pm.expect(parsedRequest).to.not.have.property('installationId');",
-                  "  });",
-                  "  pm.test('license request carries CSR and recipient public key', () => {",
-                  "    pm.expect(parsedRequest.certificateSigningRequest).to.exist;",
-                  "    pm.expect(parsedRequest.certificateSigningRequest.pem).to.include('BEGIN CERTIFICATE REQUEST');",
-                  "    pm.expect(parsedRequest.licenseRecipient).to.exist;",
-                  "    pm.expect(parsedRequest.licenseRecipient.publicJwk).to.exist;",
-                  "  });",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "04 Preview protected license bundle import",
-          "request": {
-            "method": "POST",
-            "url": "{{platformUrl}}/api/platform/setup/v1/license/import/preview",
-            "description": "Validates the protected license bundle and reports overwrite impact without mutating setup state.",
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "bundle",
-                  "type": "file",
-                  "src": "{{licenseBundleZipPath}}"
-                }
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('license bundle previews or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
-                  "const formFields = pm.request.body && pm.request.body.formdata ? pm.request.body.formdata.all().map((item) => item.key) : [];",
-                  "pm.test('license bundle preview sends only the protected bundle file', () => {",
-                  "  pm.expect(formFields).to.eql(['bundle']);",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "05 Import protected license bundle",
-          "request": {
-            "method": "POST",
-            "url": "{{platformUrl}}/api/platform/setup/v1/license/import",
-            "description": "Applies the protected license bundle while the anonymous setup gate is still open. The gate remains open until the operator bootstrap step completes.",
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "bundle",
-                  "type": "file",
-                  "src": "{{licenseBundleZipPath}}"
-                }
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('license bundle imported or setup is already closed', () => pm.expect([200, 404]).to.include(pm.response.code));",
-                  "const formFields = pm.request.body && pm.request.body.formdata ? pm.request.body.formdata.all().map((item) => item.key) : [];",
-                  "pm.test('license bundle import sends only the protected bundle file', () => {",
-                  "  pm.expect(formFields).to.eql(['bundle']);",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "06 Bootstrap platform operator",
-          "request": {
-            "method": "POST",
-            "url": "{{platformUrl}}/api/platform/setup/v1/bootstrap",
-            "description": "Creates the platform tenant, hosted platform authorization server, platform application login surface, and initial operator credential. This step closes the anonymous setup gate.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"adminEmail\": \"{{operatorEmail}}\",\n  \"adminDisplayName\": \"Platform Operator\",\n  \"adminPassword\": \"{{operatorPassword}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('platform operator bootstrapped or setup is already closed', () => pm.expect([200, 201, 404]).to.include(pm.response.code));",
-                  "if (pm.response.code !== 404) {",
-                  "  const j = pm.response.json();",
-                  "  if (j.tenantId) pm.collectionVariables.set('platformTenantId', j.tenantId);",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "07 Setup gate is closed",
-          "request": {
-            "method": "GET",
-            "url": "{{platformUrl}}/api/platform/setup/v1/status",
-            "description": "Confirms the anonymous setup status endpoint is no longer visible after setup has completed."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('setup status is hidden after bootstrap', () => pm.response.to.have.status(404));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "08 Admin console is served",
-          "request": {
-            "method": "HEAD",
-            "url": "{{adminConsoleUrl}}",
-            "description": "Confirms the admin console route is available for the platform operator after setup."
-          },
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const adminConsoleUrl = pm.variables.replaceIn('{{adminConsoleUrl}}');",
-                  "if (!adminConsoleUrl || adminConsoleUrl === '{{adminConsoleUrl}}') {",
-                  "  pm.execution.skipRequest();",
-                  "}"
-                ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('admin console is served after onboarding', () => pm.response.to.have.status(200));",
-                  "pm.test('admin console serves html', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('text/html'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "09 Platform root redirects to admin console",
-          "protocolProfileBehavior": {
-            "followRedirects": false
-          },
-          "request": {
-            "method": "GET",
-            "url": "{{platformUrl}}/",
-            "description": "Confirms the platform root sends operators to the admin console instead of the first-run setup page."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('platform root redirects after setup', () => pm.expect([301, 302, 303, 307, 308]).to.include(pm.response.code));",
-                  "const location = pm.response.headers.get('Location');",
-                  "pm.test('platform root redirects to admin console', () => pm.expect(location || '').to.match(/\\/admin-console\\/?$/));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "10 Setup license page is hidden",
-          "request": {
-            "method": "GET",
-            "url": "{{platformUrl}}/setup-license",
-            "description": "Confirms the first-run setup license page is no longer reachable after setup has completed."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('setup license page is hidden after setup', () => pm.response.to.have.status(404));"
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "name": "00 Before You Start",
+      "description": "Use the Admin Console UI to install the license and complete platform setup before running this collection. This Postman collection starts after the platform is provisioned; it covers operator sign-in, tenant onboarding, runtime discovery, issuer/verifier configuration, credential issuance, status lists, DCQL binding, and verification.",
+      "item": []
     },
     {
       "name": "02 Operator Sign-in",
@@ -816,7 +489,209 @@
                   "const serviceTypes = endpoints.map((endpoint) => endpoint.serviceType);",
                   "pm.test('registration created gateway bindings for AS, issuer, and verifier protocol routes', () => {",
                   "  ['OAUTH2_AUTHORIZATION_SERVER', 'OID4VCI_ISSUER', 'OID4VP_VERIFIER'].forEach((serviceType) => pm.expect(serviceTypes, serviceType).to.include(serviceType));",
-                  "});"
+                  "});",
+                  "const trimBase = (value) => String(value || '').trim().replace(/\\/$/, '');",
+                  "const platformUrl = trimBase(pm.variables.get('platformUrl'));",
+                  "const platformParts = platformUrl.match(/^([a-z][a-z0-9+.-]*):\\/\\/([^/?#]+)/i);",
+                  "const platformScheme = platformParts ? platformParts[1].toLowerCase() : 'https';",
+                  "const platformPort = platformParts && platformParts[2].match(/:(\\d+)$/) ? ':' + platformParts[2].match(/:(\\d+)$/)[1] : '';",
+                  "const endpointFor = (serviceType) => endpoints.filter((endpoint) => endpoint.enabled !== false && endpoint.serviceType === serviceType).find((endpoint) => endpoint.primaryEndpoint) || endpoints.find((endpoint) => endpoint.enabled !== false && endpoint.serviceType === serviceType);",
+                  "const originFor = (endpoint, fallback) => {",
+                  "  const host = String(endpoint && endpoint.host || '').trim();",
+                  "  if (!host) return trimBase(fallback);",
+                  "  if (/^https?:\\/\\//i.test(host)) return trimBase(host);",
+                  "  return platformScheme + '://' + host + (/:(\\d+)$/.test(host) ? '' : platformPort);",
+                  "};",
+                  "const expectedGateway = trimBase(pm.variables.get('tenantGatewayUrl'));",
+                  "const expectedHost = expectedGateway.match(/^https?:\\/\\/([^/?#]+)/i);",
+                  "let expectedHostname = expectedHost ? expectedHost[1].replace(/:\\d+$/, '') : '';",
+                  "const origins = [",
+                  "  originFor(endpointFor('OID4VCI_ISSUER'), expectedGateway),",
+                  "  originFor(endpointFor('OID4VP_VERIFIER'), expectedGateway),",
+                  "  originFor(endpointFor('OAUTH2_AUTHORIZATION_SERVER'), expectedGateway),",
+                  "];",
+                  "if (!expectedHostname) {",
+                  "  const firstHost = origins[0].match(/^https?:\\/\\/([^/?#]+)/i);",
+                  "  expectedHostname = firstHost ? firstHost[1].replace(/:\\d+$/, '') : '';",
+                  "}",
+                  "pm.test('tenant public endpoint bindings resolve to the tenant gateway host', () => {",
+                  "  origins.forEach((origin) => {",
+                  "    pm.expect(origin, 'endpoint origin').to.match(/^https?:\\/\\//);",
+                  "    const host = origin.match(/^https?:\\/\\/([^/?#]+)/i);",
+                  "    pm.expect(host && host[1].replace(/:\\d+$/, ''), origin).to.eql(expectedHostname);",
+                  "  });",
+                  "});",
+                  "if (expectedHostname) pm.collectionVariables.set('tenantHost', expectedHostname);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Resolve tenant runtime service discovery",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/bootstrap/v1/runtime-config/admin-console?tenantId={{tenantId}}&tenantSlug={{tenantSlug}}",
+            "description": "Fetches the same platform runtime service discovery consumed by the admin console. The collection stores the discovered tenant service base URLs and named endpoint paths, then uses those variables for tenant KMS, DID, issuer, credential-design, status-list, DCQL, and verifier backend calls.",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tenant runtime config returned', () => pm.response.to.have.status(200));",
+                  "const cfg = pm.response.json();",
+                  "const services = (cfg.data && cfg.data.services) || {};",
+                  "const trimBase = (value) => String(value || '').trim().replace(/\\/$/, '');",
+                  "const service = (key) => services[key] || {};",
+                  "const endpointPath = (svc, names, fallback) => {",
+                  "  for (const name of names) {",
+                  "    const path = svc.endpoints && svc.endpoints[name] && svc.endpoints[name].path;",
+                  "    if (path) return String(path).trim();",
+                  "  }",
+                  "  return fallback;",
+                  "};",
+                  "const joinUrl = (base, path) => {",
+                  "  const cleanBase = trimBase(base);",
+                  "  const cleanPath = String(path || '').trim();",
+                  "  if (/^https?:\\/\\//i.test(cleanPath)) return trimBase(cleanPath);",
+                  "  return cleanBase.replace(/\\/$/, '') + '/' + cleanPath.replace(/^\\/+/, '');",
+                  "};",
+                  "const setPublic = (key, value) => {",
+                  "  const normalized = trimBase(value);",
+                  "  if (normalized) {",
+                  "    pm.collectionVariables.set(key, normalized);",
+                  "    pm.environment.set(key, normalized);",
+                  "  }",
+                  "};",
+                  "const tenantKms = service('tenantKms');",
+                  "const tenantDid = service('tenantDid');",
+                  "const issuer = service('issuer');",
+                  "const verifier = service('verifier');",
+                  "pm.test('runtime config exposes tenant workload services', () => {",
+                  "  ['tenantKms', 'tenantDid', 'issuer', 'verifier'].forEach((key) => {",
+                  "    pm.expect(services[key] && services[key].baseUrl, key + ' baseUrl').to.be.a('string').and.match(/^https?:\\/\\//);",
+                  "  });",
+                  "  pm.expect(endpointPath(tenantKms, ['api'], ''), 'tenantKms api endpoint').to.eql('/api/kms/v1');",
+                  "  pm.expect(endpointPath(tenantDid, ['api'], ''), 'tenantDid api endpoint').to.eql('/api/did/v1');",
+                  "  pm.expect(endpointPath(issuer, ['credentialDesigns'], ''), 'credential-design endpoint').to.eql('/api/credential-design/v1');",
+                  "  pm.expect(endpointPath(issuer, ['statusLists'], ''), 'status-list endpoint').to.eql('/api/statuslist/v1');",
+                  "  pm.expect(endpointPath(verifier, ['dcqlApi'], ''), 'dcql endpoint').to.eql('/api/dcql/v1');",
+                  "});",
+                  "const tenantOrigin = trimBase(issuer.baseUrl || tenantKms.baseUrl || tenantDid.baseUrl || verifier.baseUrl || pm.variables.get('tenantGatewayUrl'));",
+                  "setPublic('tenantGatewayUrl', tenantOrigin);",
+                  "setPublic('tenantIssuerOrigin', issuer.baseUrl || tenantOrigin);",
+                  "setPublic('tenantVerifierOrigin', verifier.baseUrl || tenantOrigin);",
+                  "setPublic('tenantAuthorizationServerOrigin', tenantOrigin);",
+                  "setPublic('tenantKmsApiBaseUrl', joinUrl(tenantKms.baseUrl || tenantOrigin, endpointPath(tenantKms, ['api'], '/api/kms/v1')));",
+                  "setPublic('tenantDidApiBaseUrl', joinUrl(tenantDid.baseUrl || tenantOrigin, endpointPath(tenantDid, ['api'], '/api/did/v1')));",
+                  "setPublic('tenantCredentialDesignApiBaseUrl', joinUrl(issuer.baseUrl || tenantOrigin, endpointPath(issuer, ['credentialDesigns'], '/api/credential-design/v1')));",
+                  "setPublic('tenantStatusListApiBaseUrl', joinUrl(issuer.baseUrl || tenantOrigin, endpointPath(issuer, ['statusLists'], '/api/statuslist/v1')));",
+                  "setPublic('tenantIssuerApiBaseUrl', joinUrl(issuer.baseUrl || tenantOrigin, endpointPath(issuer, ['api'], '/api/oid4vci/v1')));",
+                  "setPublic('tenantDcqlApiBaseUrl', joinUrl(verifier.baseUrl || tenantOrigin, endpointPath(verifier, ['dcqlApi'], '/api/dcql/v1')));",
+                  "setPublic('tenantVerifierBackendBaseUrl', joinUrl(verifier.baseUrl || tenantOrigin, '/oid4vp/backend'));",
+                  "pm.collectionVariables.set('tenantRuntimeServicesResolved', 'true');",
+                  "pm.environment.set('tenantRuntimeServicesResolved', 'true');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Resolve verifier party id",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vp/verifier/instances",
+            "description": "Reads the verifier instance created during tenant registration and stores its verifier party id. DCQL binding and OID4VP verification requests use this UUID; tenantSlug remains only the public host/routing slug.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('verifier instances listed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "const instances = j.data || j.items || j.instances || (Array.isArray(j) ? j : []);",
+                  "const stringOf = (value) => typeof value === 'string' && value.trim() ? value.trim() : null;",
+                  "const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "const uuidOf = (value) => {",
+                  "  const text = stringOf(value);",
+                  "  return text && uuidPattern.test(text) ? text : null;",
+                  "};",
+                  "const capabilityOf = (instance) => instance && typeof instance.capability === 'object' && instance.capability ? instance.capability : {};",
+                  "const idOf = (instance) => instance && (",
+                  "  uuidOf(instance.partyId) ||",
+                  "  uuidOf(capabilityOf(instance).softwarePartyId) ||",
+                  "  uuidOf(instance.verifierId) ||",
+                  "  uuidOf(instance.id)",
+                  ");",
+                  "const selected = instances.find((instance) => instance.enabled !== false) || instances[0];",
+                  "const resolvedId = idOf(selected);",
+                  "pm.test('verifier party id resolved from platform config', () => {",
+                  "  pm.expect(resolvedId, 'verifier party id').to.be.a('string').and.match(uuidPattern);",
+                  "});",
+                  "if (resolvedId) {",
+                  "  pm.collectionVariables.set('verifierId', resolvedId);",
+                  "  pm.environment.set('verifierId', resolvedId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 Resolve issuer instance id",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances",
+            "description": "Reads the issuer instance created during tenant registration and stores its runtime instance id. Issuer branding and credential designs bind to this issuer instance id.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer instances listed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "const instances = j.data || j.items || j.instances || (Array.isArray(j) ? j : []);",
+                  "const stringOf = (value) => typeof value === 'string' && value.trim() ? value.trim() : null;",
+                  "const idOf = (instance) => instance && (",
+                  "  stringOf(instance.instanceId) ||",
+                  "  stringOf(instance.slug) ||",
+                  "  stringOf(instance.id) ||",
+                  "  stringOf(instance.issuerId) ||",
+                  "  stringOf(instance.partyId)",
+                  ");",
+                  "const selected = instances.find((instance) => instance.enabled !== false) || instances[0];",
+                  "const resolvedId = idOf(selected);",
+                  "pm.test('issuer instance id resolved from platform config', () => {",
+                  "  pm.expect(resolvedId, 'issuer instance id').to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (resolvedId) {",
+                  "  pm.collectionVariables.set('issuerId', resolvedId);",
+                  "  pm.environment.set('issuerId', resolvedId);",
+                  "}"
                 ]
               }
             }
@@ -955,6 +830,16 @@
                   "type": "text"
                 },
                 {
+                  "key": "audience",
+                  "value": "enterprise-wallet-unit",
+                  "type": "text"
+                },
+                {
+                  "key": "audience",
+                  "value": "enterprise-wallet-interaction",
+                  "type": "text"
+                },
+                {
                   "key": "client_id",
                   "value": "platform-operator-cli",
                   "type": "text"
@@ -986,7 +871,7 @@
                   "const aud = tenantAccessTokenPayload.aud;",
                   "const audiences = Array.isArray(aud) ? aud : (aud ? [aud] : []);",
                   "pm.test('tenant runtime token is scoped to runtime audiences', () => {",
-                  "  ['enterprise-tenant-kms', 'enterprise-tenant-did', 'enterprise-issuer', 'enterprise-verifier'].forEach((expected) => pm.expect(audiences, expected).to.include(expected));",
+                  "  ['enterprise-tenant-kms', 'enterprise-tenant-did', 'enterprise-issuer', 'enterprise-verifier', 'enterprise-wallet-unit', 'enterprise-wallet-interaction'].forEach((expected) => pm.expect(audiences, expected).to.include(expected));",
                   "});",
                   "pm.collectionVariables.set('tenantToken', tenantAccessToken);"
                 ]
@@ -999,156 +884,13 @@
     },
     {
       "name": "06 Tenant Keys and DID",
-      "description": "Checks authentication boundaries through the tenant gateway, verifies tenant setup KMS material, discovers the tenant did:web identifier created during tenant activation, and verifies the public did.json document.",
+      "description": "Verifies tenant setup KMS material, discovers the tenant did:web identifier created during tenant activation, and verifies the public did.json document.",
       "item": [
         {
-          "name": "01 KMS create rejects anonymous",
-          "request": {
-            "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys",
-            "description": "Verifies strict auth before any authenticated KMS mutation: anonymous callers must not be able to create keys.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"providerId\": \"{{kmsProviderId}}\",\n  \"alias\": \"{{tenantSlug}}-anonymous-denied\",\n  \"use\": \"sig\",\n  \"alg\": \"ECDSA_SHA256\",\n  \"keyOperations\": [\"sign\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('anonymous KMS create is rejected', () => pm.response.to.have.status(401));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "02 KMS import rejects anonymous",
-          "request": {
-            "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys/import",
-            "description": "Verifies anonymous callers cannot import externally supplied key material into KMS.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('anonymous KMS import is rejected', () => pm.response.to.have.status(401));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "03 KMS delete rejects anonymous",
-          "request": {
-            "method": "DELETE",
-            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys/{{tenantSlug}}-anonymous-denied",
-            "description": "Verifies anonymous callers cannot delete KMS keys. The alias is intentionally non-existent; auth must reject before key lookup.",
-            "header": [
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ]
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('anonymous KMS delete is rejected', () => pm.response.to.have.status(401));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "04 KMS register rejects anonymous",
-          "request": {
-            "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys/register",
-            "description": "Verifies anonymous callers cannot register an existing provider key reference for platform use.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Host",
-                "value": "{{tenantHost}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"providerId\": \"{{kmsProviderId}}\",\n  \"alias\": \"{{tenantSlug}}-anonymous-register-denied\",\n  \"kid\": \"{{tenantSlug}}-anonymous-register-denied\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('anonymous KMS register is rejected', () => pm.response.to.have.status(401));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "05 List KMS providers",
+          "name": "01 List KMS providers",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/kms/v1/providers",
+            "url": "{{tenantKmsApiBaseUrl}}/providers",
             "description": "Lists configured tenant KMS providers using the tenant bearer token. Exactly one customer-visible provider must be exposed, and its id must be the tenant slug.",
             "header": [
               {
@@ -1183,10 +925,10 @@
           ]
         },
         {
-          "name": "06 Get tenant provider capabilities",
+          "name": "02 Get tenant provider capabilities",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/kms/v1/providers/{{kmsProviderId}}/capabilities",
+            "url": "{{tenantKmsApiBaseUrl}}/providers/{{kmsProviderId}}/capabilities",
             "description": "Reads the selected provider capability report so the suite fails when provider discovery is mounted but provider-specific capability routing is broken.",
             "header": [
               {
@@ -1214,10 +956,10 @@
           ]
         },
         {
-          "name": "07 List tenant setup KMS keys",
+          "name": "03 List tenant setup KMS keys",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys",
+            "url": "{{tenantKmsApiBaseUrl}}/keys",
             "description": "Lists keys provisioned by tenant setup. The collection must not generate the default tenant KMS material through KMS APIs.",
             "header": [
               {
@@ -1247,10 +989,10 @@
           ]
         },
         {
-          "name": "08 List activation-created DID identifiers",
+          "name": "04 List activation-created DID identifiers",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/did/v1/identifiers",
+            "url": "{{tenantDidApiBaseUrl}}/identifiers",
             "description": "Lists managed DIDs for the tenant and verifies tenant activation created the default did:web record. This collection must not create the default DID through the management API.",
             "header": [
               {
@@ -1320,10 +1062,10 @@
           ]
         },
         {
-          "name": "09 Resolve activation-created DID",
+          "name": "05 Resolve activation-created DID",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/did/v1/identifiers/{{didEncoded}}",
+            "url": "{{tenantDidApiBaseUrl}}/identifiers/{{didEncoded}}",
             "description": "Resolves the activation-created DID through the management API and returns the full record including the DID document.",
             "header": [
               {
@@ -1352,10 +1094,10 @@
           ]
         },
         {
-          "name": "10 List activation-created DID verification methods",
+          "name": "06 List activation-created DID verification methods",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/did/v1/identifiers/{{didEncoded}}/verification-methods",
+            "url": "{{tenantDidApiBaseUrl}}/identifiers/{{didEncoded}}/verification-methods",
             "description": "Lists verification methods on the activation-created managed DID, proving tenant setup attached the verifier authentication key and issuer assertion key.",
             "header": [
               {
@@ -1386,7 +1128,7 @@
           ]
         },
         {
-          "name": "11 Fetch hosted activation did.json",
+          "name": "07 Fetch hosted activation did.json",
           "request": {
             "method": "GET",
             "url": "{{didJsonUrl}}",
@@ -1429,7 +1171,7 @@
           "name": "01 Create issuer design",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/issuers",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/issuers",
             "header": [
               {
                 "key": "Content-Type",
@@ -1447,7 +1189,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bindings\": [\n    {\n      \"issuerDid\": \"{{did}}\"\n    }\n  ],\n  \"alias\": \"{{tenantSlug}}-authority\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"displayName\": \"{{tenantName}} Authority\",\n      \"description\": \"{{tenantName}} credential issuing authority\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"displayName\": \"{{tenantName}} Autoriteit\",\n      \"description\": \"Uitgevende autoriteit voor verifieerbare credentials van {{tenantName}}\"\n    }\n  ]\n}"
+              "raw": "{\n  \"bindings\": [\n    {\n      \"issuerDid\": \"{{did}}\",\n      \"issuerId\": \"{{issuerId}}\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\"\n    }\n  ],\n  \"alias\": \"{{tenantSlug}}-authority\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"displayName\": \"{{tenantName}} Authority\",\n      \"description\": \"{{tenantName}} credential issuing authority\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"displayName\": \"{{tenantName}} Autoriteit\",\n      \"description\": \"Uitgevende autoriteit voor verifieerbare credentials van {{tenantName}}\"\n    }\n  ]\n}"
             },
             "description": "Binds the issuing identity to the tenant's did:web identifier. Wallets display this name and description when presenting a credential offer."
           },
@@ -1469,7 +1211,7 @@
           "name": "02 Upload issuer logo asset",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{issuerDesignId}}/assets/en/LOGO",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{issuerDesignId}}/assets/en/LOGO",
             "header": [
               {
                 "key": "Content-Type",
@@ -1514,7 +1256,7 @@
           "name": "03 Create issuer render variant",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/render/variants",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/render/variants",
             "header": [
               {
                 "key": "Content-Type",
@@ -1554,7 +1296,7 @@
           "name": "04 Attach render variant to issuer design",
           "request": {
             "method": "PUT",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/issuers/{{issuerDesignId}}",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/issuers/{{issuerDesignId}}",
             "header": [
               {
                 "key": "Content-Type",
@@ -1598,7 +1340,7 @@
           "name": "01 Create EuPid SD-JWT design",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials",
             "header": [
               {
                 "key": "Content-Type",
@@ -1616,7 +1358,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"EuPid\",\n      \"vctHostingMode\": \"HOSTED\",\n      \"credentialConfigurationId\": \"EuPid\"\n    }\n  ],\n  \"alias\": \"eu-pid\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
+              "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"EuPid\",\n      \"vctHostingMode\": \"HOSTED\",\n      \"credentialConfigurationId\": \"EuPid\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\",\n      \"issuerId\": \"{{issuerId}}\"\n    }\n  ],\n  \"alias\": \"eu-pid\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"SD_JWT_VC\",\n    \"vct\": \"EuPid\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
             },
             "description": "EuPid credential design with English and Dutch displays, per-locale claim labels, and the en/nl render variants attached (both at the design level and as per-display preferred variants). family_name, given_name, and issuing_country are always selectively disclosable."
           },
@@ -1638,7 +1380,7 @@
           "name": "02 Upload EuPid logo asset",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{eupidDesignId}}/assets/en/LOGO",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{eupidDesignId}}/assets/en/LOGO",
             "header": [
               {
                 "key": "Content-Type",
@@ -1683,7 +1425,7 @@
           "name": "03 Create EuPid render variant (en)",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/render/variants",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/render/variants",
             "header": [
               {
                 "key": "Content-Type",
@@ -1723,7 +1465,7 @@
           "name": "04 Create EuPid render variant (nl)",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/render/variants",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/render/variants",
             "header": [
               {
                 "key": "Content-Type",
@@ -1763,7 +1505,7 @@
           "name": "05 Attach render variants to EuPid design",
           "request": {
             "method": "PUT",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{eupidDesignId}}",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{eupidDesignId}}",
             "header": [
               {
                 "key": "Content-Type",
@@ -1801,7 +1543,7 @@
           "name": "06 Create Mdl mdoc design",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials",
             "header": [
               {
                 "key": "Content-Type",
@@ -1819,7 +1561,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bindings\": [\n    {\n      \"docType\": \"org.iso.18013.5.1.mDL\",\n      \"credentialConfigurationId\": \"Mdl\"\n    }\n  ],\n  \"alias\": \"mdl\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"Mobile Driving Licence\",\n      \"description\": \"ISO 18013-5 mobile driving licence\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"Mobiel Rijbewijs\",\n      \"description\": \"ISO 18013-5 mobiel rijbewijs\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issue_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issue date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Datum van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"expiry_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Expiry date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Vervaldatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 8\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"portrait\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Portrait\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Portret\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 9\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"driving_privileges\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Driving privileges\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Rijbevoegdheden\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 10\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"un_distinguishing_sign\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"UN distinguishing sign\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"VN-onderscheidingsteken\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 11\n    }\n  ]\n}"
+              "raw": "{\n  \"bindings\": [\n    {\n      \"docType\": \"org.iso.18013.5.1.mDL\",\n      \"credentialConfigurationId\": \"Mdl\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\",\n      \"issuerId\": \"{{issuerId}}\"\n    }\n  ],\n  \"alias\": \"mdl\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"MSO_MDOC\",\n    \"docType\": \"org.iso.18013.5.1.mDL\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"Mobile Driving Licence\",\n      \"description\": \"ISO 18013-5 mobile driving licence\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"Mobiel Rijbewijs\",\n      \"description\": \"ISO 18013-5 mobiel rijbewijs\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issue_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issue date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Datum van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"expiry_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Expiry date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Vervaldatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 8\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"portrait\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Portrait\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Portret\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 9\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"driving_privileges\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Driving privileges\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Rijbevoegdheden\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 10\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"un_distinguishing_sign\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"UN distinguishing sign\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"VN-onderscheidingsteken\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 11\n    }\n  ]\n}"
             },
             "description": "Mdl credential design with English and Dutch displays, per-locale claim labels under the org.iso.18013.5.1 namespace, and the en render variant attached."
           },
@@ -1841,7 +1583,7 @@
           "name": "07 Upload Mdl logo asset",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{mdlDesignId}}/assets/en/LOGO",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{mdlDesignId}}/assets/en/LOGO",
             "header": [
               {
                 "key": "Content-Type",
@@ -1886,7 +1628,7 @@
           "name": "08 Create Mdl render variant (en)",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/render/variants",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/render/variants",
             "header": [
               {
                 "key": "Content-Type",
@@ -1926,7 +1668,7 @@
           "name": "09 Attach render variant to Mdl design",
           "request": {
             "method": "PUT",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials/{{mdlDesignId}}",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{mdlDesignId}}",
             "header": [
               {
                 "key": "Content-Type",
@@ -1964,7 +1706,7 @@
           "name": "10 List credential designs",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/credential-design/v1/designs/credentials",
+            "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials",
             "description": "Lists the tenant's credential designs.",
             "header": [
               {
@@ -2000,7 +1742,7 @@
           "name": "01 Create token status list",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists",
+            "url": "{{tenantStatusListApiBaseUrl}}/statuslists",
             "header": [
               {
                 "key": "Content-Type",
@@ -2020,7 +1762,7 @@
               "mode": "raw",
               "raw": "{\n  \"correlationId\": \"eupid-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{tenantGatewayUrl}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/eupid-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1,\n  \"signingKeyAlias\": \"{{statusListSigningKeyAlias}}\"\n}"
             },
-            "description": "Creates the IETF Token Status List the EuPid configuration references, signed with the tenant's credential signing key via the overridable `statusListSigningKeyAlias` collection variable (defaults to the SD-JWT/OID4VCI assertion key `<tenantSlug>-assertion`, so the status list is signed with the same key as the credentials referencing it). The deployment configuration declares the list under the statuslists namespace; this call materializes it. The correlation id is the stable business identifier; the signed token is re-issued whenever entries change, and indexes are allocated randomly at issuance time, never sequentially. Issuance refuses to mint when a configured list cannot be resolved."
+            "description": "Creates the IETF Token Status List the EuPid configuration references, signed with the tenant's credential signing key via the derived `statusListSigningKeyAlias` variable. By default the collection refreshes that variable to `issuer-signing-<tenantSlug>` for the active tenant; set `statusListSigningKeyAliasOverride` only when you need an explicit custom alias. The deployment configuration declares the list under the statuslists namespace; this call materializes it. The correlation id is the stable business identifier; the signed token is re-issued whenever entries change, and indexes are allocated randomly at issuance time, never sequentially. Issuance refuses to mint when a configured list cannot be resolved."
           },
           "event": [
             {
@@ -2032,7 +1774,34 @@
                   "const j = pm.response.json();",
                   "if (j.id) pm.collectionVariables.set('statusListId', j.id);",
                   "if (j.statusListUri) pm.collectionVariables.set('statusListUri', j.statusListUri);",
-                  "if (!pm.collectionVariables.get('statusListUri')) pm.collectionVariables.set('statusListUri', 'https://' + pm.variables.get('tenantHost') + '/public/statuslists/eupid-revocation');"
+                  "if (!pm.collectionVariables.get('statusListUri')) pm.collectionVariables.set('statusListUri', 'https://' + pm.variables.get('tenantHost') + '/public/statuslists/eupid-revocation');",
+                  "const decodeJwtPart = (jwt, index) => {",
+                  "  const compact = String(jwt || '').split('~')[0];",
+                  "  const segment = compact.split('.')[index];",
+                  "  pm.expect(segment, 'jwt segment ' + index).to.be.a('string').and.not.empty;",
+                  "  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "pm.test('status list response matches EuPid revocation contract', () => {",
+                  "  pm.expect(j.correlationId).to.eql('eupid-revocation');",
+                  "  pm.expect(j.spec).to.eql('token_status_list');",
+                  "  pm.expect(j.proofFormat).to.eql('jwt');",
+                  "  pm.expect(j.bitsPerStatus).to.eql(1);",
+                  "  pm.expect(j.statusListUri).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation');",
+                  "  pm.expect(j.contentType).to.eql('application/statuslist+jwt');",
+                  "});",
+                  "if (j.signedToken) {",
+                  "  const header = decodeJwtPart(j.signedToken, 0);",
+                  "  const payload = decodeJwtPart(j.signedToken, 1);",
+                  "  pm.test('status list signed token claims match hosted list', () => {",
+                  "    pm.expect(header.typ).to.eql('statuslist+jwt');",
+                  "    pm.expect(payload.iss).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "    pm.expect(payload.sub).to.eql(pm.collectionVariables.get('statusListUri'));",
+                  "    pm.expect(payload.status_list && payload.status_list.bits).to.eql(1);",
+                  "    pm.expect(payload.status_list && payload.status_list.lst).to.be.a('string').and.not.empty;",
+                  "  });",
+                  "}"
                 ]
               }
             }
@@ -2042,7 +1811,7 @@
           "name": "02 List status lists",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists",
+            "url": "{{tenantStatusListApiBaseUrl}}/statuslists",
             "description": "Lists status lists for the tenant after materializing the EuPid revocation list.",
             "header": [
               {
@@ -2073,7 +1842,7 @@
           "name": "03 Get token status list",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists/{{statusListId}}",
+            "url": "{{tenantStatusListApiBaseUrl}}/statuslists/{{statusListId}}",
             "description": "Reads back the created status list through the management API before checking the hosted token.",
             "header": [
               {
@@ -2119,7 +1888,26 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status list hosted', () => pm.response.to.have.status(200));"
+                  "pm.test('status list hosted', () => pm.response.to.have.status(200));",
+                  "const decodeJwtPart = (jwt, index) => {",
+                  "  const compact = String(jwt || '').split('~')[0];",
+                  "  const segment = compact.split('.')[index];",
+                  "  pm.expect(segment, 'jwt segment ' + index).to.be.a('string').and.not.empty;",
+                  "  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "const hostedStatusToken = pm.response.text().trim();",
+                  "const hostedHeader = decodeJwtPart(hostedStatusToken, 0);",
+                  "const hostedPayload = decodeJwtPart(hostedStatusToken, 1);",
+                  "pm.test('hosted status list has statuslist JWT media type and claims', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type') || '', 'content type').to.include('application/statuslist+jwt');",
+                  "  pm.expect(hostedHeader.typ).to.eql('statuslist+jwt');",
+                  "  pm.expect(hostedPayload.iss).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "  pm.expect(hostedPayload.sub).to.eql(pm.collectionVariables.get('statusListUri'));",
+                  "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.bits).to.eql(1);",
+                  "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.lst).to.be.a('string').and.not.empty;",
+                  "});"
                 ]
               }
             }
@@ -2129,7 +1917,7 @@
           "name": "05 Revoke a status entry",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/status",
+            "url": "{{tenantStatusListApiBaseUrl}}/statuslists/{{statusListId}}/status",
             "header": [
               {
                 "key": "Content-Type",
@@ -2167,7 +1955,7 @@
           "name": "06 Reactivate the status entry",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/status",
+            "url": "{{tenantStatusListApiBaseUrl}}/statuslists/{{statusListId}}/status",
             "header": [
               {
                 "key": "Content-Type",
@@ -2205,7 +1993,7 @@
           "name": "07 Read status entry",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/statuslist/v1/statuslists/{{statusListId}}/entries/42",
+            "url": "{{tenantStatusListApiBaseUrl}}/statuslists/{{statusListId}}/entries/42",
             "description": "Reads the status-list entry that was revoked and reactivated by index. This verifies the non-leaking upsert/read path for allocated and previously unallocated indexes.",
             "header": [
               {
@@ -2226,7 +2014,13 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status entry returned', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.text(), 'entry index').to.include('42');"
+                  "const entry = pm.response.json();",
+                  "pm.test('reactivated status entry is readable without allocation leak', () => {",
+                  "  pm.expect(entry.statusListId).to.eql(pm.collectionVariables.get('statusListId'));",
+                  "  pm.expect(entry.statusListIndex).to.eql(42);",
+                  "  pm.expect(entry.value).to.eql(0);",
+                  "  pm.expect(entry.purpose).to.eql('revocation');",
+                  "});"
                 ]
               }
             }
@@ -2436,7 +2230,7 @@
           "name": "01 Generate wallet holder key",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/kms/v1/keys",
+            "url": "{{tenantKmsApiBaseUrl}}/keys",
             "header": [
               {
                 "key": "Content-Type",
@@ -2479,7 +2273,7 @@
           "name": "02 Create EuPid offer",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/credential/offers",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers",
             "header": [
               {
                 "key": "Content-Type",
@@ -2556,6 +2350,10 @@
                   "  return url;",
                   "};",
                   "const j = pm.response.json();",
+                  "pm.test('resolved EuPid offer carries exact credential configuration id', () => {",
+                  "  pm.expect(j.credential_issuer).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "  pm.expect(j.credential_configuration_ids).to.eql(['EuPid']);",
+                  "});",
                   "const grant = j.grants && j.grants['urn:ietf:params:oauth:grant-type:pre-authorized_code'];",
                   "if (grant && grant['pre-authorized_code']) pm.collectionVariables.set('preAuthCode', grant['pre-authorized_code']);",
                   "// OID4VCI 1.0: for a path-bearing issuer identifier the metadata URL inserts",
@@ -2650,6 +2448,12 @@
                 "exec": [
                   "pm.test('token issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
+                  "pm.test('EuPid token response is bound to requested credential configuration', () => {",
+                  "  const detail = (j.authorization_details || []).find((entry) => entry.type === 'openid_credential');",
+                  "  pm.expect(detail, 'openid credential authorization detail').to.be.an('object');",
+                  "  pm.expect(detail.credential_configuration_id).to.eql('EuPid');",
+                  "  pm.expect(detail.credential_identifiers || []).to.have.length.greaterThan(0);",
+                  "});",
                   "if (j.access_token) pm.collectionVariables.set('walletAccessToken', j.access_token);",
                   "pm.collectionVariables.set('cNonce', j.c_nonce || '');"
                 ]
@@ -2696,7 +2500,7 @@
                   "  const signingInput = b64u(header) + '.' + b64u(payload);",
                   "  const inputB64 = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(signingInput));",
                   "  pm.sendRequest({",
-                  "    url: pm.variables.get('tenantGatewayUrl') + '/api/kms/v1/signatures/raw/create',",
+                  "    url: pm.variables.get('tenantKmsApiBaseUrl') + '/signatures/raw/create',",
                   "    method: 'POST',",
                   "    header: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (pm.collectionVariables.get('tenantToken') || pm.variables.get('tenantToken')) },",
                   "    body: { mode: 'raw', raw: JSON.stringify({ keyInfo: { providerId: pm.variables.get('kmsProviderId'), alias: 'wallet-holder' }, input: inputB64 }) }",
@@ -2732,7 +2536,21 @@
                   "pm.test('eupid credential issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
                   "const cred = (j.credentials && j.credentials[0] && j.credentials[0].credential) || j.credential;",
-                  "if (cred) pm.collectionVariables.set('eupidCredential', cred);"
+                  "if (cred) pm.collectionVariables.set('eupidCredential', cred);",
+                  "const decodeJwtPart = (jwt, index) => {",
+                  "  const compact = String(jwt || '').split('~')[0];",
+                  "  const segment = compact.split('.')[index];",
+                  "  pm.expect(segment, 'jwt segment ' + index).to.be.a('string').and.not.empty;",
+                  "  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "const eupidPayload = decodeJwtPart(cred, 1);",
+                  "pm.test('EuPid credential carries expected VCT and status-list reference', () => {",
+                  "  pm.expect(eupidPayload.vct).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid');",
+                  "  pm.expect(eupidPayload.status && eupidPayload.status.status_list && eupidPayload.status.status_list.uri).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation');",
+                  "  pm.expect(eupidPayload.status.status_list.idx).to.be.a('number');",
+                  "});"
                 ]
               }
             }
@@ -2742,7 +2560,7 @@
           "name": "07 Check EuPid offer status",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/credential/offers/e2e-eupid-001",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers/e2e-eupid-001",
             "description": "Backend session status after issuance: the lifecycle ends in credential_issued.",
             "header": [
               {
@@ -2772,7 +2590,7 @@
           "name": "08 Create Mdl offer",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/credential/offers",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers",
             "header": [
               {
                 "key": "Content-Type",
@@ -2840,6 +2658,10 @@
                 "exec": [
                   "pm.test('mdl offer resolved', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
+                  "pm.test('resolved mDL offer carries exact credential configuration id', () => {",
+                  "  pm.expect(j.credential_issuer).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "  pm.expect(j.credential_configuration_ids).to.eql(['Mdl']);",
+                  "});",
                   "const grant = j.grants && j.grants['urn:ietf:params:oauth:grant-type:pre-authorized_code'];",
                   "if (grant && grant['pre-authorized_code']) pm.collectionVariables.set('mdlPreAuthCode', grant['pre-authorized_code']);"
                 ]
@@ -2886,6 +2708,12 @@
                 "exec": [
                   "pm.test('mdl token issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
+                  "pm.test('mDL token response is bound to requested credential configuration', () => {",
+                  "  const detail = (j.authorization_details || []).find((entry) => entry.type === 'openid_credential');",
+                  "  pm.expect(detail, 'openid credential authorization detail').to.be.an('object');",
+                  "  pm.expect(detail.credential_configuration_id).to.eql('Mdl');",
+                  "  pm.expect(detail.credential_identifiers || []).to.have.length.greaterThan(0);",
+                  "});",
                   "if (j.access_token) pm.collectionVariables.set('walletAccessToken', j.access_token);",
                   "pm.collectionVariables.set('cNonce', j.c_nonce || '');"
                 ]
@@ -2932,7 +2760,7 @@
                   "  const signingInput = b64u(header) + '.' + b64u(payload);",
                   "  const inputB64 = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(signingInput));",
                   "  pm.sendRequest({",
-                  "    url: pm.variables.get('tenantGatewayUrl') + '/api/kms/v1/signatures/raw/create',",
+                  "    url: pm.variables.get('tenantKmsApiBaseUrl') + '/signatures/raw/create',",
                   "    method: 'POST',",
                   "    header: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (pm.collectionVariables.get('tenantToken') || pm.variables.get('tenantToken')) },",
                   "    body: { mode: 'raw', raw: JSON.stringify({ keyInfo: { providerId: pm.variables.get('kmsProviderId'), alias: 'wallet-holder' }, input: inputB64 }) }",
@@ -2968,6 +2796,7 @@
                   "pm.test('mdl credential issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
                   "const cred = (j.credentials && j.credentials[0] && j.credentials[0].credential) || j.credential;",
+                  "pm.test('mDL credential response contains an opaque mdoc payload', () => pm.expect(cred).to.be.a('string').and.not.empty);",
                   "if (cred) pm.collectionVariables.set('mdlCredential', cred);"
                 ]
               }
@@ -2984,7 +2813,7 @@
           "name": "01 Initialize pipeline session",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions",
             "header": [
               {
                 "key": "Content-Type",
@@ -3022,7 +2851,7 @@
           "name": "02 Contribute attributes",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/e2e-pipeline-001/attributes",
             "header": [
               {
                 "key": "Content-Type",
@@ -3060,7 +2889,7 @@
           "name": "03 Read accumulated attributes",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/e2e-pipeline-001/attributes",
             "description": "Reads the attributes accumulated so far across all sources.",
             "header": [
               {
@@ -3090,7 +2919,7 @@
           "name": "04 Evaluate completeness",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/completeness",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/e2e-pipeline-001/completeness",
             "description": "Evaluates whether the accumulated attributes satisfy each credential binding's mandatory claims, and whether deferral or approval is recommended.",
             "header": [
               {
@@ -3120,7 +2949,7 @@
           "name": "05 Approve issuance",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/approve",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/e2e-pipeline-001/approve",
             "header": [
               {
                 "key": "Content-Type",
@@ -3164,7 +2993,7 @@
           "name": "01 Create EuPid query",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries",
+            "url": "{{tenantDcqlApiBaseUrl}}/queries",
             "header": [
               {
                 "key": "Content-Type",
@@ -3192,7 +3021,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('eupid query stored', () => pm.expect([200, 201]).to.include(pm.response.code));"
+                  "pm.test('eupid query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const q = pm.response.json();",
+                  "pm.test('EuPid DCQL query content is versioned and enabled', () => {",
+                  "  pm.expect(q.queryId).to.eql('eupid-sdjwt');",
+                  "  pm.expect(q.enabled).to.eql(true);",
+                  "  pm.expect(q.currentVersion).to.eql(1);",
+                  "  const credential = q.dcqlQuery.credentials[0];",
+                  "  pm.expect(credential.format).to.eql('dc+sd-jwt');",
+                  "  pm.expect(credential.meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
+                  "});"
                 ]
               }
             }
@@ -3202,7 +3040,7 @@
           "name": "02 Create Mdl query",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries",
+            "url": "{{tenantDcqlApiBaseUrl}}/queries",
             "header": [
               {
                 "key": "Content-Type",
@@ -3230,7 +3068,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('mdl query stored', () => pm.expect([200, 201]).to.include(pm.response.code));"
+                  "pm.test('mdl query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const q = pm.response.json();",
+                  "pm.test('mDL DCQL query content is versioned and enabled', () => {",
+                  "  pm.expect(q.queryId).to.eql('mdl-mdoc');",
+                  "  pm.expect(q.enabled).to.eql(true);",
+                  "  pm.expect(q.currentVersion).to.eql(1);",
+                  "  const credential = q.dcqlQuery.credentials[0];",
+                  "  pm.expect(credential.format).to.eql('mso_mdoc');",
+                  "  pm.expect(credential.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
+                  "});"
                 ]
               }
             }
@@ -3240,7 +3087,7 @@
           "name": "03 Create combined query",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries",
+            "url": "{{tenantDcqlApiBaseUrl}}/queries",
             "header": [
               {
                 "key": "Content-Type",
@@ -3268,7 +3115,18 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('combined query stored', () => pm.expect([200, 201]).to.include(pm.response.code));"
+                  "pm.test('combined query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const q = pm.response.json();",
+                  "pm.test('combined DCQL query contains EuPid and mDL credentials', () => {",
+                  "  pm.expect(q.queryId).to.eql('eupid-and-mdl');",
+                  "  pm.expect(q.enabled).to.eql(true);",
+                  "  pm.expect(q.currentVersion).to.eql(1);",
+                  "  const byId = Object.fromEntries(q.dcqlQuery.credentials.map((credential) => [credential.id, credential]));",
+                  "  pm.expect(byId.eupid.format).to.eql('dc+sd-jwt');",
+                  "  pm.expect(byId.eupid.meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
+                  "  pm.expect(byId.mdl.format).to.eql('mso_mdoc');",
+                  "  pm.expect(byId.mdl.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
+                  "});"
                 ]
               }
             }
@@ -3278,7 +3136,7 @@
           "name": "04 List queries",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries",
+            "url": "{{tenantDcqlApiBaseUrl}}/queries",
             "description": "Lists the tenant's stored DCQL query configurations.",
             "header": [
               {
@@ -3298,7 +3156,20 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('queries listed', () => pm.response.to.have.status(200));"
+                  "pm.test('queries listed', () => pm.response.to.have.status(200));",
+                  "const queries = pm.response.json();",
+                  "const byId = Object.fromEntries(queries.map((query) => [query.queryId, query]));",
+                  "pm.test('query list includes exact enabled EuPid, mDL, and combined definitions', () => {",
+                  "  ['eupid-sdjwt', 'mdl-mdoc', 'eupid-and-mdl'].forEach((id) => pm.expect(byId[id], id).to.be.an('object'));",
+                  "  pm.expect(byId['eupid-sdjwt'].enabled).to.eql(true);",
+                  "  pm.expect(byId['eupid-sdjwt'].dcqlQuery.credentials[0].format).to.eql('dc+sd-jwt');",
+                  "  pm.expect(byId['eupid-sdjwt'].dcqlQuery.credentials[0].meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
+                  "  pm.expect(byId['mdl-mdoc'].enabled).to.eql(true);",
+                  "  pm.expect(byId['mdl-mdoc'].dcqlQuery.credentials[0].format).to.eql('mso_mdoc');",
+                  "  pm.expect(byId['mdl-mdoc'].dcqlQuery.credentials[0].meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
+                  "  pm.expect(byId['eupid-and-mdl'].enabled).to.eql(true);",
+                  "  pm.expect(byId['eupid-and-mdl'].dcqlQuery.credentials.map((credential) => credential.id).sort()).to.eql(['eupid', 'mdl']);",
+                  "});"
                 ]
               }
             }
@@ -3308,7 +3179,7 @@
           "name": "05 List combined query versions",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/api/dcql/v1/queries/eupid-and-mdl/versions",
+            "url": "{{tenantDcqlApiBaseUrl}}/queries/eupid-and-mdl/versions",
             "description": "Lists version history for the combined DCQL query. This exercises the versioned DCQL store packaged in the verifier image.",
             "header": [
               {
@@ -3330,23 +3201,21 @@
                 "exec": [
                   "pm.test('query versions listed', () => pm.response.to.have.status(200));",
                   "const versions = pm.response.json();",
-                  "pm.test('query version history is not empty', () => pm.expect(Array.isArray(versions) ? versions.length : 0).to.be.greaterThan(0));"
+                  "pm.test('combined query version history starts at version 1', () => {",
+                  "  pm.expect(Array.isArray(versions) ? versions.length : 0).to.be.greaterThan(0);",
+                  "  pm.expect(versions[0].version).to.eql(1);",
+                  "});"
                 ]
               }
             }
           ]
-        }
-      ]
-    },
-    {
-      "name": "14 Verification",
-      "description": "Creates, polls, and cancels a verification session for the stored combined DCQL query. The collection covers verifier session lifecycle without simulating a full wallet presentation.",
-      "item": [
+        },
         {
-          "name": "01 Create verification request",
+          "name": "06 Bind combined query to verifier",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/oid4vp/backend/auth/requests",
+            "url": "{{tenantDcqlApiBaseUrl}}/verifiers/{{verifierId}}/bindings",
+            "description": "Binds the stored combined DCQL query to the tenant verifier instance. Verification requests below pass verifier_id so the verifier resolves the query through this instance binding.",
             "header": [
               {
                 "key": "Content-Type",
@@ -3364,7 +3233,133 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"query_id\": \"eupid-and-mdl\",\n  \"client_id\": \"redirect_uri:{{tenantGatewayUrl}}/callback\",\n  \"correlation_id\": \"e2e-verify-001\"\n}"
+              "raw": "{\n  \"queryId\": \"eupid-and-mdl\",\n  \"version\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('combined query bound to verifier', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const binding = pm.response.json();",
+                  "if (binding.id) pm.collectionVariables.set('combinedDcqlBindingId', binding.id);",
+                  "pm.test('combined query binding pins version 1 on the tenant verifier', () => {",
+                  "  pm.expect(binding.verifierId).to.eql(pm.variables.get('verifierId'));",
+                  "  pm.expect(binding.queryId).to.eql('eupid-and-mdl');",
+                  "  pm.expect(binding.pinnedVersion).to.eql(1);",
+                  "  pm.expect(binding.enabled).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 List verifier DCQL bindings",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantDcqlApiBaseUrl}}/verifiers/{{verifierId}}/bindings",
+            "description": "Lists the verifier instance bindings and proves the combined query is available to the verifier before verification starts.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('verifier bindings listed', () => pm.response.to.have.status(200));",
+                  "const bindings = pm.response.json();",
+                  "const binding = bindings.find((b) => b.queryId === 'eupid-and-mdl');",
+                  "pm.test('verifier binding list includes the combined query', () => {",
+                  "  pm.expect(binding, 'combined binding').to.be.an('object');",
+                  "  pm.expect(binding.verifierId).to.eql(pm.variables.get('verifierId'));",
+                  "  pm.expect(binding.pinnedVersion).to.eql(1);",
+                  "  pm.expect(binding.enabled).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 List combined query verifier bindings",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantDcqlApiBaseUrl}}/queries/eupid-and-mdl/verifiers",
+            "description": "Reverse-lists verifier bindings for the combined query, proving the query-to-verifier link is visible from the query resource as well.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('combined query verifier bindings listed', () => pm.response.to.have.status(200));",
+                  "const bindings = pm.response.json();",
+                  "const binding = bindings.find((b) => b.verifierId === pm.variables.get('verifierId') && b.queryId === 'eupid-and-mdl');",
+                  "pm.test('combined query is bound to the tenant verifier', () => {",
+                  "  pm.expect(binding, 'combined query verifier binding').to.be.an('object');",
+                  "  pm.expect(binding.pinnedVersion).to.eql(1);",
+                  "  pm.expect(binding.enabled).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "14 Verification",
+      "description": "Creates, polls, and cancels a verification session for the stored combined DCQL query. The collection covers verifier session lifecycle without simulating a full wallet presentation.",
+      "item": [
+        {
+          "name": "01 Create verification request",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantVerifierBackendBaseUrl}}/auth/requests",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query_id\": \"eupid-and-mdl\",\n  \"verifier_id\": \"{{verifierId}}\",\n  \"client_id\": \"redirect_uri:{{tenantGatewayUrl}}/callback\",\n  \"correlation_id\": \"e2e-verify-001\"\n}"
             },
             "description": "Creates a verifier session for the combined DCQL query. The response includes the authorization request URI a wallet would open."
           },
@@ -3387,7 +3382,7 @@
           "name": "02 Poll verification status",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/oid4vp/backend/auth/requests/{{verifyCorrelationId}}",
+            "url": "{{tenantVerifierBackendBaseUrl}}/auth/requests/{{verifyCorrelationId}}",
             "description": "Polls the session. With no wallet attached, the session stays in authorization_request_created; after a wallet presents, it ends in authorization_response_verified with the disclosed claims.",
             "header": [
               {
@@ -3417,7 +3412,7 @@
           "name": "03 Cancel verification session",
           "request": {
             "method": "DELETE",
-            "url": "{{tenantGatewayUrl}}/oid4vp/backend/auth/requests/{{verifyCorrelationId}}",
+            "url": "{{tenantVerifierBackendBaseUrl}}/auth/requests/{{verifyCorrelationId}}",
             "description": "Cleans up the verification session.",
             "header": [
               {
@@ -3453,7 +3448,7 @@
           "name": "01 Create offer with authorization code grant",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/backend/credential/offers",
+            "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers",
             "header": [
               {
                 "key": "Content-Type",
@@ -3491,7 +3486,7 @@
           "name": "02 Fetch authorization server metadata",
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/.well-known/oauth-authorization-server",
+            "url": "{{tenantAuthorizationServerOrigin}}/.well-known/oauth-authorization-server",
             "description": "Authorization server metadata the wallet uses to drive the flow: authorization endpoint, token endpoint, supported grants, and PKCE methods.",
             "header": [
               {
@@ -3528,6 +3523,10 @@
           "    pm.collectionVariables.set(key, normalized);",
           "    pm.environment.set(key, normalized);",
           "  }",
+          "};",
+          "const setRuntimeDefault = (key, value) => {",
+          "  const runtimeResolved = pm.collectionVariables.get('tenantRuntimeServicesResolved') === 'true';",
+          "  if (!runtimeResolved || !String(pm.collectionVariables.get(key) || '').trim()) setPublic(key, value);",
           "};",
           "const didWebDocumentUrl = (did, gatewayUrl) => {",
           "  const prefix = 'did:web:';",
@@ -3572,8 +3571,11 @@
           "setPublic('tenantSlug', tenantSlug);",
           "setPublic('tenantName', tenantName);",
           "setPublic('kmsProviderId', tenantSlug);",
+          "const statusListSigningKeyAliasOverride = String(pm.environment.get('statusListSigningKeyAliasOverride') || pm.collectionVariables.get('statusListSigningKeyAliasOverride') || '').trim();",
           "const statusListSigningKeyAlias = String(pm.environment.get('statusListSigningKeyAlias') || pm.collectionVariables.get('statusListSigningKeyAlias') || '').trim();",
-          "if (!statusListSigningKeyAlias || statusListSigningKeyAlias.includes('{{tenantSlug}}')) setPublic('statusListSigningKeyAlias', 'issuer-signing-' + tenantSlug);",
+          "const defaultStatusListSigningKeyAlias = 'issuer-signing-' + tenantSlug;",
+          "const usesManagedStatusListSigningAlias = !statusListSigningKeyAlias || statusListSigningKeyAlias.includes('{{tenantSlug}}') || /^issuer-signing-[A-Za-z0-9._-]+$/.test(statusListSigningKeyAlias);",
+          "setPublic('statusListSigningKeyAlias', statusListSigningKeyAliasOverride || (usesManagedStatusListSigningAlias ? defaultStatusListSigningKeyAlias : statusListSigningKeyAlias));",
           "if (baseDomain) {",
           "  const tenantHost = tenantSlug + '.' + baseDomain;",
           "  const derivedTenantGatewayUrl = publicScheme + '://' + tenantHost + publicPort;",
@@ -3586,6 +3588,16 @@
           "}",
           "if (tenantGatewayUrl) {",
           "  setPublic('tenantGatewayUrl', tenantGatewayUrl);",
+          "  setPublic('tenantIssuerOrigin', tenantGatewayUrl);",
+          "  setPublic('tenantVerifierOrigin', tenantGatewayUrl);",
+          "  setPublic('tenantAuthorizationServerOrigin', tenantGatewayUrl);",
+          "  setRuntimeDefault('tenantKmsApiBaseUrl', tenantGatewayUrl + '/api/kms/v1');",
+          "  setRuntimeDefault('tenantDidApiBaseUrl', tenantGatewayUrl + '/api/did/v1');",
+          "  setRuntimeDefault('tenantCredentialDesignApiBaseUrl', tenantGatewayUrl + '/api/credential-design/v1');",
+          "  setRuntimeDefault('tenantStatusListApiBaseUrl', tenantGatewayUrl + '/api/statuslist/v1');",
+          "  setRuntimeDefault('tenantIssuerApiBaseUrl', tenantGatewayUrl + '/api/oid4vci/v1');",
+          "  setRuntimeDefault('tenantDcqlApiBaseUrl', tenantGatewayUrl + '/api/dcql/v1');",
+          "  setRuntimeDefault('tenantVerifierBackendBaseUrl', tenantGatewayUrl + '/oid4vp/backend');",
           "  const hostMatch = tenantGatewayUrl.match(/^[a-z][a-z0-9+.-]*:\\/\\/([^/?#]+)/i);",
           "  if (hostMatch && !pm.collectionVariables.get('tenantHost')) setPublic('tenantHost', hostMatch[1].replace(/:\\d+$/, ''));",
           "}",

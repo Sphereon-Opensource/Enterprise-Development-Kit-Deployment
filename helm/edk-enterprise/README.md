@@ -52,7 +52,7 @@ Kubernetes at public Docker Hub, not the EDK enterprise registry.
 | `database.tenant.existingSecret` | `edk-tenant-postgres` | Secret with credentials for the tenant workload database. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
-| `grpc.enabled` | `true` | Renders inbound gRPC only for platform and tenant-KMS, and renders gRPC peer endpoints for routed calls to those receivers. |
+| `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, and renders gRPC peer endpoints for routed calls to those receivers. |
 | `config.providers.platformConfigRemote.enabled` | `true` | Enables platform-owned remote config reads for every satellite/workload service. |
 | `config.providers.tenantConfigDb.enabled` | `false` | Disables direct tenant-config DB reads on satellites so platform remains the config authority. |
 | `license.installationId` | `""` | Optional explicit runtime pin to a known installation id. Leave empty for first-run setup; the protected bundle supplies the installation id. If set, it must match the installed license claims. |
@@ -64,7 +64,7 @@ Kubernetes at public Docker Hub, not the EDK enterprise registry.
 
 ## Service Values
 
-Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `issuer`, `verifier`, or `admin-console`.
+Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `wallet-unit`, `wallet-interaction`, `issuer`, `verifier`, or `admin-console`.
 
 | Value | Purpose |
 | --- | --- |
@@ -85,14 +85,54 @@ Default backing components:
 | `tenant-kms` | `true` | `enterprise-tenant-kms` | Tenant key material and KMS command handling |
 | `did` | `true` | `enterprise-did` | DID resolver and `did:web` hosting behind the tenant gateway |
 | `tenant-as` | `true` | `enterprise-tenant-as` | Tenant OAuth2 authorization server behind the tenant gateway |
+| `wallet-unit` | `true` | `enterprise-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
+| `wallet-interaction` | `true` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
 | `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
 | `admin-console` | `true` | `admin-console` | Operator UI behind `platform.<baseDomain>/admin-console` |
 
-Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS, issuer,
-and verifier remain backing workloads behind `platform.<baseDomain>` and
-`<tenant>.<baseDomain>` host/path routes. Runtime probes are Kubernetes
-orchestration concerns and must not be published as customer routes.
+Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
+wallet-unit, wallet-interaction, issuer, and verifier remain backing workloads
+behind `platform.<baseDomain>` and `<tenant>.<baseDomain>` host/path routes.
+Runtime probes are Kubernetes orchestration concerns and must not be published
+as customer routes.
+
+## East-West Service Identity
+
+The chart renders internal service identity from one `serviceIdentity` contract:
+
+| Value | Purpose |
+| --- | --- |
+| `serviceIdentity.internalClientExistingSecret` | Secret containing the shared confidential-client secret used by internal service clients. |
+| `serviceIdentity.clientIds.<service>` | OAuth client id each satellite presents to the platform AS for client-credentials service tokens. |
+| `serviceIdentity.serviceIds.<service>` | Workload id the caller asserts as `X-Service-Id` on internal command transport. |
+| `serviceIdentity.audiences.<service>` | JWT audience expected by the receiving service. |
+
+These values drive platform internal OAuth clients, platform and receiver
+header trust bindings, satellite service-token env, receiver audience env,
+admin-console token-exchange audiences, and STS allowed audiences. Do not change
+one without changing the others.
+
+Internal identity headers are not credentials. A receiver may honor
+`X-Tenant-Id` or `X-Principal-Id` only after a bearer JWT validates, the token is
+a workload token, its client id or subject is bound to the asserted
+`X-Service-Id`, the token audience matches the receiver, and the receiver trust
+policy permits that override.
+
+DID, tenant-AS, issuer, and verifier use this contract for routed KMS commands.
+Issuer and verifier use it for wallet-interaction calls, and wallet-interaction
+uses it for wallet-unit calls. Their inbound bearer is addressed to the
+route-only service, so the route asks the platform STS for a fresh workload JWT
+addressed to the peer receiver audience instead of forwarding that inbound
+bearer. During tenant-AS signing-key provisioning, the inbound platform JWT is
+addressed to the tenant-AS provisioning endpoint and is terminated there; the
+AS-to-KMS hop uses the `tenant-as-service` confidential client to mint the
+tenant-KMS audience token.
+
+`platform.externalBaseUrl` is the canonical platform public origin and token
+issuer. The chart renders platform `EXTERNAL_BASE_URL` and
+`EDK_PLATFORM_PUBLIC_URL` from that value and fails rendering if
+`platform.bootstrap.issuer` differs.
 
 ## Database Boundary
 
@@ -139,15 +179,22 @@ The `admin-console` service is a Next.js standalone web UI served under the
 `/admin-console` basePath (the root `/` returns 404). It is a single
 host-agnostic build: the OIDC authorization-server origin resolves from the
 request host behind the gateway, while platform-admin, platform-config, tenant-KMS,
-and DID API calls default to `/admin-console/api/*`. The chart injects
-internal platform, tenant KMS, and DID upstreams for that server-side proxy. It is
+DID, issuer-owned, and verifier-owned browser API calls default to
+`/admin-console/api/*`. The chart injects internal platform, tenant KMS, DID,
+issuer, and verifier upstreams for that server-side route proxy. It is
 fronted on the operator/platform host
 (`platform.<baseDomain>/admin-console`) alongside the platform authorization
 server, and authenticates operators against the platform AS via the OAuth
 callback `/admin-console/callback`. The `/admin-console` prefix must NEVER be
 stripped at the proxy - Next emits absolute `/admin-console/_next/...` asset
-URLs. The pod sets `NEXT_PUBLIC_BASE_PATH=/admin-console`, `PORT=3000`, and
-the internal proxy target variables.
+URLs. The pod sets `NEXT_PUBLIC_BASE_PATH=/admin-console`, `PORT=3000`, the
+server-only `ADMIN_CONSOLE_*_BASE_URL` upstream variables, and the
+`NEXT_PUBLIC_PLATFORM_AUDIENCE`,
+`NEXT_PUBLIC_TENANT_KMS_AUDIENCE`, `NEXT_PUBLIC_TENANT_DID_AUDIENCE`,
+`NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE`, and `NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE`
+values from `serviceIdentity.audiences`. OAuth access and refresh tokens stay
+server-side in the BFF; the browser receives only the HttpOnly SameSite session
+cookie and uses same-origin `/admin-console/api/*` calls.
 
 On the Gateway API path the explicit `/admin-console` PathPrefix route is more
 specific than the platform service's `/` catch-all, so `/admin-console/*` routes

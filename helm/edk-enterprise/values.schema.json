@@ -112,6 +112,7 @@
     },
     "platformKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "tenantKmsKeystore": { "$ref": "#/definitions/keystorePersistence" },
+    "walletInteractionKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "platform": {
       "type": "object",
       "additionalProperties": true,
@@ -302,9 +303,9 @@
     "services": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform", "tenant-kms", "did", "tenant-as", "issuer", "verifier"],
+      "required": ["platform", "tenant-kms", "did", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
       "patternProperties": {
-        "^(platform|tenant-kms|did|tenant-as|issuer|verifier|admin-console)$": {
+        "^(platform|tenant-kms|did|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {

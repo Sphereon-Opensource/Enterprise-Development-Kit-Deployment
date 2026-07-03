@@ -91,7 +91,7 @@ http:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
         (PathPrefix(`/oid4vci`) || PathPrefix(`/credential`) ||
-         PathPrefix(`/credential_deferred`) || PathPrefix(`/nonce`) ||
+         PathPrefix(`/deferredCredential`) || PathPrefix(`/nonce`) ||
          PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
          PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
          PathPrefix(`/public/assets`) ||

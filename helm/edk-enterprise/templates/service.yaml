@@ -1,6 +1,6 @@
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
-{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") }}
+{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
 apiVersion: v1
 kind: Service
 metadata:

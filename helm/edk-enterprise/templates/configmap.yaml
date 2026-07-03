@@ -27,6 +27,9 @@ Rendered only for the platform service.
 {{- $platformDb := .Values.database.platform }}
 {{- $bootstrap := .Values.platform.bootstrap }}
 {{- $licenseTrust := .Values.license.trust }}
+{{- if ne $bootstrap.issuer .Values.platform.externalBaseUrl }}
+{{- fail "platform.bootstrap.issuer must equal platform.externalBaseUrl; the platform AS issuer has a single canonical public origin" }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -107,19 +110,25 @@ data:
           {{- if .Values.serviceIdentity.internalClientExistingSecret }}
           internal-clients:
             issuer:
-              client-id: issuer-service
+              client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
             kms:
-              client-id: kms-service
+              client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
             did:
-              client-id: did-service
+              client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
             verifier:
-              client-id: verifier-service
+              client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
             tenantas:
-              client-id: tenant-as-service
+              client-id: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+            wallet-unit:
+              client-id: {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+            wallet-interaction:
+              client-id: {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
           {{- end }}
         platform:
@@ -158,21 +167,28 @@ data:
     security:
       header-trust-policy:
         trusted_service_ids:
-          - service-crypto
-          - service-data
-          - service-oid4vci
-          - service-oid4vp
-          - service-tenant-as
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "wallet-unit" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
         service_client_bindings:
-          "[service-crypto]": kms-service
-          "[service-data]": did-service
-          "[service-oid4vci]": issuer-service
-          "[service-oid4vp]": verifier-service
-          "[service-tenant-as]": tenant-as-service
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "wallet-unit" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
     # First-boot operator owner and installation identity for the control-plane.
     app:
       deployment-mode: {{ $bootstrap.deploymentMode | quote }}
     platform:
+      admin-console:
+        sts:
+          allowed-audiences: {{ join "," (list (index .Values.serviceIdentity.audiences "platform") (index .Values.serviceIdentity.audiences "tenant-kms") (index .Values.serviceIdentity.audiences "did") (index .Values.serviceIdentity.audiences "issuer") (index .Values.serviceIdentity.audiences "verifier") (index .Values.serviceIdentity.audiences "wallet-unit") (index .Values.serviceIdentity.audiences "wallet-interaction")) | quote }}
       onboarding:
         installation-base-domain: {{ .Values.global.platformBaseDomain | quote }}
         {{- if $licenseTrust.rootCaPath }}
