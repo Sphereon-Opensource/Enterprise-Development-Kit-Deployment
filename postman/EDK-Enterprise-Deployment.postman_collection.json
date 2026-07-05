@@ -313,9 +313,9 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tenantType\": \"organization\",\n  \"name\": \"{{tenantName}}\",\n  \"description\": \"{{tenantName}} issuing and verification tenant\",\n  \"slug\": \"{{tenantSlug}}\",\n  \"addIssuer\": true,\n  \"addVerifier\": true,\n  \"owner\": {\n    \"type\": \"local\",\n    \"email\": \"admin@{{tenantSlug}}.example\",\n    \"displayName\": \"{{tenantName}} Administrator\"\n  },\n  \"ownerDelivery\": {\n    \"mode\": \"none\"\n  }\n}"
+              "raw": "{\n  \"tenant\": {\n    \"tenantType\": \"organization\",\n    \"name\": \"{{tenantName}}\",\n    \"description\": \"{{tenantName}} issuing and verification tenant\",\n    \"slug\": \"{{tenantSlug}}\",\n    \"initialPlatformSubdomain\": true\n  },\n  \"contacts\": {\n    \"technical\": {\n      \"email\": \"admin@{{tenantSlug}}.example\",\n      \"displayName\": \"{{tenantName}} Technical Contact\"\n    },\n    \"administrativeSameAsTechnical\": true,\n    \"ownerAdmin\": {\n      \"source\": \"technical\"\n    }\n  },\n  \"login\": {\n    \"enabled\": true,\n    \"deliveryMode\": \"none\",\n    \"defaultAuthorizationServerRequired\": true\n  },\n  \"provisioning\": {\n    \"issuer\": true,\n    \"verifier\": true,\n    \"keysAndDids\": true,\n    \"sampleData\": true\n  }\n}"
             },
-            "description": "Registers a root tenant with a local owner account. Owner credential delivery is disabled here; production deployments use email delivery."
+            "description": "Registers an organization tenant with natural-person contacts, owner/admin login, mandatory default authorization server, and default issuer/verifier/key/DID/sample-data provisioning. Owner credential delivery is disabled here; production deployments normally use email delivery."
           },
           "event": [
             {
@@ -324,15 +324,6 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('tenant registered', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                  "const requestBody = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
-                  "pm.test('tenant registration request matches admin console provisioning payload', () => {",
-                  "  pm.expect(requestBody.tenantType).to.eql('organization');",
-                  "  pm.expect(requestBody.addIssuer).to.eql(true);",
-                  "  pm.expect(requestBody.addVerifier).to.eql(true);",
-                  "  pm.expect(requestBody.owner).to.include({ type: 'local' });",
-                  "  pm.expect(requestBody.owner.email).to.be.a('string').and.not.empty;",
-                  "  pm.expect(requestBody.ownerDelivery).to.deep.include({ mode: 'none' });",
-                  "});",
                   "const j = pm.response.json();",
                   "const tenant = j.tenant || j;",
                   "if (tenant && tenant.id) pm.collectionVariables.set('tenantId', tenant.id);",
@@ -340,9 +331,11 @@
                   "pm.expect(correlationId, 'tenant onboarding correlation id').to.be.a('string').and.not.empty;",
                   "pm.collectionVariables.set('tenantRegistrationCorrelationId', correlationId);",
                   "pm.test('registration returned tenant gateway protocol URLs', () => {",
-                  "  pm.expect(j.issuerUrl || j.tenant?.issuerUrl, 'AS issuer URL').to.be.a('string').and.not.empty;",
-                  "  pm.expect(j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl, 'OID4VCI issuer URL').to.be.a('string').and.not.empty;",
-                  "  pm.expect(j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl, 'OID4VP verifier URL').to.be.a('string').and.not.empty;",
+                  "  const serviceUrls = j.serviceUrls || {};",
+                  "  pm.expect(j.tenantUrl || j.primaryDomainUrl, 'tenant URL').to.be.a('string').and.not.empty;",
+                  "  pm.expect(serviceUrls.authorizationServerUrl || j.issuerUrl || j.tenant?.issuerUrl, 'AS issuer URL').to.be.a('string').and.not.empty;",
+                  "  pm.expect(serviceUrls.oid4vciIssuerUrl || j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl, 'OID4VCI issuer URL').to.be.a('string').and.not.empty;",
+                  "  pm.expect(serviceUrls.oid4vpVerifierUrl || j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl, 'OID4VP verifier URL').to.be.a('string').and.not.empty;",
                   "});"
                 ]
               }

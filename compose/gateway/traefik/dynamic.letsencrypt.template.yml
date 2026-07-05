@@ -38,6 +38,26 @@ __LE_TLS_DOMAINS__
       tls:
         certResolver: le
 
+    tenant-platform-theme:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/theme/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 300
+      tls:
+        certResolver: le
+
+    tenant-platform-wallet-entitlement:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/wallet-entitlement/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 300
+      tls:
+        certResolver: le
+
     tenant-issuer:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
