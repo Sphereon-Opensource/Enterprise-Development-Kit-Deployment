@@ -22,7 +22,7 @@ server:
       # Open paths: first-run setup UI/API, OAuth protocol surface, discovery/JWKS,
       # the internal pre-auth registration channel (own Basic auth), and the
       # in-network command transport. Everything else requires an operator bearer.
-      anonymous-path-prefixes: /,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/api/commands,/introspect
+      anonymous-path-prefixes: /,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/api/commands,/introspect,/public/**
 # Browser CORS allow-list for the setup and admin UI. Set this to the external
 # origin that serves the operator UI. The platform serves the admin site at its
 # own instance root, so this is normally the platform external URL.
@@ -310,6 +310,13 @@ east-west:
     base-url: http://enterprise-tenant-kms:8080
   tenant-did:
     base-url: http://enterprise-did:8080
+  # Sample-data provisioning (tenant onboarding `sample-data-provisioned` step) seeds credential
+  # designs / render variants / offers on the issuer and DCQL queries / verifier bindings on the
+  # verifier, over east-west REST with a tenant-scoped impersonation bearer.
+  tenant-issuer:
+    base-url: http://enterprise-issuer:8080
+  tenant-verifier:
+    base-url: http://enterprise-verifier:8080
 license:
   # This is the local licensing authority: it owns the deployment and is exempt
   # from the deployment license gate.

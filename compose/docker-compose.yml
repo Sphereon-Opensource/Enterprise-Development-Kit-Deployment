@@ -172,6 +172,13 @@ services:
       EDK_PLATFORM_DB_NAME: ${EDK_PLATFORM_DB_NAME:-platform}
       EDK_PLATFORM_DB_USERNAME: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
       EDK_PLATFORM_DB_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
+      DATABASE_APP_DEFAULT_DIALECT: postgresql
+      DATABASE_APP_DEFAULT_ISOLATION: shared
+      DATABASE_APP_DEFAULT_HOST: platform-postgres
+      DATABASE_APP_DEFAULT_PORT: "5432"
+      DATABASE_APP_DEFAULT_DATABASE: ${EDK_PLATFORM_DB_NAME:-platform}
+      DATABASE_APP_DEFAULT_USERNAME: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
+      DATABASE_APP_DEFAULT_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
       EXTERNAL_BASE_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
       ONBOARDING_UI_BASE_URL: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
       PORT: "18080"
@@ -211,6 +218,10 @@ services:
       <<: [*edk-common-env, *edk-tenant-db-env]
       PORT: "18083"
       REST_PORT: "18083"
+      # Remote theme resolution (theme.client.base-url): the hosted login page fetches
+      # tenant/application branding from the platform service's public theme endpoints.
+      # Unset it to serve the neutral login page.
+      THEME_CLIENT_BASE_URL: http://enterprise-platform:18080
     volumes:
       - ./config/tenant-as.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
@@ -416,6 +427,8 @@ services:
       # basePath: the app serves under /admin-console; the root / returns 404.
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_AUDIT_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
       ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
       ADMIN_CONSOLE_ISSUER_BASE_URL: http://enterprise-issuer:8080

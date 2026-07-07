@@ -61,6 +61,24 @@ http:
       priority: 1100
       tls: {}
 
+    # --- Tenant hosts: platform-owned tenant-scoped APIs --------------------
+    tenant-platform-theme:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/theme/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 300
+      tls: {}
+    tenant-platform-wallet-entitlement:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/wallet-entitlement/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 300
+      tls: {}
+
     # --- FUTURE: tenant admin console (DISABLED) ----------------------------
     # Do NOT enable until a per-tenant API authorization proxy enforces tenant
     # isolation. The gateway only routes; it does not stop a tenant principal
