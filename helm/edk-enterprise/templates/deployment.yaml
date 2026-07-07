@@ -403,6 +403,10 @@ spec:
             {{- if $isAdminConsole }}
             - name: ADMIN_CONSOLE_PLATFORM_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            - name: ADMIN_CONSOLE_AUDIT_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            - name: ADMIN_CONSOLE_THEME_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-kms")) (index $.Values.services "tenant-kms").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_DID_BASE_URL

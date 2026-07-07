@@ -427,6 +427,8 @@ services:
       # basePath: the app serves under /admin-console; the root / returns 404.
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_AUDIT_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
       ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
       ADMIN_CONSOLE_ISSUER_BASE_URL: http://enterprise-issuer:8080

@@ -1763,7 +1763,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status list created', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "pm.test('status list created or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
                   "const j = pm.response.json();",
                   "if (j.id) pm.collectionVariables.set('statusListId', j.id);",
                   "if (j.statusListUri) pm.collectionVariables.set('statusListUri', j.statusListUri);",
@@ -1777,6 +1777,10 @@
                   "  return JSON.parse(atob(padded));",
                   "};",
                   "pm.test('status list response matches EuPid revocation contract', () => {",
+                  "  if (pm.response.code === 409) {",
+                  "    pm.expect(j.error && j.error.code).to.eql('STATUSLIST_DUPLICATE_CORRELATION_ID');",
+                  "    return;",
+                  "  }",
                   "  pm.expect(j.correlationId).to.eql('eupid-revocation');",
                   "  pm.expect(j.spec).to.eql('token_status_list');",
                   "  pm.expect(j.proofFormat).to.eql('jwt');",
@@ -1825,7 +1829,16 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status lists returned', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.text(), 'created status list visible').to.include(pm.collectionVariables.get('statusListId'));"
+                  "const j = pm.response.json();",
+                  "const lists = Array.isArray(j) ? j : (j.data || j.items || []);",
+                  "const expectedUri = pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation';",
+                  "const statusList = lists.find((entry) => entry.correlationId === 'eupid-revocation' || entry.statusListUri === expectedUri);",
+                  "pm.test('EuPid revocation status list visible', () => {",
+                  "  pm.expect(statusList, 'eupid-revocation status list').to.be.an('object');",
+                  "  pm.expect(statusList.id, 'status list id').to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (statusList && statusList.id) pm.collectionVariables.set('statusListId', statusList.id);",
+                  "if (statusList && statusList.statusListUri) pm.collectionVariables.set('statusListUri', statusList.statusListUri);"
                 ]
               }
             }
@@ -3014,8 +3027,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('eupid query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "pm.test('eupid query stored or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
                   "const q = pm.response.json();",
+                  "const alreadyExists = pm.response.code === 409;",
+                  "if (alreadyExists) {",
+                  "  pm.test('EuPid DCQL query is already provisioned', () => {",
+                  "    pm.expect(q.error.code).to.eql('ALREADY_EXISTS_ERROR');",
+                  "    pm.expect(q.error.message).to.include('eupid-sdjwt');",
+                  "  });",
+                  "} else {",
                   "pm.test('EuPid DCQL query content is versioned and enabled', () => {",
                   "  pm.expect(q.queryId).to.eql('eupid-sdjwt');",
                   "  pm.expect(q.enabled).to.eql(true);",
@@ -3023,7 +3043,8 @@
                   "  const credential = q.dcqlQuery.credentials[0];",
                   "  pm.expect(credential.format).to.eql('dc+sd-jwt');",
                   "  pm.expect(credential.meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
-                  "});"
+                  "});",
+                  "}"
                 ]
               }
             }
@@ -3061,8 +3082,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('mdl query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "pm.test('mdl query stored or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
                   "const q = pm.response.json();",
+                  "const alreadyExists = pm.response.code === 409;",
+                  "if (alreadyExists) {",
+                  "  pm.test('mDL DCQL query is already provisioned', () => {",
+                  "    pm.expect(q.error.code).to.eql('ALREADY_EXISTS_ERROR');",
+                  "    pm.expect(q.error.message).to.include('mdl-mdoc');",
+                  "  });",
+                  "} else {",
                   "pm.test('mDL DCQL query content is versioned and enabled', () => {",
                   "  pm.expect(q.queryId).to.eql('mdl-mdoc');",
                   "  pm.expect(q.enabled).to.eql(true);",
@@ -3070,7 +3098,8 @@
                   "  const credential = q.dcqlQuery.credentials[0];",
                   "  pm.expect(credential.format).to.eql('mso_mdoc');",
                   "  pm.expect(credential.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
-                  "});"
+                  "});",
+                  "}"
                 ]
               }
             }
@@ -3108,8 +3137,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('combined query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "pm.test('combined query stored or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
                   "const q = pm.response.json();",
+                  "const alreadyExists = pm.response.code === 409;",
+                  "if (alreadyExists) {",
+                  "  pm.test('combined DCQL query is already provisioned', () => {",
+                  "    pm.expect(q.error.code).to.eql('ALREADY_EXISTS_ERROR');",
+                  "    pm.expect(q.error.message).to.include('eupid-and-mdl');",
+                  "  });",
+                  "} else {",
                   "pm.test('combined DCQL query contains EuPid and mDL credentials', () => {",
                   "  pm.expect(q.queryId).to.eql('eupid-and-mdl');",
                   "  pm.expect(q.enabled).to.eql(true);",
@@ -3119,7 +3155,8 @@
                   "  pm.expect(byId.eupid.meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
                   "  pm.expect(byId.mdl.format).to.eql('mso_mdoc');",
                   "  pm.expect(byId.mdl.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
-                  "});"
+                  "});",
+                  "}"
                 ]
               }
             }
@@ -3235,15 +3272,23 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('combined query bound to verifier', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "pm.test('combined query bound or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
                   "const binding = pm.response.json();",
+                  "const alreadyExists = pm.response.code === 409;",
+                  "if (alreadyExists) {",
+                  "  pm.test('combined query binding is already provisioned', () => {",
+                  "    pm.expect(binding.error.code).to.eql('ALREADY_EXISTS_ERROR');",
+                  "    pm.expect(binding.error.message).to.include('eupid-and-mdl');",
+                  "  });",
+                  "} else {",
                   "if (binding.id) pm.collectionVariables.set('combinedDcqlBindingId', binding.id);",
                   "pm.test('combined query binding pins version 1 on the tenant verifier', () => {",
                   "  pm.expect(binding.verifierId).to.eql(pm.variables.get('verifierId'));",
                   "  pm.expect(binding.queryId).to.eql('eupid-and-mdl');",
                   "  pm.expect(binding.pinnedVersion).to.eql(1);",
                   "  pm.expect(binding.enabled).to.eql(true);",
-                  "});"
+                  "});",
+                  "}"
                 ]
               }
             }
