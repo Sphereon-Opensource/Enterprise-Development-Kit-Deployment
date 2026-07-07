@@ -310,6 +310,13 @@ east-west:
     base-url: http://enterprise-tenant-kms:8080
   tenant-did:
     base-url: http://enterprise-did:8080
+  # Sample-data provisioning (tenant onboarding `sample-data-provisioned` step) seeds credential
+  # designs / render variants / offers on the issuer and DCQL queries / verifier bindings on the
+  # verifier, over east-west REST with a tenant-scoped impersonation bearer.
+  tenant-issuer:
+    base-url: http://enterprise-issuer:8080
+  tenant-verifier:
+    base-url: http://enterprise-verifier:8080
 license:
   # This is the local licensing authority: it owns the deployment and is exempt
   # from the deployment license gate.

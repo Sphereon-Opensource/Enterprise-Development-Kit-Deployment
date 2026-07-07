@@ -218,6 +218,10 @@ services:
       <<: [*edk-common-env, *edk-tenant-db-env]
       PORT: "18083"
       REST_PORT: "18083"
+      # Remote theme resolution (theme.client.base-url): the hosted login page fetches
+      # tenant/application branding from the platform service's public theme endpoints.
+      # Unset it to serve the neutral login page.
+      THEME_CLIENT_BASE_URL: http://enterprise-platform:18080
     volumes:
       - ./config/tenant-as.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
