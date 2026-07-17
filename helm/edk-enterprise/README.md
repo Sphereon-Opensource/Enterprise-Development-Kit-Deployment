@@ -43,11 +43,19 @@ bash ./scripts/upgrade-helm.sh \
   --tenant-host abc.example.com
 ```
 
-Supply `--migration-values <path>` only when the selected release explicitly
-provides an overlay. The included RC1-to-RC2 overlay is applied after the site
-values so stale RC1 computed values cannot restore empty anonymous path lists;
-it contains no Secret values and must not be reused for later releases. Without
-an overlay, the selected chart and maintained site values are authoritative.
+`--release` and `--namespace` are operator choices. `sphereon-edk-enterprise`
+and `edk` are only the wrapper defaults; pass the release name and namespace this
+install uses. For an upgrade, they must match the existing release.
+
+Supply `--migration-values <path>` only when the release you are installing ships
+an overlay. The one current case is the upgrade from 0.25.0-RC1 to 0.25.0-RC2.
+The overlay `examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml` re-asserts
+the public `serviceIdentity.anonymousPathPrefixes` that RC1 left empty, which is
+what blocked tenant creation on RC1. It is applied after the site values so a
+values file exported from RC1 cannot restore the broken list. It holds no Secret
+values and must not be reused for later releases. Without an overlay, the
+selected chart and maintained site values are authoritative. The full upgrade is
+in [quickstart-kubernetes.md](../../docs/quickstart-kubernetes.md#upgrading-from-0250-rc1-to-0250-rc2).
 
 Existing `internal-client-secret`, `keystore-password`, BFF credentials, and
 issuer-pipeline keys are preserved. If an existing Secret is missing a key that
