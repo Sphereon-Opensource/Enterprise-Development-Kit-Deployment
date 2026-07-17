@@ -117,10 +117,44 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "externalBaseUrl": { "type": "string", "minLength": 1 },
+        "secretBackend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "minLength": 1 }
+          }
+        },
+        "setup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["licenseRequest"],
+          "properties": {
+            "licenseRequest": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["defaultAlias", "defaultAlgorithm", "defaultUse"],
+              "properties": {
+                "defaultAlias": { "type": "string", "minLength": 1 },
+                "defaultAlgorithm": { "type": "string", "minLength": 1 },
+                "defaultUse": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "onboarding": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "deploymentId": { "type": "string", "minLength": 1 }
+          }
+        },
         "bootstrap": {
           "type": "object",
           "additionalProperties": true,
           "properties": {
+            "automatic": { "type": "boolean" },
             "issuer": { "type": "string", "minLength": 1 },
             "owner": {
               "type": "object",
@@ -141,9 +175,98 @@
     "serviceIdentity": {
       "type": "object",
       "additionalProperties": true,
+      "required": ["clientIds", "serviceIds", "audiences"],
       "properties": {
         "internalClientExistingSecret": { "type": "string" },
-        "internalClientSecretKey": { "type": "string", "minLength": 1 }
+        "internalClientSecretKey": { "type": "string", "minLength": 1 },
+        "clientIds": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "properties": {
+            "tenant-kms": { "type": "string", "minLength": 1 },
+            "tenant-as": { "type": "string", "minLength": 1 },
+            "did": { "type": "string", "minLength": 1 },
+            "issuer": { "type": "string", "minLength": 1 },
+            "verifier": { "type": "string", "minLength": 1 },
+            "wallet-unit": { "type": "string", "minLength": 1 },
+            "wallet-interaction": { "type": "string", "minLength": 1 }
+          }
+        },
+        "serviceIds": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "properties": {
+            "tenant-kms": { "type": "string", "minLength": 1 },
+            "tenant-as": { "type": "string", "minLength": 1 },
+            "did": { "type": "string", "minLength": 1 },
+            "issuer": { "type": "string", "minLength": 1 },
+            "verifier": { "type": "string", "minLength": 1 },
+            "wallet-unit": { "type": "string", "minLength": 1 },
+            "wallet-interaction": { "type": "string", "minLength": 1 }
+          }
+        },
+        "audiences": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["platform", "tenant-kms", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "properties": {
+            "platform": { "type": "string", "minLength": 1 },
+            "tenant-kms": { "type": "string", "minLength": 1 },
+            "did": { "type": "string", "minLength": 1 },
+            "issuer": { "type": "string", "minLength": 1 },
+            "verifier": { "type": "string", "minLength": 1 },
+            "wallet-unit": { "type": "string", "minLength": 1 },
+            "wallet-interaction": { "type": "string", "minLength": 1 }
+          }
+        },
+        "anonymousPathPrefixes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "properties": {
+            "platform": { "type": "string" },
+            "tenant-kms": { "type": "string" },
+            "tenant-as": { "type": "string" },
+            "did": { "type": "string" },
+            "issuer": { "type": "string" },
+            "verifier": { "type": "string" },
+            "wallet-unit": { "type": "string" },
+            "wallet-interaction": { "type": "string" }
+          }
+        }
+      }
+    },
+    "portalBff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clientId", "audience", "scope", "existingSecret", "clientSecretKey", "kms", "trustedIngress"],
+      "properties": {
+        "clientId": { "type": "string", "minLength": 1 },
+        "audience": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "existingSecret": { "type": "string" },
+        "clientSecretKey": { "type": "string", "minLength": 1 },
+        "kms": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["providerId", "encryptionKeyAlias", "handleHmacKeyAlias"],
+          "properties": {
+            "providerId": { "type": "string", "minLength": 1 },
+            "encryptionKeyAlias": { "type": "string", "minLength": 1 },
+            "handleHmacKeyAlias": { "type": "string", "minLength": 1 }
+          }
+        },
+        "trustedIngress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "hops"],
+          "properties": {
+            "mode": { "type": "string", "enum": ["X_FORWARDED", "FORWARDED"] },
+            "hops": { "type": "integer", "minimum": 1 }
+          }
+        }
       }
     },
     "keystore": {
@@ -152,6 +275,16 @@
       "properties": {
         "existingSecret": { "type": "string" },
         "passwordKey": { "type": "string", "minLength": 1 }
+      }
+    },
+    "issuerPipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["existingSecret", "masterKekKey", "blindIndexKey"],
+      "properties": {
+        "existingSecret": { "type": "string" },
+        "masterKekKey": { "type": "string", "minLength": 1 },
+        "blindIndexKey": { "type": "string", "minLength": 1 }
       }
     },
     "license": {
@@ -246,7 +379,6 @@
         "resourceAttributes": { "type": "string" }
       }
     },
-    "enableTenantConsole": { "type": "boolean" },
     "podSecurityContext": { "type": "object" },
     "containerSecurityContext": { "type": "object" },
     "podAnnotations": { "type": "object" },
@@ -286,6 +418,16 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "className": { "type": "string", "minLength": 1 },
+        "infrastructureParametersRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["group", "kind", "name"],
+          "properties": {
+            "group": { "type": "string", "minLength": 1 },
+            "kind": { "type": "string", "minLength": 1 },
+            "name": { "type": "string" }
+          }
+        },
         "operatorHost": { "type": "string", "minLength": 1 },
         "baseDomain": { "type": "string" },
         "httpRedirect": { "type": "boolean" },

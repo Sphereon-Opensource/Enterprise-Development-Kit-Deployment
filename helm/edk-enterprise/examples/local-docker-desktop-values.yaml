@@ -6,7 +6,7 @@
 #
 # Secrets expected in the namespace:
 #   edk-platform-postgres / edk-tenant-postgres : { username, password }
-#   edk-secrets          : { internal-client-secret, keystore-password }
+#   edk-runtime-secrets  : { internal-client-secret, keystore-password }
 #   edk-license-root-ca  : { license-root-ca.pem }   (evaluation license root)
 
 global:
@@ -59,12 +59,16 @@ platform:
     selfHostsExtra: ",localhost:18080"
 
 serviceIdentity:
-  internalClientExistingSecret: edk-secrets
+  internalClientExistingSecret: edk-runtime-secrets
   internalClientSecretKey: internal-client-secret
 
 keystore:
-  existingSecret: edk-secrets
+  existingSecret: edk-runtime-secrets
   passwordKey: keystore-password
+issuerPipeline:
+  existingSecret: edk-issuer-pipeline-secrets
+portalBff:
+  existingSecret: edk-runtime-secrets
 
 license:
   trust:
@@ -77,6 +81,8 @@ license:
     recipientKmsAlias: license-recipient
 
 # No external gateway/ingress for the local run; reach services by port-forward.
+gateway:
+  enabled: false
 ingress:
   legacy:
     enabled: false
@@ -95,20 +101,18 @@ services:
         value: http://localhost:18080
       - name: ONBOARDING_UI_BASE_URL
         value: http://localhost:18080
-      - name: PLATFORM_SETUP_KMS_PROVIDER_ID
-        value: license
-      - name: PLATFORM_SETUP_LICENSE_MATERIAL_DEFAULT_ALIAS
-        value: license-recipient
       - name: LICENSE_RECIPIENT_KMS_ENABLED
         value: "true"
-      - name: LICENSE_RECIPIENT_KMS_PROVIDER_ID
-        value: license
       - name: LICENSE_RECIPIENT_KMS_ALIAS
         value: license-recipient
   tenant-as:
     enabled: true
   tenant-kms:
     enabled: true
+  wallet-unit:
+    enabled: false
+  wallet-interaction:
+    enabled: false
   did:
     enabled: false
   issuer:

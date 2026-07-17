@@ -1,7 +1,7 @@
 global:
   imageTag: 0.25.0-SNAPSHOT
   imagePullSecrets:
-    - sphereon-nexus
+    - edk-registry-credentials
   platformBaseDomain: example.com
 
 database:
@@ -47,3 +47,15 @@ auth:
     issuer: https://acme.example.com
     jwksUri: https://acme.example.com/.well-known/jwks.json
     audience: edk-enterprise
+
+# Pre-create this Secret in the release namespace. It must contain the keys
+# `internal-client-secret` and `keystore-password`; see the chart README.
+serviceIdentity:
+  internalClientExistingSecret: edk-runtime-secrets
+
+keystore:
+  existingSecret: edk-runtime-secrets
+issuerPipeline:
+  existingSecret: edk-issuer-pipeline-secrets
+portalBff:
+  existingSecret: edk-runtime-secrets

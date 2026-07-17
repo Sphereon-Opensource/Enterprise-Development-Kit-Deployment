@@ -16,7 +16,7 @@ metadata:
 spec:
   parentRefs:
     - name: {{ $gatewayName }}
-      sectionName: https
+      sectionName: https-platform
   hostnames:
     - {{ $operatorHost | quote }}
   rules:
@@ -44,7 +44,7 @@ metadata:
 spec:
   parentRefs:
     - name: {{ $gatewayName }}
-      sectionName: https
+      sectionName: https-platform
   hostnames:
     - {{ $operatorHost | quote }}
   rules:
@@ -56,12 +56,10 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
 ---
-{{- if $.Values.enableTenantConsole }}
-# FUTURE tenant-host console: *.{baseDomain}/admin-console -> admin-console. Rendered
-# only when enableTenantConsole is true.
-# WARNING: Do NOT enable until a per-tenant API authorization proxy enforces
-# tenant isolation. Routing alone does not stop a tenant principal from reaching
-# platform-admin APIs or another tenant's data.
+# Instance-host testing console. Rewrite only the canonical public page URL to
+# Next's internal /admin-console basePath. Direct BFF/static support paths use a
+# separate rule without URLRewrite. Instance access mode and exact origin remain
+# fail-closed backend endpoint-registry decisions.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -77,16 +75,52 @@ spec:
     - {{ $wildcard | quote }}
   rules:
     - matches:
+        - path:
+            type: PathPrefix
+            value: /testing-console
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/testing-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    # Browser-facing testing API under the neutral /testing-console prefix, so the
+    # customer-facing surface never exposes admin-console URLs. One rule per path
+    # because each carries its own ReplacePrefixMatch; longest-prefix precedence
+    # keeps these ahead of the page rule above.
+    {{- range $apiPrefix := list "/api/oid4vci/v1/testing" "/api/oid4vp/v1/testing" "/api/portal-oauth/login" "/api/portal-oauth/callback" "/api/portal-oauth/grant" "/api/portal-oauth/revoke" }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ printf "/testing-console%s" $apiPrefix | quote }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: {{ printf "/admin-console%s" $apiPrefix | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    {{- end }}
+    - matches:
         {{- range $path := (include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim | fromYamlArray) }}
         - path:
             type: PathPrefix
+            value: {{ $path | quote }}
+        {{- end }}
+        {{- range $path := list "/admin-console/api/portal-oauth/login" "/admin-console/api/portal-oauth/callback" "/admin-console/api/portal-oauth/grant" "/admin-console/api/portal-oauth/revoke" "/admin-console/health" }}
+        - path:
+            type: Exact
             value: {{ $path | quote }}
         {{- end }}
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
 ---
-{{- end }}
 {{- else }}
 {{- $paths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
 {{- if $paths }}
@@ -116,6 +150,65 @@ spec:
 ---
 {{- end }}
 {{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.services.platform.enabled }}
+# Tenant-host platform projections used by the theme and wallet-entitlement
+# APIs. These are intentionally narrow; the platform's operator-host catch-all
+# must not become a wildcard tenant-host catch-all.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-platform-tenant
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: platform
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/theme/v1
+        - path:
+            type: PathPrefix
+            value: /api/wallet-entitlement/v1
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
+          port: {{ .Values.services.platform.restPort }}
+---
+{{- end }}
+{{- range $name := list "tenant-kms" "did" }}
+{{- $svc := index $.Values.services $name }}
+{{- if $svc.enabled }}
+# Operator-host management projection. This mirrors the Compose gateway where
+# /api/kms/v1 and /api/did/v1 take precedence over the platform catch-all.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" $ }}-{{ $name }}-operator
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ eq $name "tenant-kms" | ternary "/api/kms/v1" "/api/did/v1" | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
 {{- end }}
 {{- end }}
 {{- if .Values.gateway.httpRedirect }}

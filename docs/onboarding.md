@@ -25,7 +25,7 @@ Use this flow for normal customer installations:
    `https://platform.<base-domain>/admin-console` and follow the setup redirect.
 3. Generate the license request. The platform creates the local license
    recipient key and returns the public license request payload.
-4. Send that license request to the Sphereon license issuer out of band.
+4. Send that license request to the license issuer provided through your EDK distribution channel.
 5. Import the protected license bundle ZIP returned by the license issuer.
 6. Bootstrap the first platform operator account. This closes the anonymous
    setup gate.
@@ -153,6 +153,27 @@ Content-Type: application/json
 Tenant registration provisions the default authorization server, KMS provider
 and key material, tenant DID, issuer, verifier, and public endpoint bindings for
 `https://<tenant-slug>.<base-domain>`.
+
+If registration returns `503 SERVICE_UNAVAILABLE` and mentions remote platform
+configuration, `platform.config.get`, or a missing Authorization header, inspect
+the tenant-AS and platform logs together. For Helm deployments, verify that
+`serviceIdentity.internalClientExistingSecret` references a Secret in the release
+namespace and that it contains `internal-client-secret`. Also verify
+`keystore.existingSecret` and `keystore-password`, then restart the affected
+Deployments after correcting or rotating Secret data. This is an east-west
+service-identity failure, not an operator bearer-token failure or a reason to
+recreate the tenant database.
+
+If the internal token request instead returns `invalid_target`, trace the
+effective caller client ID, then the route `serviceTokenAudience`, then that
+client's `default-access-token-audience` and
+`allowed-access-token-audiences`, and finally the receiver's expected audience.
+The AS permits an omitted audience only with a nonblank default and permits one
+explicit audience only when it is the default or an allowed additional target;
+missing defaults, unregistered targets, and multiple or duplicate targets are
+rejected. An explicit route audience or
+`preferServiceTokenOverSessionBearer=true` is fail-closed and cannot use a
+session, delegation, or anonymous fallback.
 
 Read the onboarding status returned by registration:
 

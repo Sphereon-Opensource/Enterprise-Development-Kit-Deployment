@@ -3,9 +3,21 @@ EDK enterprise services have been deployed.
 Images are pulled from:
 {{ .Values.global.imageRegistry }}/enterprise-*:{{ .Values.global.imageTag | default .Chart.AppVersion }}
 
-Customer-facing traffic enters through the Gateway only:
+{{- if .Values.gateway.enabled }}
+Customer-facing traffic enters through the Gateway:
   - platform.{{ .Values.global.platformBaseDomain }} for the platform/operator plane
   - <tenant>.{{ .Values.global.platformBaseDomain }} for tenant protocol routes
+{{- else if .Values.ingress.legacy.enabled }}
+Customer-facing traffic enters through the configured per-service Ingress resources.
+{{- else }}
+No Gateway or Ingress resources were rendered. Reach enabled services through
+cluster-internal networking or a temporary port-forward.
+{{- if .Values.services.platform.enabled }}
+
+Platform port-forward example:
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }} 18080:{{ .Values.services.platform.restPort }}
+{{- end }}
+{{- end }}
 
 Backing services and runtime probes are Kubernetes-internal and must not be
 exposed as customer endpoints.

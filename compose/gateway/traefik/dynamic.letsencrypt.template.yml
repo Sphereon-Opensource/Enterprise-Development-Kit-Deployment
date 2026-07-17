@@ -58,6 +58,57 @@ __LE_TLS_DOMAINS__
       tls:
         certResolver: le
 
+    # Public page URL rewritten to Next's internal /admin-console basePath.
+    # Application/bootstrap policy remains fail-closed for disabled instances.
+    instance-testing-console-page:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathRegexp(`^/testing-console/(issuer|verifier)/[^/]+/?$`)
+      entryPoints: ["websecure"]
+      service: svc-admin-console
+      middlewares: ["instance-testing-console-add-admin-prefix"]
+      priority: 260
+      tls:
+        certResolver: le
+
+    # Browser-facing testing API under the neutral /testing-console prefix, so
+    # the customer-facing surface never exposes admin-console URLs. Rewritten to
+    # the Next base path before hitting the app.
+    instance-testing-console-api:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/testing-console/api/oid4vci/v1/testing`) ||
+         PathPrefix(`/testing-console/api/oid4vp/v1/testing`) ||
+         Path(`/testing-console/api/portal-oauth/login`) ||
+         Path(`/testing-console/api/portal-oauth/callback`) ||
+         Path(`/testing-console/api/portal-oauth/grant`) ||
+         Path(`/testing-console/api/portal-oauth/revoke`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console
+      middlewares: ["instance-testing-console-api-rewrite"]
+      priority: 265
+      tls:
+        certResolver: le
+
+    # Direct Next/BFF support paths; no public-page rewrite applies here.
+    instance-testing-console-support:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/admin-console/api/oid4vci/v1/testing`) ||
+         PathPrefix(`/admin-console/api/oid4vp/v1/testing`) ||
+         Path(`/admin-console/api/portal-oauth/login`) ||
+         Path(`/admin-console/api/portal-oauth/callback`) ||
+         Path(`/admin-console/api/portal-oauth/grant`) ||
+         Path(`/admin-console/api/portal-oauth/revoke`) ||
+         PathPrefix(`/admin-console/_next`) ||
+         PathPrefix(`/admin-console/public/assets`) ||
+         Path(`/admin-console/health`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console
+      priority: 250
+      tls:
+        certResolver: le
+
     tenant-issuer:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
@@ -78,7 +129,8 @@ __LE_TLS_DOMAINS__
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         (PathPrefix(`/oid4vp`) || PathPrefix(`/request_uri`) ||
-         PathPrefix(`/direct_post`) || PathPrefix(`/api/dcql/v1`))
+         PathPrefix(`/direct_post`) || PathPrefix(`/api/oid4vp/v1`) ||
+         PathPrefix(`/api/dcql/v1`))
       entryPoints: ["websecure"]
       service: svc-verifier
       priority: 200
@@ -119,6 +171,15 @@ __LE_TLS_DOMAINS__
       priority: 100
       tls:
         certResolver: le
+
+  middlewares:
+    instance-testing-console-add-admin-prefix:
+      addPrefix:
+        prefix: /admin-console
+    instance-testing-console-api-rewrite:
+      replacePathRegex:
+        regex: "^/testing-console/(.*)"
+        replacement: "/admin-console/$1"
 
   services:
     svc-platform:

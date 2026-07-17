@@ -1,6 +1,12 @@
 global:
+  # Registry distributed with the standard EDK channel. An OEM/MSP may provide
+  # a private mirror with the same enterprise image set.
   imageRegistry: nexus.sphereon.com/edk-docker
+  # Pin the approved enterprise release tag in production. `latest` is rejected
+  # in prod and requires imagePullPolicy=Always in non-production testing.
   imageTag: "0.25.0-SNAPSHOT"
+  # IfNotPresent is appropriate for immutable/versioned tags. Use Always only
+  # when deliberately testing the mutable `latest` tag outside production.
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
   platformBaseDomain: example.com
@@ -123,7 +129,28 @@ platform:
   # validating east-west platform bearers. It must equal the EXTERNAL_BASE_URL the
   # platform service stamps on the tokens it mints.
   externalBaseUrl: https://platform.example.com
+  # Backend used for application-admin secrets. The in-memory/config-system
+  # backend is suitable only for local evaluation; production values must select
+  # the durable secret backend configured for the installation.
+  secretBackend:
+    type: config-system-dev-only
+  setup:
+    licenseRequest:
+      # KMS material defaults used when creating the installation-bound license
+      # request. These are the current runtime keys; the old
+      # PLATFORM_SETUP_* environment variables are not consumed by the service.
+      defaultAlias: platform-license-request
+      defaultAlgorithm: ECDSA_SHA256
+      defaultUse: sig
+  onboarding:
+    # Stable installation/deployment handle used by onboarding-owned secrets
+    # and operator material. Keep it stable across upgrades.
+    deploymentId: deployment-1
   bootstrap:
+    # true provisions the configured owner automatically during application
+    # startup. Set false for setup-API-driven first installation: the setup API
+    # imports the protected license before it writes and provisions the owner.
+    automatic: true
     # Hosted authorization-server issuer URL for the `platform` tenant. The
     # operator signs in here and the admin console exchanges operator tokens for
     # tenant tokens against it. Set to the platform's external base URL.
@@ -163,8 +190,10 @@ platform:
 # client secret through a Secret referenced by `internalClientExistingSecret`.
 serviceIdentity:
   # Secret holding the internal client secret (key `internal-client-secret` by
-  # default). When set, the platform AS registers the internal service clients
-  # (issuer/kms/did/verifier/tenant-as) and the satellites authenticate with it.
+  # default). Required when any satellite is enabled. The platform AS registers
+  # the internal service clients and every satellite authenticates with the same
+  # value to obtain short-lived east-west service tokens. This is a Secret name,
+  # not the secret value; `edk-runtime-secrets` is the documented example name.
   internalClientExistingSecret: ""
   internalClientSecretKey: internal-client-secret
   # Per-service client_credentials client id each satellite presents to the
@@ -208,20 +237,52 @@ serviceIdentity:
   # in-network command/introspection channels stay open by design (each enforces
   # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
+    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/api/commands,/introspect,/public/**"
     tenant-as: "/authorize,/login,/token,/.well-known,/internal/preauth,/api/commands,/introspect"
     tenant-kms: ""
-    did: ""
-    issuer: ""
-    verifier: ""
+    did: "/.well-known,/api/commands"
+    issuer: "/oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers"
+    verifier: "/oid4vp/request-uri,/oid4vp/auth/response,/.well-known"
     wallet-unit: ""
     wallet-interaction: ""
+
+# Dedicated confidential client and cryptographic state protection for the
+# public issuer/verifier testing-console BFF. The client secret is independent
+# from the east-west service-identity secret and is consumed only by the
+# platform authorization server and the admin-console server process.
+portalBff:
+  clientId: admin-console-portal-bff
+  audience: application-bff-oauth-client
+  scope: bff.oauth
+  existingSecret: ""
+  clientSecretKey: admin-console-portal-bff-secret
+  kms:
+    providerId: platform
+    encryptionKeyAlias: application-bff-oauth-client-aead
+    handleHmacKeyAlias: application-bff-oauth-client-owner-hmac
+  trustedIngress:
+    # Gateway API implementations populate X-Forwarded-Host/Proto. Exactly one
+    # trusted gateway hop is selected; extra browser-supplied values are ignored.
+    mode: X_FORWARDED
+    hops: 1
 
 # Keystore password for the software KMS providers. Provide it through a Secret;
 # the platform and tenant-kms read it as EDK_KEYSTORE_PASSWORD.
 keystore:
   # Secret holding the keystore password (key `keystore-password` by default).
+  # Required when platform or tenant-kms is enabled. This may reference the same
+  # Kubernetes Secret as serviceIdentity, but must use an independently generated
+  # value under its own key.
   existingSecret: ""
   passwordKey: keystore-password
+
+# Issuer pipeline session payloads are encrypted before they are written to the
+# tenant database. Supply two independently generated 32-byte base64url keys in
+# an existing Secret; the chart never generates or stores these values itself.
+issuerPipeline:
+  existingSecret: ""
+  masterKekKey: master-kek
+  blindIndexKey: blind-index-key
 
 license:
   # Optional explicit installation pin for the license gate. Leave empty during
@@ -338,6 +399,12 @@ gateway:
   # out by host and path to each service per the routing contract.
   enabled: true
   className: cilium
+  # Optional implementation-specific per-Gateway parameters reference.
+  # Leave name empty unless the selected GatewayClass documents this kind.
+  infrastructureParametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: ""
   # Operator host = {operatorHost}.{baseDomain} (the platform plane).
   operatorHost: platform
   # Defaults to global.platformBaseDomain when empty.
@@ -403,14 +470,8 @@ services:
       # a separate :3003 static export; there ONBOARDING_UI_BASE_URL points at :3003 instead.)
       - name: ONBOARDING_UI_BASE_URL
         value: https://platform.example.com
-      - name: PLATFORM_SETUP_KMS_PROVIDER_ID
-        value: license
-      - name: PLATFORM_SETUP_LICENSE_MATERIAL_DEFAULT_ALIAS
-        value: license-recipient
       - name: LICENSE_RECIPIENT_KMS_ENABLED
         value: "true"
-      - name: LICENSE_RECIPIENT_KMS_PROVIDER_ID
-        value: license
       - name: LICENSE_RECIPIENT_KMS_ALIAS
         value: license-recipient
 
@@ -615,6 +676,7 @@ services:
         - /oid4vp
         - /request_uri
         - /direct_post
+        - /api/oid4vp/v1
         - /api/dcql/v1
       annotations: {}
     internalIngress:
@@ -622,6 +684,7 @@ services:
       className: internal
       host: ""
       paths:
+        - /api/oid4vp/v1
         - /api/dcql/v1
       annotations: {}
     resources:
@@ -633,14 +696,14 @@ services:
         memory: 1536Mi
     env: []
 
-  # Operator/admin web console (Next.js standalone, served under the /admin-console
-  # basePath; the root / returns 404). A single host-agnostic build resolves the
-  # API and OIDC authorization-server origin from the request host at runtime, so
-  # there is no per-host pod config: the gateway/ingress per-host routing already
-  # routes auth endpoints to the right AS (platform AS on the operator host;
-  # tenant AS on tenant hosts). NEVER strip the /admin-console prefix at the proxy:
-  # Next emits absolute /admin-console/_next/... asset URLs. The OAuth callback path
-  # is /admin-console/callback.
+  # Operator admin console plus instance-host testing console (Next.js
+  # standalone, served under /admin-console). The application host guard grants
+  # the complete UI/API only to platform.externalBaseUrl; instance hosts receive
+  # /testing-console/{kind}/{instanceId} through a page-only gateway rewrite,
+  # plus direct protocol-BFF, portal-OAuth, static asset, and health support
+  # paths. The backend endpoint registry still enforces disabled/public/protected
+  # instance modes; routing alone does not enable an instance.
+  # NEVER strip /admin-console: Next emits absolute basePath asset URLs.
   admin-console:
     enabled: true
     image: admin-console
@@ -670,12 +733,3 @@ services:
         value: /admin-console
       - name: PORT
         value: "3000"
-
-# Render the FUTURE tenant-host console route (*.{baseDomain}/admin-console ->
-# admin-console). Do NOT enable until a per-tenant API authorization proxy
-# enforces tenant isolation: routing alone does not stop a tenant principal from
-# reaching platform-admin APIs or another tenant's data. The operator-host
-# console (platform.<baseDomain>/admin-console) is always rendered via
-# services.admin-console.publicIngress above; this flag only adds the wildcard
-# tenant-host HTTPRoute (Gateway API path).
-enableTenantConsole: false

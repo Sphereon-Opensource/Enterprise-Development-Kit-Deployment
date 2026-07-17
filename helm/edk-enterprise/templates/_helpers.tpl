@@ -42,10 +42,12 @@ name, or an empty list for services that are not tenant-routed.
 {{- if eq $name "issuer" -}}
 - /oid4vci
 - /credential
-- /credential_deferred
+- /deferredCredential
 - /nonce
 - /notification
 - /public/statuslists
+- /public/schema
+- /public/assets
 - /.well-known/openid-credential-issuer
 - /api/oid4vci/v1
 - /api/credential-design/v1
@@ -54,6 +56,7 @@ name, or an empty list for services that are not tenant-routed.
 - /oid4vp
 - /request_uri
 - /direct_post
+- /api/oid4vp/v1
 - /api/dcql/v1
 {{- else if eq $name "did" -}}
 - /1.0/identifiers
@@ -71,8 +74,11 @@ name, or an empty list for services that are not tenant-routed.
 - /.well-known/openid-configuration
 - /.well-known/jwks.json
 {{- else if eq $name "admin-console" -}}
-{{/* FUTURE tenant-host console prefix; only consumed when enableTenantConsole. */}}
-- /admin-console
+{{/* Direct same-origin BFF/static support paths for the public testing console. */}}
+- /admin-console/api/oid4vci/v1/testing
+- /admin-console/api/oid4vp/v1/testing
+- /admin-console/_next
+- /admin-console/public/assets
 {{- end -}}
 {{- end -}}
 
@@ -91,5 +97,84 @@ name, or an empty list for services that are not tenant-routed.
 {{- end -}}
 {{- if eq $registry "nexus.sphereon.com" -}}
 {{- fail "global.imageRegistry must include the EDK Docker repository. Use nexus.sphereon.com/edk-docker, not host-only nexus.sphereon.com." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Reject unsafe `latest` settings that can leave old enterprise images running
+after a Helm upgrade. Production releases must use a versioned tag. Development
+may use `latest`, but only with an Always pull policy.
+*/}}
+{{- define "edk-enterprise.validateImageReference" -}}
+{{- $tag := lower (default .Chart.AppVersion .Values.global.imageTag) -}}
+{{- $pullPolicy := lower (default "IfNotPresent" .Values.global.imagePullPolicy) -}}
+{{- $deploymentMode := lower (default "dev" .Values.platform.bootstrap.deploymentMode) -}}
+{{- if and (eq $tag "latest") (eq $deploymentMode "prod") -}}
+{{- fail "global.imageTag=latest is not allowed when platform.bootstrap.deploymentMode=prod. Pin the approved enterprise release tag supplied through your EDK distribution channel." -}}
+{{- end -}}
+{{- if and (eq $tag "latest") (ne $pullPolicy "always") -}}
+{{- fail "global.imageTag=latest requires global.imagePullPolicy=Always for non-production testing; preferably pin the approved enterprise release tag supplied through your EDK distribution channel." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The chart does not generate runtime credentials. Requiring existing Secret
+references here prevents otherwise healthy-looking pods from starting without
+east-west Authorization headers or software-keystore access.
+*/}}
+{{- define "edk-enterprise.validateRuntimeSecrets" -}}
+{{- $satelliteEnabled := or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled -}}
+{{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
+{{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
+{{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
+{{- $issuerPipelineSecret := trim (default "" .Values.issuerPipeline.existingSecret) -}}
+{{- if and $satelliteEnabled (eq $identitySecret "") -}}
+{{- fail "serviceIdentity.internalClientExistingSecret is required when an EDK satellite service is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the key configured by serviceIdentity.internalClientSecretKey (default: internal-client-secret), then reference that Secret by name." -}}
+{{- end -}}
+{{- if and (or .Values.services.platform.enabled (index .Values.services "tenant-kms").enabled) (eq $keystoreSecret "") -}}
+{{- fail "keystore.existingSecret is required when platform or tenant-kms is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the key configured by keystore.passwordKey (default: keystore-password), then reference that Secret by name." -}}
+{{- end -}}
+{{- if and .Values.services.platform.enabled (index .Values.services "admin-console").enabled (eq $portalBffSecret "") -}}
+{{- fail "portalBff.existingSecret is required when platform and admin-console are enabled. Create a Kubernetes Secret containing the key configured by portalBff.clientSecretKey, then reference that Secret by name." -}}
+{{- end -}}
+{{- if and .Values.services.issuer.enabled (eq $issuerPipelineSecret "") -}}
+{{- fail "issuerPipeline.existingSecret is required when the issuer service is enabled. Create a Kubernetes Secret containing independent 32-byte base64url values under issuerPipeline.masterKekKey and issuerPipeline.blindIndexKey, then reference that Secret by name." -}}
+{{- end -}}
+{{- if eq .Values.issuerPipeline.masterKekKey .Values.issuerPipeline.blindIndexKey -}}
+{{- fail "issuerPipeline.masterKekKey and issuerPipeline.blindIndexKey must be distinct Secret keys." -}}
+{{- end -}}
+{{- if and (eq (lower .Values.platform.bootstrap.deploymentMode) "prod") (eq (lower .Values.platform.secretBackend.type) "config-system-dev-only") -}}
+{{- fail "platform.secretBackend.type=config-system-dev-only is not allowed when platform.bootstrap.deploymentMode=prod. Configure the installation's durable secret backend." -}}
+{{- end -}}
+{{- if eq .Values.portalBff.kms.encryptionKeyAlias .Values.portalBff.kms.handleHmacKeyAlias -}}
+{{- fail "portalBff.kms.encryptionKeyAlias and portalBff.kms.handleHmacKeyAlias must be distinct." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Route-only services have no local tenant keystore. The chart has no external
+tenant-KMS target override, so rendering those services without tenant-kms
+would create endpoints that can never provision or use tenant keys.
+*/}}
+{{- define "edk-enterprise.validateTenantKmsDependency" -}}
+{{- $kmsConsumerEnabled := or .Values.services.did.enabled (index .Values.services "tenant-as").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled -}}
+{{- if and $kmsConsumerEnabled (not (index .Values.services "tenant-kms").enabled) -}}
+{{- fail "services.tenant-kms.enabled must be true while did, tenant-as, issuer, or verifier is enabled: these route-only services send tenant key operations to the in-chart tenant-kms service." -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Validate the service graph represented by the service-specific routes. */}}
+{{- define "edk-enterprise.validateRuntimeDependencies" -}}
+{{- if and .Values.services.issuer.enabled (not (index .Values.services "tenant-as").enabled) -}}
+{{- fail "services.tenant-as.enabled must be true while issuer is enabled: the issuer routes OAuth2 commands to tenant-as." -}}
+{{- end -}}
+{{- if and .Values.services.verifier.enabled (not .Values.services.did.enabled) -}}
+{{- fail "services.did.enabled must be true while verifier is enabled: the verifier routes DID resolution commands to did." -}}
+{{- end -}}
+{{- if and (or .Values.services.issuer.enabled .Values.services.verifier.enabled) (not (index .Values.services "wallet-interaction").enabled) -}}
+{{- fail "services.wallet-interaction.enabled must be true while issuer or verifier is enabled: both route wallet interaction commands to that service." -}}
+{{- end -}}
+{{- if and (index .Values.services "wallet-interaction").enabled (not (index .Values.services "wallet-unit").enabled) -}}
+{{- fail "services.wallet-unit.enabled must be true while wallet-interaction is enabled: wallet interaction routes HSM policy authorization to wallet-unit." -}}
 {{- end -}}
 {{- end -}}

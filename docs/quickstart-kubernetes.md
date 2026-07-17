@@ -9,15 +9,37 @@ The chart reference, including every value and its default, is in [helm/edk-ente
 ## Prerequisites
 
 - A Kubernetes cluster and `kubectl` configured against it.
-- Helm 3.
+- Helm 3 or Helm 4.
 - Nexus credentials for the published `nexus.sphereon.com/edk-docker/enterprise-*` and `nexus.sphereon.com/edk-docker/admin-console` images for the selected `global.imageTag`.
 - Keep `global.imageRegistry=nexus.sphereon.com/edk-docker`. Do not use `sphereon` or `docker.io/sphereon`; those values point Kubernetes at public Docker Hub.
 - Reachable PostgreSQL 15+ databases for the platform control plane and tenant workload data plane. The chart does not deploy Postgres. Use managed databases, operator-managed databases, or environment-owned Postgres releases, then point `database.platform.*` and `database.tenant.*` at them. These must be two separate logical databases; never put platform and tenant state in the same database, even with separate schemas.
-- A Sphereon protected license bundle ZIP, ready to import during onboarding.
+- A protected license bundle ZIP from the license issuer provided through your EDK distribution channel, ready to import during onboarding.
 - TLS material for the operator and tenant hosts. Use one wildcard certificate
   for `*.<base-domain>`, or individual certificates for every deployed host.
   For Let's Encrypt wildcard certificates, use cert-manager with DNS-01
   validation.
+
+## Recommended one-go install or upgrade
+
+From the repository root on Linux or macOS, use the release-independent
+wrapper. Select the immutable image tag named by the release you are installing:
+
+```bash
+export TARGET_IMAGE_TAG='<approved-release-tag>'
+
+bash ./scripts/upgrade-helm.sh \
+  --release sphereon-edk-enterprise \
+  --namespace edk \
+  --values ./customer-values.yaml \
+  --image-tag "$TARGET_IMAGE_TAG" \
+  --tenant-host abc.example.com
+```
+
+The wrapper preserves existing cryptographic Secrets, backs up the installed
+release, validates the candidate manifests, selects the supported Helm 3 or 4
+rollback-on-failure flag, waits for all Deployments, and optionally verifies
+the tenant DID document. Add `--migration-values <path>` only when the selected
+release explicitly supplies a migration overlay.
 
 ## 1. Create the namespace and pull secret
 
@@ -58,7 +80,49 @@ one shared credential for both endpoints in an enterprise deployment.
 Tenant schemas are created inside the tenant workload database; they are not a
 replacement for the platform/tenant database split.
 
-## 3. Pick a values overlay
+## 3. Create the runtime Secret
+
+The chart does not generate the confidential client secret used for east-west
+service tokens or the password protecting the software PKCS#12 keystores. Create
+both values in the release namespace before installing. `edk-runtime-secrets`
+is an example Kubernetes Secret name, not an image or prepackaged file:
+
+The corresponding Helm parameters are `serviceIdentity.internalClientExistingSecret`
+and `keystore.existingSecret`.
+
+```bash
+kubectl -n edk create secret generic edk-runtime-secrets \
+  --from-literal=internal-client-secret='<long-random-confidential-client-secret>' \
+  --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' \
+  --from-literal=keystore-password='<long-random-pkcs12-password>'
+```
+
+Generate the two values independently with at least 32 random bytes each. For
+production, have the cluster's secret-management mechanism create this Secret;
+do not commit Secret manifests containing plaintext values.
+
+Reference the Secret name and keys from the values overlay:
+
+```yaml
+serviceIdentity:
+  internalClientExistingSecret: edk-runtime-secrets
+  internalClientSecretKey: internal-client-secret
+keystore:
+  existingSecret: edk-runtime-secrets
+  passwordKey: keystore-password
+portalBff:
+  existingSecret: edk-runtime-secrets
+  clientSecretKey: admin-console-portal-bff-secret
+```
+
+`internal-client-secret` is shared by the platform authorization server and the
+registered satellite confidential clients so they can obtain short-lived
+east-west tokens. `admin-console-portal-bff-secret` belongs only to the dedicated
+portal BFF confidential client. `keystore-password` protects the platform and tenant-KMS
+software keystores. Changing Secret data under the same name requires restarting
+the affected Deployments because these values are read when containers start.
+
+## 4. Pick a values overlay
 
 The `examples/` directory holds ready-to-copy overlays. Start from one and adjust:
 
@@ -66,9 +130,10 @@ The `examples/` directory holds ready-to-copy overlays. Start from one and adjus
 | --- | --- |
 | `shared-postgres-values.yaml` | Environment-owned in-cluster Postgres endpoints for separate platform and tenant databases, JWT auth wired to the tenant AS |
 | `external-managed-postgres-values.yaml` | Managed external Postgres with an egress NetworkPolicy |
+| `local-docker-desktop-values.yaml` | Port-forwarded Docker Desktop evaluation without Gateway API or Ingress resources |
 | `service-jwt-auth-values.yaml` | Require JWT on each service's admin REST |
 | `secret-backed-credentials-values.yaml` | Pull signing and provider credentials from Secrets |
-| `admin-console-values.yaml` | Enable the optional admin console and its `/admin-console` route on the platform host |
+| `admin-console-values.yaml` | Configure the platform console and isolated issuer/verifier testing-console routes |
 | `gateway-cilium-values.yaml` | Single-port multi-tenant front door via Cilium Gateway API |
 | `gateway-aws-alb-values.yaml`, `gateway-gke-values.yaml`, `gateway-azure-agic-values.yaml` | Cloud gateway variants |
 | `mesh-mtls-values.yaml` | Service-mesh mTLS for inter-service traffic |
@@ -76,7 +141,7 @@ The `examples/` directory holds ready-to-copy overlays. Start from one and adjus
 
 Set `global.platformBaseDomain` to the customer-controlled base domain for the installation. The platform host is `platform.<base-domain>` and tenant hosts are `<tenant-slug>.<base-domain>`. Point DNS for `platform.<base-domain>` and `*.<base-domain>` at the gateway address. Do not publish runtime probes or backing service hosts as customer endpoints.
 
-## 4. Render and install
+## 5. Render and install
 
 Render first so you can review the manifests:
 
@@ -94,7 +159,12 @@ helm upgrade --install edk ./helm/edk-enterprise \
   -f ./helm/edk-enterprise/examples/shared-postgres-values.yaml
 ```
 
-## 5. Ingress and gateway
+Rendering validates that both runtime Secret references are configured. Helm
+cannot verify Secret objects or keys at render time; use the checks in
+[troubleshooting.md](troubleshooting.md) if pods enter
+`CreateContainerConfigError` after installation.
+
+## 6. Ingress and gateway
 
 Use the single-port Gateway API front door. The chart defaults to
 `gateway.enabled: true` and `ingress.legacy.enabled: false`, so one HTTPS
@@ -116,13 +186,13 @@ Customers do not call pods or containers directly. Keep every `/api/.../v1`
 path internal or protected by operator/tenant authentication, and never publish
 runtime probes as customer-facing routes.
 
-**Admin console.** The optional `services.admin-console` service (image, `enabled`, `replicas`, `restPort: 3000`) renders the Next.js operator console behind the `/admin-console` route on the platform host. After first-run setup activates the license and creates the operator account, operators sign in at `https://platform.<base-domain>/admin-console`. The route is served without stripping the prefix and must take precedence over the platform catch-all. The `enableTenantConsole: false` flag gates the future per-tenant route. Enable it with `examples/admin-console-values.yaml`. See [tls-and-gateway.md](tls-and-gateway.md) for the routing details.
+**Admin console and testing console.** `services.admin-console` serves the complete operator console behind `/admin-console` on the platform host. On wildcard instance hosts the canonical public page is `/testing-console/{kind}/{instanceId}`. A page-only Gateway API rewrite maps that prefix to Next's internal `/admin-console/testing-console` path; a separate rule forwards only the testing APIs, portal OAuth, required Next/public assets, and health beneath `/admin-console`. The application repeats this host/path allowlist, while the backend public-endpoint registry enforces disabled/public/AS-protected instance modes. Routing alone never enables an instance. The testing console is intended for external issuer/verifier testers and other conformance participants. See `examples/admin-console-values.yaml` and [tls-and-gateway.md](tls-and-gateway.md).
 
-## 6. Security defaults
+## 7. Security defaults
 
 The chart runs every service as non-root UID/GID `10001` with a read-only root filesystem, dropped Linux capabilities, the runtime default seccomp profile, REST auth enabled, JWT auth wiring enabled, and NetworkPolicies enabled. For production, set non-empty `auth.jwt.issuer`, `auth.jwt.jwksUri`, and `auth.jwt.audience`. The example overlays point the JWT issuer and JWKS URI at the tenant AS.
 
-## 7. First-run setup and tenant onboarding
+## 8. First-run setup and tenant onboarding
 
 With the release running, open `https://platform.<base-domain>/setup-license`
 or `https://platform.<base-domain>/admin-console` and complete first-run setup.

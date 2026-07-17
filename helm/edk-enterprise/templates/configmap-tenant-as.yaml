@@ -24,6 +24,20 @@ metadata:
     app.kubernetes.io/component: tenant-as
 data:
   application.yml: |
+    security:
+      header-trust-policy:
+        trusted_service_ids:
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+        service_client_bindings:
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
     # Local, keyless software provider for in-process signature verification.
     # Signing/MAC/encryption route to the tenant KMS over gRPC; this provider only
     # backs the LOCAL verify route below, with an ephemeral keystore under temp.

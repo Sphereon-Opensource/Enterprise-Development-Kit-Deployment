@@ -39,6 +39,24 @@ The admin and onboarding secret backend is selected by
 `application.admin.secret-backend.type` in the platform config template (env
 `EDK_SECRET_BACKEND`); choose a production backend before going live.
 
+## Deployment bootstrap Secrets
+
+The Kubernetes runtime Secret required by the Helm chart is separate from the
+application-level secret-provider system described below. The documented example
+name `edk-runtime-secrets` contains two keys:
+
+| Key | Purpose |
+| --- | --- |
+| `internal-client-secret` | Shared confidential-client credential used to obtain platform-issued east-west service tokens. |
+| `keystore-password` | Password for the platform and tenant-KMS software PKCS#12 keystores. |
+
+Reference the Secret with `serviceIdentity.internalClientExistingSecret` and
+`keystore.existingSecret`. External Secrets Operator, a CSI driver, GitOps secret
+encryption, or another cluster mechanism may create the Secret, but the final
+Secret object and both keys must exist in the Helm release namespace before pods
+can start. These bootstrap values are injected with Kubernetes `secretKeyRef`;
+they are not `${secret:...}` property-source references.
+
 ## Selecting a backend in Helm values
 
 The chart accepts standard Kubernetes `env.valueFrom.secretKeyRef` entries under

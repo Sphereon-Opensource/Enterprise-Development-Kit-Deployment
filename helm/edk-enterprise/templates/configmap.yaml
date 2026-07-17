@@ -44,6 +44,18 @@ data:
   # environment variable name cannot express (the platform tenant datasource
   # and the hyphenated control-plane bootstrap keys).
   application.yml: |
+    server:
+      rest:
+        auth:
+          anonymous-path-prefixes: {{ index .Values.serviceIdentity.anonymousPathPrefixes "platform" | quote }}
+          # The platform AS stamps tokens with the public issuer, but validates
+          # them by fetching JWKS through the in-cluster service. This keeps
+          # operator token validation independent from external gateway TLS
+          # trust inside the service containers.
+          issuer: ${env:EXTERNAL_BASE_URL}
+          jwks-uri: {{ printf "http://%s:%v/.well-known/jwks.json" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+    cors:
+      origins: ${env:ONBOARDING_UI_BASE_URL}
     database:
       tenants:
         # The platform process creates tenant registry/control-plane rows during
@@ -69,6 +81,18 @@ data:
     # authorization server, and the operator owner. The platform provisions
     # these on first boot and the steps are idempotent across restarts.
     application:
+      bff:
+        oauth-client:
+          workload-audience: {{ .Values.portalBff.audience | quote }}
+          workload-scope: {{ .Values.portalBff.scope | quote }}
+          workload-client-id: {{ .Values.portalBff.clientId | quote }}
+          kms:
+            provider-id: {{ .Values.portalBff.kms.providerId | quote }}
+            encryption-key-id: {{ .Values.portalBff.kms.encryptionKeyAlias | quote }}
+            handle-hmac-key-id: {{ .Values.portalBff.kms.handleHmacKeyAlias | quote }}
+      admin:
+        secret-backend:
+          type: {{ .Values.platform.secretBackend.type | quote }}
       tenant:
         hosted-as:
           issuer: {{ $bootstrap.issuer | quote }}
@@ -80,15 +104,6 @@ data:
           {{- end }}
     # The platform hosts its own authorization server for operator sign-in and
     # the operator->tenant token exchange the admin console drives.
-    server:
-      rest:
-        auth:
-          # The platform AS stamps tokens with the public issuer, but validates
-          # them by fetching JWKS through the in-cluster service. This keeps
-          # operator token validation independent from external gateway TLS
-          # trust inside the service containers.
-          issuer: ${env:EXTERNAL_BASE_URL}
-          jwks-uri: {{ printf "http://%s:%v/.well-known/jwks.json" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
     oauth2:
       user-provider:
         mode: {{ $bootstrap.userProviderMode | quote }}
@@ -112,24 +127,36 @@ data:
             issuer:
               client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
+              allowed-access-token-audiences: {{ join "," (list (index .Values.serviceIdentity.audiences "tenant-kms") (index .Values.serviceIdentity.audiences "wallet-interaction")) | quote }}
             kms:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
             did:
               client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
+              allowed-access-token-audiences: {{ index .Values.serviceIdentity.audiences "tenant-kms" | quote }}
             verifier:
               client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
+              allowed-access-token-audiences: {{ join "," (list (index .Values.serviceIdentity.audiences "tenant-kms") (index .Values.serviceIdentity.audiences "wallet-interaction")) | quote }}
             tenantas:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
+              allowed-access-token-audiences: {{ index .Values.serviceIdentity.audiences "tenant-kms" | quote }}
             wallet-unit:
               client-id: {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
             wallet-interaction:
               client-id: {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
+              allowed-access-token-audiences: {{ index .Values.serviceIdentity.audiences "wallet-unit" | quote }}
           {{- end }}
         platform:
           # Application bootstrap provisions the control-plane AS with slug
@@ -137,6 +164,15 @@ data:
           signing-key:
             auto-generate: true
       clients:
+        admin-console-portal-bff:
+          client-id: {{ .Values.portalBff.clientId | quote }}
+          client-name: Admin Console Portal BFF
+          client-secret: ${env:ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
+          client-type: confidential
+          grant-types: client_credentials
+          allowed-scopes: {{ .Values.portalBff.scope | quote }}
+          default-access-token-audience: {{ .Values.portalBff.audience | quote }}
+          token-endpoint-auth-method: client_secret_basic
         platform-operator-cli:
           client-id: platform-operator-cli
           client-name: Platform Operator CLI
@@ -186,18 +222,24 @@ data:
     app:
       deployment-mode: {{ $bootstrap.deploymentMode | quote }}
     platform:
+      setup:
+        license-request:
+          default-alias: {{ .Values.platform.setup.licenseRequest.defaultAlias | quote }}
+          default-algorithm: {{ .Values.platform.setup.licenseRequest.defaultAlgorithm | quote }}
+          default-use: {{ .Values.platform.setup.licenseRequest.defaultUse | quote }}
       admin-console:
         sts:
           allowed-audiences: {{ join "," (list (index .Values.serviceIdentity.audiences "platform") (index .Values.serviceIdentity.audiences "tenant-kms") (index .Values.serviceIdentity.audiences "did") (index .Values.serviceIdentity.audiences "issuer") (index .Values.serviceIdentity.audiences "verifier") (index .Values.serviceIdentity.audiences "wallet-unit") (index .Values.serviceIdentity.audiences "wallet-interaction")) | quote }}
       onboarding:
         installation-base-domain: {{ .Values.global.platformBaseDomain | quote }}
+        deployment-id: {{ .Values.platform.onboarding.deploymentId | quote }}
         {{- if $licenseTrust.rootCaPath }}
         trust-bundle-path: {{ $licenseTrust.rootCaPath | quote }}
         {{- end }}
         operator:
           email: {{ $bootstrap.owner.email | quote }}
           display-name: {{ $bootstrap.owner.displayName | quote }}
-          {{- if $bootstrap.ownerInitialCredential }}
+          {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
           initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
           {{- end }}
       config:
@@ -268,7 +310,7 @@ data:
         self:
           tenant-id: "platform"
           hosts: {{ printf "%s,%s:%v,localhost,platform.%s%s" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) .Values.global.platformBaseDomain (.Values.platform.bootstrap.selfHostsExtra | default "") | quote }}
-      {{- if $bootstrap.ownerInitialCredential }}
+      {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
       platform:
         owner:
           initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
@@ -297,6 +339,14 @@ data:
       {{- if (index .Values.services "did").enabled }}
       tenant-did:
         base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
+      {{- end }}
+      {{- if (index .Values.services "issuer").enabled }}
+      tenant-issuer:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "issuer")) ((index .Values.services "issuer").restPort) | quote }}
+      {{- end }}
+      {{- if (index .Values.services "verifier").enabled }}
+      tenant-verifier:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "verifier")) ((index .Values.services "verifier").restPort) | quote }}
       {{- end }}
     # License trust anchor and recipient binding. The platform is the local
     # licensing authority; it trusts the installed license bundle's root CA via

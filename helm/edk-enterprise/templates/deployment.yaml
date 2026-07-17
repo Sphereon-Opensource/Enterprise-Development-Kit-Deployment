@@ -19,8 +19,21 @@ spec:
       {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
   template:
     metadata:
+      {{- if or (not $isAdminConsole) $.Values.podAnnotations }}
       annotations:
-        {{- toYaml $.Values.podAnnotations | nindent 8 }}
+        {{- if eq $name "platform" }}
+        checksum/platform-config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        {{- else if eq $name "tenant-as" }}
+        checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-tenant-as.yaml") $ | sha256sum }}
+        {{- else if eq $name "tenant-kms" }}
+        checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-tenant-kms.yaml") $ | sha256sum }}
+        {{- else if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+        checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-runtime-services.yaml") $ | sha256sum }}
+        {{- end }}
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
       labels:
         {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 8 }}
     spec:
@@ -109,6 +122,10 @@ spec:
               value: {{ $.Values.grpc.authMode | quote }}
             - name: TENANT_RESOLUTION_PLATFORM_BASE_DOMAIN
               value: {{ $.Values.global.platformBaseDomain | quote }}
+            - name: TENANT_RESOLUTION_PLATFORM_SUBDOMAIN_ENABLED
+              value: "true"
+            - name: TENANT_RESOLUTION_CUSTOM_DOMAIN_ENABLED
+              value: "true"
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
             {{- $transportAudience := "" }}
@@ -120,6 +137,10 @@ spec:
             {{- if eq $name "platform" }}
             - name: EXTERNAL_BASE_URL
               value: {{ $.Values.platform.externalBaseUrl | quote }}
+            {{- end }}
+            {{- if eq $name "tenant-as" }}
+            - name: THEME_CLIENT_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             {{- end }}
             {{- /* East-west service identity + keystore secrets shared by the service containers.
                    The platform AS mints the service tokens the satellites present; the
@@ -138,6 +159,25 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.keystore.existingSecret }}
                   key: {{ $.Values.keystore.passwordKey }}
+            {{- end }}
+            {{- if and (eq $name "platform") $.Values.portalBff.existingSecret }}
+            - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.portalBff.existingSecret }}
+                  key: {{ $.Values.portalBff.clientSecretKey }}
+            {{- end }}
+            {{- if and (eq $name "issuer") $.Values.issuerPipeline.existingSecret }}
+            - name: EDK_PIPELINE_MASTER_KEK
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.issuerPipeline.existingSecret }}
+                  key: {{ $.Values.issuerPipeline.masterKekKey }}
+            - name: EDK_PIPELINE_BLIND_INDEX_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.issuerPipeline.existingSecret }}
+                  key: {{ $.Values.issuerPipeline.blindIndexKey }}
             {{- end }}
             {{- /* Public URLs the satellites self-fetch JWKS from and the platform/tenant
                    AS stamp as token issuers. The platform host and tenant-AS host derive
@@ -296,6 +336,12 @@ spec:
               value: "GRPC"
             - name: TRANSPORT_ROUTING_MODULES_PLATFORM_ENDPOINT
               value: {{ printf "grpc://%s-platform:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
+            - name: TRANSPORT_ROUTING_MODULES_PLATFORM_SERVICES_CONFIG_TARGET
+              value: "SERVER"
+            - name: TRANSPORT_ROUTING_MODULES_PLATFORM_SERVICES_CONFIG_TRANSPORT
+              value: "GRPC"
+            - name: TRANSPORT_ROUTING_MODULES_PLATFORM_SERVICES_CONFIG_ENDPOINT
+              value: {{ printf "grpc://%s-platform:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
             # Satellites never read tenant routing/public-endpoint metadata from
             # a local tenant DB. They resolve it through the platform service so
             # anonymous public Host routes work across namespaces/clusters.
@@ -313,7 +359,7 @@ spec:
                    only when platform.bootstrap.ownerInitialCredential is set; the value
                    resolves from the same secret as the keystore password by convention,
                    or set platform.bootstrap.ownerInitialCredential to a literal. */}}
-            {{- if $.Values.platform.bootstrap.ownerInitialCredential }}
+            {{- if and $.Values.platform.bootstrap.automatic $.Values.platform.bootstrap.ownerInitialCredential }}
             - name: EDK_OWNER_INITIAL_CREDENTIAL
               value: {{ $.Values.platform.bootstrap.ownerInitialCredential | quote }}
             {{- end }}
@@ -355,6 +401,8 @@ spec:
               value: {{ printf "http://%s-platform:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_ID
               value: {{ index $.Values.serviceIdentity.clientIds $name | quote }}
+            - name: SERVER_SERVICE_IDENTITY_AUDIENCE
+              value: {{ index $.Values.serviceIdentity.audiences "platform" | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -403,6 +451,21 @@ spec:
             {{- if $isAdminConsole }}
             - name: ADMIN_CONSOLE_PLATFORM_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            - name: ADMIN_CONSOLE_PUBLIC_ORIGIN
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: ADMIN_CONSOLE_TRUSTED_INGRESS_MODE
+              value: {{ $.Values.portalBff.trustedIngress.mode | quote }}
+            - name: ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS
+              value: {{ $.Values.portalBff.trustedIngress.hops | quote }}
+            - name: ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_ID
+              value: {{ $.Values.portalBff.clientId | quote }}
+            - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.portalBff.existingSecret }}
+                  key: {{ $.Values.portalBff.clientSecretKey }}
             - name: ADMIN_CONSOLE_AUDIT_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
@@ -475,6 +538,14 @@ spec:
               subPath: application.yml
               readOnly: true
             {{- end }}
+            {{- if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+            # Service-specific routing, persistence and trust policy. Enterprise
+            # images do not contain a baked application.yml.
+            - name: runtime-service-config
+              mountPath: /app/config/application.yml
+              subPath: application.yml
+              readOnly: true
+            {{- end }}
             {{- if and (eq $name "platform") $.Values.platformKeystore.enabled }}
             # The platform keystore holds the platform AS cert/user and the
             # license-request instance cert. Mounted only in the platform service.
@@ -526,6 +597,11 @@ spec:
         - name: tenant-kms-config
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-tenant-kms-config
+        {{- end }}
+        {{- if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+        - name: runtime-service-config
+          configMap:
+            name: {{ include "edk-enterprise.fullname" $ }}-{{ $name }}-config
         {{- end }}
         {{- if and (not $isAdminConsole) $.Values.license.trust.existingSecret }}
         - name: license-root-ca

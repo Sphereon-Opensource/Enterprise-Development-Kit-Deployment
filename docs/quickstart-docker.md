@@ -11,7 +11,8 @@ There are two run modes:
 
 The platform is the configuration authority for tenant workloads. A clean
 first-run installation starts the platform and all workload containers together:
-tenant AS, tenant KMS, DID, issuer, and verifier must already be present when
+tenant AS, tenant KMS, DID, wallet unit, wallet interaction, issuer, and verifier
+must already be present when
 tenant registration later provisions signing material and tenant DID state
 through east-west services. Before the license is imported those workload
 health endpoints can report `licenseStatus: MISSING`; Docker Compose accepts
@@ -22,7 +23,7 @@ that only while the first-run setup gate is still open.
 - Docker with Compose v2.
 - Nexus credentials for the published `nexus.sphereon.com/edk-docker/enterprise-*` and `nexus.sphereon.com/edk-docker/admin-console` images for the selected `EDK_TAG`.
 - Docker Compose starts two local PostgreSQL 16 containers for evaluation: one platform/control-plane database and one tenant workload database. For a real single-node deployment, replace them with managed or operator-run PostgreSQL databases and keep platform and tenant state in separate logical databases. Do not put platform tables and tenant schemas in one database.
-- A Sphereon protected license bundle ZIP, or access to your evaluation license issuer. The setup UI creates the license recipient key in the platform `license` KMS when it generates the license request. Evaluation bundles can include the test root CA material when needed.
+- A protected license bundle ZIP, or access to the license issuer provided through your EDK distribution channel. The setup UI creates the license recipient key in the platform `license` KMS when it generates the license request. Evaluation bundles can include the test root CA material when needed.
 - TLS certificates for the operator and tenant hosts when you use the gateway
   overlay. For local gateway evaluation, use the included wildcard certificate
   helper. For a real domain, use a publicly trusted wildcard certificate for
@@ -182,9 +183,13 @@ After setup closes the anonymous setup gate, open
 `https://platform.<base-domain>/admin-console` and sign in with the operator
 account. The console authenticates against the platform authorization server for
 this host, then uses token exchange to act on tenant KMS and DID APIs. The
-per-tenant console (`https://<tenant>.<base-domain>/admin-console`) is a future
-capability and is not enabled. For details see [configuration.md](configuration.md)
-and [tls-and-gateway.md](tls-and-gateway.md).
+issuer/verifier testing console is available to external testers at
+`https://<instance-host>/testing-console/{kind}/{instanceId}` when enabled for
+that instance. Those hosts expose only the canonical page and narrowly scoped
+protocol-BFF/static support paths;
+the full admin console and platform admin APIs remain platform-host-only. For
+details see [configuration.md](configuration.md) and
+[tls-and-gateway.md](tls-and-gateway.md).
 
 ## 6. Onboard the first tenant
 

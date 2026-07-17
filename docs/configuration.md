@@ -275,6 +275,14 @@ schema or database lifecycle is handled by the workload data plane. Tenant
 workloads obtain platform-owned configuration through the platform service
 rather than by connecting to the platform database.
 
+The issuer also configures `kv.stores.oid4vci.credential-request-identities`
+with `backendId: database` and `scopeBinding: TENANT`. This small versioned KV
+stream pins wallet-initiated, token-derived OID4VCI protocol sessions to the
+first routed issuer instance. The database KV backend performs the optimistic
+append atomically across replicas; a retry on another issuer instance is
+rejected instead of silently re-attributing the session. Keep this store on the
+tenant database and do not change its scope.
+
 ## Issuer trust and REST auth
 
 Administrative REST endpoints require a valid operator or service bearer token.
@@ -350,6 +358,67 @@ exchange audiences, and NetworkPolicy peer edges from those values. In Docker
 Compose the same contract is represented by the mounted `compose/config/*.yml`
 files and the admin-console environment variables.
 
+Keep these four audience concepts distinct:
+
+- The **receiver expected audience** is the value a receiving service validates
+  in the JWT `aud` claim, normally `serviceIdentity.audiences.<receiver>`.
+- The **route-requested audience** is the one audience the caller asks the STS
+  to mint for a downstream route, for example
+  `transport.routing.modules.kms.serviceTokenAudience`.
+- The **default audience** is the internal client registration key
+  `default-access-token-audience`. It is used only when the
+  `client_credentials` request does not include an audience.
+- **Allowed additional audiences** are the non-default explicit targets in
+  `allowed-access-token-audiences`. They are not receiver defaults and the
+  default does not need to be repeated in this allowlist.
+
+The platform AS enforces a strict one-target model. An audience-free
+`client_credentials` request succeeds only when the client has a nonblank
+`default-access-token-audience`. A request containing an audience must contain
+exactly one value, and that value must equal the default or appear in
+`allowed-access-token-audiences`. A missing default, multiple values (including
+duplicate values), or an unregistered value is rejected with `invalid_target`.
+
+The chart derives the registrations below from `serviceIdentity.audiences`; the
+audience strings are not a second independent set of Helm values:
+
+| Caller | Client/service binding | `default-access-token-audience` | `allowed-access-token-audiences` | Explicit downstream route |
+| --- | --- | --- | --- | --- |
+| tenant-KMS | `serviceIdentity.clientIds.tenant-kms` / `serviceIdentity.serviceIds.tenant-kms` | `serviceIdentity.audiences.platform` | none | platform |
+| wallet-unit | `serviceIdentity.clientIds.wallet-unit` / `serviceIdentity.serviceIds.wallet-unit` | `serviceIdentity.audiences.platform` | none | platform |
+| tenant-AS | `serviceIdentity.clientIds.tenant-as` / `serviceIdentity.serviceIds.tenant-as` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.tenant-kms` | tenant-KMS |
+| DID | `serviceIdentity.clientIds.did` / `serviceIdentity.serviceIds.did` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.tenant-kms` | tenant-KMS |
+| issuer | `serviceIdentity.clientIds.issuer` / `serviceIdentity.serviceIds.issuer` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.tenant-kms`, `serviceIdentity.audiences.wallet-interaction` | tenant-KMS, wallet-interaction |
+| verifier | `serviceIdentity.clientIds.verifier` / `serviceIdentity.serviceIds.verifier` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.tenant-kms`, `serviceIdentity.audiences.wallet-interaction` | tenant-KMS, wallet-interaction |
+| wallet-interaction | `serviceIdentity.clientIds.wallet-interaction` / `serviceIdentity.serviceIds.wallet-interaction` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.wallet-unit` | wallet-unit |
+
+The service-identity credential, portal-BFF credential, and software-keystore password are
+deployment bootstrap Secrets. In Kubernetes, create a Secret in the Helm release
+namespace with three independently generated keys and reference it by name:
+
+```yaml
+serviceIdentity:
+  internalClientExistingSecret: edk-runtime-secrets
+  internalClientSecretKey: internal-client-secret
+keystore:
+  existingSecret: edk-runtime-secrets
+  passwordKey: keystore-password
+portalBff:
+  existingSecret: edk-runtime-secrets
+  clientSecretKey: admin-console-portal-bff-secret
+```
+
+| Kubernetes Secret key | Runtime input | Purpose |
+| --- | --- | --- |
+| `internal-client-secret` | `SERVER_SERVICE_IDENTITY_CLIENT_SECRET` | Shared secret used by registered satellite confidential clients to obtain short-lived platform-issued east-west tokens. |
+| `admin-console-portal-bff-secret` | `ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Dedicated confidential client secret used only by the admin-console server and platform AS registration. |
+| `keystore-password` | `EDK_KEYSTORE_PASSWORD` | Password protecting the platform and tenant-KMS software PKCS#12 keystores. |
+
+`edk-runtime-secrets` is only an example Secret name. The chart requires all three
+Secret references at render time but Kubernetes verifies the Secret object and
+keys when it creates containers. Secret data changes under the same name do not
+automatically restart pods; roll the platform and satellites after rotation.
+
 The binary/gRPC path is security-sensitive because trusted workload tokens may
 carry tenant context through internal headers. A receiver may honor
 `X-Tenant-Id` or `X-Principal-Id` only after all of these checks succeed:
@@ -376,6 +445,13 @@ an `enterprise-wallet-unit` token. Tenant-AS signing-key provisioning is the
 strictest example: the platform calls tenant-AS with a short-lived provisioning
 JWT whose audience is the tenant provisioning endpoint, and that provisioning
 JWT must not be forwarded to tenant-KMS.
+
+Caller configuration is also strict. Setting a route
+`serviceTokenAudience` or `preferServiceTokenOverSessionBearer=true` makes a
+service token mandatory for that route. Failure to configure or mint it cannot
+fall back to the session bearer, delegation, or an anonymous request. A wholly
+absent service identity remains optional only for routes that declare neither
+requirement; a partially configured identity is always a configuration error.
 
 ## gRPC routing between services
 
@@ -496,9 +572,9 @@ platform CSR key and CSR at that point; the recipient key is separate and is use
 only by the platform licensing authority to decrypt the issued license material
 inside the protected bundle.
 
-Submit the generated license request to your Sphereon license operator. The
-operator generates the license with Sphereon's internal license tooling and
-returns a protected bundle. The customer deployment imports only that protected
+Submit the generated license request to the license issuer provided through your
+EDK distribution channel. The issuer returns a protected bundle. The customer
+deployment imports only that protected
 bundle. Non-platform services do not mount
 recipient private keys or license material; they fetch the platform-evaluated
 license status and entitlement projection over the internal command route and
@@ -521,9 +597,9 @@ optionally `opentelemetry.protocol`, `opentelemetry.headers`,
 
 ## Admin Console
 
-The optional admin console is a separate Next.js app, image
-`nexus.sphereon.com/edk-docker/admin-console`, built and published by Sphereon. It is
-not built by this kit. The console is served under the `/admin-console` path prefix and
+The optional admin console is a separately published Next.js app, image
+`nexus.sphereon.com/edk-docker/admin-console`. It is not built by this kit. The
+console is served under the `/admin-console` path prefix and
 listens on port `3000`.
 
 The admin console loads most browser runtime values from
@@ -541,6 +617,10 @@ server public origins. Browser resource API calls stay same-origin through
 | --- | --- | --- |
 | `NEXT_PUBLIC_BASE_PATH` | `/admin-console` | The path prefix the app is served under. The app owns the prefix and emits assets at `/admin-console/_next/...`. |
 | `ADMIN_CONSOLE_PLATFORM_BASE_URL` | Internal platform upstream URL | Server-side platform base used by the BFF for setup-status, runtime-config bootstrap lookups, platform-admin, platform-config, and token exchange. |
+| `ADMIN_CONSOLE_PUBLIC_ORIGIN` | `https://platform.<base-domain>` | Canonical operator host; the complete console is served only for this origin. |
+| `ADMIN_CONSOLE_TRUSTED_INGRESS_MODE` / `ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS` | `X_FORWARDED` / `1` | Select exactly one trusted gateway hop for the untrusted instance-origin candidate. |
+| `ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS` | Exact internal platform origin | Server-only exception for the configured in-cluster HTTP platform service; wildcards, paths, credentials, and arbitrary HTTP origins are rejected. |
+| `ADMIN_CONSOLE_WORKLOAD_CLIENT_ID` / `ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Dedicated client id / Secret ref | Server-only client_credentials identity for the workload-protected OAuth-client facade. |
 | `ADMIN_CONSOLE_TENANT_KMS_BASE_URL` | Internal tenant-KMS upstream URL | Server-side tenant-KMS API upstream for BFF resource calls. |
 | `ADMIN_CONSOLE_TENANT_DID_BASE_URL` | Internal DID upstream URL | Server-side DID API upstream for BFF resource calls. |
 | `ADMIN_CONSOLE_ISSUER_BASE_URL` | Internal issuer upstream URL | Server-side issuer-owned API upstream for status-list, credential-design, and OID4VCI BFF calls. |
@@ -567,11 +647,15 @@ URLs. The DID upstream is required for platform-driven tenant DID provisioning a
 `https://<tenant>.<base-domain>/.well-known/did.json`; the platform does not
 connect to the tenant database or write DID rows directly.
 
-In Helm this is the `services.admin-console` block (`enabled`, `image`,
-`replicas`, `restPort: 3000`), with an `enableTenantConsole: false` flag that
-gates the future per-tenant route. In Docker Compose it is the `admin-console`
-service, reached through the gateway overlay. The gateway routes
-`https://platform.<base-domain>/admin-console` to the container without stripping the prefix;
+In Helm this is the `services.admin-console` block plus `portalBff` for the
+dedicated workload client, secret reference, KMS aliases, and trusted ingress.
+In Docker Compose it is the `admin-console` service, reached through the gateway
+overlay. The gateway routes the complete
+`https://platform.<base-domain>/admin-console` surface. On instance hosts it
+rewrites only `/testing-console/{kind}/{instanceId}` to Next's internal
+`/admin-console/testing-console/{kind}/{instanceId}` route and forwards only the
+narrow testing API, portal OAuth, static asset, and health support paths under
+`/admin-console`. Routing does not enable a disabled instance;
 see [TLS and gateway](tls-and-gateway.md).
 
 The console uses runtime bootstrap and the platform public-endpoints API to
@@ -593,16 +677,12 @@ DID calls use RFC 8693 token exchange against the platform AS with the configure
 tenant service audience; the console must not send tenant identity through
 `X-Tenant-Id` headers.
 
-### Per-host authorization server
+### Platform auth and instance portal grants
 
-A single build authenticates against whichever authorization server matches the
-host it is served on, resolved same-origin at runtime. On `platform.<base-domain>` it
-uses the platform authorization server. On a tenant host (a future capability,
-not yet enabled) it would use the multi-tenant tenant-AS, which derives the
-tenant from the inbound Host. On the platform host the operator signs in and the
-console then uses RFC 8693 token exchange to act on tenant KMS and DID APIs.
-
-The console's OAuth redirect URI is
-`{host}/admin-console/callback`. Register it for the operator client in
-**each** authorization server the console is served against, the platform AS
-and, when the tenant console is enabled, the tenant-AS.
+The platform host uses the platform authorization server for operator sign-in;
+IAM sessions remain entirely AS-owned. Instance hosts do not expose the normal
+console auth routes. Their testing console asks the platform BFF to perform a
+resource-specific OAuth transaction against the authorization-server binding
+selected by the exact issuer/verifier endpoint registry entry. The browser never
+submits a tenant id, receives the confidential client secret, or chooses a BFF
+network destination.
