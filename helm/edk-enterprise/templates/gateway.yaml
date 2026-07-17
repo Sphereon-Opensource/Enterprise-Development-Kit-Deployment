@@ -2,6 +2,7 @@
 {{- $base := include "edk-enterprise.gateway.baseDomain" . }}
 {{- $wildcard := printf "*.%s" $base }}
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
+{{- $external := eq .Values.gateway.tls.mode "external" }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -27,31 +28,51 @@ spec:
     # The exact operator listener wins over the wildcard listener. Keeping
     # platform routes on this listener prevents instance-only HTTPRoutes from
     # being considered for platform.<base-domain> requests.
+    #
+    # tls.mode=external: TLS terminates at an external front (edge proxy or
+    # load balancer) and the Gateway serves plain HTTP on port 80. The listener
+    # names stay `https-platform`/`https` in every mode; they are the stable
+    # sectionName contract for the chart's HTTPRoutes and any customer-attached
+    # routes.
     - name: https-platform
+      {{- if $external }}
+      protocol: HTTP
+      port: 80
+      {{- else }}
       protocol: HTTPS
       port: 443
+      {{- end }}
       hostname: {{ $operatorHost | quote }}
+      {{- if not $external }}
       tls:
         mode: Terminate
         certificateRefs:
           - kind: Secret
             name: {{ .Values.gateway.tls.secretName | quote }}
+      {{- end }}
       allowedRoutes:
         namespaces:
           from: Same
     - name: https
+      {{- if $external }}
+      protocol: HTTP
+      port: 80
+      {{- else }}
       protocol: HTTPS
       port: 443
+      {{- end }}
       hostname: {{ $wildcard | quote }}
+      {{- if not $external }}
       tls:
         mode: Terminate
         certificateRefs:
           - kind: Secret
             name: {{ .Values.gateway.tls.secretName | quote }}
+      {{- end }}
       allowedRoutes:
         namespaces:
           from: Same
-    {{- if .Values.gateway.httpRedirect }}
+    {{- if and .Values.gateway.httpRedirect (not $external) }}
     - name: http
       protocol: HTTP
       port: 80

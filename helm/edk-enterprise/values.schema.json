@@ -435,7 +435,7 @@
           "type": "object",
           "additionalProperties": true,
           "properties": {
-            "mode": { "type": "string", "enum": ["secret", "certManager"] },
+            "mode": { "type": "string", "enum": ["secret", "certManager", "external"] },
             "secretName": { "type": "string" },
             "clusterIssuer": { "type": "string" }
           }

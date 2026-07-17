@@ -118,6 +118,26 @@ may use `latest`, but only with an Always pull policy.
 {{- end -}}
 
 {{/*
+The Gateway TLS mode is a three-way switch and a typo would silently render a
+broken listener set, so validate it. secret and certManager need an in-cluster
+certificate reference; external explicitly must not carry one.
+*/}}
+{{- define "edk-enterprise.validateGatewayTls" -}}
+{{- if .Values.gateway.enabled -}}
+{{- $mode := .Values.gateway.tls.mode -}}
+{{- if not (has $mode (list "secret" "certManager" "external")) -}}
+{{- fail (printf "gateway.tls.mode must be one of secret, certManager, external (got %q)." $mode) -}}
+{{- end -}}
+{{- if and (eq $mode "secret") (eq (trim (default "" .Values.gateway.tls.secretName)) "") -}}
+{{- fail "gateway.tls.mode=secret requires gateway.tls.secretName to reference an existing wildcard TLS Secret." -}}
+{{- end -}}
+{{- if and (eq $mode "certManager") (eq (trim (default "" .Values.gateway.tls.clusterIssuer)) "") -}}
+{{- fail "gateway.tls.mode=certManager requires gateway.tls.clusterIssuer." -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 The chart does not generate runtime credentials. Requiring existing Secret
 references here prevents otherwise healthy-looking pods from starting without
 east-west Authorization headers or software-keystore access.

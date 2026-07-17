@@ -211,7 +211,10 @@ spec:
 ---
 {{- end }}
 {{- end }}
-{{- if .Values.gateway.httpRedirect }}
+{{- if and .Values.gateway.httpRedirect (ne .Values.gateway.tls.mode "external") }}
+{{- /* With tls.mode=external the external front owns the http->https redirect
+       and the Gateway has no `http` listener, so the redirect route is
+       skipped even when httpRedirect stays true. */}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

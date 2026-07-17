@@ -320,6 +320,16 @@ registration, not per-tenant certificate issuance. Public CAs such as Let's
 Encrypt can be used; for cert-manager and Let's Encrypt wildcard certificates,
 configure DNS-01 validation.
 
+`gateway.tls.mode` selects where the certificate lives: `secret` references an
+existing wildcard TLS Secret, `certManager` delegates issuance to a
+cert-manager ClusterIssuer, and `external` is for installations where TLS
+terminates outside the cluster (a corporate load balancer or edge proxy that
+owns the wildcard certificate). With `external` the Gateway serves plain HTTP
+on port 80, needs no in-cluster certificate, and `httpRedirect` is ignored
+because the external front owns the redirect; that front must preserve the
+Host header and set `X-Forwarded-Proto: https`. See
+`examples/gateway-external-tls-values.yaml`.
+
 The single-port Gateway API model is enabled by default with
 `gateway.enabled=true` and `ingress.legacy.enabled=false`. Customer-visible
 ingress is limited to platform and tenant host/path routes; admin REST and
@@ -328,7 +338,9 @@ runtime probes must stay internal or protected.
 The Gateway has an exact `https-platform` listener for the operator host and a
 separate wildcard `https` listener for tenant/satellite hosts. Platform routes
 attach only to the exact listener; instance testing-console routes attach only
-to the wildcard listener.
+to the wildcard listener. The listener names are a stable contract across all
+TLS modes (with `external` they carry HTTP), so HTTPRoutes attached by
+`sectionName` keep working regardless of where TLS terminates.
 
 ### Admin console
 
