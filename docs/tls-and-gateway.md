@@ -42,7 +42,9 @@ Public exposure is limited to host/path routes through the gateway:
 - `<tenant>.<base-domain>` for DID resolver paths, tenant OAuth/OIDC paths,
   OID4VCI issuer paths, OID4VP verifier paths, and authenticated operator/admin
   API paths when your policy intentionally exposes them.
-- The optional admin console at `/admin-console` on the platform host only.
+- The complete admin console at `/admin-console` on the platform host, plus the
+  canonical `/testing-console/{kind}/{instanceId}` page and isolated
+  protocol-BFF/static support paths on registered issuer/verifier hosts.
 
 Those are gateway or ingress routes. Customers and operators do not call the
 workload containers directly. Runtime probes are for Docker Compose or
@@ -421,13 +423,37 @@ win over the platform host's `/` route. With classic Ingress, add an
 `/admin-console` prefix path on the platform public Ingress ahead of the
 catch-all, again without a rewrite annotation that strips the prefix.
 
-### Future per-tenant console (not enabled)
+The chart uses an exact `https-platform` listener for the operator hostname and
+a separate wildcard `https` listener for instance hosts. Platform and complete
+admin-console HTTPRoutes attach only to `https-platform`; tenant/satellite and
+testing-console routes attach only to `https`. This listener split prevents the
+wildcard testing-console route from becoming a platform-host route.
 
-The per-tenant console at `https://<tenant>.<base-domain>/admin-console` is a
-future capability and is not enabled. Do **not** add a `/admin-console` route on
-tenant hosts until a per-tenant API authorization proxy enforces tenant
-isolation. The gateway only routes by host and path; it does not prevent a
-tenant principal from reaching platform-admin APIs or another tenant's data.
-Until that proxy exists, exposing the console on tenant hosts is a
-tenant-isolation breach. The Helm `enableTenantConsole: false` flag keeps the
-tenant route off.
+### Instance-host testing-console isolation
+
+The canonical public page URL is
+`https://<instance-host>/testing-console/{kind}/{instanceId}`, where `kind` is
+`issuer` or `verifier`. Next remains mounted internally under `/admin-console`.
+The Compose Traefik configuration uses a dedicated public-page router with an
+`AddPrefix /admin-console` middleware, so the backend receives
+`/admin-console/testing-console/{kind}/{instanceId}`. The Helm Gateway API route
+uses a page-only `ReplacePrefixMatch` from `/testing-console` to
+`/admin-console/testing-console`.
+
+A separate route forwards only the direct support paths
+`/admin-console/api/oid4vci/v1/testing`,
+`/admin-console/api/oid4vp/v1/testing`, the exact portal OAuth `login`,
+`callback`, `grant`, and `revoke` endpoints under
+`/admin-console/api/portal-oauth`,
+`/admin-console/_next`, `/admin-console/public/assets`, and the exact
+`/admin-console/health` path. It has no page rewrite. There is no
+`/admin-console/testing` compatibility page and no generic `/admin-console`
+route on instance hosts. The Next host guard enforces the same allowlist using
+the configured canonical platform origin and exact trusted gateway hop.
+Requests for the root console, platform admin/auth APIs, the operator console
+callback, previews, or tools on an instance host return 404.
+
+These routes do not decide whether an issuer/verifier testing console is enabled. The
+backend public-endpoint registry validates the exact origin and enforces the
+instance's disabled, public, or authorization-server-protected mode. The browser
+does not supply a tenant id.

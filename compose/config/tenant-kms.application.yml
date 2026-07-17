@@ -24,6 +24,7 @@ server:
     token-endpoint: http://enterprise-platform:18080/token
     client-id: kms-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    audience: enterprise-platform
 sphereon:
   telemetry:
     enabled: true

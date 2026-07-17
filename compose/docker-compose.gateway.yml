@@ -149,11 +149,14 @@ services:
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       - ./gateway/certs:/app/certs:ro
 
-  # Platform admin console. Reached at
-  # https://platform.<base-domain>/admin-console; the gateway path-prefix routes
-  # /admin-console to it (no StripPrefix, so Next /admin-console/_next/* assets
-  # resolve). Host-agnostic build, so no per-host config is needed here; it only
-  # joins the gateway network so Traefik can reach it as http://admin-console:3000.
+  # Canonical platform origin anchors the full operator console. The exact
+  # gateway hop supplies instance-origin candidates; the backend registry still
+  # validates each candidate and its public/protected/disabled mode.
   admin-console:
     networks:
       appnet: {}
+    environment:
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+      ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
+      ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
+      ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"

@@ -29,6 +29,7 @@ server:
     token-endpoint: http://enterprise-platform:18080/token
     client-id: tenant-as-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    audience: enterprise-platform
 sphereon:
   telemetry:
     enabled: true

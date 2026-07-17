@@ -24,6 +24,10 @@ server:
     token-endpoint: http://enterprise-platform:18080/token
     client-id: issuer-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    audience: enterprise-platform
+applications:
+  admin-console:
+    public-base-path: ${env:EDK_ADMIN_CONSOLE_PUBLIC_BASE_PATH:/admin-console}
 oid4vci:
   issuer:
     protocol:
@@ -181,11 +185,13 @@ kms:
         path: "{tempDir}/edk-verify-keystore.p12"
 # Design-asset blob store: logos/backgrounds uploaded via the credential-design
 # API land here and are served content-addressed at /public/assets/design/{hash}.
+# Backed by the design-assets KV store below (tenant database), so assets survive
+# container restarts and pod rescheduling without a volume.
 blob:
   stores:
     designs:
-      type: filesystem
-      rootDir: "/tmp/edk-design-assets"
+      type: kvstore
+      kvStoreId: design-assets
 # Pipeline session payloads are sealed with this master KEK before they reach the
 # KV backend. TODO: supply both keys from your secret backend (base64url, 32
 # bytes each); do not reuse keys across deployments.
@@ -200,6 +206,18 @@ kv:
       type: KvStoreConfig
       backendId: database
       scopeBinding: TENANT
+    # Backing store for the designs blob store above.
+    design-assets:
+      type: KvStoreConfig
+      backendId: database
+      scopeBinding: TENANT
+    # Pins token-derived OID4VCI protocol sessions to their first routed issuer
+    # instance using the database KV backend's atomic version chains.
+    oid4vci:
+      credential-request-identities:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
     # Blob descriptor/metadata index for design assets. The dotted store id
     # "blob.metadata" is represented as nested config keys.
     blob:

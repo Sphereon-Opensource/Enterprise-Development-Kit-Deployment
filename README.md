@@ -1,6 +1,6 @@
-# Sphereon EDK Enterprise Deployment Kit
+# EDK Enterprise Deployment Kit
 
-This kit deploys the Sphereon EDK enterprise platform from published container images. It contains the Helm chart, a Docker Compose stack, gateway TLS helpers, and optional scripts/Postman assets for validating first-run setup and tenant onboarding.
+This kit deploys the EDK enterprise platform from published container images. It contains the Helm chart, a Docker Compose stack, gateway TLS helpers, and optional scripts/Postman assets for validating first-run setup and tenant onboarding.
 
 You run published images only. The kit does not build anything. Customer deployments use the public Enterprise Development Kit Deployment repository: <https://github.com/Sphereon-Opensource/Enterprise-Development-Kit-Deployment>.
 
@@ -36,9 +36,9 @@ One optional container completes the platform:
 
 | Image | Role | Public ingress |
 | --- | --- | --- |
-| `nexus.sphereon.com/edk-docker/admin-console` | Next.js operator admin console served under `/admin-console` | `/admin-console` on the platform host only |
+| `nexus.sphereon.com/edk-docker/admin-console` | Next.js operator console and issuer/verifier testing console | Full `/admin-console` on the platform host; isolated testing-console paths on instance hosts |
 
-The admin console is a separate Next.js app built and published by Sphereon, not from this kit. The gateway routes `https://platform.<base-domain>/admin-console` to it. After first-run setup activates the license and creates the operator account, operators sign in there with that account. The per-tenant console (`https://<tenant>.<base-domain>/admin-console`) is a future capability and is not enabled. Do not enable it until a per-tenant API authorization proxy enforces tenant isolation: the gateway only routes, it does not stop a tenant principal from reaching platform-admin APIs or another tenant's data.
+The admin console is a separately published Next.js app, not something this kit builds. The gateway routes the complete console only at `https://platform.<base-domain>/admin-console`. Registered issuer/verifier instance hosts receive only the external testing console, its protocol-local BFF/portal-OAuth routes, required static assets, and health route. Gateway path filtering and the application host guard both deny normal platform admin UI and APIs on instance hosts; the backend public-endpoint registry enforces disabled, public, and AS-protected instance modes.
 
 ## Domain and TLS model
 
@@ -66,13 +66,14 @@ gateway model.
 
 - Nexus credentials for the published `nexus.sphereon.com/edk-docker/enterprise-*` and `nexus.sphereon.com/edk-docker/admin-console` images for the selected `EDK_TAG`.
 - Docker Compose pins the enterprise image repository to `nexus.sphereon.com/edk-docker`; only the tag is configurable. Do not reintroduce `sphereon` or `docker.io/sphereon`, because those names resolve to public Docker Hub and are not EDK enterprise image locations.
-- A Sphereon protected license bundle ZIP, or access to your evaluation license issuer. The setup UI generates the license recipient key when it creates the license request and includes only its public key in that request. You import the protected bundle during platform setup, and setup must also create the first operator account. Evaluation bundles can include the test root CA material when needed.
+- A protected license bundle ZIP, or access to the license issuer provided through your EDK distribution channel. The setup UI generates the license recipient key when it creates the license request and includes only its public key in that request. You import the protected bundle during platform setup, and setup must also create the first operator account. Evaluation bundles can include the test root CA material when needed.
 - TLS material for the operator and tenant hosts. Use one wildcard certificate
   for `*.<base-domain>`, or individual certificates for every tenant host and
   the operator host. The wildcard model is recommended because tenants are
   hosted as `<tenant>.<base-domain>` and can be onboarded without per-tenant
   certificate work.
 - Two PostgreSQL databases: one platform/control-plane database and one tenant workload database. The Docker Compose stack starts separate local Postgres containers for evaluation. For Kubernetes or production-style deployments, use managed, operator-managed, or separately run databases and point the deployment at them with separate credentials Secrets or connection settings. Never put platform and tenant state in the same database in an enterprise deployment.
+- For Kubernetes, a runtime Secret containing independently generated `internal-client-secret` and `keystore-password` values. The Secret name is referenced by `serviceIdentity.internalClientExistingSecret` and `keystore.existingSecret`; the chart never generates these credentials.
 
 ## Required Database Boundary
 
@@ -105,6 +106,28 @@ Follow [docs/quickstart-docker.md](docs/quickstart-docker.md).
 ### Kubernetes (production)
 
 Use the Helm chart under `helm/edk-enterprise/` for production. The chart renders deployments, services, ingress (or a single-port Gateway API front door), NetworkPolicies, and security defaults for the platform, runtime services, and admin console. The gateway examples under `helm/edk-enterprise/examples/` cover Cilium, GKE, AWS ALB, and Azure AGIC.
+
+For a rollback-on-failure Linux/macOS install or upgrade, run the reusable
+wrapper from the repository root. The command is release-independent: select
+the immutable image tag named by the release you are installing:
+
+```bash
+export TARGET_IMAGE_TAG='<approved-release-tag>'
+
+bash ./scripts/upgrade-helm.sh \
+  --values ./customer-values.yaml \
+  --image-tag "$TARGET_IMAGE_TAG" \
+  --tenant-host abc.example.com
+```
+
+Add `--migration-values <path>` only when the selected release explicitly
+provides a migration overlay. An RC1-to-RC2 overlay is included for that one
+historical transition; it is not part of normal future upgrades.
+
+The wrapper preserves existing cryptographic Secrets, creates missing Secrets
+only when safe, backs up the installed release, lints and renders the target
+chart, performs a Helm 3/4-compatible rollback-on-failure upgrade, waits for the
+rollout, and optionally checks the tenant DID document.
 
 Follow [docs/quickstart-kubernetes.md](docs/quickstart-kubernetes.md).
 
@@ -153,6 +176,7 @@ Enterprise-Development-Kit-Deployment/
       examples/                   Ready-to-copy values overlays (incl. gateway and admin-console examples)
       templates/                  Chart templates
   scripts/
+    upgrade-helm.sh                Safe Helm install/upgrade wrapper (Linux/macOS)
     provision.ps1                 Optional setup and tenant onboarding validation over REST (Windows)
     provision.sh                  Optional setup and tenant onboarding validation over REST (Linux/macOS)
     gen-local-wildcard-cert.ps1   Local-evaluation wildcard TLS cert for the gateway (Windows)

@@ -1,0 +1,320 @@
+{{- /*
+Runtime configuration that cannot be expressed safely or completely through the
+shared Deployment environment. The enterprise images do not bake an
+application.yml, so every service with service-specific routing, persistence, or
+security policy receives an explicit base file here.
+*/ -}}
+{{- if .Values.services.did.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-did-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: did
+data:
+  application.yml: |
+    security:
+      header-trust-policy:
+        trusted_service_ids:
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+        service_client_bindings:
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+    did:
+      persistence:
+        type: postgresql
+    kms:
+      providers:
+        software:
+          id: software
+          type: software
+          enabled: true
+          autoCreateCertificate: true
+          keystore:
+            type: pkcs12
+            id: software
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            path: "{tempDir}/edk-verify-keystore.p12"
+    transport:
+      routing:
+        modules:
+          kms:
+            services:
+              signature:
+                commands:
+                  "[kms.signature.verify]":
+                    target: LOCAL
+---
+{{- end }}
+{{- if .Values.services.issuer.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-issuer-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: issuer
+data:
+  application.yml: |
+    security:
+      header-trust-policy:
+        trusted_service_ids:
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+        service_client_bindings:
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+    applications:
+      admin-console:
+        public-base-path: /admin-console
+    oid4vci:
+      issuer:
+        protocol:
+          base-path: /oid4vci
+    kms:
+      providers:
+        software:
+          id: software
+          type: software
+          enabled: true
+          autoCreateCertificate: true
+          keystore:
+            type: pkcs12
+            id: software
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            path: "{tempDir}/edk-verify-keystore.p12"
+    transport:
+      routing:
+        modules:
+          kms:
+            services:
+              signature:
+                commands:
+                  "[kms.signature.verify]":
+                    target: LOCAL
+          oauth2:
+            target: SERVER
+            transport: HTTP
+            endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+          wallet:
+            serviceTokenAudience: {{ index .Values.serviceIdentity.audiences "wallet-interaction" | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              interaction:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-interaction")) .Values.grpc.port | quote }}
+                timeoutMs: 30000
+    blob:
+      stores:
+        designs:
+          type: kvstore
+          kvStoreId: design-assets
+    issuance-pipeline:
+      encryption:
+        master-kek: ${env:EDK_PIPELINE_MASTER_KEK}
+        blind-index-key: ${env:EDK_PIPELINE_BLIND_INDEX_KEY}
+    kv:
+      stores:
+        issuance-pipeline-sessions: &tenantDatabaseKv
+          type: KvStoreConfig
+          backendId: database
+          scopeBinding: TENANT
+        design-assets: *tenantDatabaseKv
+        oid4vci:
+          credential-request-identities: *tenantDatabaseKv
+        blob:
+          metadata: *tenantDatabaseKv
+---
+{{- end }}
+{{- if .Values.services.verifier.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-verifier-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: verifier
+data:
+  application.yml: |
+    security:
+      header-trust-policy:
+        trusted_service_ids:
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+        service_client_bindings:
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+    applications:
+      admin-console:
+        public-base-path: /admin-console
+    kms:
+      providers:
+        software:
+          id: software
+          type: software
+          enabled: true
+          autoCreateCertificate: true
+          keystore:
+            type: pkcs12
+            id: software
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            path: "{tempDir}/edk-verify-keystore.p12"
+    transport:
+      routing:
+        modules:
+          kms:
+            services:
+              signature:
+                commands:
+                  "[kms.signature.verify]":
+                    target: LOCAL
+          did:
+            target: SERVER
+            transport: HTTP
+            endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
+          wallet:
+            serviceTokenAudience: {{ index .Values.serviceIdentity.audiences "wallet-interaction" | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              interaction:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-interaction")) .Values.grpc.port | quote }}
+                timeoutMs: 30000
+---
+{{- end }}
+{{- if (index .Values.services "wallet-unit").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-wallet-unit-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wallet-unit
+data:
+  application.yml: |
+    security:
+      header-trust-policy:
+        trusted_service_ids:
+          - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+        service_client_bindings:
+          "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+    did:
+      persistence:
+        type: postgresql
+    kv-stores:
+      blob.metadata:
+        type: database
+        scope-binding: TENANT
+---
+{{- end }}
+{{- if (index .Values.services "wallet-interaction").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-wallet-interaction-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wallet-interaction
+data:
+  application.yml: |
+    security:
+      header-trust-policy:
+        trusted_service_ids:
+          - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "wallet-unit" | quote }}
+        service_client_bindings:
+          "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "wallet-unit" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
+    transport:
+      routing:
+        modules:
+          wallet:
+            serviceTokenAudience: {{ index .Values.serviceIdentity.audiences "wallet-unit" | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              "[hsm-policy]":
+                commands:
+                  "[wallet.hsm-policy.authorize]":
+                    target: SERVER
+                    transport: GRPC
+                    endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-unit")) .Values.grpc.port | quote }}
+                    timeoutMs: 30000
+    did:
+      persistence:
+        type: postgresql
+    kms:
+      providers:
+        default:
+          type: software
+          enabled: true
+          exposePrivateKeysDuringGeneration: false
+          keyStore:
+            type: pkcs12
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            keystoreRoot: /keystore
+            keyVisibility: private
+            persist: true
+            overwriteAlias: true
+        software:
+          type: software
+          id: software
+          enabled: true
+          keystore:
+            type: pkcs12
+            id: wallet-interaction-keystore
+            password: ${env:EDK_KEYSTORE_PASSWORD}
+            keystoreRoot: /keystore
+            keyVisibility: private
+            persist: true
+            overwriteAlias: true
+    crypto:
+      kms:
+        roles:
+          wallet-interaction:
+            provider: software
+            algorithm: ES256
+    blob-stores:
+      wallet-interaction:
+        type: kvstore
+        kvStoreId: wallet-interaction-blobs
+        scope-binding: TENANT
+        maxBlobSizeBytes: 10485760
+    kv-stores:
+      blob.metadata: &walletDatabaseKv
+        type: database
+        scope-binding: TENANT
+      wallet-interaction-blobs: *walletDatabaseKv
+      wallet-interaction-sessions: *walletDatabaseKv
+    wallet:
+      interaction:
+        trust:
+          policy-mode: WARN
+        security:
+          require-challenge: true
+        oid4vci:
+          holder:
+            signing-key-id: wallet-interaction-holder-signing
+            signing-algorithm: ES256
+{{- end }}

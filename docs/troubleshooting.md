@@ -5,6 +5,8 @@ images: `nexus.sphereon.com/edk-docker/enterprise-platform`,
 `nexus.sphereon.com/edk-docker/enterprise-tenant-kms`,
 `nexus.sphereon.com/edk-docker/enterprise-did`,
 `nexus.sphereon.com/edk-docker/enterprise-tenant-as`,
+`nexus.sphereon.com/edk-docker/enterprise-wallet-unit`,
+`nexus.sphereon.com/edk-docker/enterprise-wallet-interaction`,
 `nexus.sphereon.com/edk-docker/enterprise-issuer`, and
 `nexus.sphereon.com/edk-docker/enterprise-verifier`.
 
@@ -24,6 +26,47 @@ images. Check:
 Confirm the pull secret is valid by describing a failing pod and reading the
 events. A `401`/`403` from the registry or an `unauthorized` message means the
 pull secret is missing, misnamed, or lacks access to one of the repositories.
+
+## Kubernetes runtime Secret failures
+
+The Helm chart requires two references before it renders a deployment:
+
+- `serviceIdentity.internalClientExistingSecret` when any satellite service is enabled;
+- `keystore.existingSecret` when platform or tenant-KMS is enabled.
+
+The referenced Secret normally contains `internal-client-secret` and
+`keystore-password`. `edk-runtime-secrets` is an example Secret name, not a
+prepackaged artifact. A missing Helm value fails `helm template` or
+`helm install` before a release is created and tells you which value and key are
+required.
+
+Helm validates names, not live Secret objects. If the value is configured but
+the object does not exist, pods remain in `CreateContainerConfigError` and events
+contain:
+
+```text
+Error: secret "edk-runtime-secrets" not found
+```
+
+If the Secret exists but is empty or has a wrong key name, events contain one of:
+
+```text
+Error: couldn't find key internal-client-secret in Secret <namespace>/edk-runtime-secrets
+Error: couldn't find key keystore-password in Secret <namespace>/edk-runtime-secrets
+```
+
+Inspect the references and key names without printing Secret data:
+
+```bash
+helm get values edk -n edk
+kubectl get secret edk-runtime-secrets -n edk
+kubectl get events -n edk --sort-by=.metadata.creationTimestamp
+kubectl describe pod <pod-name> -n edk
+```
+
+Create or repair the Secret through the cluster's secret-management mechanism.
+After changing Secret data under the same name, restart the affected deployments
+because environment-variable Secret values are read only at container startup.
 
 ## License bundle rejected
 
@@ -153,6 +196,78 @@ operations fail with a connection error:
   wallet-interaction, and wallet-unit as appropriate. If you enabled
   `networkPolicy`, confirm intra-release traffic to those peers is permitted.
 
+## Tenant registration fails during signing-key provisioning
+
+A failed tenant registration can surface as `503 SERVICE_UNAVAILABLE` when the
+platform asks tenant-AS to provision its signing key and tenant-AS cannot fetch
+the tenant's remote platform configuration. The actionable platform and tenant-AS
+logs mention `REMOTE_PLATFORM_CONFIG_UNAVAILABLE`, `platform.config.get`, or
+`Missing Authorization header`.
+
+Check, in order:
+
+1. `serviceIdentity.internalClientExistingSecret` names the intended Secret in
+   the Helm release namespace.
+2. The Secret contains the key configured by
+   `serviceIdentity.internalClientSecretKey` (default
+   `internal-client-secret`).
+3. Platform and tenant-AS were restarted after the Secret was created or
+   rotated, so both use the same confidential-client credential.
+4. The platform-issued tenant-AS provisioning token and the tenant-AS service
+   client configuration use the chart-rendered client ids, service ids, and
+   audiences as one contract.
+5. NetworkPolicy and service DNS allow tenant-AS to call the platform gRPC
+   endpoint and tenant-KMS.
+
+This diagnostic indicates an east-west authentication/configuration problem.
+An operator token can be valid while this internal hop fails. Do not recreate
+the database or retry tenant compensation repeatedly until the runtime Secret
+and service identities are consistent.
+
+## `invalid_target` or a routed service-token failure
+
+The platform AS returns HTTP 400 with `error: "invalid_target"` when a
+`client_credentials` request cannot resolve one registered target. The exact
+descriptions are:
+
+- `Invalid target: No audience was requested and this client has no default access-token audience`
+- `Invalid target: Client credentials access tokens are restricted to one audience per request`
+- `Invalid target: Requested audience is not registered for this client`
+
+The second message also covers duplicate targets: two copies of the same
+audience are still multiple requested values. Diagnose these failures in this
+order:
+
+1. **Caller client ID.** Identify the actual
+   `serviceIdentity.clientIds.<caller>` used in the token request and its bound
+   `serviceIdentity.serviceIds.<caller>`. Do not start from the receiver name.
+2. **Route audience.** Read the effective route `serviceTokenAudience`, such as
+   `transport.routing.modules.kms.serviceTokenAudience`, and confirm the caller
+   sent zero or one audience value, never a comma-separated or duplicated set.
+3. **Default and allowlist.** Inspect that caller's internal-client registration.
+   `default-access-token-audience` must be nonblank for an omitted audience; an
+   explicit non-default target must appear once in
+   `allowed-access-token-audiences`.
+4. **Receiver audience.** Confirm the route target equals the receiver's
+   `serviceIdentity.audiences.<receiver>` and the receiver's effective expected
+   audience. A token can be validly issued yet rejected by the receiver when
+   these differ.
+
+A partial caller identity fails before token acquisition with
+`Incomplete service identity configuration; missing required keys: <keys>`;
+the reported keys are from `server.service-identity.token-endpoint`,
+`server.service-identity.client-id`, and
+`server.service-identity.client-secret`. Explicit workload routes also fail
+closed with one of these exact forms:
+
+- `Service token required by serviceTokenAudience='<audience>', but no ServiceTokenProvider is configured`
+- `Service token required by serviceTokenAudience='<audience>', but ServiceTokenProvider returned no token`
+
+When `preferServiceTokenOverSessionBearer=true` is also effective, that phrase
+is included in the requirement list. These errors cannot fall back to a session
+bearer, delegation token, or anonymous request. Fix the caller identity and
+route registration; do not weaken the receiver audience check.
+
 ## Admin console routing and sign-in
 
 The optional admin console is served under `/admin-console` on the platform host and
@@ -167,6 +282,18 @@ listens on port `3000`. If it does not load or you cannot sign in:
   the gateway prefix handling is wrong. The container must run with
   `NEXT_PUBLIC_BASE_PATH=/admin-console`, and the route must forward the full path
   **without** a StripPrefix. See [TLS and gateway](tls-and-gateway.md).
+- `404` on `https://<instance-host>/testing-console/{kind}/{instanceId}`. Confirm
+  the public-page router matches `/testing-console`, is bound to wildcard
+  instance hosts, and rewrites to `/admin-console/testing-console`. For Traefik
+  the middleware must be `AddPrefix /admin-console`; for Gateway API it must be
+  a page-only `ReplacePrefixMatch`. If routing is correct, a disabled,
+  unregistered, or origin-mismatched instance still returns 404 by design.
+- A testing page loads but its API, OAuth, asset, or health requests return
+  `404`. Confirm the separate direct-support route includes only the two testing
+  API prefixes, the exact portal OAuth login/callback/grant/revoke endpoints,
+  `_next`, public assets, and health under
+  `/admin-console`. Do not add a generic instance-host `/admin-console` route or
+  a compatibility route for `/admin-console/testing`.
 - Runtime config request `404` or `401` on
   `/api/platform/bootstrap/v1/runtime-config/admin-console`. The platform
   bootstrap route is missing from the gateway or from

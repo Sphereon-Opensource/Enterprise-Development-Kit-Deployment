@@ -24,27 +24,121 @@ database, while platform state must live in its own logical database.
 
 ## Install
 
-```powershell
-helm upgrade --install edk-enterprise .\helm\edk-enterprise `
-  --namespace edk --create-namespace `
-  -f .\helm\edk-enterprise\examples\shared-postgres-values.yaml
+### One-shot install or upgrade
+
+The deployment repository includes a Bash wrapper for Linux and macOS that
+creates only missing Secret prerequisites, preserves existing keystore and
+pipeline keys, backs up an installed release, lints and renders the chart,
+rolls back a failed upgrade, waits for every Deployment, and can verify the
+tenant DID document. It is not tied to a particular version transition:
+
+```bash
+export TARGET_IMAGE_TAG='<approved-release-tag>'
+
+bash ./scripts/upgrade-helm.sh \
+  --release sphereon-edk-enterprise \
+  --namespace edk \
+  --values ./customer-values.yaml \
+  --image-tag "$TARGET_IMAGE_TAG" \
+  --tenant-host abc.example.com
+```
+
+Supply `--migration-values <path>` only when the selected release explicitly
+provides an overlay. The included RC1-to-RC2 overlay is applied after the site
+values so stale RC1 computed values cannot restore empty anonymous path lists;
+it contains no Secret values and must not be reused for later releases. Without
+an overlay, the selected chart and maintained site values are authoritative.
+
+Existing `internal-client-secret`, `keystore-password`, BFF credentials, and
+issuer-pipeline keys are preserved. If an existing Secret is missing a key that
+cannot be regenerated safely, the wrapper stops instead of rotating it.
+
+### Direct Helm command
+
+Create the registry credential and runtime Secrets described below before
+running the example installation:
+
+```bash
+helm upgrade --install edk-enterprise ./helm/edk-enterprise \
+  --namespace edk --create-namespace \
+  -f ./helm/edk-enterprise/examples/shared-postgres-values.yaml
 ```
 
 Customer deployments install this chart from the public Enterprise Development Kit
 Deployment repository: <https://github.com/Sphereon-Opensource/Enterprise-Development-Kit-Deployment>.
 
-Create a Nexus pull secret and reference it with `global.imagePullSecrets`.
-Leave `global.imageRegistry` at `nexus.sphereon.com/edk-docker` unless Sphereon gives you a
-private mirror. Do not set it to `sphereon` or `docker.io/sphereon`; that points
+Create a registry pull Secret (the examples use `edk-registry-credentials`) and
+reference its name with `global.imagePullSecrets`.
+Leave `global.imageRegistry` at `nexus.sphereon.com/edk-docker` unless your OEM,
+MSP, or EDK distributor provides a private mirror. Do not set it to `sphereon`
+or `docker.io/sphereon`; that points
 Kubernetes at public Docker Hub, not the EDK enterprise registry.
+
+Before installing, create the runtime Secret in the same namespace as the Helm
+release. `edk-runtime-secrets` is an example Secret **name**, not an image or a
+prepackaged file. It holds three independently generated values:
+
+```powershell
+kubectl --namespace edk create secret generic edk-runtime-secrets `
+  --from-literal=internal-client-secret='<long-random-confidential-client-secret>' `
+  --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' `
+  --from-literal=keystore-password='<long-random-pkcs12-password>'
+```
+
+The command is suitable for an evaluation namespace. For production, have the
+cluster's secret-management mechanism create the same Kubernetes Secret and
+keys; do not commit a rendered Secret or plaintext values to Git. Use at least
+32 random bytes for each value.
+
+Create the issuer-pipeline Secret separately. Its master KEK and blind-index
+key must be distinct, independently generated 32-byte base64url values:
+
+```powershell
+kubectl --namespace edk create secret generic edk-issuer-pipeline-secrets `
+  --from-literal=master-kek='<independent-32-byte-base64url-value>' `
+  --from-literal=blind-index-key='<independent-32-byte-base64url-value>'
+```
+
+Then configure all Secret references:
+
+```yaml
+serviceIdentity:
+  internalClientExistingSecret: edk-runtime-secrets
+  internalClientSecretKey: internal-client-secret
+keystore:
+  existingSecret: edk-runtime-secrets
+  passwordKey: keystore-password
+
+issuerPipeline:
+  existingSecret: edk-issuer-pipeline-secrets
+  masterKekKey: master-kek
+  blindIndexKey: blind-index-key
+portalBff:
+  existingSecret: edk-runtime-secrets
+  clientSecretKey: admin-console-portal-bff-secret
+```
+
+`internal-client-secret` is shared by the platform authorization server and its
+registered internal confidential clients. Satellites use it at the platform
+token endpoint to obtain short-lived east-west bearer tokens; it is what causes
+`SERVER_SERVICE_IDENTITY_CLIENT_SECRET` to be rendered. `keystore-password`
+protects the platform and tenant-KMS software PKCS#12 stores and is rendered as
+`EDK_KEYSTORE_PASSWORD`. `admin-console-portal-bff-secret` is a separate
+credential used only by the dedicated `admin-console-portal-bff` client and the
+admin-console server. Generate all three independently, keep them out of values
+files and Git, and rotate them as credentials. The Secret name and key names may
+be changed, but the referenced Secret and keys must already exist in the release
+namespace. A Helm value change rolls the affected Deployments; when only Secret
+data changes under the same name, restart the platform and satellite pods because
+environment-variable Secret values are read only when a container starts.
 
 ## Main Values
 
 | Value | Default | Purpose |
 | --- | --- | --- |
 | `global.imageRegistry` | `nexus.sphereon.com/edk-docker` | Registry root for all service images. Must not be `sphereon` or `docker.io/sphereon`. |
-| `global.imageTag` | `0.25.0-SNAPSHOT` | Image tag used for all enterprise services. |
-| `global.imagePullPolicy` | `IfNotPresent` | Kubernetes image pull policy. |
+| `global.imageTag` | `0.25.0-SNAPSHOT` | Image tag used for all enterprise services. Production rejects `latest`; pin the approved tag supplied through your EDK distribution channel. |
+| `global.imagePullPolicy` | `IfNotPresent` | Kubernetes image pull policy. Non-production `latest` requires `Always` to avoid silently reusing a stale node-local image. |
 | `global.imagePullSecrets` | `[]` | Pull secrets rendered into every service pod. |
 | `global.platformBaseDomain` | `example.com` | Customer-controlled base domain. The platform is `platform.<baseDomain>` and tenants are `<tenant-slug>.<baseDomain>`. |
 | `database.enabled` | `true` | Enables database environment wiring. |
@@ -55,6 +149,8 @@ Kubernetes at public Docker Hub, not the EDK enterprise registry.
 | `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, and renders gRPC peer endpoints for routed calls to those receivers. |
 | `config.providers.platformConfigRemote.enabled` | `true` | Enables platform-owned remote config reads for every satellite/workload service. |
 | `config.providers.tenantConfigDb.enabled` | `false` | Disables direct tenant-config DB reads on satellites so platform remains the config authority. |
+| `issuerPipeline.existingSecret` | `""` | Required Secret name for issuer pipeline encryption and blind-index keys. |
+| `platform.secretBackend.type` | `config-system-dev-only` | Application-admin secret backend. The development backend is rejected in production mode. |
 | `license.installationId` | `""` | Optional explicit runtime pin to a known installation id. Leave empty for first-run setup; the protected bundle supplies the installation id. If set, it must match the installed license claims. |
 | `networkPolicy.enabled` | `true` | Renders service ingress/egress NetworkPolicies. |
 | `gateway.enabled` | `true` | Renders the single-port customer Gateway and HTTPRoutes. |
@@ -71,7 +167,7 @@ Each service is configured under `services.<name>` where `<name>` is `platform`,
 | `enabled` | Enable or disable the service. |
 | `image` | Image repository name under `global.imageRegistry`. |
 | `replicas` | Deployment replica count. |
-| `restPort` | Internal container and Kubernetes Service REST port. Leave the default unless Sphereon supplies an override; it is not a customer endpoint. |
+| `restPort` | Internal container and Kubernetes Service REST port. Leave the default unless your OEM, MSP, or EDK distributor supplies an override; it is not a customer endpoint. |
 | `publicIngress` | Legacy per-service ingress settings. Disabled by default; customer deployments use the Gateway. |
 | `internalIngress` | Legacy internal ingress settings for private administrative/API endpoints. Disabled by default. |
 | `resources` | Container requests and limits. |
@@ -89,7 +185,7 @@ Default backing components:
 | `wallet-interaction` | `true` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
 | `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
-| `admin-console` | `true` | `admin-console` | Operator UI behind `platform.<baseDomain>/admin-console` |
+| `admin-console` | `true` | `admin-console` | Full operator UI on the platform host and isolated testing-console paths on instance hosts |
 
 Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
 wallet-unit, wallet-interaction, issuer, and verifier remain backing workloads
@@ -104,6 +200,7 @@ The chart renders internal service identity from one `serviceIdentity` contract:
 | Value | Purpose |
 | --- | --- |
 | `serviceIdentity.internalClientExistingSecret` | Secret containing the shared confidential-client secret used by internal service clients. |
+| `serviceIdentity.internalClientSecretKey` | Key in that Secret; defaults to `internal-client-secret`. |
 | `serviceIdentity.clientIds.<service>` | OAuth client id each satellite presents to the platform AS for client-credentials service tokens. |
 | `serviceIdentity.serviceIds.<service>` | Workload id the caller asserts as `X-Service-Id` on internal command transport. |
 | `serviceIdentity.audiences.<service>` | JWT audience expected by the receiving service. |
@@ -112,6 +209,52 @@ These values drive platform internal OAuth clients, platform and receiver
 header trust bindings, satellite service-token env, receiver audience env,
 admin-console token-exchange audiences, and STS allowed audiences. Do not change
 one without changing the others.
+
+The receiver expected audience, route-requested audience, client default, and
+additional allowlist are different controls. The receiver validates
+`serviceIdentity.audiences.<receiver>`. A caller route requests that value with
+`serviceTokenAudience`. The platform AS uses the internal registration key
+`default-access-token-audience` when a `client_credentials` request omits an
+audience and permits a non-default explicit target only through
+`allowed-access-token-audiences`. The client id is also bound to the asserted
+service id; `X-Service-Id` does not establish identity by itself.
+
+The chart derives this strict registration matrix from the
+`serviceIdentity.audiences` map:
+
+| Caller | Client/service binding | Default | Allowed additional audiences |
+| --- | --- | --- | --- |
+| tenant-KMS | `clientIds.tenant-kms` / `serviceIds.tenant-kms` | `audiences.platform` | none |
+| wallet-unit | `clientIds.wallet-unit` / `serviceIds.wallet-unit` | `audiences.platform` | none |
+| tenant-AS | `clientIds.tenant-as` / `serviceIds.tenant-as` | `audiences.platform` | `audiences.tenant-kms` |
+| DID | `clientIds.did` / `serviceIds.did` | `audiences.platform` | `audiences.tenant-kms` |
+| issuer | `clientIds.issuer` / `serviceIds.issuer` | `audiences.platform` | `audiences.tenant-kms`, `audiences.wallet-interaction` |
+| verifier | `clientIds.verifier` / `serviceIds.verifier` | `audiences.platform` | `audiences.tenant-kms`, `audiences.wallet-interaction` |
+| wallet-interaction | `clientIds.wallet-interaction` / `serviceIds.wallet-interaction` | `audiences.platform` | `audiences.wallet-unit` |
+
+An audience-free client-credentials request is valid only when its default is
+nonblank. Exactly one requested audience is valid only when it equals the
+default or is in the explicit additional allowlist. Missing defaults, multiple
+or duplicate targets, and unregistered targets return HTTP 400
+`invalid_target`. Do not repeat the default in the additional allowlist.
+
+The chart now rejects a deployment with enabled satellite services when
+`serviceIdentity.internalClientExistingSecret` is empty. It also rejects
+platform/tenant-KMS deployments without `keystore.existingSecret`, and rejects
+KMS-consuming services when `services.tenant-kms.enabled=false`. These are
+render-time errors so an incomplete release cannot reach the tenant-registration
+path with missing service Authorization headers.
+
+Render-time validation cannot query the target namespace. When a configured
+Secret name does not exist, Kubernetes leaves affected pods in
+`CreateContainerConfigError` with `secret "<name>" not found`. When the Secret
+exists without the configured key, events report `couldn't find key
+internal-client-secret` or `couldn't find key keystore-password`. Inspect events
+with `kubectl get events --namespace <namespace>
+--sort-by=.metadata.creationTimestamp`; do not print Secret values into
+diagnostic logs. Correct the Secret through the cluster's secret-management
+mechanism and restart affected Deployments after changing data under an existing
+Secret name.
 
 Internal identity headers are not credentials. A receiver may honor
 `X-Tenant-Id` or `X-Principal-Id` only after a bearer JWT validates, the token is
@@ -128,6 +271,15 @@ bearer. During tenant-AS signing-key provisioning, the inbound platform JWT is
 addressed to the tenant-AS provisioning endpoint and is terminated there; the
 AS-to-KMS hop uses the `tenant-as-service` confidential client to mint the
 tenant-KMS audience token.
+
+A route-level `serviceTokenAudience` or
+`preferServiceTokenOverSessionBearer=true` is an explicit workload-auth
+requirement. A missing provider or token fails closed; the caller cannot fall
+back to a session bearer, delegation, or anonymous transport. Likewise, setting
+only some of `server.service-identity.token-endpoint`,
+`server.service-identity.client-id`, and
+`server.service-identity.client-secret` is an invalid partial identity, not a
+disabled identity.
 
 `platform.externalBaseUrl` is the canonical platform public origin and token
 issuer. The chart renders platform `EXTERNAL_BASE_URL` and
@@ -173,38 +325,41 @@ The single-port Gateway API model is enabled by default with
 ingress is limited to platform and tenant host/path routes; admin REST and
 runtime probes must stay internal or protected.
 
+The Gateway has an exact `https-platform` listener for the operator host and a
+separate wildcard `https` listener for tenant/satellite hosts. Platform routes
+attach only to the exact listener; instance testing-console routes attach only
+to the wildcard listener.
+
 ### Admin console
 
-The `admin-console` service is a Next.js standalone web UI served under the
-`/admin-console` basePath (the root `/` returns 404). It is a single
-host-agnostic build: the OIDC authorization-server origin resolves from the
-request host behind the gateway, while platform-admin, platform-config, tenant-KMS,
-DID, issuer-owned, and verifier-owned browser API calls default to
-`/admin-console/api/*`. The chart injects internal platform, tenant KMS, DID,
-issuer, and verifier upstreams for that server-side route proxy. It is
-fronted on the operator/platform host
-(`platform.<baseDomain>/admin-console`) alongside the platform authorization
-server, and authenticates operators against the platform AS via the OAuth
-callback `/admin-console/callback`. The `/admin-console` prefix must NEVER be
-stripped at the proxy - Next emits absolute `/admin-console/_next/...` asset
-URLs. The pod sets `NEXT_PUBLIC_BASE_PATH=/admin-console`, `PORT=3000`, the
-server-only `ADMIN_CONSOLE_*_BASE_URL` upstream variables, and the
-`NEXT_PUBLIC_PLATFORM_AUDIENCE`,
-`NEXT_PUBLIC_TENANT_KMS_AUDIENCE`, `NEXT_PUBLIC_TENANT_DID_AUDIENCE`,
-`NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE`, and `NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE`
-values from `serviceIdentity.audiences`. OAuth access and refresh tokens stay
-server-side in the BFF; the browser receives only the HttpOnly SameSite session
-cookie and uses same-origin `/admin-console/api/*` calls.
+The `admin-console` service is a Next.js standalone app under `/admin-console`.
+The platform host receives the complete operator console. Wildcard instance
+hosts receive the canonical public page
+`/testing-console/{kind}/{instanceId}`. A page-only `URLRewrite` maps
+`/testing-console` to `/admin-console/testing-console`; a separate rule forwards
+only `/admin-console/api/oid4vci/v1/testing`,
+`/admin-console/api/oid4vp/v1/testing`, `/admin-console/api/portal-oauth`,
+required Next/public assets, and health. Both the Gateway route and
+the application host guard enforce the allowlist; the backend endpoint registry
+then validates the exact instance origin and disabled/public/AS-protected mode.
+Normal platform admin UI, auth endpoints, callbacks, previews, tools, and generic
+admin APIs are not routed or served on instance hosts.
+
+The server obtains a dedicated `admin-console-portal-bff` client_credentials
+token with the single `bff.oauth` scope and
+`application-bff-oauth-client` audience. Its client secret comes from
+`portalBff.existingSecret`; it is never included in browser configuration. The
+platform backend provisions and startup-validates distinct A256GCM and HMAC key
+aliases under `portalBff.kms`. The exact internal platform HTTP origin is passed
+through the server-only allowlist; arbitrary insecure HTTP destinations remain
+rejected.
 
 On the Gateway API path the explicit `/admin-console` PathPrefix route is more
 specific than the platform service's `/` catch-all, so `/admin-console/*` routes
-to the console while everything else falls through to the platform. Root `/api/*`
-routes may still be enabled for authenticated automation and diagnostics through
-the gateway, but the console does not depend on them.
-
-| Value | Default | Purpose |
-| --- | --- | --- |
-| `enableTenantConsole` | `false` | FUTURE: render the wildcard tenant-host console route (`*.<baseDomain>/admin-console`). Do NOT enable until a per-tenant API authorization proxy enforces tenant isolation - routing alone does not stop a tenant principal from reaching platform-admin APIs or another tenant's data. Only the operator-host console route is rendered by default. |
+to the console while everything else falls through to the platform. Instance
+HTTPRoutes keep the public-page rewrite in its own rule so it cannot alter the
+direct testing-console support paths described above. They provide no
+`/admin-console/testing` compatibility alias.
 
 See `examples/admin-console-values.yaml`.
 

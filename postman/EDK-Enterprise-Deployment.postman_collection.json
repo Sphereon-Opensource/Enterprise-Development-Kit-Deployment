@@ -44,6 +44,27 @@
     {
       "key": "issuerId",
       "value": ""
+    },
+    {
+      "key": "verifierInstanceId",
+      "value": "",
+      "description": "Runtime verifier instance id resolved separately from the verifier party UUID."
+    },
+    {
+      "key": "issuerTestingPublicBaseUrl",
+      "value": ""
+    },
+    {
+      "key": "verifierTestingPublicBaseUrl",
+      "value": ""
+    },
+    {
+      "key": "issuerTestingDisplayUrl",
+      "value": ""
+    },
+    {
+      "key": "verifierTestingDisplayUrl",
+      "value": ""
     }
   ],
   "item": [
@@ -634,12 +655,20 @@
                   ");",
                   "const selected = instances.find((instance) => instance.enabled !== false) || instances[0];",
                   "const resolvedId = idOf(selected);",
+                  "const resolvedInstanceId = stringOf(selected && selected.instanceId);",
                   "pm.test('verifier party id resolved from platform config', () => {",
                   "  pm.expect(resolvedId, 'verifier party id').to.be.a('string').and.match(uuidPattern);",
+                  "});",
+                  "pm.test('verifier runtime instance id resolved from platform config', () => {",
+                  "  pm.expect(resolvedInstanceId, 'verifier instance id').to.be.a('string').and.not.empty;",
                   "});",
                   "if (resolvedId) {",
                   "  pm.collectionVariables.set('verifierId', resolvedId);",
                   "  pm.environment.set('verifierId', resolvedId);",
+                  "}",
+                  "if (resolvedInstanceId) {",
+                  "  pm.collectionVariables.set('verifierInstanceId', resolvedInstanceId);",
+                  "  pm.environment.set('verifierInstanceId', resolvedInstanceId);",
                   "}"
                 ]
               }
@@ -685,6 +714,182 @@
                   "  pm.collectionVariables.set('issuerId', resolvedId);",
                   "  pm.environment.set('issuerId', resolvedId);",
                   "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 Get issuer testing-console config",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/testing-console",
+            "description": "Confirms sample-data provisioning automatically enabled the exact issuer instance's PUBLIC testing console and resolves its tenant-gateway URLs.",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer testing-console config returned', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "const tenantGatewayUrl = pm.variables.replaceIn('{{tenantGatewayUrl}}').replace(/\\/+$/, '');",
+                  "const issuerId = pm.variables.replaceIn('{{issuerId}}');",
+                  "const publicBaseUrl = typeof j.publicBaseUrl === 'string' ? j.publicBaseUrl.replace(/\\/+$/, '') : '';",
+                  "const displayUrl = typeof j.displayUrl === 'string' ? j.displayUrl : '';",
+                  "const expectedDisplayUrl = `${tenantGatewayUrl}/testing-console/issuer/${encodeURIComponent(issuerId)}?publicBaseUrl=${encodeURIComponent(publicBaseUrl)}`;",
+                  "pm.test('issuer testing-console config is enabled PUBLIC on the tenant host', () => {",
+                  "  pm.expect(j.enabled && j.enabled.value, 'enabled.value').to.eql(true);",
+                  "  pm.expect(j.exposureMode && j.exposureMode.value, 'exposureMode.value').to.eql('public');",
+                  "  pm.expect(publicBaseUrl, 'publicBaseUrl').to.satisfy((value) => value === tenantGatewayUrl || value.startsWith(`${tenantGatewayUrl}/`));",
+                  "  pm.expect(displayUrl, 'displayUrl').to.eql(expectedDisplayUrl);",
+                  "});",
+                  "if (publicBaseUrl && displayUrl) {",
+                  "  pm.collectionVariables.set('issuerTestingPublicBaseUrl', publicBaseUrl);",
+                  "  pm.environment.set('issuerTestingPublicBaseUrl', publicBaseUrl);",
+                  "  pm.collectionVariables.set('issuerTestingDisplayUrl', displayUrl);",
+                  "  pm.environment.set('issuerTestingDisplayUrl', displayUrl);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Get verifier testing-console config",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vp/verifier/instances/{{verifierInstanceId}}/testing-console",
+            "description": "Confirms sample-data provisioning automatically enabled the exact verifier instance's PUBLIC testing console and resolves its tenant-gateway URLs.",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('verifier testing-console config returned', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "const tenantGatewayUrl = pm.variables.replaceIn('{{tenantGatewayUrl}}').replace(/\\/+$/, '');",
+                  "const verifierInstanceId = pm.variables.replaceIn('{{verifierInstanceId}}');",
+                  "const publicBaseUrl = typeof j.publicBaseUrl === 'string' ? j.publicBaseUrl.replace(/\\/+$/, '') : '';",
+                  "const displayUrl = typeof j.displayUrl === 'string' ? j.displayUrl : '';",
+                  "const expectedDisplayUrl = `${tenantGatewayUrl}/testing-console/verifier/${encodeURIComponent(verifierInstanceId)}?publicBaseUrl=${encodeURIComponent(publicBaseUrl)}`;",
+                  "pm.test('verifier testing-console config is enabled PUBLIC on the tenant host', () => {",
+                  "  pm.expect(j.enabled && j.enabled.value, 'enabled.value').to.eql(true);",
+                  "  pm.expect(j.exposureMode && j.exposureMode.value, 'exposureMode.value').to.eql('public');",
+                  "  pm.expect(publicBaseUrl, 'publicBaseUrl').to.satisfy((value) => value === tenantGatewayUrl || value.startsWith(`${tenantGatewayUrl}/`));",
+                  "  pm.expect(displayUrl, 'displayUrl').to.eql(expectedDisplayUrl);",
+                  "});",
+                  "if (publicBaseUrl && displayUrl) {",
+                  "  pm.collectionVariables.set('verifierTestingPublicBaseUrl', publicBaseUrl);",
+                  "  pm.environment.set('verifierTestingPublicBaseUrl', publicBaseUrl);",
+                  "  pm.collectionVariables.set('verifierTestingDisplayUrl', displayUrl);",
+                  "  pm.environment.set('verifierTestingDisplayUrl', displayUrl);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Fetch issuer testing-console bootstrap",
+          "request": {
+            "method": "GET",
+            "url": "{{issuerTestingPublicBaseUrl}}/api/oid4vci/v1/testing/instances/{{issuerId}}/bootstrap",
+            "description": "Fetches the exact tenant-host issuer PUBLIC bootstrap without an operator or resource token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer testing-console bootstrap returned', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('issuer testing-console bootstrap matches exact public instance contract', () => {",
+                  "  pm.expect(j.kind, 'kind').to.eql('issuer');",
+                  "  pm.expect(j.instanceId, 'instanceId').to.eql(pm.variables.replaceIn('{{issuerId}}'));",
+                  "  pm.expect(j.publicBaseUrl, 'publicBaseUrl').to.eql(pm.variables.replaceIn('{{issuerTestingPublicBaseUrl}}'));",
+                  "  pm.expect(j.displayUrl, 'displayUrl').to.eql(pm.variables.replaceIn('{{issuerTestingDisplayUrl}}'));",
+                  "  pm.expect(j.access, 'access').to.eql('PUBLIC');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 Fetch verifier testing-console bootstrap",
+          "request": {
+            "method": "GET",
+            "url": "{{verifierTestingPublicBaseUrl}}/api/oid4vp/v1/testing/instances/{{verifierInstanceId}}/bootstrap",
+            "description": "Fetches the exact tenant-host verifier PUBLIC bootstrap without an operator or resource token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('verifier testing-console bootstrap returned', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('verifier testing-console bootstrap matches exact public instance contract', () => {",
+                  "  pm.expect(j.kind, 'kind').to.eql('verifier');",
+                  "  pm.expect(j.instanceId, 'instanceId').to.eql(pm.variables.replaceIn('{{verifierInstanceId}}'));",
+                  "  pm.expect(j.publicBaseUrl, 'publicBaseUrl').to.eql(pm.variables.replaceIn('{{verifierTestingPublicBaseUrl}}'));",
+                  "  pm.expect(j.displayUrl, 'displayUrl').to.eql(pm.variables.replaceIn('{{verifierTestingDisplayUrl}}'));",
+                  "  pm.expect(j.access, 'access').to.eql('PUBLIC');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 Fetch issuer testing-console display page",
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "method": "GET",
+            "url": "{{issuerTestingDisplayUrl}}",
+            "description": "Requires the exact tenant-host issuer testing-console document to be served directly with HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer testing-console display page returned', () => pm.response.to.have.status(200));",
+                  "pm.test('issuer testing-console display page is HTML', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('text/html'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 Fetch verifier testing-console display page",
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "method": "GET",
+            "url": "{{verifierTestingDisplayUrl}}",
+            "description": "Requires the exact tenant-host verifier testing-console document to be served directly with HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('verifier testing-console display page returned', () => pm.response.to.have.status(200));",
+                  "pm.test('verifier testing-console display page is HTML', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('text/html'));"
                 ]
               }
             }

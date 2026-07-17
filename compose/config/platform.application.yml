@@ -182,6 +182,15 @@ oauth2:
   user-provider:
     mode: local
   clients:
+    admin-console-portal-bff:
+      client-id: admin-console-portal-bff
+      client-name: Admin Console Portal BFF
+      client-secret: ${env:ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
+      client-type: confidential
+      grant-types: client_credentials
+      allowed-scopes: bff.oauth
+      default-access-token-audience: application-bff-oauth-client
+      token-endpoint-auth-method: client_secret_basic
     platform-operator-cli:
       client-id: platform-operator-cli
       client-name: Platform Operator CLI
@@ -229,24 +238,36 @@ oauth2:
         issuer:
           client-id: issuer-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-wallet-interaction
         kms:
           client-id: kms-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          default-access-token-audience: enterprise-platform
         did:
           client-id: did-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms
         verifier:
           client-id: verifier-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-wallet-interaction
         wallet-unit:
           client-id: wallet-unit-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          default-access-token-audience: enterprise-platform
         wallet-interaction:
           client-id: wallet-interaction-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-wallet-unit
         tenantas:
           client-id: tenant-as-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms
     platform:
       # Application bootstrap provisions the control-plane AS with slug `platform`
       # (ApplicationTenants.AS_SLUG), so the materialization flag must exist on
@@ -255,6 +276,15 @@ oauth2:
       signing-key:
         auto-generate: true
 application:
+  bff:
+    oauth-client:
+      workload-audience: application-bff-oauth-client
+      workload-scope: bff.oauth
+      workload-client-id: admin-console-portal-bff
+      kms:
+        provider-id: platform
+        encryption-key-id: application-bff-oauth-client-aead
+        handle-hmac-key-id: application-bff-oauth-client-owner-hmac
   admin:
     secret-backend:
       # Secret backend that resolves admin and onboarding secrets. TODO: select a

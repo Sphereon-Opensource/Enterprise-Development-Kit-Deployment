@@ -21,6 +21,10 @@ server:
     token-endpoint: http://enterprise-platform:18080/token
     client-id: verifier-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    audience: enterprise-platform
+applications:
+  admin-console:
+    public-base-path: ${env:EDK_ADMIN_CONSOLE_PUBLIC_BASE_PATH:/admin-console}
 sphereon:
   telemetry:
     enabled: true
