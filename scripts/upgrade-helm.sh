@@ -81,7 +81,7 @@ secret_key_value() {
   local secret_name="$1"
   local key="$2"
   kubectl -n "$NAMESPACE" get secret "$secret_name" \
-    -o "go-template={{ index .data \"$key\" }}" 2>/dev/null || true
+    -o "go-template={{ with index .data \"$key\" }}{{ . }}{{ end }}" 2>/dev/null || true
 }
 
 secret_has_key() {
@@ -200,6 +200,11 @@ else
   fi
 fi
 
+for required_key in internal-client-secret keystore-password admin-console-portal-bff-secret; do
+  secret_has_key "$RUNTIME_SECRET_NAME" "$required_key" ||
+    die "Secret/$RUNTIME_SECRET_NAME is missing '$required_key' after runtime-secret reconciliation."
+done
+
 if ! secret_exists "$PIPELINE_SECRET_NAME"; then
   printf 'Creating issuer pipeline Secret/%s.\n' "$PIPELINE_SECRET_NAME"
   PIPELINE_MASTER_KEK="$(base64url_secret 32)"
@@ -218,6 +223,11 @@ else
      "$(secret_key_value "$PIPELINE_SECRET_NAME" blind-index-key)" ]] ||
     die "Existing Secret/$PIPELINE_SECRET_NAME reuses the same value for both pipeline keys."
 fi
+
+for required_key in master-kek blind-index-key; do
+  secret_has_key "$PIPELINE_SECRET_NAME" "$required_key" ||
+    die "Secret/$PIPELINE_SECRET_NAME is missing '$required_key' after issuer-pipeline reconciliation."
+done
 
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$BACKUP_ROOT/$RELEASE_NAME-$TIMESTAMP"
