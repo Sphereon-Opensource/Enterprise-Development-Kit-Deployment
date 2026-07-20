@@ -196,6 +196,19 @@ operations fail with a connection error:
   wallet-interaction, and wallet-unit as appropriate. If you enabled
   `networkPolicy`, confirm intra-release traffic to those peers is permitted.
 
+## Tenant creation fails on a 0.25.0-RC1 install
+
+0.25.0-RC1 shipped Helm defaults that left `/.well-known` off the DID service's
+anonymous path list. The tenant DID document at
+`https://<tenant-host>/.well-known/did.json` then required a bearer token, so it
+could not be resolved anonymously and tenant creation could not complete. A
+direct check against the DID service returns `401` on the DID document path for
+the same reason.
+
+This is fixed in 0.25.0-RC2. Upgrade with the bundled overlay so the corrected
+public paths apply even when the maintained values file was exported from RC1.
+See [Upgrading from 0.25.0-RC1 to 0.25.0-RC2](quickstart-kubernetes.md#upgrading-from-0250-rc1-to-0250-rc2).
+
 ## Tenant registration fails during signing-key provisioning
 
 A failed tenant registration can surface as `503 SERVICE_UNAVAILABLE` when the

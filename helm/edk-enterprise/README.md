@@ -43,11 +43,19 @@ bash ./scripts/upgrade-helm.sh \
   --tenant-host abc.example.com
 ```
 
-Supply `--migration-values <path>` only when the selected release explicitly
-provides an overlay. The included RC1-to-RC2 overlay is applied after the site
-values so stale RC1 computed values cannot restore empty anonymous path lists;
-it contains no Secret values and must not be reused for later releases. Without
-an overlay, the selected chart and maintained site values are authoritative.
+`--release` and `--namespace` are operator choices. `sphereon-edk-enterprise`
+and `edk` are only the wrapper defaults; pass the release name and namespace this
+install uses. For an upgrade, they must match the existing release.
+
+Supply `--migration-values <path>` only when the release you are installing ships
+an overlay. The one current case is the upgrade from 0.25.0-RC1 to 0.25.0-RC2.
+The overlay `examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml` re-asserts
+the public `serviceIdentity.anonymousPathPrefixes` that RC1 left empty, which is
+what blocked tenant creation on RC1. It is applied after the site values so a
+values file exported from RC1 cannot restore the broken list. It holds no Secret
+values and must not be reused for later releases. Without an overlay, the
+selected chart and maintained site values are authoritative. The full upgrade is
+in [quickstart-kubernetes.md](../../docs/quickstart-kubernetes.md#upgrading-from-0250-rc1-to-0250-rc2).
 
 Existing `internal-client-secret`, `keystore-password`, BFF credentials, and
 issuer-pipeline keys are preserved. If an existing Secret is missing a key that
@@ -320,6 +328,16 @@ registration, not per-tenant certificate issuance. Public CAs such as Let's
 Encrypt can be used; for cert-manager and Let's Encrypt wildcard certificates,
 configure DNS-01 validation.
 
+`gateway.tls.mode` selects where the certificate lives: `secret` references an
+existing wildcard TLS Secret, `certManager` delegates issuance to a
+cert-manager ClusterIssuer, and `external` is for installations where TLS
+terminates outside the cluster (a corporate load balancer or edge proxy that
+owns the wildcard certificate). With `external` the Gateway serves plain HTTP
+on port 80, needs no in-cluster certificate, and `httpRedirect` is ignored
+because the external front owns the redirect; that front must preserve the
+Host header and set `X-Forwarded-Proto: https`. See
+`examples/gateway-external-tls-values.yaml`.
+
 The single-port Gateway API model is enabled by default with
 `gateway.enabled=true` and `ingress.legacy.enabled=false`. Customer-visible
 ingress is limited to platform and tenant host/path routes; admin REST and
@@ -328,7 +346,9 @@ runtime probes must stay internal or protected.
 The Gateway has an exact `https-platform` listener for the operator host and a
 separate wildcard `https` listener for tenant/satellite hosts. Platform routes
 attach only to the exact listener; instance testing-console routes attach only
-to the wildcard listener.
+to the wildcard listener. The listener names are a stable contract across all
+TLS modes (with `external` they carry HTTP), so HTTPRoutes attached by
+`sectionName` keep working regardless of where TLS terminates.
 
 ### Admin console
 

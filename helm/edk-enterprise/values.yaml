@@ -412,10 +412,18 @@ gateway:
   tls:
     # secret: reference an existing wildcard TLS Secret.
     # certManager: rely on a cert-manager ClusterIssuer (DNS-01) for the wildcard.
+    # external: TLS terminates OUTSIDE the cluster (corporate load balancer or
+    #   edge proxy owning the *.{base} wildcard); the Gateway serves plain HTTP
+    #   on port 80 and no in-cluster certificate is needed. The external front
+    #   must preserve the Host header and set X-Forwarded-Proto=https, and the
+    #   data plane in front of the backends must trust that hop (see
+    #   examples/gateway-external-tls-values.yaml).
     mode: secret
     secretName: edk-wildcard-tls
     clusterIssuer: ""
   # Add a :80 HTTP listener and a redirect HTTPRoute that 301s to https.
+  # Ignored with tls.mode=external: the external front owns the redirect and
+  # port 80 is the serving listener.
   httpRedirect: true
 
 # Backing workload configuration. These entries create Kubernetes Deployments
@@ -461,15 +469,9 @@ services:
         cpu: "2"
         memory: 1536Mi
     env:
-      - name: EXTERNAL_BASE_URL
-        value: https://platform.example.com
-      # External origin of the onboarding/admin UI. The platform serves setup and (after
-      # license + operator account) the platform-admin site at the SAME instance root, so this
-      # is normally the platform's own external URL. The AS registers the operator-cli OAuth
-      # redirect_uri against it and it is the setup-API CORS origin. (Local dev serves the UI as
-      # a separate :3003 static export; there ONBOARDING_UI_BASE_URL points at :3003 instead.)
-      - name: ONBOARDING_UI_BASE_URL
-        value: https://platform.example.com
+      # EXTERNAL_BASE_URL and ONBOARDING_UI_BASE_URL are chart-owned: both
+      # render from platform.externalBaseUrl and entries with those names in
+      # this list are ignored.
       - name: LICENSE_RECIPIENT_KMS_ENABLED
         value: "true"
       - name: LICENSE_RECIPIENT_KMS_ALIAS

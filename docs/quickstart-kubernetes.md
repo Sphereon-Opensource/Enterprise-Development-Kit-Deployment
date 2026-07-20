@@ -35,11 +35,52 @@ bash ./scripts/upgrade-helm.sh \
   --tenant-host abc.example.com
 ```
 
+`--release` and `--namespace` are yours to choose. The values shown are the
+wrapper defaults; pass the release name and namespace this install actually uses.
+
 The wrapper preserves existing cryptographic Secrets, backs up the installed
 release, validates the candidate manifests, selects the supported Helm 3 or 4
 rollback-on-failure flag, waits for all Deployments, and optionally verifies
 the tenant DID document. Add `--migration-values <path>` only when the selected
 release explicitly supplies a migration overlay.
+
+## Upgrading from 0.25.0-RC1 to 0.25.0-RC2
+
+0.25.0-RC1 shipped Helm defaults that left `/.well-known` off the DID service's
+anonymous path list. That path serves the tenant DID document, and with it
+behind bearer-token auth the document could not be fetched anonymously, so
+tenant creation could not complete. 0.25.0-RC2 corrects the defaults so the DID
+document and the other public discovery paths resolve without a token.
+
+A values file exported from an RC1 install can still carry the old, empty
+anonymous-path settings, and those would override the corrected RC2 defaults.
+The overlay at
+`helm/edk-enterprise/examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml`
+re-asserts the correct public paths. Pass it after your own values file so it
+takes precedence. Set `--release` and `--namespace` to the release name and
+namespace of your existing RC1 install, not the placeholders below. If you did
+not override them when you installed, the wrapper defaults are
+`sphereon-edk-enterprise` and `edk`.
+
+```bash
+bash ./scripts/upgrade-helm.sh \
+  --release <your-release> \
+  --namespace <your-namespace> \
+  --values ./customer-values.yaml \
+  --image-tag 0.25.0-RC2 \
+  --migration-values ./helm/edk-enterprise/examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml
+```
+
+The overlay sets only `serviceIdentity.anonymousPathPrefixes`. It holds no
+Secret values and is specific to this one transition, so do not carry it into
+later upgrades.
+
+After the upgrade completes, create a tenant from the admin console. This now
+succeeds because the DID document resolves without a token. Confirm it by
+fetching `https://<tenant-host>/.well-known/did.json` along with the tenant
+metadata paths listed in [onboarding.md](onboarding.md). Once a tenant exists,
+you can also re-run the wrapper with `--tenant-host <tenant-host>` so it checks
+the DID document for you.
 
 ## 1. Create the namespace and pull secret
 

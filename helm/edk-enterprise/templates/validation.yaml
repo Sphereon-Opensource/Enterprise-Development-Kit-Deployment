@@ -1,5 +1,6 @@
 {{- include "edk-enterprise.validateImageRegistry" . -}}
 {{- include "edk-enterprise.validateImageReference" . -}}
+{{- include "edk-enterprise.validateGatewayTls" . -}}
 {{- include "edk-enterprise.validateRuntimeSecrets" . -}}
 {{- include "edk-enterprise.validateTenantKmsDependency" . -}}
 {{- include "edk-enterprise.validateRuntimeDependencies" . -}}

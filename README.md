@@ -120,9 +120,13 @@ bash ./scripts/upgrade-helm.sh \
   --tenant-host abc.example.com
 ```
 
-Add `--migration-values <path>` only when the selected release explicitly
-provides a migration overlay. An RC1-to-RC2 overlay is included for that one
-historical transition; it is not part of normal future upgrades.
+Add `--migration-values <path>` only when the release you are installing ships a
+migration overlay. Most upgrades do not need one. The exception is the move from
+0.25.0-RC1 to 0.25.0-RC2: RC1 left the DID `/.well-known` path off the anonymous
+list, which blocked tenant creation, and the bundled overlay restores the correct
+public paths on top of a values file exported from RC1. The
+[Kubernetes quickstart](docs/quickstart-kubernetes.md#upgrading-from-0250-rc1-to-0250-rc2)
+gives the full command and how to confirm the fix.
 
 The wrapper preserves existing cryptographic Secrets, creates missing Secrets
 only when safe, backs up the installed release, lints and renders the target

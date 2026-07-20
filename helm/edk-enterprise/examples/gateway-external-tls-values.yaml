@@ -1,0 +1,42 @@
+# Single-port multi-tenant front door behind an EXTERNAL TLS terminator: a
+# corporate load balancer or edge proxy that owns the *.{base} wildcard
+# certificate and forwards plain HTTP into the cluster. The Gateway keeps the
+# same host + path routing contract but listens on port 80 without any
+# in-cluster certificate; httpRedirect is ignored because the external front
+# owns the http->https redirect.
+#
+# Contract for the external front (same as every other conformant front door,
+# see the deployment guide's gateway contract):
+#   - preserve the inbound Host header end to end
+#   - set X-Forwarded-Proto: https on forwarded requests
+#   - forward to the Gateway service's HTTP port (80)
+#
+# Forwarded-header trust is data-plane specific. The chart's HTTPRoutes do not
+# depend on it (public URLs come from platform.externalBaseUrl), but if the
+# backends must see the original client IP and scheme, configure the data plane
+# to trust exactly one external hop. For Envoy Gateway that is a
+# ClientTrafficPolicy targeting the chart's Gateway, for example:
+#
+#   apiVersion: gateway.envoyproxy.io/v1alpha1
+#   kind: ClientTrafficPolicy
+#   metadata:
+#     name: edk-gateway-trust-edge
+#   spec:
+#     targetRefs:
+#       - group: gateway.networking.k8s.io
+#         kind: Gateway
+#         name: <release>-edk-enterprise-gateway
+#     clientIPDetection:
+#       xForwardedFor:
+#         numTrustedHops: 1
+gateway:
+  enabled: true
+  className: cilium
+  operatorHost: platform
+  baseDomain: example.com
+  tls:
+    mode: external
+
+ingress:
+  legacy:
+    enabled: false

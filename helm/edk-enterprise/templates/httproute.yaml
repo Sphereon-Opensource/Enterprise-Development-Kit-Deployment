@@ -211,7 +211,69 @@ spec:
 ---
 {{- end }}
 {{- end }}
-{{- if .Values.gateway.httpRedirect }}
+{{- if .Values.services.platform.enabled }}
+# Tenant-host platform projections used by the theme and wallet-entitlement
+# APIs. These are intentionally narrow; the platform's operator-host catch-all
+# must not become a wildcard tenant-host catch-all.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-platform-tenant
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: platform
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/theme/v1
+        - path:
+            type: PathPrefix
+            value: /api/wallet-entitlement/v1
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
+          port: {{ .Values.services.platform.restPort }}
+---
+{{- end }}
+{{- range $name := list "tenant-kms" "did" }}
+{{- $svc := index $.Values.services $name }}
+{{- if $svc.enabled }}
+# Operator-host management projection. This mirrors the Compose gateway where
+# /api/kms/v1 and /api/did/v1 take precedence over the platform catch-all.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" $ }}-{{ $name }}-operator
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ eq $name "tenant-kms" | ternary "/api/kms/v1" "/api/did/v1" | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+{{- end }}
+{{- end }}
+{{- if and .Values.gateway.httpRedirect (ne .Values.gateway.tls.mode "external") }}
+{{- /* With tls.mode=external the external front owns the http->https redirect
+       and the Gateway has no `http` listener, so the redirect route is
+       skipped even when httpRedirect stays true. */}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
