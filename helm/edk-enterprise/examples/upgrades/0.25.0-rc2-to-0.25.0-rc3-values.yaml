@@ -1,0 +1,23 @@
+# Compatibility overlay for upgrades from 0.25.0-RC2 to 0.25.0-RC3.
+#
+# Pass this after the customer's maintained values file. It exists because an
+# RC2 values export pins the tenant ingress path lists, which would otherwise
+# override the RC3 chart defaults that add this tenant-gateway route:
+#   - tenant-as: /api/trust-domain/v1 (tenant-scoped trust-domain management:
+#     mdoc issuer-certificate trust anchors and bindings)
+# Do not carry this file into unrelated future upgrades; use only migration
+# files named by that target release's notes.
+services:
+  tenant-as:
+    publicIngress:
+      paths:
+        - /.well-known/oauth-authorization-server
+        - /.well-known/openid-configuration
+        - /.well-known/jwks.json
+        - /authorize
+        - /token
+        - /userinfo
+        - /oauth2
+        - /login
+        - /logout
+        - /api/trust-domain/v1

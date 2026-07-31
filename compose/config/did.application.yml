@@ -17,13 +17,19 @@ server:
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
       expected-audience: enterprise-tenant-did
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
-      # Open prefixes: did.json hosting plus the in-network command transport.
-      anonymous-path-prefixes: /.well-known,/api/commands
+      # Open prefixes: did.json hosting only.
+      anonymous-path-prefixes: /.well-known
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
+    token-endpoint-allow-http: true
+    token-endpoint-source: active-as
+    active-as-token-endpoint: http://enterprise-tenant-as:18083/token
+    active-as-client-role: did
     client-id: did-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    tenant-bound-client-id: true
     audience: enterprise-platform
+    allowed-audiences: enterprise-tenant-kms
 sphereon:
   telemetry:
     enabled: true
@@ -53,7 +59,7 @@ otel:
         endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
         protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
 security:
-  header-trust-policy:
+  workload-trust-policy:
     trusted_service_ids:
       - service-crypto
       - service-data
@@ -71,6 +77,7 @@ transport:
     enabled: false
     port: 9090
   routing:
+    configScope: APP
     modules:
       kms:
         serviceTokenAudience: enterprise-tenant-kms
@@ -90,6 +97,7 @@ transport:
                 target: LOCAL
           mac: *tenantKmsGrpcRoute
           encryption: *tenantKmsGrpcRoute
+          ecdh: *tenantKmsGrpcRoute
       platform:
         target: SERVER
         transport: GRPC
@@ -107,7 +115,7 @@ config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: kms.providers
+      bootstrap-required-keyspaces: crypto.kms.roles
     tenant-config-db:
       enabled: false
 database:

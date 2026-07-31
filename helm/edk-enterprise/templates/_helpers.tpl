@@ -14,6 +14,26 @@
 {{- printf "%s-%s" (include "edk-enterprise.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/*
+East-west JWT audiences are protocol identifiers shared with source-level STS
+and tenant-registration contracts. They are intentionally not chart values:
+changing one side would make otherwise valid tokens unusable at another
+receiver.
+*/}}
+{{- define "edk-enterprise.serviceAudience" -}}
+{{- $audiences := dict
+    "platform" "enterprise-platform"
+    "tenant-kms" "enterprise-tenant-kms"
+    "tenant-as" "enterprise-tenant-as"
+    "did" "enterprise-tenant-did"
+    "issuer" "enterprise-issuer"
+    "verifier" "enterprise-verifier"
+    "wallet-unit" "enterprise-wallet-unit"
+    "wallet-interaction" "enterprise-wallet-interaction"
+-}}
+{{- required (printf "unsupported service audience role %q" .) (index $audiences .) -}}
+{{- end -}}
+
 {{- define "edk-enterprise.labels" -}}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
 app.kubernetes.io/name: {{ include "edk-enterprise.name" . }}
@@ -28,7 +48,8 @@ app.kubernetes.io/component: {{ .name }}
 {{- end -}}
 
 {{- define "edk-enterprise.gateway.baseDomain" -}}
-{{- $base := .Values.gateway.baseDomain | default .Values.global.platformBaseDomain -}}
+{{- $globalBase := required "global.platformBaseDomain is required; set it explicitly for every installation" .Values.global.platformBaseDomain -}}
+{{- $base := .Values.gateway.baseDomain | default $globalBase -}}
 {{- $base -}}
 {{- end -}}
 
@@ -62,19 +83,20 @@ name, or an empty list for services that are not tenant-routed.
 - /1.0/identifiers
 - /.well-known/did.json
 - /api/did/v1
-{{- else if eq $name "tenant-kms" -}}
-- /api/kms/v1
 {{- else if eq $name "tenant-as" -}}
 - /authorize
+- /par
 - /token
 - /userinfo
 - /oauth2
 - /login
+- /logout
+- /api/trust-domain/v1
 - /.well-known/oauth-authorization-server
 - /.well-known/openid-configuration
 - /.well-known/jwks.json
-{{- else if eq $name "admin-console" -}}
-{{/* Direct same-origin BFF/static support paths for the public testing console. */}}
+{{- else if eq $name "admin-console-tenant" -}}
+{{/* Direct public testing-console support paths on the tenant-mode runtime. */}}
 - /admin-console/api/oid4vci/v1/testing
 - /admin-console/api/oid4vp/v1/testing
 - /admin-console/_next
@@ -87,6 +109,14 @@ name, or an empty list for services that are not tenant-routed.
 {{- default (include "edk-enterprise.fullname" .) .Values.serviceAccount.name -}}
 {{- else -}}
 {{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.platformServiceAccountName" -}}
+{{- if .Values.serviceAccount.platform.create -}}
+{{- default (printf "%s-platform" (include "edk-enterprise.fullname" .)) .Values.serviceAccount.platform.name -}}
+{{- else -}}
+{{- required "serviceAccount.platform.name is required when serviceAccount.platform.create=false" .Values.serviceAccount.platform.name -}}
 {{- end -}}
 {{- end -}}
 
@@ -117,6 +147,22 @@ may use `latest`, but only with an Always pull policy.
 {{- end -}}
 {{- end -}}
 
+{{/* Validate the selected Gateway API TLS termination mode and its required inputs. */}}
+{{- define "edk-enterprise.validateGatewayTls" -}}
+{{- if .Values.gateway.enabled -}}
+{{- $mode := .Values.gateway.tls.mode -}}
+{{- if not (has $mode (list "secret" "certManager" "external")) -}}
+{{- fail (printf "gateway.tls.mode must be one of secret, certManager, external (got %q)." $mode) -}}
+{{- end -}}
+{{- if and (eq $mode "secret") (eq (trim (default "" .Values.gateway.tls.secretName)) "") -}}
+{{- fail "gateway.tls.mode=secret requires gateway.tls.secretName to reference an existing wildcard TLS Secret." -}}
+{{- end -}}
+{{- if and (eq $mode "certManager") (eq (trim (default "" .Values.gateway.tls.clusterIssuer)) "") -}}
+{{- fail "gateway.tls.mode=certManager requires gateway.tls.clusterIssuer." -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 The chart does not generate runtime credentials. Requiring existing Secret
 references here prevents otherwise healthy-looking pods from starting without
@@ -143,9 +189,6 @@ east-west Authorization headers or software-keystore access.
 {{- if eq .Values.issuerPipeline.masterKekKey .Values.issuerPipeline.blindIndexKey -}}
 {{- fail "issuerPipeline.masterKekKey and issuerPipeline.blindIndexKey must be distinct Secret keys." -}}
 {{- end -}}
-{{- if and (eq (lower .Values.platform.bootstrap.deploymentMode) "prod") (eq (lower .Values.platform.secretBackend.type) "config-system-dev-only") -}}
-{{- fail "platform.secretBackend.type=config-system-dev-only is not allowed when platform.bootstrap.deploymentMode=prod. Configure the installation's durable secret backend." -}}
-{{- end -}}
 {{- if eq .Values.portalBff.kms.encryptionKeyAlias .Values.portalBff.kms.handleHmacKeyAlias -}}
 {{- fail "portalBff.kms.encryptionKeyAlias and portalBff.kms.handleHmacKeyAlias must be distinct." -}}
 {{- end -}}
@@ -170,9 +213,6 @@ would create endpoints that can never provision or use tenant keys.
 {{- end -}}
 {{- if and .Values.services.verifier.enabled (not .Values.services.did.enabled) -}}
 {{- fail "services.did.enabled must be true while verifier is enabled: the verifier routes DID resolution commands to did." -}}
-{{- end -}}
-{{- if and (or .Values.services.issuer.enabled .Values.services.verifier.enabled) (not (index .Values.services "wallet-interaction").enabled) -}}
-{{- fail "services.wallet-interaction.enabled must be true while issuer or verifier is enabled: both route wallet interaction commands to that service." -}}
 {{- end -}}
 {{- if and (index .Values.services "wallet-interaction").enabled (not (index .Values.services "wallet-unit").enabled) -}}
 {{- fail "services.wallet-unit.enabled must be true while wallet-interaction is enabled: wallet interaction routes HSM policy authorization to wallet-unit." -}}

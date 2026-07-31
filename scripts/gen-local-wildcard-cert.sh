@@ -9,11 +9,11 @@
 # certificate instead and skip this script.
 #
 # Output (compose/gateway/certs/):
-#   wildcard.crt / wildcard.key   - server cert for *.saas.localtest.me, mounted into Traefik
+#   wildcard.crt / wildcard.key   - server cert for the selected base domain, mounted into Traefik
 #   local-ca.crt                  - the local CA; trust this in your OS/browser/wallet
-#   local-truststore.p12          - PKCS#12 truststore holding the CA (password: changeit),
-#                                   mounted into the service containers so they trust the
-#                                   gateway when fetching per-tenant JWKS over TLS
+#   local-truststore.p12          - JVM default public roots plus the local CA
+#                                   (password: changeit), mounted into service containers
+#                                   so internal and public provider TLS both validate
 #
 # Uses mkcert when available (its CA is auto-trusted by `mkcert -install`), otherwise
 # falls back to a self-signed openssl CA you trust manually.
@@ -23,8 +23,32 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CERT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/compose/gateway/certs"
-BASE_DOMAIN="${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}"
+BASE_DOMAIN="${EDK_PLATFORM_BASE_DOMAIN:-}"
+BASE_DOMAIN_ARGUMENT_PROVIDED=false
+LOCALTEST=false
 TRUSTSTORE_PASS="${EDK_TRUSTSTORE_PASSWORD:-changeit}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --base-domain) BASE_DOMAIN="$2"; BASE_DOMAIN_ARGUMENT_PROVIDED=true; shift 2 ;;
+    --localtest) LOCALTEST=true; shift ;;
+    *) echo "Unknown argument: $1" >&2; exit 64 ;;
+  esac
+done
+
+if [[ "$LOCALTEST" == true && "$BASE_DOMAIN_ARGUMENT_PROVIDED" == true ]]; then
+  echo "--localtest and --base-domain are mutually exclusive." >&2
+  exit 64
+fi
+if [[ "$LOCALTEST" == true ]]; then BASE_DOMAIN="saas.localtest.me"; fi
+if [[ -z "${BASE_DOMAIN//[[:space:]]/}" ]]; then
+  echo "A base domain is required. Pass --base-domain, set EDK_PLATFORM_BASE_DOMAIN, or pass --localtest explicitly." >&2
+  exit 64
+fi
+if [[ "$BASE_DOMAIN" == *"://"* || "$BASE_DOMAIN" == *":"* || "$BASE_DOMAIN" == *"/"* || "$BASE_DOMAIN" == *"\\"* || "$BASE_DOMAIN" =~ [[:space:]] || "$BASE_DOMAIN" == .* || "$BASE_DOMAIN" == *. ]]; then
+  echo "Base domain must be a hostname without scheme, port, path, or whitespace; got '$BASE_DOMAIN'." >&2
+  exit 64
+fi
 
 mkdir -p "$CERT_DIR"
 
@@ -68,14 +92,22 @@ EOF
   rm -f "$CERT_DIR/.wildcard.csr" "$CERT_DIR/.san.cnf" "$CERT_DIR/local-ca.srl"
 fi
 
-# PKCS#12 truststore with the CA so the service containers trust per-tenant JWKS over TLS.
+# Preserve the JVM public roots when adding the local CA. Replacing the default
+# trust anchors with only the local CA breaks HTTPS calls to external providers.
 if command -v keytool >/dev/null 2>&1; then
+  keytool_bin="$(readlink -f "$(command -v keytool)")"
+  default_cacerts="$(cd "$(dirname "$keytool_bin")/../lib/security" && pwd)/cacerts"
+  [[ -f "$default_cacerts" ]] || { echo "Could not locate the JVM default truststore." >&2; exit 2; }
   rm -f "$CERT_DIR/local-truststore.p12"
+  keytool -importkeystore -noprompt \
+    -srckeystore "$default_cacerts" -srcstorepass changeit \
+    -destkeystore "$CERT_DIR/local-truststore.p12" \
+    -deststorepass "$TRUSTSTORE_PASS" -deststoretype PKCS12 >/dev/null 2>&1
   keytool -importcert -noprompt -trustcacerts \
     -alias edk-local-ca -file "$CERT_DIR/local-ca.crt" \
     -keystore "$CERT_DIR/local-truststore.p12" -storetype PKCS12 \
     -storepass "$TRUSTSTORE_PASS" >/dev/null 2>&1
-  echo "Wrote local-truststore.p12 (password: $TRUSTSTORE_PASS)."
+  echo "Wrote local-truststore.p12 with JVM public roots and the local CA (password: $TRUSTSTORE_PASS)."
 else
   echo "WARNING: keytool not found; local-truststore.p12 not generated."
   echo "         Per-tenant JWKS over TLS from inside the service containers will fail until you create it."

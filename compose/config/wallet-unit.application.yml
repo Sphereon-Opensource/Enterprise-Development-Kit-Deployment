@@ -13,6 +13,7 @@ server:
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
+    active-as-client-role: wallet-unit
     client-id: wallet-unit-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     audience: enterprise-platform
@@ -39,7 +40,7 @@ otel:
       endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
       protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
 security:
-  header-trust-policy:
+  workload-trust-policy:
     trusted_service_ids:
       - service-wallet-interaction
       - service-oid4vci
@@ -72,7 +73,7 @@ config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: kms.providers
+      bootstrap-required-keyspaces: crypto.kms.roles
     tenant-config-db:
       enabled: false
 license:

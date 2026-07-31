@@ -2,16 +2,16 @@
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
 {{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
-{{- $isAdminConsole := eq $name "admin-console" }}
+{{- $isAdminConsole := or (eq $name "admin-console") (eq $name "admin-console-tenant") }}
 {{- $tenantGatewayPaths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
-{{- $gatewayRouted := and $.Values.gateway.enabled (or (eq $name "platform") (eq $name "admin-console") (ne $tenantGatewayPaths "")) }}
+{{- $gatewayRouted := and $.Values.gateway.enabled (or (eq $name "platform") (eq $name "admin-console") (eq $name "admin-console-tenant") (ne $tenantGatewayPaths "")) }}
 {{- $peersIn := list }}
-{{- if eq $name "tenant-kms" }}{{- $peersIn = list "platform" "tenant-as" "did" "issuer" "verifier" "admin-console" }}{{- end }}
-{{- if eq $name "platform" }}{{- $peersIn = list "tenant-kms" "tenant-as" "did" "issuer" "verifier" "wallet-unit" "wallet-interaction" "admin-console" }}{{- end }}
-{{- if eq $name "tenant-as" }}{{- $peersIn = list "platform" "tenant-kms" "did" "issuer" "verifier" }}{{- end }}
-{{- if eq $name "did" }}{{- $peersIn = list "platform" "verifier" "admin-console" }}{{- end }}
-{{- if eq $name "issuer" }}{{- $peersIn = list "platform" "admin-console" }}{{- end }}
-{{- if eq $name "verifier" }}{{- $peersIn = list "platform" "admin-console" }}{{- end }}
+{{- if eq $name "tenant-kms" }}{{- $peersIn = list "platform" "tenant-as" "did" "issuer" "verifier" "wallet-interaction" }}{{- end }}
+{{- if eq $name "platform" }}{{- $peersIn = list "tenant-kms" "tenant-as" "did" "issuer" "verifier" "wallet-unit" "wallet-interaction" "admin-console" "admin-console-tenant" }}{{- end }}
+{{- if eq $name "tenant-as" }}{{- $peersIn = list "platform" "tenant-kms" "did" "issuer" "verifier" "admin-console-tenant" }}{{- end }}
+{{- if eq $name "did" }}{{- $peersIn = list "platform" "verifier" "admin-console" "admin-console-tenant" }}{{- end }}
+{{- if eq $name "issuer" }}{{- $peersIn = list "platform" "admin-console" "admin-console-tenant" }}{{- end }}
+{{- if eq $name "verifier" }}{{- $peersIn = list "platform" "admin-console" "admin-console-tenant" }}{{- end }}
 {{- if eq $name "wallet-unit" }}{{- $peersIn = list "wallet-interaction" }}{{- end }}
 {{- if eq $name "wallet-interaction" }}{{- $peersIn = list "issuer" "verifier" }}{{- end }}
 {{- $peersOut := list }}
@@ -20,10 +20,11 @@
 {{- if eq $name "did" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
 {{- if eq $name "tenant-as" }}{{- $peersOut = list "platform" "tenant-kms" }}{{- end }}
 {{- if eq $name "wallet-unit" }}{{- $peersOut = list "platform" }}{{- end }}
-{{- if eq $name "wallet-interaction" }}{{- $peersOut = list "wallet-unit" "platform" }}{{- end }}
+{{- if eq $name "wallet-interaction" }}{{- $peersOut = list "wallet-unit" "tenant-kms" "platform" }}{{- end }}
 {{- if eq $name "issuer" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" "wallet-interaction" }}{{- end }}
 {{- if eq $name "verifier" }}{{- $peersOut = list "tenant-kms" "tenant-as" "did" "platform" "wallet-interaction" }}{{- end }}
-{{- if eq $name "admin-console" }}{{- $peersOut = list "platform" "tenant-kms" "did" "issuer" "verifier" }}{{- end }}
+{{- if eq $name "admin-console" }}{{- $peersOut = list "platform" "did" "issuer" "verifier" }}{{- end }}
+{{- if eq $name "admin-console-tenant" }}{{- $peersOut = list "platform" "tenant-as" "did" "issuer" "verifier" }}{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -88,6 +89,32 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    {{- end }}
+    {{- with $.Values.networkPolicy.secretProviderEgress }}
+    {{- if and (eq $name "platform") .enabled }}
+    - {{- if or .namespaceSelector .podSelector .ipBlocks }}
+      to:
+        {{- if or .namespaceSelector .podSelector }}
+        - {{- with .namespaceSelector }}
+          namespaceSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .podSelector }}
+          podSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- range .ipBlocks }}
+        - ipBlock:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
+      {{- end }}
+      ports:
+        {{- range .ports }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    {{- end }}
     {{- end }}
     {{- if and $.Values.database.enabled (not $isAdminConsole) }}
     {{- /* Database egress reflects the platform/tenant split. The platform service

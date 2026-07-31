@@ -5,3 +5,5 @@
 /compose/gateway/traefik/dynamic.letsencrypt.generated.yml
 /compose/gateway/traefik/dynamic.public-cert.generated.yml
 /build/
+/compose/.edk-installed-image-tag
+/compose/.env.manual-localtest

@@ -36,9 +36,9 @@ One optional container completes the platform:
 
 | Image | Role | Public ingress |
 | --- | --- | --- |
-| `nexus.sphereon.com/edk-docker/admin-console` | Next.js operator console and issuer/verifier testing console | Full `/admin-console` on the platform host; isolated testing-console paths on instance hosts |
+| `nexus.sphereon.com/edk-docker/admin-console` | Next.js platform/tenant admin console and issuer/verifier testing console | `/admin-console` on the platform host and every registered tenant host |
 
-The admin console is a separately published Next.js app, not something this kit builds. The gateway routes the complete console only at `https://platform.<base-domain>/admin-console`. Registered issuer/verifier instance hosts receive only the external testing console, its protocol-local BFF/portal-OAuth routes, required static assets, and health route. Gateway path filtering and the application host guard both deny normal platform admin UI and APIs on instance hosts; the backend public-endpoint registry enforces disabled, public, and AS-protected instance modes.
+The admin console is a separately published Next.js app, not something this kit builds. The same image runs as two isolated processes: the platform runtime at `https://platform.<base-domain>/admin-console`, and the tenant runtime at `https://<tenant>.<base-domain>/admin-console`. The tenant runtime has no platform BFF credential, resolves the tenant and its default AS from the registered host, and cannot expose the platform-management persona. Issuer/verifier testing-console routes remain on the tenant runtime and retain their endpoint-registry access checks.
 
 ## Domain and TLS model
 
@@ -99,9 +99,15 @@ and use only the tenant workload database for runtime tenant data.
 Use the stack under `compose/` to run the services on one machine. Run it two ways:
 
 - The base file `compose/docker-compose.yml` alone publishes each service on its own loopback host port over plain HTTP for low-level local debugging only. The customer walkthroughs assume the gateway model below.
-- The base file plus the gateway overlay `compose/docker-compose.gateway.yml` starts the platform, tenant AS, tenant KMS, DID, issuer, verifier, admin console, and Traefik gateway. The gateway routes by host and path on a single TLS port. The operator plane is `https://platform.<base-domain>`; tenant protocol URLs are bound during onboarding as `https://<tenant-slug>.<base-domain>`. For local evaluation, first generate a wildcard certificate with `scripts/gen-local-wildcard-cert.ps1` (Windows) or `scripts/gen-local-wildcard-cert.sh` (Linux/macOS), then trust the local CA.
+- The base file plus the gateway overlay `compose/docker-compose.gateway.yml` starts the platform, tenant AS, tenant KMS, DID, issuer, verifier, admin console, and Traefik gateway. The gateway routes by host and path on a single TLS port. The operator plane is `https://platform.<base-domain>`; tenant protocol URLs are bound during onboarding as `https://<tenant-slug>.<base-domain>`. `EDK_PLATFORM_BASE_DOMAIN` is mandatory. For explicit localtest evaluation, generate the wildcard certificate with `scripts/gen-local-wildcard-cert.ps1 -Localtest` (Windows) or `scripts/gen-local-wildcard-cert.sh --localtest` (Linux/macOS), then trust the local CA.
 
 Follow [docs/quickstart-docker.md](docs/quickstart-docker.md).
+
+For installs and upgrades, use `scripts/upgrade-compose.sh` or
+`scripts/upgrade-compose.ps1`. The wrappers detect the installed release and
+automatically execute RC1-to-RC2-to-RC3 when RC3 is requested from RC1, waiting
+for health checks at each release. Repeating the same target is safe and does
+not recreate database volumes.
 
 ### Kubernetes (production)
 
@@ -120,18 +126,24 @@ bash ./scripts/upgrade-helm.sh \
   --tenant-host abc.example.com
 ```
 
-Add `--migration-values <path>` only when the release you are installing ships a
-migration overlay. Most upgrades do not need one. The exception is the move from
-0.25.0-RC1 to 0.25.0-RC2: RC1 left the DID `/.well-known` path off the anonymous
-list, which blocked tenant creation, and the bundled overlay restores the correct
-public paths on top of a values file exported from RC1. The
-[Kubernetes quickstart](docs/quickstart-kubernetes.md#upgrading-from-0250-rc1-to-0250-rc2)
-gives the full command and how to confirm the fix.
+The wrapper reads the installed `global.imageTag` and automatically applies the
+known transition overlays cumulatively and in order. RC1 to RC3 is executed as
+two Helm revisions, RC1 to RC2 and then RC2 to RC3. Repeating the target release
+reapplies the same cumulative compatibility set, so the original customer values
+file cannot undo an earlier transition. `--migration-values` remains available only for
+an additional site- or release-specific overlay not known to the wrapper. The
+[Kubernetes quickstart](docs/quickstart-kubernetes.md#upgrading-directly-from-0250-rc1-to-0250-rc3)
+shows the direct upgrade and migration checks.
 
 The wrapper preserves existing cryptographic Secrets, creates missing Secrets
 only when safe, backs up the installed release, lints and renders the target
 chart, performs a Helm 3/4-compatible rollback-on-failure upgrade, waits for the
-rollout, and optionally checks the tenant DID document.
+rollout, and optionally checks the tenant DID document. Secret management is a
+greenfield cutover: it does not import, adopt, or dual-read prior provider or
+migration state. Before upgrading, take a database snapshot and remove any
+obsolete secret-provider state. If live legacy state is detected, startup fails
+with a reset diagnostic and the Helm rollout is rolled back. Restoring the
+pre-upgrade database snapshot is the only supported binary rollback.
 
 Follow [docs/quickstart-kubernetes.md](docs/quickstart-kubernetes.md).
 
@@ -151,6 +163,15 @@ provided as optional validation and automation tools.
 
 Follow [docs/onboarding.md](docs/onboarding.md).
 
+For a non-interactive release gate against the literal customer Compose
+topology, use
+[docs/compose-postman-release-gate.md](docs/compose-postman-release-gate.md).
+That gate requires one immutable seven-image tag whose OCI version matches the
+tag, inventories project containers/networks/volumes before mutation, and
+retains sanitized Compose, Newman, database-schema, runtime image-ID, setup
+identity, teardown, and plaintext-canary evidence under a terminal hashed
+manifest.
+
 ## Repository map
 
 ```
@@ -160,9 +181,10 @@ Enterprise-Development-Kit-Deployment/
     quickstart-docker.md          Bring the stack up with Docker Compose
     quickstart-kubernetes.md      Install the Helm chart on Kubernetes
     onboarding.md                 First-run setup, tenant creation, and optional validation helpers
+    compose-postman-release-gate.md  Non-interactive customer Compose plus Postman release gate
     tls-and-gateway.md            Single-port TLS, gateway, and ingress options
     configuration.md              Configuration inputs and public hostnames
-    secret-backends.md            Secret backend selection
+    secret-management.md          Secret-management trust tiers and deployment prerequisites
     troubleshooting.md            Common problems and checks
   compose/
     docker-compose.yml            Base stack: enterprise services on individual host ports
@@ -181,6 +203,8 @@ Enterprise-Development-Kit-Deployment/
       templates/                  Chart templates
   scripts/
     upgrade-helm.sh                Safe Helm install/upgrade wrapper (Linux/macOS)
+    upgrade-compose.sh             Ordered Compose install/upgrade wrapper
+    upgrade-compose.ps1            Ordered Compose install/upgrade wrapper (Windows)
     provision.ps1                 Optional setup and tenant onboarding validation over REST (Windows)
     provision.sh                  Optional setup and tenant onboarding validation over REST (Linux/macOS)
     gen-local-wildcard-cert.ps1   Local-evaluation wildcard TLS cert for the gateway (Windows)

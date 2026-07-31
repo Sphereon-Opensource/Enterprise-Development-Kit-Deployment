@@ -1,0 +1,124 @@
+# Shared-edge gateway overlay for the customer EDK enterprise stack.
+#
+# The maintained release wrapper renders this template into its evidence
+# directory. The stack gateway publishes no host ports and terminates no TLS.
+# The existing shared edge terminator owns 80/443 and forwards the exact
+# environment host space to __EDGE_ALIAS__:80 over __EDGE_NETWORK_NAME__.
+#
+# Public tenant and platform calls, including east-west JWKS resolution, use
+# publicly trusted edge TLS. Local CA files and truststore overrides are
+# deliberately absent.
+
+services:
+  traefik:
+    image: traefik:v3.3
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+    command: []
+    volumes:
+      - "__TRAEFIK_STATIC_PATH__:/etc/traefik/traefik.yml:ro"
+      - "__TRAEFIK_DYNAMIC_PATH__:/etc/traefik/dynamic/dynamic.yml:ro"
+    networks:
+      appnet: {}
+      edge:
+        aliases:
+          - __EDGE_ALIAS__
+
+  enterprise-platform:
+    # The base file exposes direct workload ports for local diagnostics.
+    # Shared-edge mode must make the public gateway the only workload ingress.
+    ports: !reset []
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
+      EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: https://platform.__BASE_DOMAIN__
+      ONBOARDING_UI_BASE_URL: https://platform.__BASE_DOMAIN__
+    healthcheck:
+      test: ["CMD", "bash", "-c", "(exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.__BASE_DOMAIN__\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) ') || (exec 4<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.__BASE_DOMAIN__\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -Eq ' (200|404) ')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-tenant-as:
+    ports: !reset []
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
+      EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.__BASE_DOMAIN__\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-tenant-kms:
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
+      EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.__BASE_DOMAIN__\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-did:
+    ports: !reset []
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
+      EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: ""
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.__BASE_DOMAIN__\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-issuer:
+    ports: !reset []
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
+      EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: ""
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.__BASE_DOMAIN__\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  enterprise-verifier:
+    ports: !reset []
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
+      EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: ""
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.__BASE_DOMAIN__\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  admin-console:
+    networks:
+      appnet: {}
+    environment:
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: https://platform.__BASE_DOMAIN__
+      ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
+      ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
+      ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
+
+networks:
+  edge:
+    name: __EDGE_NETWORK_NAME__
+    external: true

@@ -37,13 +37,12 @@ x-edk-common-env: &edk-common-env
   PORT: "8080"
   REST_PORT: "8080"
   SPHEREON_CONFIG_LOCATION: /app/config
-  EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+  EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
   EDK_PLATFORM_PUBLIC_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
   EDK_TRUST_TENANT_REGISTRY_ISSUERS: ${EDK_TRUST_TENANT_REGISTRY_ISSUERS:-true}
   EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD}
   EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET}
   EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
-  EDK_SECRET_BACKEND: ${EDK_SECRET_BACKEND:-config-system-dev-only}
   EDK_OWNER_INITIAL_CREDENTIAL: ${EDK_OWNER_INITIAL_CREDENTIAL}
 
 x-edk-tenant-db-env: &edk-tenant-db-env
@@ -58,14 +57,14 @@ x-edk-runtime-healthcheck-8080: &edk-runtime-healthcheck-8080
   # return 503. Accept that only while the platform setup gate is still open, so
   # the full customer stack can start before license import but fails closed
   # after setup if the license is still missing.
-  test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && line=$$(head -n1 <&3) && echo \"$$line\" | grep -Eq ' (200|204) ' && exit 0; echo \"$$line\" | grep -q ' 503 ' || exit 1; exec 4<>/dev/tcp/enterprise-platform/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -q ' 200 '"]
+  test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && line=$$(head -n1 <&3) && echo \"$$line\" | grep -Eq ' (200|204) ' && exit 0; echo \"$$line\" | grep -q ' 503 ' || exit 1; exec 4<>/dev/tcp/enterprise-platform/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -q ' 200 '"]
   interval: 5s
   timeout: 5s
   retries: 30
   start_period: 20s
 
 x-edk-runtime-healthcheck-18083: &edk-runtime-healthcheck-18083
-  test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && line=$$(head -n1 <&3) && echo \"$$line\" | grep -Eq ' (200|204) ' && exit 0; echo \"$$line\" | grep -q ' 503 ' || exit 1; exec 4<>/dev/tcp/enterprise-platform/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -q ' 200 '"]
+  test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && line=$$(head -n1 <&3) && echo \"$$line\" | grep -Eq ' (200|204) ' && exit 0; echo \"$$line\" | grep -q ' 503 ' || exit 1; exec 4<>/dev/tcp/enterprise-platform/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -q ' 200 '"]
   interval: 5s
   timeout: 5s
   retries: 30
@@ -86,8 +85,11 @@ services:
       POSTGRES_USER: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
       POSTGRES_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
       POSTGRES_DB: ${EDK_PLATFORM_DB_NAME:-platform}
+      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
     volumes:
       - platform-postgres-data:/var/lib/postgresql/data
+      - ./postgres-init/10-secret-management-roles.sh:/docker-entrypoint-initdb.d/10-secret-management-roles.sh:ro
     networks:
       - platform-db-net
     ports:
@@ -97,6 +99,37 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+
+  # PostgreSQL runs /docker-entrypoint-initdb.d only for an empty data
+  # directory. Run the same idempotent role bootstrap on every start so an
+  # existing RC1/RC2 volume is ready before the RC3 platform opens its pools.
+  secret-management-db-roles-init:
+    image: postgres:16-alpine
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: platform-postgres
+      PGPORT: "5432"
+      PGPASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
+      POSTGRES_USER: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
+      POSTGRES_DB: ${EDK_PLATFORM_DB_NAME:-platform}
+      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+    entrypoint: ["sh", "/role-init.sh"]
+    volumes:
+      - ./postgres-init/10-secret-management-roles.sh:/role-init.sh:ro
+    networks:
+      - platform-db-net
+    user: "70:70"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
 
   tenant-postgres:
     image: postgres:16-alpine
@@ -143,11 +176,10 @@ services:
   # volumes, then exits. The writable-keystore services wait for it to complete.
   keystore-init:
     image: busybox:1.36
-    command: ["sh", "-c", "chown 10001:10001 /platform-keystore /tenant-kms-keystore /wallet-interaction-keystore"]
+    command: ["sh", "-c", "chown 10001:10001 /platform-keystore /tenant-kms-keystore"]
     volumes:
       - platform-keystore:/platform-keystore
       - tenant-kms-keystore:/tenant-kms-keystore
-      - wallet-interaction-keystore:/wallet-interaction-keystore
     networks:
       - appnet
 
@@ -162,6 +194,8 @@ services:
       otel-collector:
         condition: service_started
       keystore-init:
+        condition: service_completed_successfully
+      secret-management-db-roles-init:
         condition: service_completed_successfully
     networks:
       - appnet
@@ -179,6 +213,8 @@ services:
       DATABASE_APP_DEFAULT_DATABASE: ${EDK_PLATFORM_DB_NAME:-platform}
       DATABASE_APP_DEFAULT_USERNAME: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
       DATABASE_APP_DEFAULT_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
+      EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
       EXTERNAL_BASE_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
       ONBOARDING_UI_BASE_URL: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
       ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
@@ -191,6 +227,8 @@ services:
     volumes:
       - ./config/platform.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
+      - ./config/secret-management-environment.manifest:/app/secret-management/deployment/environment.manifest:ro
+      - ./config/secret-provider-private-endpoints.manifest:/app/secret-management/egress/private-endpoints.manifest:ro
       - platform-keystore:/keystore
     ports:
       - "${EDK_PLATFORM_HOST_PORT:-18080}:18080"
@@ -219,6 +257,10 @@ services:
       <<: [*edk-common-env, *edk-tenant-db-env]
       PORT: "18083"
       REST_PORT: "18083"
+      # Authenticated issuer/verifier workloads call the Trust Domain API on
+      # tenant-AS with service tokens issued by an active tenant AS binding.
+      # Trust domains, anchors, and validation relationships remain REST state.
+      SERVER_REST_AUTH_TRUST_TENANT_REGISTRY_ISSUERS: "true"
       # Remote theme resolution (theme.client.base-url): the hosted login page fetches
       # tenant/application branding from the platform service's public theme endpoints.
       # Unset it to serve the neutral login page.
@@ -263,68 +305,6 @@ services:
       - "9090"
     healthcheck: *edk-runtime-healthcheck-8080
 
-  # Wallet Unit: owns server-side wallet-unit lifecycle, activation, attestation,
-  # and policy-gated wallet-key commands over the shared gRPC command transport.
-  # No public ingress. Uses the tenant PostgreSQL data plane.
-  enterprise-wallet-unit:
-    image: nexus.sphereon.com/edk-docker/enterprise-wallet-unit:${EDK_TAG:-0.25.0-SNAPSHOT}
-    depends_on:
-      tenant-postgres:
-        condition: service_healthy
-      otel-collector:
-        condition: service_started
-      enterprise-platform:
-        condition: service_healthy
-    networks:
-      - appnet
-      - tenant-db-net
-    environment:
-      <<: [*edk-common-env, *edk-tenant-db-env]
-      EXTERNAL_BASE_URL: ${EDK_WALLET_UNIT_INTERNAL_BASE_URL:-http://enterprise-wallet-unit:8080}
-      REST_ENABLED: "false"
-      GRPC_ENABLED: "true"
-      GRPC_PORT: "9090"
-    volumes:
-      - ./config/wallet-unit.application.yml:/app/config/application.yml:ro
-    expose:
-      - "8080"
-      - "9090"
-    healthcheck: *edk-runtime-healthcheck-9090
-
-  # Wallet Interaction: headless wallet interaction runtime. Internal command
-  # callers use gRPC; the REST surface remains a public/API projection only when
-  # explicitly exposed by deployment policy.
-  enterprise-wallet-interaction:
-    image: nexus.sphereon.com/edk-docker/enterprise-wallet-interaction:${EDK_TAG:-0.25.0-SNAPSHOT}
-    depends_on:
-      tenant-postgres:
-        condition: service_healthy
-      otel-collector:
-        condition: service_started
-      keystore-init:
-        condition: service_completed_successfully
-      enterprise-platform:
-        condition: service_healthy
-      enterprise-wallet-unit:
-        condition: service_healthy
-    networks:
-      - appnet
-      - tenant-db-net
-    environment:
-      <<: [*edk-common-env, *edk-tenant-db-env]
-      EXTERNAL_BASE_URL: ${EDK_WALLET_INTERACTION_INTERNAL_BASE_URL:-http://enterprise-wallet-interaction:8080}
-      REST_ENABLED: "false"
-      GRPC_ENABLED: "true"
-      GRPC_PORT: "9090"
-      WALLET_INTERACTION_KEYSTORE_ROOT: /keystore
-    volumes:
-      - ./config/wallet-interaction.application.yml:/app/config/application.yml:ro
-      - wallet-interaction-keystore:/keystore
-    expose:
-      - "8080"
-      - "9090"
-    healthcheck: *edk-runtime-healthcheck-9090
-
   # DID resolver and did.json hosting; routes KMS commands to tenant KMS.
   enterprise-did:
     image: nexus.sphereon.com/edk-docker/enterprise-did:${EDK_TAG:-0.25.0-SNAPSHOT}
@@ -364,8 +344,6 @@ services:
         condition: service_healthy
       enterprise-tenant-as:
         condition: service_healthy
-      enterprise-wallet-interaction:
-        condition: service_healthy
     networks:
       - appnet
       - tenant-db-net
@@ -397,8 +375,6 @@ services:
         condition: service_healthy
       enterprise-tenant-as:
         condition: service_healthy
-      enterprise-wallet-interaction:
-        condition: service_healthy
     networks:
       - appnet
       - tenant-db-net
@@ -427,6 +403,7 @@ services:
     environment:
       # basePath: the app serves under /admin-console; the root / returns 404.
       NEXT_PUBLIC_BASE_PATH: /admin-console
+      ADMIN_CONSOLE_MODE: PLATFORM
       ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_PUBLIC_ORIGIN: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "true"
@@ -436,12 +413,13 @@ services:
       ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
       ADMIN_CONSOLE_AUDIT_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-platform:18080
-      ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
       ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
+      ADMIN_CONSOLE_TENANT_AS_BASE_URL: http://enterprise-tenant-as:18083
+      ADMIN_CONSOLE_IDENTITY_BASE_URL: http://enterprise-tenant-as:18083
+      ADMIN_CONSOLE_TRUST_DOMAIN_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_ISSUER_BASE_URL: http://enterprise-issuer:8080
       ADMIN_CONSOLE_VERIFIER_BASE_URL: http://enterprise-verifier:8080
       NEXT_PUBLIC_PLATFORM_AUDIENCE: enterprise-platform
-      NEXT_PUBLIC_TENANT_KMS_AUDIENCE: enterprise-tenant-kms
       NEXT_PUBLIC_TENANT_DID_AUDIENCE: enterprise-tenant-did
       NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE: enterprise-issuer
       NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE: enterprise-verifier
@@ -459,6 +437,46 @@ services:
       retries: 30
       start_period: 20s
 
+  # Tenant-facing administration uses the same image and /admin-console path,
+  # but runs in a separate least-privilege process. It deliberately receives no
+  # platform portal-BFF client id or secret. The trusted request host selects
+  # the tenant and its default AS; the application rejects unknown hosts.
+  admin-console-tenant:
+    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG:-0.25.0-SNAPSHOT}
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-tenant-as:
+        condition: service_healthy
+    networks:
+      - appnet
+    environment:
+      NEXT_PUBLIC_BASE_PATH: /admin-console
+      ADMIN_CONSOLE_MODE: TENANT
+      ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_TENANT_CONTEXT_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1/admin-console-context
+      ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
+      ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
+      ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
+      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-tenant-as:18083
+      ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
+      ADMIN_CONSOLE_TENANT_AS_BASE_URL: http://enterprise-tenant-as:18083
+      ADMIN_CONSOLE_IDENTITY_BASE_URL: http://enterprise-tenant-as:18083
+      ADMIN_CONSOLE_TRUST_DOMAIN_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_ISSUER_BASE_URL: http://enterprise-issuer:8080
+      ADMIN_CONSOLE_VERIFIER_BASE_URL: http://enterprise-verifier:8080
+      NEXT_PUBLIC_TENANT_DID_AUDIENCE: enterprise-tenant-did
+      NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE: enterprise-issuer
+      NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE: enterprise-verifier
+      PORT: "3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/admin-console/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
 volumes:
   platform-postgres-data:
   tenant-postgres-data:
@@ -466,9 +484,6 @@ volumes:
   platform-keystore:
   # Tenant-KMS keystore: per-tenant key material (software now; AWS/Key Vault later).
   tenant-kms-keystore:
-  # Wallet-interaction keystore: server-side holder/proof keys for the headless
-  # interaction runtime. Mobile/IDK wallet apps do not use this VDX volume.
-  wallet-interaction-keystore:
 networks:
   appnet:
   platform-db-net:

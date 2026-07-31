@@ -255,10 +255,20 @@ if [ "$SETUP_OPEN" = "true" ]; then
   echo "  License bundle imported."
 
   echo "Bootstrapping platform operator..."
-  BOOTSTRAP_BODY="$(node -e 'process.stdout.write(JSON.stringify({adminEmail:process.argv[1],adminDisplayName:process.argv[2],adminPassword:process.argv[3]}))' \
-    "$OPERATOR_EMAIL" "$OPERATOR_DISPLAY_NAME" "$OPERATOR_PASSWORD")"
-  post_json "$PLATFORM_URL/api/platform/setup/v1/bootstrap" "$BOOTSTRAP_BODY" >/dev/null
-  echo "  Operator bootstrapped; setup gate closed."
+  BOOTSTRAP_BODY="$(node -e 'process.stdout.write(JSON.stringify({adminEmail:process.argv[1],adminDisplayName:process.argv[2]}))' \
+    "$OPERATOR_EMAIL" "$OPERATOR_DISPLAY_NAME")"
+  BOOTSTRAP_RESPONSE="$(post_json "$PLATFORM_URL/api/platform/setup/v1/bootstrap" "$BOOTSTRAP_BODY")"
+  ACTIVATION_TOKEN="$(node -e '
+    const value = JSON.parse(process.argv[1]);
+    const link = value?.activation?.manualActivationLink;
+    if (!link || !link.includes("#")) process.exit(2);
+    process.stdout.write(link.split("#", 2)[1]);
+  ' "$BOOTSTRAP_RESPONSE")" || \
+    fail "Platform bootstrap did not return the manual activation link required by unattended provisioning."
+  ACTIVATION_BODY="$(node -e 'process.stdout.write(JSON.stringify({token:process.argv[1],password:process.argv[2]}))' \
+    "$ACTIVATION_TOKEN" "$OPERATOR_PASSWORD")"
+  post_json "$PLATFORM_URL/api/account-actions/v1/complete" "$ACTIVATION_BODY" >/dev/null
+  echo "  Operator activated; setup gate closed."
 fi
 
 # --- Step 3: operator sign-in (PKCE authorization-code flow) -------------------

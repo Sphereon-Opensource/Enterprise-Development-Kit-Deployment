@@ -1,0 +1,25 @@
+# Customer EDK stack gateway behind the shared edge terminator.
+#
+# TLS, ACME, and public 80/443 ownership remain at the shared edge. This
+# gateway listens only on its container port 80 and trusts forwarded headers
+# solely from the configured, pinned edge-network subnet.
+
+entryPoints:
+  web:
+    address: ":80"
+    forwardedHeaders:
+      trustedIPs:
+        - "__EDGE_TRUSTED_SUBNET__"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic/dynamic.yml
+    watch: true
+
+log:
+  level: INFO
+
+accessLog: {}
+
+api:
+  dashboard: false

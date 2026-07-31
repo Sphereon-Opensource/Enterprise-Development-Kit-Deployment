@@ -18,6 +18,13 @@ The chart reference, including every value and its default, is in [helm/edk-ente
   for `*.<base-domain>`, or individual certificates for every deployed host.
   For Let's Encrypt wildcard certificates, use cert-manager with DNS-01
   validation.
+- An existing symmetric AWS KMS key plus a workload identity that permits only
+  the platform pod to attest, encrypt/decrypt, create, tag, resolve, and revoke
+  the server-derived KMS bindings. Set
+  `secretManagement.bootstrap.kek.identity`,
+  `secretManagement.bootstrap.kek.awsRegion`, and the cloud workload annotation
+  under `serviceAccount.platform.annotations`. Do not grant that identity to
+  the shared satellite ServiceAccount.
 
 ## Recommended one-go install or upgrade
 
@@ -41,8 +48,9 @@ wrapper defaults; pass the release name and namespace this install actually uses
 The wrapper preserves existing cryptographic Secrets, backs up the installed
 release, validates the candidate manifests, selects the supported Helm 3 or 4
 rollback-on-failure flag, waits for all Deployments, and optionally verifies
-the tenant DID document. Add `--migration-values <path>` only when the selected
-release explicitly supplies a migration overlay.
+the tenant DID document. It reads the installed `global.imageTag` and selects
+the known ordered migration path automatically. Add `--migration-values <path>`
+only for an additional overlay that is not already known to the wrapper.
 
 ## Upgrading from 0.25.0-RC1 to 0.25.0-RC2
 
@@ -67,13 +75,12 @@ bash ./scripts/upgrade-helm.sh \
   --release <your-release> \
   --namespace <your-namespace> \
   --values ./customer-values.yaml \
-  --image-tag 0.25.0-RC2 \
-  --migration-values ./helm/edk-enterprise/examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml
+  --image-tag 0.25.0-RC2
 ```
 
-The overlay sets only `serviceIdentity.anonymousPathPrefixes`. It holds no
-Secret values and is specific to this one transition, so do not carry it into
-later upgrades.
+The wrapper detects RC1 from the installed Helm values and applies the bundled
+RC1-to-RC2 overlay automatically. The overlay sets only
+`serviceIdentity.anonymousPathPrefixes` and holds no Secret values.
 
 After the upgrade completes, create a tenant from the admin console. This now
 succeeds because the DID document resolves without a token. Confirm it by
@@ -81,6 +88,73 @@ fetching `https://<tenant-host>/.well-known/did.json` along with the tenant
 metadata paths listed in [onboarding.md](onboarding.md). Once a tenant exists,
 you can also re-run the wrapper with `--tenant-host <tenant-host>` so it checks
 the DID document for you.
+
+## Upgrading from 0.25.0-RC2 to 0.25.0-RC3
+
+RC3 adds the tenant trust-domain management route and changes tenant KMS
+configuration to use the stable logical provider id `default`. An RC2 values
+export can pin the old ingress route list, so apply the bundled transition
+overlay after your maintained values:
+
+```bash
+bash ./scripts/upgrade-helm.sh \
+  --release <your-release> \
+  --namespace <your-namespace> \
+  --values ./customer-values.yaml \
+  --image-tag 0.25.0-RC3 \
+  --tenant-host <existing-rc2-tenant-host>
+```
+
+The wrapper detects RC2 and applies both compatibility overlays cumulatively:
+RC1-to-RC2 first and RC2-to-RC3 second. Keeping the earlier overlay is intentional;
+it makes the result independent of whether the maintained values file originated
+from RC1 or RC2.
+
+Secret management is a greenfield cutover. It does not import, adopt, backfill,
+or dual-read provider state from an earlier release. Before the rollout, take a
+database snapshot and remove obsolete secret-provider and secret-migration state.
+If live legacy state is detected, platform startup stops with a reset diagnostic,
+which makes the wrapper roll the Helm release back. Restoring the pre-upgrade
+database snapshot is the only supported way to run the previous binary again.
+
+After the rollout, verify both an existing RC2 tenant and a newly created tenant:
+
+- `https://<existing-rc2-tenant-host>/.well-known/did.json`
+- `https://<existing-rc2-tenant-host>/.well-known/openid-credential-issuer`
+- create a new tenant and verify the same two endpoints for its host
+
+The wrapper owns these release overlays. Rerunning the same RC3 command reapplies
+the same cumulative pair, so it cannot undo an earlier compatibility correction.
+Do not copy the transition values into the maintained site values file.
+
+## Upgrading directly from 0.25.0-RC1 to 0.25.0-RC3
+
+Use the same one-go command and name only the final target image:
+
+```bash
+bash ./scripts/upgrade-helm.sh \
+  --release <your-release> \
+  --namespace <your-namespace> \
+  --values ./customer-values.yaml \
+  --image-tag 0.25.0-RC3 \
+  --tenant-host <existing-rc1-tenant-host>
+```
+
+The wrapper detects the installed RC1 tag and performs the complete ordered
+upgrade itself:
+
+1. Render and validate RC2 with the RC1-to-RC2 overlay.
+2. Perform a rollback-on-failure Helm upgrade to the official RC2 images and
+   wait for every Deployment.
+3. Render RC3 with the RC1-to-RC2 and RC2-to-RC3 overlays in that order.
+4. Perform the final rollback-on-failure Helm upgrade to RC3. Platform startup
+   runs the idempotent registration/KMS data migration before readiness.
+5. Verify the existing tenant DID document when `--tenant-host` is supplied.
+
+The intermediate and final candidate manifests are stored in the upgrade backup
+directory. If the RC2 stage fails, Helm rolls back to RC1 and the script stops.
+If the RC3 stage fails, Helm rolls back to the completed RC2 revision and the
+script stops, so the operator can correct the issue and rerun the same command.
 
 ## 1. Create the namespace and pull secret
 
@@ -109,7 +183,20 @@ kubectl -n edk create secret generic edk-platform-postgres \
 kubectl -n edk create secret generic edk-tenant-postgres \
   --from-literal=username=edk_tenant \
   --from-literal=password=<tenant-db-password>
+
+kubectl -n edk create secret generic edk-secret-management-database \
+  --from-literal=admin-password=<secret-management-admin-password> \
+  --from-literal=tenant-password=<secret-management-tenant-password>
 ```
+
+Before installing, provision fixed PostgreSQL login roles
+`secret_management_admin` and `secret_management_tenant_serving` in the
+platform database with the matching passwords. Both roles must be
+`NOSUPERUSER NOBYPASSRLS` and need `USAGE` on the target schema. Neither role
+may own or create schema objects. The platform database owner is used only by
+the deployment-time `secret-management-migrator` route; do not reuse it for
+either runtime pool. See
+[Secret management](secret-management.md) for the exact trust boundary.
 
 Point the chart at the control-plane database through
 `database.platform.host`, `database.platform.port`, and
@@ -227,7 +314,7 @@ Customers do not call pods or containers directly. Keep every `/api/.../v1`
 path internal or protected by operator/tenant authentication, and never publish
 runtime probes as customer-facing routes.
 
-**Admin console and testing console.** `services.admin-console` serves the complete operator console behind `/admin-console` on the platform host. On wildcard instance hosts the canonical public page is `/testing-console/{kind}/{instanceId}`. A page-only Gateway API rewrite maps that prefix to Next's internal `/admin-console/testing-console` path; a separate rule forwards only the testing APIs, portal OAuth, required Next/public assets, and health beneath `/admin-console`. The application repeats this host/path allowlist, while the backend public-endpoint registry enforces disabled/public/AS-protected instance modes. Routing alone never enables an instance. The testing console is intended for external issuer/verifier testers and other conformance participants. See `examples/admin-console-values.yaml` and [tls-and-gateway.md](tls-and-gateway.md).
+**Admin console and testing console.** `services.admin-console` serves the platform persona at `platform.<base-domain>/admin-console`; `services.admin-console-tenant` serves the tenant persona at `<tenant>.<base-domain>/admin-console` from the same image without a platform BFF credential. The wildcard route is only a transport rule: the application must resolve an active registered tenant before OAuth. The tenant runtime also keeps the `/testing-console/{kind}/{instanceId}` page and its existing page-only rewrite and support routes. See `examples/admin-console-values.yaml` and [tls-and-gateway.md](tls-and-gateway.md).
 
 ## 7. Security defaults
 

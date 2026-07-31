@@ -4,9 +4,9 @@ Tenant KMS configuration overlay.
 The tenant KMS holds the per-tenant software key material and serves the
 east-west signing, MAC, and encryption hops over gRPC. It must trust the
 workload identities that call it — including the tenant authorization server,
-which seeds its signing key here during tenant registration — and must let a
-trusted caller assert the target tenant via the request header so the seed lands
-in the right tenant's key space.
+which seeds its signing key here during tenant registration. The target tenant
+must be carried in the cryptographically validated workload
+JWT so the seed lands in the right tenant's key space.
 
 Delivered as the tenant KMS base application.yml; the image bakes no
 application.yml, so this is the KMS file configuration and it merges over the
@@ -26,26 +26,59 @@ data:
   application.yml: |
     # Workload identities the tenant KMS trusts on east-west command-transport
     # calls, each bound to the client id of the service token the caller presents.
-    # A trusted caller may assert the target tenant via the request header
-    # (header_wins) so the tenant AS can seed its signing key into the right
-    # tenant's key space; untrusted callers keep the fail-closed reject default.
+    # Tenant and principal claims are taken only from the validated workload JWT.
     security:
-      header-trust-policy:
-        internal:
-          tenant_mismatch: header_wins
-          principal_mismatch: header_wins
+      workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+          {{- if (index .Values.services "wallet-interaction").enabled }}
+          - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
+          {{- end }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+          {{- if (index .Values.services "wallet-interaction").enabled }}
+          "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
+          {{- end }}
+    # Tenant configuration routes platform-side KMS commands to SERVER. This
+    # workload is that receiver, so its deployment-local routing must remain
+    # LOCAL to avoid recursively invoking the remote KMS endpoint.
+    transport:
+      routing:
+        modules:
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            # Resolving the active KMS workload credential uses the dedicated
+            # tenant bootstrap bearer supplied by RemoteOpaqueSecretResolver.
+            preferServiceTokenOverSessionBearer: false
+    config:
+      overrides:
+        transport:
+          routing:
+            modules:
+              kms:
+                services:
+                  key:
+                    target: LOCAL
+                  leaf:
+                    target: LOCAL
+                  encryption:
+                    target: LOCAL
+                  # Tenant configuration points this group at the KMS server for
+                  # every other workload. This service is that server, so the
+                  # same setting would make it call itself.
+                  mac:
+                    target: LOCAL
     kms:
       # Internal-only software provider used before tenant platform config has
       # been pulled. It gives tenant-KMS local crypto support for validating
@@ -65,12 +98,11 @@ data:
             id: internal-token-verifier-memory
             keyVisibility: public
             overwriteAlias: true
-      # Tenant-specific software KMS providers are authored by the platform during
-      # tenant registration and exposed through platform-config-remote as
-      # kms.providers.<tenant-slug>.*. Tenant-KMS must not define a generic local
-      # provider named software because it would be visible through
-      # /api/kms/v1/providers next to the protected tenant-slug provider. Key
-      # material persists in the tenant-kms keystore volume.
+      # Tenant KMS roles are authored by the platform during tenant registration
+      # and exposed through platform-config-remote as crypto.kms.roles.*.
+      # Tenant-KMS must not define a second tenant-visible local role or restore
+      # the removed generic provider API. Key material persists in the tenant-kms
+      # keystore volume.
       enterprise:
         lifecycle:
           enabled: true

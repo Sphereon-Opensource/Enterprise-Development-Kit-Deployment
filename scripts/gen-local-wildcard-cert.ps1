@@ -10,21 +10,32 @@
   certificate instead and skip this script.
 
   Output (compose/gateway/certs/):
-    wildcard.crt / wildcard.key   server cert for *.saas.localtest.me, mounted into Traefik
+    wildcard.crt / wildcard.key   server cert for the selected base domain, mounted into Traefik
     local-ca.crt                  the local CA; trust this in your OS/browser/wallet
-    local-truststore.p12          PKCS#12 truststore holding the CA (password: changeit), mounted
-                                  into the service containers so they trust the gateway when
-                                  fetching per-tenant JWKS over TLS
+    local-truststore.p12          JVM default public roots plus the local CA (password:
+                                  changeit), mounted into service containers so internal
+                                  gateway TLS and public provider endpoints both validate
 
   Uses mkcert when available (auto-trusted after 'mkcert -install'), otherwise a self-signed
   openssl CA you trust manually. Re-run any time; it overwrites the cert material.
 #>
 param(
-  [string]$BaseDomain = $(if ($env:EDK_PLATFORM_BASE_DOMAIN) { $env:EDK_PLATFORM_BASE_DOMAIN } else { "saas.localtest.me" }),
+  [string]$BaseDomain = $(if ($env:EDK_PLATFORM_BASE_DOMAIN) { $env:EDK_PLATFORM_BASE_DOMAIN } else { "" }),
+  [switch]$Localtest,
   [string]$TruststorePassword = $(if ($env:EDK_TRUSTSTORE_PASSWORD) { $env:EDK_TRUSTSTORE_PASSWORD } else { "changeit" })
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Localtest -and $PSBoundParameters.ContainsKey("BaseDomain")) { throw "-Localtest and -BaseDomain are mutually exclusive." }
+if ($Localtest) { $BaseDomain = "saas.localtest.me" }
+if ([string]::IsNullOrWhiteSpace($BaseDomain)) {
+  throw "A base domain is required. Pass -BaseDomain, set EDK_PLATFORM_BASE_DOMAIN, or pass -Localtest explicitly."
+}
+$BaseDomain = $BaseDomain.Trim()
+if ($BaseDomain -match '^[a-zA-Z][a-zA-Z0-9+.-]*://' -or $BaseDomain -match '[/\\\s:]' -or $BaseDomain.StartsWith('.') -or $BaseDomain.EndsWith('.')) {
+  throw "BaseDomain must be a hostname without scheme, port, path, or whitespace; got '$BaseDomain'."
+}
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $certDir = Join-Path (Split-Path -Parent $scriptDir) "compose\gateway\certs"
 New-Item -ItemType Directory -Force -Path $certDir | Out-Null
@@ -53,6 +64,16 @@ function Resolve-Keytool {
   if ($c) { return $c.Source }
   foreach ($base in @($env:JAVA_HOME, $env:JDK_HOME)) {
     if ($base) { $p = Join-Path $base "bin\keytool.exe"; if (Test-Path $p) { return $p } }
+  }
+  return $null
+}
+
+function Resolve-DefaultCacerts([string]$KeytoolPath) {
+  $jdkRoot = Split-Path -Parent (Split-Path -Parent $KeytoolPath)
+  foreach ($candidate in @(
+      (Join-Path $jdkRoot "lib\security\cacerts"),
+      (Join-Path $jdkRoot "jre\lib\security\cacerts"))) {
+    if (Test-Path $candidate) { return $candidate }
   }
   return $null
 }
@@ -106,10 +127,16 @@ IP.1 = 127.0.0.1
 $keytool = Resolve-Keytool
 if ($keytool) {
   $ts = Join-Path $certDir "local-truststore.p12"
+  $defaultCacerts = Resolve-DefaultCacerts $keytool
+  if (-not $defaultCacerts) { throw "Could not locate the JVM default truststore next to $keytool." }
   Remove-Item $ts -ErrorAction SilentlyContinue
+  & $keytool -importkeystore -noprompt -srckeystore $defaultCacerts -srcstorepass changeit `
+    -destkeystore $ts -deststorepass $TruststorePassword -deststoretype PKCS12 2>$null
+  if ($LASTEXITCODE -ne 0) { throw "Could not copy JVM public roots into local-truststore.p12." }
   & $keytool -importcert -noprompt -trustcacerts -alias edk-local-ca `
     -file (Join-Path $certDir "local-ca.crt") -keystore $ts -storetype PKCS12 -storepass $TruststorePassword 2>$null
-  Write-Host "Wrote local-truststore.p12 (password: $TruststorePassword)."
+  if ($LASTEXITCODE -ne 0) { throw "Could not add the local CA to local-truststore.p12." }
+  Write-Host "Wrote local-truststore.p12 with JVM public roots and the local CA (password: $TruststorePassword)."
 }
 else {
   Write-Host "WARNING: keytool not found; local-truststore.p12 not generated."

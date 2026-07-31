@@ -1,0 +1,25 @@
+# Shared edge route for one customer EDK Compose environment.
+# The customer release wrapper renders the exact host space, environment label,
+# and internal stack-gateway alias. The shared edge owns TLS and hot-reloads
+# the installed result from its watched dynamic configuration directory.
+
+http:
+  routers:
+    customer-__ENV__:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`)
+      entryPoints: ["websecure"]
+      service: customer-__ENV__
+      tls:
+        certResolver: le
+        domains:
+          - main: "__BASE_DOMAIN__"
+            sans:
+              - "*.__BASE_DOMAIN__"
+
+  services:
+    customer-__ENV__:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://__EDGE_ALIAS__:80"

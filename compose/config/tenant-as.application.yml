@@ -15,21 +15,27 @@ server:
     auth:
       enabled: true
       # Open prefixes: OAuth protocol surface, login UI, discovery/JWKS, the
-      # internal pre-auth registration channel, the in-network command transport,
-      # and RFC 7662 introspection. The signing-key provisioning endpoint is
+      # internal pre-auth registration channel and RFC 7662 introspection. The signing-key command
+      # transport is
       # intentionally protected: tenant resolution validates the platform-issued
       # bearer and uses its tenant_id claim before the tenant's public host is active.
-      anonymous-path-prefixes: /authorize,/login,/token,/.well-known,/internal/preauth,/api/commands,/introspect
-      # Trust anchor for the platform AS. The /internal/provision/signing-key endpoint validates a
-      # short-lived, platform-issued bearer bound to this tenant (per-tenant audience), so it needs the
-      # platform issuer and JWKS — the same anchor the tenant runtime services trust.
+      anonymous-path-prefixes: /authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect
+      # Trust anchor for the platform AS. The internal east-west surfaces validate a short-lived,
+      # platform-issued bearer bound to this tenant (per-tenant audience), so they need the platform
+      # issuer and JWKS, the same anchor the tenant runtime services trust.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      expected-audience: enterprise-tenant-as
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
+    token-endpoint-allow-http: true
+    token-endpoint-source: configured
+    active-as-client-role: authorization-server
     client-id: tenant-as-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    tenant-bound-client-id: true
     audience: enterprise-platform
+    allowed-audiences: enterprise-tenant-kms
 sphereon:
   telemetry:
     enabled: true
@@ -59,7 +65,7 @@ otel:
         endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
         protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
 security:
-  header-trust-policy:
+  workload-trust-policy:
     trusted_service_ids:
       - service-crypto
       - service-data
@@ -77,6 +83,7 @@ transport:
     enabled: false
     port: 9090
   routing:
+    configScope: APP
     modules:
       kms:
         serviceTokenAudience: enterprise-tenant-kms
@@ -96,6 +103,7 @@ transport:
                 target: LOCAL
           mac: *tenantKmsGrpcRoute
           encryption: *tenantKmsGrpcRoute
+          ecdh: *tenantKmsGrpcRoute
       platform:
         target: SERVER
         transport: GRPC
@@ -113,7 +121,7 @@ config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: oauth2.servers,kms.providers
+      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
     tenant-config-db:
       enabled: false
 database:
@@ -164,7 +172,7 @@ kms:
         path: "{tempDir}/edk-verify-keystore.p12"
 crypto:
   kms:
-    # The AS signing roles resolve against the tenant-slug provider, which is
+    # The AS signing roles resolve against the tenant default provider, which is
     # served remotely by the tenant KMS via the kms routing module above. No key
     # material is held locally.
     roles:

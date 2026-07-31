@@ -77,19 +77,19 @@ present before tenant onboarding starts.
 For local evaluation, generate a wildcard certificate with the kit script:
 
 ```bash
-scripts/gen-local-wildcard-cert.sh
+scripts/gen-local-wildcard-cert.sh --localtest
 ```
 
-On Windows use `scripts\gen-local-wildcard-cert.ps1`. The script writes to `compose/gateway/certs/`:
+On Windows use `scripts\gen-local-wildcard-cert.ps1 -Localtest`. The script writes to `compose/gateway/certs/`:
 
-- `wildcard.crt` and `wildcard.key`. The server certificate for `*.saas.localtest.me` (the default base domain) and the operator host, mounted into Traefik.
+- `wildcard.crt` and `wildcard.key`. The server certificate for the explicitly selected base domain and the operator host, mounted into Traefik.
 - `local-ca.crt`. The local CA. Trust it in your operating system, browser, and wallet to avoid certificate warnings.
 - `local-truststore.p12`. A PKCS#12 truststore holding the CA (password `changeit`), mounted into the containers so they trust the gateway when fetching per-tenant JWKS over TLS.
 
-The script uses `mkcert` when available (run `mkcert -install` once so your browser trusts the CA) and otherwise falls back to a self-signed openssl CA you trust manually. Override the base domain with `EDK_PLATFORM_BASE_DOMAIN` and the truststore password with `EDK_TRUSTSTORE_PASSWORD`. Re-run any time; it overwrites the cert material.
+The script uses `mkcert` when available (run `mkcert -install` once so your browser trusts the CA) and otherwise falls back to a self-signed openssl CA you trust manually. A base domain is mandatory: pass `--base-domain`/`-BaseDomain`, set `EDK_PLATFORM_BASE_DOMAIN`, or explicitly select `--localtest`/`-Localtest`. Override the truststore password with `EDK_TRUSTSTORE_PASSWORD`. Re-run any time; it overwrites the cert material.
 
-The local default base domain is `saas.localtest.me`, whose subdomains resolve
-to `127.0.0.1` with no DNS setup, so
+The explicit localtest selection uses `saas.localtest.me`, whose subdomains
+resolve to `127.0.0.1` with no DNS setup, so
 `https://platform.saas.localtest.me` and
 `https://<tenant>.saas.localtest.me` reach the gateway on your machine.
 
@@ -396,10 +396,11 @@ example from Azure Key Vault or a Kubernetes TLS Secret.
 
 ## Admin console routing
 
-The optional admin console is a Next.js app served under the `/admin-console`
-path prefix on the platform host. The gateway routes
-`https://platform.<base-domain>/admin-console` to the `admin-console` container
-on port `3000`. The console owns the prefix and emits its assets under
+The optional admin console uses the `/admin-console` path on both the platform
+host and registered tenant hosts. The same image runs as two isolated services:
+`admin-console` for the platform persona and `admin-console-tenant` for the
+tenant persona. The tenant service receives no platform BFF credential. Both
+emit assets under
 `/admin-console/_next/...`, so the route is served **without** a StripPrefix:
 forward the full path including `/admin-console` to the backend. Stripping the
 prefix breaks asset loading.
@@ -409,25 +410,33 @@ that `/admin-console` requests reach the console and not the platform service.
 Give the console route higher priority than the platform host route.
 
 **Traefik (Compose).** The gateway overlay routes the `/admin-console` prefix on
-the platform host to the `admin-console` service. The router matches
+the platform host to `admin-console`. The router matches
 `Host(platform.<base-domain>) && PathPrefix(/admin-console)` with no StripPrefix
 middleware, and is given a higher priority than the platform catch-all router so
-the more specific path wins. The routing table lives in
+the more specific path wins. A wildcard-host router sends the same prefix to
+`admin-console-tenant`, without a StripPrefix. The routing table lives in
 `compose/gateway/traefik/dynamic.yml`.
 
-**Kubernetes Gateway API / Ingress.** With the Gateway API, an HTTPRoute on the
-platform host matches the `/admin-console` path prefix and forwards to the
-admin-console Service on port `3000`, with no URLRewrite/path filter that strips
+**Kubernetes Gateway API / Ingress.** With the Gateway API, separate HTTPRoutes
+on the exact platform listener and wildcard tenant listener forward the same
+prefix to the platform and tenant Services respectively, with no filter that strips
 the prefix. Gateway API longest-prefix matching makes the `/admin-console` route
 win over the platform host's `/` route. With classic Ingress, add an
 `/admin-console` prefix path on the platform public Ingress ahead of the
 catch-all, again without a rewrite annotation that strips the prefix.
 
 The chart uses an exact `https-platform` listener for the operator hostname and
-a separate wildcard `https` listener for instance hosts. Platform and complete
-admin-console HTTPRoutes attach only to `https-platform`; tenant/satellite and
-testing-console routes attach only to `https`. This listener split prevents the
-wildcard testing-console route from becoming a platform-host route.
+a separate wildcard `https` listener for tenant hosts. The operator console
+attaches only to `https-platform`; tenant administration and testing-console
+routes attach only to `https`.
+
+To IP-restrict the platform host without restricting tenant consoles, attach
+the ingress-controller's IP-allowlist or WAF policy through
+`gateway.platformAccess.routeAnnotations`. The chart applies those annotations
+only to exact-platform HTTPRoutes, including the platform catch-all and operator
+console; it never copies them to wildcard tenant routes. For Compose, apply the
+equivalent host-specific policy at the external firewall or as a Traefik
+middleware on the `platform` and `platform-admin-console` routers.
 
 ### Instance-host testing-console isolation
 
@@ -440,18 +449,16 @@ The Compose Traefik configuration uses a dedicated public-page router with an
 uses a page-only `ReplacePrefixMatch` from `/testing-console` to
 `/admin-console/testing-console`.
 
-A separate route forwards only the direct support paths
+A separate testing route still forwards the direct support paths
 `/admin-console/api/oid4vci/v1/testing`,
 `/admin-console/api/oid4vp/v1/testing`, the exact portal OAuth `login`,
 `callback`, `grant`, and `revoke` endpoints under
 `/admin-console/api/portal-oauth`,
 `/admin-console/_next`, `/admin-console/public/assets`, and the exact
-`/admin-console/health` path. It has no page rewrite. There is no
-`/admin-console/testing` compatibility page and no generic `/admin-console`
-route on instance hosts. The Next host guard enforces the same allowlist using
-the configured canonical platform origin and exact trusted gateway hop.
-Requests for the root console, platform admin/auth APIs, the operator console
-callback, previews, or tools on an instance host return 404.
+`/admin-console/health` path. It has no page rewrite and there is no
+`/admin-console/testing` compatibility page. The tenant-mode host guard first
+validates the exact host against the tenant registry; unknown or disabled hosts
+return 404, and platform-management APIs return 403/404.
 
 These routes do not decide whether an issuer/verifier testing console is enabled. The
 backend public-endpoint registry validates the exact origin and enforces the

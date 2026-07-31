@@ -1,6 +1,6 @@
 # Traefik dynamic configuration: the single-port routing table.
 #
-# The base domain saas.localtest.me below is the local-evaluation default; every
+# This file is the explicit saas.localtest.me local-evaluation fixture; every
 # subdomain of localtest.me resolves to 127.0.0.1. To use a real base domain,
 # replace saas.localtest.me throughout this file (the Traefik file provider does
 # not interpolate environment variables).
@@ -47,23 +47,38 @@ http:
     # platform plane. The canonical platform origin is server configuration;
     # instance origins come only from the exact trusted gateway hop.
     platform-admin-console:
-      rule: "Host(`platform.saas.localtest.me`) && PathPrefix(`/admin-console`)"
+      rule: "Host(`platform.saas.localtest.me`) && (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))"
       entryPoints: ["websecure"]
       service: svc-admin-console
       priority: 1100   # above platform catch-all (1000)
       tls: {}
 
-    # --- KMS / DID management APIs: host-agnostic, routed by path ------------
-    # The KMS and DID management APIs are tenant-scoped by the request token,
-    # not by host, so the operator console can call them same-origin on the
-    # platform host. Deliberately no Host() constraint: priority above the
-    # platform catch-all keeps these paths from falling through to platform.
-    api-kms:
-      rule: "PathPrefix(`/api/kms/v1`)"
+    # Exact browser-safe platform bootstrap projection for tenant administration.
+    # Never broaden this to the platform bootstrap or management namespace.
+    tenant-admin-console-runtime-config:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        Path(`/api/platform/bootstrap/v1/runtime-config/admin-console`)
       entryPoints: ["websecure"]
-      service: svc-kms
-      priority: 1100
+      service: svc-platform
+      priority: 280
       tls: {}
+
+    # Registered tenant hosts use the same path but a separate runtime without
+    # platform-management credentials. The app resolves the exact tenant from
+    # the trusted host and fails closed for unknown or disabled hosts.
+    tenant-admin-console:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      priority: 270
+      tls: {}
+
+    # --- DID management API: host-agnostic, routed by path -------------------
+    # Tenant-KMS command traffic is internal gRPC only. The browser-visible KMS
+    # administration surface is the typed platform-config route below.
     api-did:
       rule: "PathPrefix(`/api/did/v1`)"
       entryPoints: ["websecure"]
@@ -88,6 +103,17 @@ http:
       service: svc-platform
       priority: 300
       tls: {}
+    # Typed KMS resource management is part of the platform configuration API and
+    # is served by the platform, which owns the secret authority state; the tenant
+    # host supplies the tenant-routing context.
+    tenant-platform-config-kms:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        PathRegexp(`^/api/platform/config/v1/tenants/[^/]+/kms(/.*)?$`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 300
+      tls: {}
 
     # --- Public instance testing-console page -------------------------------
     # Keep the customer URL independent from Next's internal /admin-console
@@ -98,7 +124,7 @@ http:
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
         PathRegexp(`^/testing-console/(issuer|verifier)/[^/]+/?$`)
       entryPoints: ["websecure"]
-      service: svc-admin-console
+      service: svc-admin-console-tenant
       middlewares: ["instance-testing-console-add-admin-prefix"]
       priority: 260
       tls: {}
@@ -116,7 +142,7 @@ http:
          Path(`/testing-console/api/portal-oauth/grant`) ||
          Path(`/testing-console/api/portal-oauth/revoke`))
       entryPoints: ["websecure"]
-      service: svc-admin-console
+      service: svc-admin-console-tenant
       middlewares: ["instance-testing-console-api-rewrite"]
       priority: 265
       tls: {}
@@ -137,7 +163,7 @@ http:
          PathPrefix(`/admin-console/public/assets`) ||
          Path(`/admin-console/health`))
       entryPoints: ["websecure"]
-      service: svc-admin-console
+      service: svc-admin-console-tenant
       priority: 250
       tls: {}
 
@@ -180,14 +206,25 @@ http:
       priority: 200
       tls: {}
 
-    # --- Tenant hosts: KMS management --------------------------------------
-    tenant-kms:
+    # Customer identities and credentials belong to the workload AS database.
+    tenant-as-identity-admin:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        PathPrefix(`/api/kms/v1`)
+        PathRegexp(`^/api/(identity/v1|identity-auth/v1/admin|party/v1)(/.*)?$`)
       entryPoints: ["websecure"]
-      service: svc-kms
-      priority: 200
+      service: svc-as
+      priority: 220
+      tls: {}
+
+    # Trust-domain policy is platform-owned; the tenant host still supplies
+    # the tenant-routing context to the platform process.
+    tenant-trust-domain:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        PathPrefix(`/api/trust-domain/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 220
       tls: {}
 
     # --- Tenant hosts: authorization server (lowest tenant priority so the
@@ -195,8 +232,8 @@ http:
     tenant-as:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        (PathPrefix(`/authorize`) || PathPrefix(`/token`) ||
-         PathPrefix(`/userinfo`) || PathPrefix(`/oauth2`) || PathPrefix(`/login`) ||
+        (PathPrefix(`/authorize`) || PathPrefix(`/token`) || PathPrefix(`/par`) ||
+         PathPrefix(`/userinfo`) || PathPrefix(`/oauth2`) || PathPrefix(`/login`) || PathPrefix(`/logout`) ||
          PathPrefix(`/.well-known/oauth-authorization-server`) ||
          PathPrefix(`/.well-known/openid-configuration`) ||
          PathPrefix(`/.well-known/jwks.json`))
@@ -240,13 +277,13 @@ http:
         passHostHeader: true
         servers:
           - url: "http://enterprise-did:8080"
-    svc-kms:
-      loadBalancer:
-        passHostHeader: true
-        servers:
-          - url: "http://enterprise-tenant-kms:8080"
     svc-admin-console:
       loadBalancer:
         passHostHeader: true
         servers:
           - url: "http://admin-console:3000"
+    svc-admin-console-tenant:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://admin-console-tenant:3000"
