@@ -5,6 +5,10 @@
        it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
        /admin-console/health route rather than the EDK /health endpoint. */}}
 {{- $isAdminConsole := or (eq $name "admin-console") (eq $name "admin-console-tenant") }}
+{{- $secretAuthoritySecret := "" }}
+{{- if not $isAdminConsole }}
+{{- $secretAuthoritySecret = index $.Values.secretAuthority.existingSecrets $name }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,6 +41,11 @@ spec:
       {{- end }}
       labels:
         {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 8 }}
+        {{- if eq $name "platform" }}
+        edk.sphereon.com/platform-authority-bootstrap: "true"
+        {{- else if eq $name "tenant-kms" }}
+        edk.sphereon.com/tenant-kms-authority-bootstrap: "true"
+        {{- end }}
     spec:
       serviceAccountName: {{ if eq $name "platform" }}{{ include "edk-enterprise.platformServiceAccountName" $ }}{{ else }}{{ include "edk-enterprise.serviceAccountName" $ }}{{ end }}
       securityContext:
@@ -76,6 +85,10 @@ spec:
               mountPath: {{ dir $.Values.license.trust.rootCaPath | quote }}
         {{- end }}
         {{- if $waitForPlatformGrpc }}
+        {{- $platformGrpcService := include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
+        {{- if eq $name "tenant-kms" }}
+        {{- $platformGrpcService = printf "%s-platform-authority-bootstrap" (include "edk-enterprise.fullname" $) }}
+        {{- end }}
         # Do not construct a long-lived gRPC channel while the platform Service
         # has no ready endpoint. Netty's reconnect backoff can otherwise outlive
         # the first tenant-registration request even though the platform becomes
@@ -89,7 +102,7 @@ spec:
             - /bin/bash
             - -ec
             - >-
-              until (echo > /dev/tcp/{{ include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}/{{ $.Values.grpc.port }}) 2>/dev/null;
+              until (echo > /dev/tcp/{{ $platformGrpcService }}/{{ $.Values.grpc.port }}) 2>/dev/null;
               do sleep 1;
               done
         {{- end }}
@@ -119,6 +132,35 @@ spec:
             {{- end }}
           env:
             {{- if not $isAdminConsole }}
+            # Secret-authority coordinate strings contain key identifiers,
+            # validity windows, and in-container paths. They remain in the
+            # workload-isolated Secret with the corresponding key material.
+            - name: SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretAuthoritySecret | quote }}
+                  key: {{ $.Values.secretAuthority.keys.satelliteAssertionSigningKey | quote }}
+            - name: SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretAuthoritySecret | quote }}
+                  key: {{ $.Values.secretAuthority.keys.satellitePermitVerificationKeys | quote }}
+            {{- if eq $name "platform" }}
+            - name: TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST
+              value: {{ printf "%s-tenant-kms-authority-bootstrap" (include "edk-enterprise.fullname" $) | quote }}
+            - name: TENANT_KMS_AUTHORITY_BOOTSTRAP_PORT
+              value: {{ $.Values.grpc.port | quote }}
+            - name: SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretAuthoritySecret | quote }}
+                  key: {{ $.Values.secretAuthority.keys.centralPermitSigningKey | quote }}
+            - name: SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretAuthoritySecret | quote }}
+                  key: {{ $.Values.secretAuthority.keys.centralAssertionVerificationKeys | quote }}
+            {{- end }}
             - name: APP_PROFILE
               value: "container"
             # Configuration directory the service reads: application.yml plus the
@@ -388,6 +430,26 @@ spec:
                 secretKeyRef:
                   name: {{ $tenantDb.existingSecret }}
                   key: {{ $tenantDb.passwordKey }}
+            - name: EDK_TENANT_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: EDK_TENANT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            - name: EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.secretManagement.existingSecret }}
+                  key: {{ $.Values.database.secretManagement.adminPasswordKey }}
+            - name: EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.secretManagement.existingSecret }}
+                  key: {{ $.Values.database.secretManagement.tenantPasswordKey }}
             {{- end }}
             {{- end }}
             {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") }}
@@ -582,6 +644,8 @@ spec:
             {{- end }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-kms")) (index $.Values.services "tenant-kms").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_DID_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "did")) (index $.Values.services "did").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_AS_BASE_URL
@@ -636,6 +700,11 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if not $isAdminConsole }}
+            - name: secret-authority
+              mountPath: /app/secret-authority
+              readOnly: true
+            {{- end }}
             {{- if and (eq $name "platform") $.Values.database.enabled }}
             # The system platform tenant is control-plane state. This overlay binds its
             # datasource to the platform database while customer tenant workload state
@@ -732,6 +801,25 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if not $isAdminConsole }}
+        - name: secret-authority
+          secret:
+            secretName: {{ $secretAuthoritySecret | quote }}
+            defaultMode: 0400
+            items:
+              - key: {{ $.Values.secretAuthority.keys.satelliteAssertionPrivateKey | quote }}
+                path: workload/assertion.pem
+              - key: {{ $.Values.secretAuthority.keys.centralPermitPublicKey | quote }}
+                path: public/central-permit.pub.pem
+              {{- if eq $name "platform" }}
+              - key: {{ $.Values.secretAuthority.keys.centralPermitPrivateKey | quote }}
+                path: central/permit-signing.pem
+              {{- range $workloadId, $key := $.Values.secretAuthority.keys.assertionPublicKeys }}
+              - key: {{ $key | quote }}
+                path: {{ printf "public/%s-assertion.pub.pem" $workloadId | quote }}
+              {{- end }}
+              {{- end }}
+        {{- end }}
         {{- if eq $name "platform" }}
         - name: license-state
           emptyDir: {}

@@ -209,7 +209,7 @@ secret-management:
     environment:
       enabled: true
       manifest-path: /app/secret-management/deployment/environment.manifest
-      manifest-sha256: sha256:da715f170961dcfaeaefcf488644da9186e83a284e0e5cdf7ab2accae300c5e6
+      manifest-sha256: sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e
     kubernetes-mount:
       enabled: false
 # Trust-domain anchor -> identifier materialization source. The platform executes the routed trust
@@ -227,8 +227,14 @@ trust-domain:
     # In-network base URL of the tenant AS whose identity-manager API this platform reads identifiers
     # from. Only consulted when identifier-source.mode=rest above.
     internal-url: http://enterprise-tenant-as:18083
-    # The platform forwards the platform-AS-issued target-tenant STS bearer from the current
-    # request. There is deliberately no second client-credentials authority path.
+    # Dedicated least-privilege identity for platform -> tenant-AS identifier reads. The client
+    # secret remains opaque and is selected through the tenant-bound secret-use binding.
+    service-identity:
+      token-endpoint: http://enterprise-platform:18080/token
+      token-endpoint-allow-http: true
+      client-id: trust-domain-service
+      tenant-bound-client-id: true
+      audience: enterprise-tenant-as
 # Dedicated trust-domain router registry, deliberately kept under its own
 # prefix and separate from database.* above: that shared registry also backs
 # every other platform-side tenant-scoped store (auth sessions, signing keys,

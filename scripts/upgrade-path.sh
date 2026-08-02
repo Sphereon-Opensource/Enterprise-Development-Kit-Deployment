@@ -30,7 +30,7 @@ edk_plan_known_upgrade_path() {
   local installed_tag="$1"
   local target_tag="$2"
   local rc1_to_rc2_values="$3"
-  local rc2_to_rc3_values="$4"
+  local v0_25_0_rc2_to_v0_25_0_rc3_values="$4"
   local installed_release_number target_release_number
 
   EDK_AUTO_MIGRATION_VALUE_FILES=()
@@ -54,7 +54,7 @@ edk_plan_known_upgrade_path() {
     EDK_AUTO_MIGRATION_VALUE_FILES+=("$rc1_to_rc2_values")
   fi
   if [[ "$installed_release_number" -gt 0 && "$target_release_number" -ge 3 ]]; then
-    EDK_AUTO_MIGRATION_VALUE_FILES+=("$rc2_to_rc3_values")
+    EDK_AUTO_MIGRATION_VALUE_FILES+=("$v0_25_0_rc2_to_v0_25_0_rc3_values")
   fi
   if [[ "$installed_release_number" == "1" && "$target_release_number" -ge 3 ]]; then
     EDK_INTERMEDIATE_IMAGE_TAG="0.25.0-RC2"

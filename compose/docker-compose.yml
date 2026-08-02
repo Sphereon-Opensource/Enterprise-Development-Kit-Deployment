@@ -95,41 +95,10 @@ services:
     ports:
       - "127.0.0.1:${EDK_PLATFORM_POSTGRES_HOST_PORT:-15432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${EDK_PLATFORM_DB_USERNAME:-edk_platform} -d ${EDK_PLATFORM_DB_NAME:-platform}"]
+      test: ["CMD-SHELL", "/docker-entrypoint-initdb.d/10-secret-management-roles.sh"]
       interval: 3s
       timeout: 3s
       retries: 20
-
-  # PostgreSQL runs /docker-entrypoint-initdb.d only for an empty data
-  # directory. Run the same idempotent role bootstrap on every start so an
-  # existing RC1/RC2 volume is ready before the RC3 platform opens its pools.
-  secret-management-db-roles-init:
-    image: postgres:16-alpine
-    depends_on:
-      platform-postgres:
-        condition: service_healthy
-    environment:
-      PGHOST: platform-postgres
-      PGPORT: "5432"
-      PGPASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
-      POSTGRES_USER: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
-      POSTGRES_DB: ${EDK_PLATFORM_DB_NAME:-platform}
-      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
-    entrypoint: ["sh", "/role-init.sh"]
-    volumes:
-      - ./postgres-init/10-secret-management-roles.sh:/role-init.sh:ro
-    networks:
-      - platform-db-net
-    user: "70:70"
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    restart: "no"
 
   tenant-postgres:
     image: postgres:16-alpine
@@ -171,18 +140,6 @@ services:
     ports:
       - "127.0.0.1:${EDK_JAEGER_UI_HOST_PORT:-16686}:16686"
 
-  # One-shot: the keystore volumes mount root-owned, but the service containers
-  # run as uid 10001 and need write access to their keystore. This grants those
-  # volumes, then exits. The writable-keystore services wait for it to complete.
-  keystore-init:
-    image: busybox:1.36
-    command: ["sh", "-c", "chown 10001:10001 /platform-keystore /tenant-kms-keystore"]
-    volumes:
-      - platform-keystore:/platform-keystore
-      - tenant-kms-keystore:/tenant-kms-keystore
-    networks:
-      - appnet
-
   # Control plane: operator login, OAuth/OIDC discovery, setup, platform admin,
   # platform config. Local licensing authority for the deployment. Runs the gRPC
   # server transport for config routing; REST listens on 18080 in-container.
@@ -193,10 +150,6 @@ services:
         condition: service_healthy
       otel-collector:
         condition: service_started
-      keystore-init:
-        condition: service_completed_successfully
-      secret-management-db-roles-init:
-        condition: service_completed_successfully
     networks:
       - appnet
       - platform-db-net
@@ -279,8 +232,6 @@ services:
     depends_on:
       tenant-postgres:
         condition: service_healthy
-      keystore-init:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
       enterprise-platform:
@@ -413,6 +364,7 @@ services:
       ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
       ADMIN_CONSOLE_AUDIT_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
       ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
       ADMIN_CONSOLE_TENANT_AS_BASE_URL: http://enterprise-tenant-as:18083
       ADMIN_CONSOLE_IDENTITY_BASE_URL: http://enterprise-tenant-as:18083
@@ -460,6 +412,7 @@ services:
       ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
       ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-tenant-as:18083
       ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
       ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
       ADMIN_CONSOLE_TENANT_AS_BASE_URL: http://enterprise-tenant-as:18083
       ADMIN_CONSOLE_IDENTITY_BASE_URL: http://enterprise-tenant-as:18083

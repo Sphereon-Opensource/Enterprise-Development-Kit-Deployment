@@ -192,6 +192,122 @@ east-west Authorization headers or software-keystore access.
 {{- if eq .Values.portalBff.kms.encryptionKeyAlias .Values.portalBff.kms.handleHmacKeyAlias -}}
 {{- fail "portalBff.kms.encryptionKeyAlias and portalBff.kms.handleHmacKeyAlias must be distinct." -}}
 {{- end -}}
+{{- range $name := list "platform" "tenant-kms" "tenant-as" "did" "issuer" "verifier" "wallet-unit" "wallet-interaction" -}}
+{{- $service := index $.Values.services $name -}}
+{{- if and $service.enabled (eq (trim (default "" (index $.Values.secretAuthority.existingSecrets $name))) "") -}}
+{{- fail (printf "secretAuthority.existingSecrets.%s is required when services.%s.enabled=true; reference a workload-isolated Secret containing the configured secret-authority coordinates and key files." $name $name) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Runtime configuration shared by every secret-consuming satellite. */}}
+{{- define "edk-enterprise.secretAuthoritySatelliteConfig" -}}
+# The local service identity is cryptographically bound into the execution
+# assertion and must equal secret.authority.satellite.workload-id.
+sphereon:
+  service:
+    id: {{ .workloadId | quote }}
+secret:
+  authority:
+    allowed-clock-skew-millis: 2000
+    satellite:
+      workload-id: {{ .workloadId | quote }}
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+{{- end -}}
+
+{{/* Fixed-role database pools used by every tenant workload's local secret broker. */}}
+{{- define "edk-enterprise.secretManagementSatelliteDatabaseConfig" -}}
+{{- $tenantDb := .Values.database.tenant -}}
+database:
+  app:
+    # The deployment owner is used only for schema migration and hardening.
+    secret-management-migrator:
+      dialect: {{ .Values.database.dialect }}
+      isolation: shared
+      host: {{ $tenantDb.host }}
+      port: {{ $tenantDb.port }}
+      database: {{ $tenantDb.name }}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-admin:
+      dialect: {{ .Values.database.dialect }}
+      isolation: shared
+      host: {{ $tenantDb.host }}
+      port: {{ $tenantDb.port }}
+      database: {{ $tenantDb.name }}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: {{ .Values.database.dialect }}
+      isolation: shared
+      host: {{ $tenantDb.host }}
+      port: {{ $tenantDb.port }}
+      database: {{ $tenantDb.name }}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+{{- end -}}
+
+{{/* Platform-owned command families every satellite resolves over gRPC. */}}
+{{- define "edk-enterprise.remotePlatformRoutingModules" -}}
+platform:
+  target: SERVER
+  transport: GRPC
+  endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+  services:
+    config:
+      target: SERVER
+      transport: GRPC
+      endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+application:
+  target: SERVER
+  transport: GRPC
+  endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+{{- end -}}
+
+{{/* The platform is both the central permit issuer and a satellite consumer. */}}
+{{- define "edk-enterprise.secretAuthorityPlatformConfig" -}}
+sphereon:
+  service:
+    id: service-platform
+secret:
+  authority:
+    allowed-clock-skew-millis: 2000
+    central:
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        signing-key: ${env:SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY}
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        verification-keys: ${env:SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS}
+    satellite:
+      workload-id: service-platform
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
 {{- end -}}
 
 {{/*

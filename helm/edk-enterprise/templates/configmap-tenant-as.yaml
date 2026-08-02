@@ -24,6 +24,8 @@ metadata:
     app.kubernetes.io/component: tenant-as
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "tenant-as")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     {{- if .Values.serviceIdentity.internalClientExistingSecret }}
     # The tenant AS reaches tenant-kms with a tenant-bound workload client.
     # Tokens are still minted at the platform AS to avoid the signing -> KMS ->
@@ -31,8 +33,14 @@ data:
     # authorization-server client that platform onboarding registered.
     server:
       service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
         token-endpoint-source: configured
         active-as-client-role: authorization-server
+        client-id: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
         allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
     {{- end }}
     security:
@@ -96,6 +104,7 @@ data:
       routing:
         configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
           secret:
             target: SERVER
             transport: GRPC

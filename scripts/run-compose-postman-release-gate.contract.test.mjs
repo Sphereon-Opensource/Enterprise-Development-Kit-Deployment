@@ -90,10 +90,10 @@ const kmsLifecycleContract = [
   ['04 Create disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources'],
   ['05 Read SOFTWARE KMS credential status', 'GET', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/credentials/software-keystore'],
   ['06 Attach SOFTWARE KMS credential', 'PUT', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/credentials/software-keystore'],
-  ['07 Validate disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}:validate'],
-  ['08 Rotate SOFTWARE KMS credential', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}:rotate'],
-  ['09 Detach disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}:detach'],
-  ['10 Retire disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}:retire'],
+  ['07 Validate disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/validate'],
+  ['08 Rotate SOFTWARE KMS credential', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/rotate'],
+  ['09 Detach disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/detach'],
+  ['10 Retire disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/retire'],
 ]
 for (const [name, method, url] of kmsLifecycleContract) {
   const item = requestByName.get(name)

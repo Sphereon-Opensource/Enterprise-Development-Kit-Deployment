@@ -45,6 +45,13 @@ __LE_TLS_DOMAINS__
       tls:
         certResolver: le
 
+    api-kms:
+      rule: "PathPrefix(`/api/kms/v1`)"
+      entryPoints: ["websecure"]
+      service: svc-kms
+      priority: 1100
+      tls:
+        certResolver: le
     api-did:
       rule: "PathPrefix(`/api/did/v1`)"
       entryPoints: ["websecure"]
@@ -257,3 +264,8 @@ __LE_TLS_DOMAINS__
         passHostHeader: true
         servers:
           - url: "http://enterprise-did:8080"
+    svc-kms:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-kms:8080"

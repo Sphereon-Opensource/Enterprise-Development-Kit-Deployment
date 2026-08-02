@@ -55,6 +55,7 @@ data:
   # environment variable name cannot express (the platform tenant datasource
   # and the hyphenated control-plane bootstrap keys).
   application.yml: |
+{{ include "edk-enterprise.secretAuthorityPlatformConfig" . | indent 4 }}
     server:
       rest:
         auth:
@@ -176,7 +177,7 @@ data:
           enabled: {{ ne .Values.portalBff.existingSecret "" }}
           {{- if .Values.portalBff.existingSecret }}
           manifest-path: /app/secret-management/deployment/environment.manifest
-          manifest-sha256: "sha256:da715f170961dcfaeaefcf488644da9186e83a284e0e5cdf7ab2accae300c5e6"
+          manifest-sha256: "sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e"
           {{- end }}
         kubernetes-mount:
           enabled: {{ .Values.secretManagement.kubernetesMount.enabled }}
@@ -193,6 +194,16 @@ data:
         mode: rest
       identifier-source-rest:
         internal-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+        {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "tenant-as").enabled }}
+        # A closed token profile selects these server-authored coordinates; the opaque tenant-bound
+        # client secret is resolved by the secret broker and is never rendered into this ConfigMap.
+        service-identity:
+          token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          token-endpoint-allow-http: true
+          client-id: {{ index .Values.serviceIdentity.clientIds "trust-domain-identifier" | quote }}
+          tenant-bound-client-id: true
+          audience: {{ include "edk-enterprise.serviceAudience" "tenant-as" | quote }}
+        {{- end }}
     # Dedicated trust-domain router registry, deliberately kept under its own
     # prefix and separate from database.* above: that registry also backs
     # every other platform-side tenant-scoped store (auth sessions, signing
@@ -398,19 +409,19 @@ data:
             services:
               key:
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
               # Typed key-resource operations are a separate service namespace.
               # Customer tenant sessions route them to tenant-KMS while the
               # application tenant continues to select LOCAL.
               leaf:
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
               mac:
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
               encryption:
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
           {{- end }}
           {{- if (index .Values.services "tenant-as").enabled }}
           # A tenant's authorization server owns its signing-key store. Registration provisions
@@ -425,12 +436,12 @@ data:
           # audience before it issues the command, so the bearer on the session already carries
           # the tenant binding. Preferring a workload token here would discard that binding, and
           # the platform registers no authorization-server client role to mint one with.
-          oauth2-as-admin:
+          "[oauth2-as-admin]":
             target: SERVER
             serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-as" | quote }}
             preferServiceTokenOverSessionBearer: false
             services:
-              signing-key:
+              "[signing-key]":
                 target: SERVER
                 transport: HTTP
                 endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) (index .Values.services "tenant-as").restPort | quote }}

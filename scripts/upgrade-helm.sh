@@ -221,7 +221,7 @@ append_unique_file() {
 }
 
 RC1_TO_RC2_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml"
-RC2_TO_RC3_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc2-to-0.25.0-rc3-values.yaml"
+V0_25_0_RC2_TO_V0_25_0_RC3_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc2-to-0.25.0-rc3-values.yaml"
 
 # Resolve the currently installed immutable image tag before rendering. Known
 # release transitions are selected automatically. Compatibility overlays are
@@ -240,7 +240,7 @@ if [[ -n "$INSTALLED_IMAGE_TAG" && -n "$IMAGE_TAG" ]]; then
     "$INSTALLED_IMAGE_TAG" \
     "$IMAGE_TAG" \
     "$(absolute_file "$RC1_TO_RC2_VALUES")" \
-    "$(absolute_file "$RC2_TO_RC3_VALUES")"; then
+    "$(absolute_file "$V0_25_0_RC2_TO_V0_25_0_RC3_VALUES")"; then
     die "Refusing unsupported release downgrade: $INSTALLED_IMAGE_TAG -> $IMAGE_TAG"
   fi
   AUTO_MIGRATION_VALUE_FILES=("${EDK_AUTO_MIGRATION_VALUE_FILES[@]}")

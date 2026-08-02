@@ -94,7 +94,7 @@ fi
 
 INTERMEDIATE_IMAGE_TAG=""
 if [[ -n "$INSTALLED_IMAGE_TAG" ]]; then
-  if ! edk_plan_known_upgrade_path "$INSTALLED_IMAGE_TAG" "$IMAGE_TAG" "rc1-to-rc2" "rc2-to-rc3"; then
+  if ! edk_plan_known_upgrade_path "$INSTALLED_IMAGE_TAG" "$IMAGE_TAG" "0.25.0-rc1-to-0.25.0-rc2" "0.25.0-rc2-to-0.25.0-rc3"; then
     die "Refusing unsupported release downgrade: $INSTALLED_IMAGE_TAG -> $IMAGE_TAG"
   fi
   INTERMEDIATE_IMAGE_TAG="$EDK_INTERMEDIATE_IMAGE_TAG"
@@ -121,7 +121,7 @@ run_release_step() {
     printf 'Using locally built target images for %s; intermediate releases were still pulled.\n' "$tag"
   fi
   printf 'Starting release %s and waiting for health checks.\n' "$tag"
-  EDK_TAG="$tag" "${COMPOSE[@]}" up -d --wait --pull never
+  EDK_TAG="$tag" "${COMPOSE[@]}" up -d --wait --pull never --remove-orphans
   printf '%s\n' "$tag" >"$STATE_FILE"
   EDK_TAG="$tag" "${COMPOSE[@]}" ps >"$BACKUP_DIR/containers-$tag.txt"
 }

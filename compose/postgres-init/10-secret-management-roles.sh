@@ -1,6 +1,11 @@
 #!/usr/bin/env sh
 set -eu
 
+marker=/tmp/edk-secret-management-roles-ready
+
+pg_isready --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" >/dev/null 2>&1 || exit 1
+[ -f "$marker" ] && exit 0
+
 if [ -z "${SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:-}" ]; then
   echo "SECRET_MANAGEMENT_ADMIN_DB_PASSWORD is required" >&2
   exit 1
@@ -16,6 +21,8 @@ psql \
   --set=tenant_password="${SECRET_MANAGEMENT_TENANT_DB_PASSWORD}" \
   --username "${POSTGRES_USER}" \
   --dbname "${POSTGRES_DB}" <<'SQL'
+BEGIN;
+SELECT pg_advisory_xact_lock(755624362, 20250802);
 SELECT format(
   'CREATE ROLE secret_management_admin LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD %L',
   :'admin_password'
@@ -45,4 +52,7 @@ GRANT CONNECT ON DATABASE :"DBNAME"
   TO secret_management_admin, secret_management_tenant_serving;
 GRANT USAGE ON SCHEMA public
   TO secret_management_admin, secret_management_tenant_serving;
+COMMIT;
 SQL
+
+: > "$marker"

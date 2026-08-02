@@ -24,6 +24,20 @@ metadata:
     app.kubernetes.io/component: tenant-kms
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "tenant-kms")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    server:
+      service-identity:
+        # Tenant-scoped config fetches must use the tenant-bound KMS client at
+        # the platform AS; active-AS discovery would recurse through KMS.
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        token-endpoint-source: configured
+        active-as-client-role: kms
+        client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
     # Workload identities the tenant KMS trusts on east-west command-transport
     # calls, each bound to the client id of the service token the caller presents.
     # Tenant and principal claims are taken only from the validated workload JWT.
@@ -53,10 +67,29 @@ data:
     transport:
       routing:
         modules:
+          # Tenant registration migrations run while the ordinary platform
+          # Service can still select the RC2 pod. Configuration refresh must
+          # use the same RC3-only, publish-not-ready bootstrap Service as the
+          # secret-authority reads below; otherwise tenant-KMS keeps the
+          # pre-migration snapshot and cannot resolve the newly committed
+          # resource handle.
+          platform:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+            services:
+              config:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+          application:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
           secret:
             target: SERVER
             transport: GRPC
-            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
             serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
             # Resolving the active KMS workload credential uses the dedicated
             # tenant bootstrap bearer supplied by RemoteOpaqueSecretResolver.

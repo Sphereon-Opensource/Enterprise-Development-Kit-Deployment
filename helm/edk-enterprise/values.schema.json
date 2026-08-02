@@ -296,6 +296,66 @@
         }
       }
     },
+    "secretAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["existingSecrets", "keys"],
+      "properties": {
+        "existingSecrets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "properties": {
+            "platform": { "type": "string" },
+            "tenant-kms": { "type": "string" },
+            "tenant-as": { "type": "string" },
+            "did": { "type": "string" },
+            "issuer": { "type": "string" },
+            "verifier": { "type": "string" },
+            "wallet-unit": { "type": "string" },
+            "wallet-interaction": { "type": "string" }
+          }
+        },
+        "keys": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "centralPermitSigningKey",
+            "centralAssertionVerificationKeys",
+            "satelliteAssertionSigningKey",
+            "satellitePermitVerificationKeys",
+            "centralPermitPrivateKey",
+            "centralPermitPublicKey",
+            "satelliteAssertionPrivateKey",
+            "assertionPublicKeys"
+          ],
+          "properties": {
+            "centralPermitSigningKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "centralAssertionVerificationKeys": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "satelliteAssertionSigningKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "satellitePermitVerificationKeys": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "centralPermitPrivateKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "centralPermitPublicKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "satelliteAssertionPrivateKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "assertionPublicKeys": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["service-platform", "service-crypto", "service-data", "service-tenant-as", "service-oid4vci", "service-oid4vp", "service-wallet-unit", "service-wallet-interaction"],
+              "properties": {
+                "service-platform": { "type": "string", "minLength": 1 },
+                "service-crypto": { "type": "string", "minLength": 1 },
+                "service-data": { "type": "string", "minLength": 1 },
+                "service-tenant-as": { "type": "string", "minLength": 1 },
+                "service-oid4vci": { "type": "string", "minLength": 1 },
+                "service-oid4vp": { "type": "string", "minLength": 1 },
+                "service-wallet-unit": { "type": "string", "minLength": 1 },
+                "service-wallet-interaction": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
     "auth": {
       "type": "object",
       "additionalProperties": true,

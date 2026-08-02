@@ -114,7 +114,7 @@ was removed and its `.env` was already changed. After success, keep the target
 ## 3a. Run the base stack (developer diagnostic only)
 
 ```bash
-docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml up -d --remove-orphans
 ```
 
 Compose pulls the published images and starts the full backing stack over plain
@@ -164,13 +164,13 @@ Then start the full enterprise stack behind the gateway.
 With the local certificate overlay:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d --remove-orphans
 ```
 
 With the Let's Encrypt overlay:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait
+docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait --remove-orphans
 ```
 
 All public traffic now goes through `443`. Traefik terminates TLS, preserves the inbound Host header, and routes by host and path: the operator plane at `https://platform.<base-domain>` and each tenant at `https://<tenant>.<base-domain>`. Customers and operators call the gateway URLs, not the individual containers.

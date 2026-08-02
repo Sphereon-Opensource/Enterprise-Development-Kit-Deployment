@@ -14,11 +14,19 @@ metadata:
     app.kubernetes.io/component: did
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "did")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     server:
       service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
         token-endpoint-source: active-as
         active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
         active-as-client-role: did
+        client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
         allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
     security:
       workload-trust-policy:
@@ -51,6 +59,7 @@ data:
       routing:
         configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
           secret:
             target: SERVER
             transport: GRPC
@@ -90,11 +99,19 @@ metadata:
     app.kubernetes.io/component: issuer
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "issuer")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     server:
       service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
         token-endpoint-source: active-as
         active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
         active-as-client-role: issuer
+        client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
         allowed-audiences: {{ printf "%s,%s" (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "tenant-as") | quote }}
     security:
       workload-trust-policy:
@@ -131,6 +148,7 @@ data:
       routing:
         configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
           secret:
             target: SERVER
             transport: GRPC
@@ -215,11 +233,19 @@ metadata:
     app.kubernetes.io/component: verifier
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "verifier")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     server:
       service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
         token-endpoint-source: active-as
         active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
         active-as-client-role: verifier
+        client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
         allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
     security:
       workload-trust-policy:
@@ -255,6 +281,7 @@ data:
         # settings cannot make blind-index MAC generation local.
         configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
           secret:
             target: SERVER
             transport: GRPC
@@ -316,6 +343,17 @@ metadata:
     app.kubernetes.io/component: wallet-unit
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "wallet-unit")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        active-as-client-role: wallet-unit
+        client-id: {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -336,6 +374,7 @@ data:
     transport:
       routing:
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
           secret:
             target: SERVER
             transport: GRPC
@@ -354,6 +393,17 @@ metadata:
     app.kubernetes.io/component: wallet-interaction
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "wallet-interaction")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        active-as-client-role: wallet-interaction
+        client-id: {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -368,6 +418,7 @@ data:
       routing:
         configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
           secret:
             target: SERVER
             transport: GRPC

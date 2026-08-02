@@ -90,7 +90,7 @@ try {
             Write-Host "Using locally built target images for $Tag; intermediate releases were still pulled."
         }
         Write-Host "Starting release $Tag and waiting for health checks."
-        Invoke-DockerCompose up -d --wait --pull never
+        Invoke-DockerCompose up -d --wait --pull never --remove-orphans
         Set-Content -LiteralPath $stateFile -Value $Tag
         Invoke-DockerCompose ps | Set-Content -LiteralPath (Join-Path $backupDir "containers-$Tag.txt")
     }

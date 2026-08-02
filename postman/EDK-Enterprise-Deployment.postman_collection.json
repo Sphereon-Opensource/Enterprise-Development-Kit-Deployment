@@ -585,15 +585,16 @@
                   "    pm.environment.set(key, normalized);",
                   "  }",
                   "};",
+                  "const tenantKms = service('tenantKms');",
                   "const tenantDid = service('tenantDid');",
                   "const issuer = service('issuer');",
                   "const verifier = service('verifier');",
                   "const expectedTenantOrigin = 'https://' + pm.variables.get('tenantSlug') + '.' + pm.variables.get('baseDomain');",
                   "pm.test('runtime config exposes tenant workload services', () => {",
-                  "  ['tenantDid', 'issuer', 'verifier'].forEach((key) => {",
+                  "  ['tenantKms', 'tenantDid', 'issuer', 'verifier'].forEach((key) => {",
                   "    pm.expect(trimBase(services[key] && services[key].baseUrl), key + ' baseUrl').to.eql(expectedTenantOrigin);",
                   "  });",
-                  "  pm.expect(services, 'browser runtime config does not expose tenant-KMS').to.not.have.property('tenantKms');",
+                  "  pm.expect(tenantKms.audience, 'tenant-KMS audience').to.eql('enterprise-tenant-kms');",
                   "  pm.expect(endpointPath(tenantDid, ['api'], ''), 'tenantDid api endpoint').to.eql('/api/did/v1');",
                   "  pm.expect(endpointPath(issuer, ['credentialDesigns'], ''), 'credential-design endpoint').to.eql('/api/credential-design/v1');",
                   "  pm.expect(endpointPath(issuer, ['statusLists'], ''), 'status-list endpoint').to.eql('/api/statuslist/v1');",
@@ -1452,7 +1453,7 @@
           "name": "03 Validate tenant setup KMS resource",
           "request": {
             "method": "POST",
-            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsResourceHandle}}:validate",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsResourceHandle}}/validate",
             "description": "Validates the activation-created typed KMS resource through its opaque krh_ handle. Product DID, issuer, and verifier behavior provides key-operation evidence without exposing internal keys or selectors.",
             "header": [
               {
@@ -1654,7 +1655,7 @@
           "name": "07 Validate disposable SOFTWARE KMS resource",
           "request": {
             "method": "POST",
-            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}:validate",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/validate",
             "description": "Validates the newly credentialed SOFTWARE resource and requires the complete redacted public validation result.",
             "header": [
               {
@@ -1692,7 +1693,7 @@
           "name": "08 Rotate SOFTWARE KMS credential",
           "request": {
             "method": "POST",
-            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}:rotate",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/rotate",
             "description": "Rotates the exact SOFTWARE credential leaf with a second generated password, the server-derived reference, and the version captured from credential attachment.",
             "header": [
               {
@@ -1749,7 +1750,7 @@
           "name": "09 Detach disposable SOFTWARE KMS resource",
           "request": {
             "method": "POST",
-            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}:detach",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/detach",
             "description": "Detaches the disposable SOFTWARE resource with the resource version returned by rotation.",
             "header": [
               {
@@ -1796,7 +1797,7 @@
           "name": "10 Retire disposable SOFTWARE KMS resource",
           "request": {
             "method": "POST",
-            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}:retire",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/retire",
             "description": "Retires the already detached disposable resource, verifies its terminal state, and clears transient lifecycle variables.",
             "header": [
               {

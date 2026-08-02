@@ -62,7 +62,7 @@ protected by network policy.
 The Compose stack ships a gateway overlay at `compose/docker-compose.gateway.yml` that puts a Traefik reverse proxy in front of the services. Bring the full base stack and the overlay up together:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d --remove-orphans
 ```
 
 Traefik terminates TLS on `443`, redirects `80` to `443`, and fans out to the services by host and path with `passHostHeader: true`, so the inbound Host reaches the backend unchanged. The static configuration is in `compose/gateway/traefik/traefik.yml` and the routing table is in `compose/gateway/traefik/dynamic.yml`.
@@ -150,7 +150,7 @@ Start the stack with the generated overlay:
 
 ```bash
 cd compose
-docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait
+docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait --remove-orphans
 ```
 
 The default renderer uses the Let's Encrypt production ACME endpoint.
@@ -265,7 +265,7 @@ Start with the rendered public static-certificate overlay:
 
 ```bash
 cd compose
-docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait
+docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait --remove-orphans
 ```
 
 Manual DNS-01 does not give Traefik automated renewals. Before the certificate

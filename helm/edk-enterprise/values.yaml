@@ -137,6 +137,40 @@ secretManagement:
     # deployment preparation tooling. Plaintext Secret values are not hashed.
     manifestSha256: ""
 
+# Secret-use authority material is operator supplied and isolated per workload.
+# Each referenced Secret contains only the private key needed by that workload,
+# the central permit public key, and the opaque coordinate strings consumed by
+# the runtime. The platform Secret additionally contains the central permit
+# private key and every workload assertion public key. The chart never creates,
+# copies, or returns this key material.
+secretAuthority:
+  existingSecrets:
+    platform: ""
+    tenant-kms: ""
+    tenant-as: ""
+    did: ""
+    issuer: ""
+    verifier: ""
+    wallet-unit: ""
+    wallet-interaction: ""
+  keys:
+    centralPermitSigningKey: central-permit-signing-key
+    centralAssertionVerificationKeys: central-assertion-verification-keys
+    satelliteAssertionSigningKey: satellite-assertion-signing-key
+    satellitePermitVerificationKeys: satellite-permit-verification-keys
+    centralPermitPrivateKey: central-permit-signing.pem
+    centralPermitPublicKey: central-permit.pub.pem
+    satelliteAssertionPrivateKey: assertion.pem
+    assertionPublicKeys:
+      service-platform: service-platform-assertion.pub.pem
+      service-crypto: service-crypto-assertion.pub.pem
+      service-data: service-data-assertion.pub.pem
+      service-tenant-as: service-tenant-as-assertion.pub.pem
+      service-oid4vci: service-oid4vci-assertion.pub.pem
+      service-oid4vp: service-oid4vp-assertion.pub.pem
+      service-wallet-unit: service-wallet-unit-assertion.pub.pem
+      service-wallet-interaction: service-wallet-interaction-assertion.pub.pem
+
 auth:
   enabled: true
   jwt:
@@ -281,6 +315,7 @@ serviceIdentity:
     did: did-service
     issuer: issuer-service
     verifier: verifier-service
+    trust-domain-identifier: trust-domain-service
     wallet-unit: wallet-unit-service
     wallet-interaction: wallet-interaction-service
   # Local workload labels used to select credentials and configure the binding
