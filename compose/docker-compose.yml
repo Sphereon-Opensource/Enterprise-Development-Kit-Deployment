@@ -106,14 +106,17 @@ services:
       POSTGRES_USER: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
       POSTGRES_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
       POSTGRES_DB: ${EDK_TENANT_DB_NAME:-tenant}
+      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
     volumes:
       - tenant-postgres-data:/var/lib/postgresql/data
+      - ./postgres-init/10-secret-management-roles.sh:/docker-entrypoint-initdb.d/10-secret-management-roles.sh:ro
     networks:
       - tenant-db-net
     ports:
       - "127.0.0.1:${EDK_TENANT_POSTGRES_HOST_PORT:-15433}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${EDK_TENANT_DB_USERNAME:-edk_tenant} -d ${EDK_TENANT_DB_NAME:-tenant}"]
+      test: ["CMD-SHELL", "POSTGRES_USER=${EDK_TENANT_DB_USERNAME:-edk_tenant} POSTGRES_DB=${EDK_TENANT_DB_NAME:-tenant} SECRET_MANAGEMENT_ADMIN_DB_PASSWORD=$${SECRET_MANAGEMENT_ADMIN_DB_PASSWORD} SECRET_MANAGEMENT_TENANT_DB_PASSWORD=$${SECRET_MANAGEMENT_TENANT_DB_PASSWORD} sh /docker-entrypoint-initdb.d/10-secret-management-roles.sh"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -148,13 +151,16 @@ services:
     depends_on:
       platform-postgres:
         condition: service_healthy
+      tenant-postgres:
+        condition: service_healthy
       otel-collector:
         condition: service_started
     networks:
       - appnet
       - platform-db-net
+      - tenant-db-net
     environment:
-      <<: *edk-common-env
+      <<: [*edk-common-env, *edk-tenant-db-env]
       EDK_PLATFORM_DB_HOST: platform-postgres
       EDK_PLATFORM_DB_NAME: ${EDK_PLATFORM_DB_NAME:-platform}
       EDK_PLATFORM_DB_USERNAME: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
@@ -166,6 +172,21 @@ services:
       DATABASE_APP_DEFAULT_DATABASE: ${EDK_PLATFORM_DB_NAME:-platform}
       DATABASE_APP_DEFAULT_USERNAME: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
       DATABASE_APP_DEFAULT_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
+      DATABASE_APP_TENANT_MIGRATOR_DIALECT: postgresql
+      DATABASE_APP_TENANT_MIGRATOR_ISOLATION: shared
+      DATABASE_APP_TENANT_MIGRATOR_HOST: tenant-postgres
+      DATABASE_APP_TENANT_MIGRATOR_PORT: "5432"
+      DATABASE_APP_TENANT_MIGRATOR_DATABASE: ${EDK_TENANT_DB_NAME:-tenant}
+      DATABASE_APP_TENANT_MIGRATOR_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      DATABASE_APP_TENANT_MIGRATOR_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
+      DATABASE_TENANTS_DEFAULT_DIALECT: postgresql
+      DATABASE_TENANTS_DEFAULT_ISOLATION: schema
+      DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN: tenant_{id}
+      DATABASE_TENANTS_DEFAULT_HOST: tenant-postgres
+      DATABASE_TENANTS_DEFAULT_PORT: "5432"
+      DATABASE_TENANTS_DEFAULT_DATABASE: ${EDK_TENANT_DB_NAME:-tenant}
+      DATABASE_TENANTS_DEFAULT_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      DATABASE_TENANTS_DEFAULT_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
       EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
       EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
       EXTERNAL_BASE_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}

@@ -256,6 +256,13 @@ platform:
     # Stable installation/deployment handle used by onboarding-owned secrets
     # and operator material. Keep it stable across upgrades.
     deploymentId: deployment-1
+  sts:
+    # Clients whose exchanged tenant tokens carry the dedicated tenant-provisioning role
+    # the tenant AS bootstrap trust window requires. null (default) applies the built-in
+    # sanction list: the operator CLI plus the secret-bootstrap workload client ids. An
+    # explicit "" sanctions nobody; a comma-separated list sanctions exactly those clients.
+    # The admin console is deliberately not sanctioned by default.
+    provisioningRoleClientIds: null
   bootstrap:
     # true provisions the configured owner automatically during application
     # startup. Set false for setup-API-driven first installation: the setup API
@@ -293,6 +300,18 @@ platform:
     # a port-forward host (e.g. `,localhost:18080`) for a local cluster reached by
     # `kubectl port-forward`. Leading comma required.
     selfHostsExtra: ""
+
+# Tenant AS bootstrap trust window roles.
+tenantAs:
+  asAdmin:
+    # Role a platform-STS bearer must carry to register the first signing key of a tenant
+    # whose authorization server is not fully onboarded yet. Must match the role the
+    # platform STS stamps for provisioning-sanctioned clients (tenant-provisioning).
+    provisioningRequiredRole: tenant-provisioning
+    # Role required on the bearer for post-onboarding signing-key changes. Absent (null)
+    # refuses every post-onboarding key change (fail closed); set a role name to enable
+    # operator-driven rotation.
+    signingKeyRotationRole: null
 
 # Service identity for the platform-issued east-west service tokens. The tenant
 # AS authenticates here as a client_credentials client to mint a platform service

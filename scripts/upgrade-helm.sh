@@ -54,6 +54,14 @@ Options:
   --release-set-evidence PATH   Canonical enterprise-image-set.json for an
                                 immutable RC3 upgrade (required for RC3 tags).
   -h, --help                    Show this help.
+
+Rollback contract:
+  Take pg_dump snapshots of the platform database and the tenant workload
+  database before every upgrade. The wrapper first quiesces the entire release,
+  then starts the platform migration owner ahead of validate-only satellites.
+  Helm rollback is never automatic. If an upgrade fails, all release workloads
+  are stopped; restore both database snapshots first and only then run an
+  explicit 'helm rollback' or retry.
 EOF
 }
 
@@ -187,15 +195,7 @@ if [[ -n "$RELEASE_SET_EVIDENCE" ]]; then
     '
 fi
 
-# Helm 4 renamed the rollback behavior exposed by Helm 3's --atomic flag.
-# Select the supported spelling so this release-independent wrapper works on
-# both currently common Helm major versions.
 HELM_UPGRADE_SAFETY_ARGS=(--wait)
-if helm upgrade --help 2>/dev/null | grep -q -- '--rollback-on-failure'; then
-  HELM_UPGRADE_SAFETY_ARGS+=(--rollback-on-failure --cleanup-on-fail)
-else
-  HELM_UPGRADE_SAFETY_ARGS+=(--atomic)
-fi
 
 VALUES_FILE="$(absolute_file "$VALUES_FILE")"
 CHART_PATH="$(absolute_directory "$CHART_PATH")"
@@ -397,26 +397,77 @@ wait_for_release_deployments() {
     done
 }
 
+quiesce_release_deployments() {
+  local selector="app.kubernetes.io/instance=$RELEASE_NAME"
+  local deployments
+  deployments="$(kubectl -n "$NAMESPACE" get deployment -l "$selector" -o name)"
+  [[ -n "$deployments" ]] || return 0
+  printf 'Quiescing every workload in release %s before the database migration barrier.\n' "$RELEASE_NAME"
+  kubectl -n "$NAMESPACE" scale deployment -l "$selector" --replicas=0
+  if kubectl -n "$NAMESPACE" get pod -l "$selector" -o name | grep -q .; then
+    kubectl -n "$NAMESPACE" wait --for=delete pod -l "$selector" --timeout="$TIMEOUT"
+  fi
+  # A release installed before the migration barrier existed carries the
+  # RollingUpdate default, and its spec.strategy.rollingUpdate survives the Helm
+  # merge (an explicit null in a rendered manifest is dropped before it reaches
+  # the API server). Kubernetes then rejects the whole upgrade because that field
+  # cannot coexist with Recreate. The workloads are already stopped here, so the
+  # strategy can be converted in place before the upgrade renders.
+  local deployment
+  for deployment in $deployments; do
+    if [[ "$(kubectl -n "$NAMESPACE" get "$deployment" -o jsonpath='{.spec.strategy.type}')" == "Recreate" ]]; then
+      continue
+    fi
+    kubectl -n "$NAMESPACE" patch "$deployment" --type=merge \
+      -p '{"spec":{"strategy":{"type":"Recreate","rollingUpdate":null}}}' >/dev/null
+  done
+}
+
+stop_failed_release() {
+  kubectl -n "$NAMESPACE" scale deployment \
+    -l "app.kubernetes.io/instance=$RELEASE_NAME" --replicas=0 >/dev/null 2>&1 || true
+}
+
+warn_post_migration_failure() {
+  cat >&2 <<'EOF'
+WARNING: The Helm upgrade failed. Automatic Helm rollback is disabled and all
+release workloads have been scaled to zero. The platform may already have
+upgraded the platform and tenant databases. Restore both pre-upgrade database
+snapshots before running an explicit 'helm rollback' or retrying. Do not start
+old application pods against the new schema generation.
+EOF
+}
+
 if [[ -n "$INTERMEDIATE_IMAGE_TAG" ]]; then
+  quiesce_release_deployments
   printf 'Performing required intermediate Helm upgrade to %s.\n' "$INTERMEDIATE_IMAGE_TAG"
-  helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
+  if ! helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
     -n "$NAMESPACE" --create-namespace \
     "${INTERMEDIATE_VALUE_ARGS[@]}" \
-    "${HELM_UPGRADE_SAFETY_ARGS[@]}" --timeout "$TIMEOUT"
+    "${HELM_UPGRADE_SAFETY_ARGS[@]}" --timeout "$TIMEOUT"; then
+    stop_failed_release
+    warn_post_migration_failure
+    die "Intermediate Helm upgrade to $INTERMEDIATE_IMAGE_TAG failed. Read the warning above before any rollback or retry."
+  fi
   wait_for_release_deployments
 fi
 
-printf 'Performing rollback-on-failure Helm upgrade/install.\n'
-helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
+quiesce_release_deployments
+printf 'Performing platform-first Helm upgrade/install with automatic rollback disabled.\n'
+if ! helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
   -n "$NAMESPACE" --create-namespace \
   "${VALUE_ARGS[@]}" \
-  "${HELM_UPGRADE_SAFETY_ARGS[@]}" --timeout "$TIMEOUT"
+  "${HELM_UPGRADE_SAFETY_ARGS[@]}" --timeout "$TIMEOUT"; then
+  stop_failed_release
+  warn_post_migration_failure
+  die "Helm upgrade failed. Read the warning above before any rollback or retry."
+fi
 
 wait_for_release_deployments
 
 if [[ -n "$TENANT_HOST" ]]; then
   # Kubernetes resource names cannot contain whitespace, so shell word splitting
-  # is safe here and keeps compatibility with the Bash 3.2 shipped by macOS.
+  # is safe here and works with the Bash 3.2 shipped by macOS.
   DID_SERVICES="$(kubectl -n "$NAMESPACE" get service \
     -l "app.kubernetes.io/instance=$RELEASE_NAME,app.kubernetes.io/component=did" \
     -o jsonpath='{.items[*].metadata.name}')"

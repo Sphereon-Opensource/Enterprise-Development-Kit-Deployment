@@ -117,9 +117,8 @@ spec:
     {{- end }}
     {{- end }}
     {{- if and $.Values.database.enabled (not $isAdminConsole) }}
-    {{- /* Database egress reflects the platform/tenant split. The platform service
-           reaches ONLY the control-plane (platform) database; every runtime
-           service reaches ONLY the tenant workload database. */}}
+    {{- /* The platform is the sole schema owner and reaches both databases.
+           Runtime services reach only the tenant database and validate schemas. */}}
     {{- if eq $name "platform" }}
     - to:
         - {{- if $.Values.database.platform.networkPolicy.ipBlock }}
@@ -141,6 +140,26 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $.Values.database.platform.port }}
+    - to:
+        - {{- if $.Values.database.tenant.networkPolicy.ipBlock }}
+          ipBlock:
+            {{- toYaml $.Values.database.tenant.networkPolicy.ipBlock | nindent 12 }}
+          {{- else if or $.Values.database.tenant.networkPolicy.podSelector $.Values.database.tenant.networkPolicy.namespaceSelector }}
+          {{- if $.Values.database.tenant.networkPolicy.namespaceSelector }}
+          namespaceSelector:
+            {{- toYaml $.Values.database.tenant.networkPolicy.namespaceSelector | nindent 12 }}
+          {{- end }}
+          {{- if $.Values.database.tenant.networkPolicy.podSelector }}
+          podSelector:
+            {{- toYaml $.Values.database.tenant.networkPolicy.podSelector | nindent 12 }}
+          {{- end }}
+          {{- else }}
+          ipBlock:
+            cidr: 0.0.0.0/0
+          {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.database.tenant.port }}
     {{- else }}
     - to:
         - {{- if $.Values.database.tenant.networkPolicy.ipBlock }}

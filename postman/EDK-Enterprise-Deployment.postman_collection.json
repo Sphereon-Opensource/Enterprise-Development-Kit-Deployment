@@ -339,31 +339,42 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('tenant registered', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                  "const j = pm.response.json();",
-                  "const tenant = j.tenant || j;",
-                  "if (tenant && tenant.id) pm.collectionVariables.set('tenantId', tenant.id);",
-                  "const ownerEmail = `admin@${pm.variables.replaceIn('{{tenantSlug}}')}.example`;",
-                  "pm.collectionVariables.set('tenantOwnerEmail', ownerEmail);",
-                  "pm.expect(j.created && j.created.ownerIdentityId, 'persisted owner identity id').to.be.a('string').and.not.empty;",
-                  "pm.collectionVariables.set('tenantOwnerIdentityId', j.created.ownerIdentityId);",
-                  "const activationLink = j.delivery && j.delivery.manualActivationLink;",
-                  "pm.expect(j.delivery && j.delivery.status, 'owner activation delivery state').to.eql('MANUAL_READY');",
-                  "pm.expect(activationLink, 'single-use manual owner activation link').to.be.a('string').and.not.empty;",
-                  "const fragment = activationLink.split('#')[1] || '';",
-                  "pm.expect(fragment, 'owner activation token fragment').to.be.a('string').and.not.empty;",
-                  "pm.collectionVariables.set('tenantOwnerActivationToken', decodeURIComponent(fragment));",
-                  "const correlationId = j.correlationId || j.registration?.correlationId || j.registrationLogId || tenant?.correlationId;",
-                  "pm.expect(correlationId, 'tenant onboarding correlation id').to.be.a('string').and.not.empty;",
-                  "pm.collectionVariables.set('tenantRegistrationCorrelationId', correlationId);",
-                  "pm.test('registration returned tenant gateway protocol URLs', () => {",
-                  "  const serviceUrls = j.serviceUrls || {};",
-                  "  const expectedTenantOrigin = 'https://' + pm.variables.get('tenantSlug') + '.' + pm.variables.get('baseDomain');",
-                  "  const exactTenantOrigin = (label, value) => pm.expect(String(value || '').replace(/\\/$/, ''), label).to.eql(expectedTenantOrigin);",
-                  "  exactTenantOrigin('tenant URL', j.tenantUrl || j.primaryDomainUrl);",
-                  "  exactTenantOrigin('AS issuer URL', serviceUrls.authorizationServerUrl || j.issuerUrl || j.tenant?.issuerUrl);",
-                  "  exactTenantOrigin('OID4VCI issuer URL', serviceUrls.oid4vciIssuerUrl || j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl);",
-                  "  exactTenantOrigin('OID4VP verifier URL', serviceUrls.oid4vpVerifierUrl || j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl);",
-                  "});"
+                  "if (![200, 201].includes(pm.response.code)) {",
+                  "  console.error('Tenant registration failed (' + pm.response.code + '); aborting this tenant run - every downstream request depends on a registered tenant.');",
+                  "  postman.setNextRequest(null);",
+                  "} else {",
+                  "  try {",
+                  "    const j = pm.response.json();",
+                  "    const tenant = j.tenant || j;",
+                  "    if (tenant && tenant.id) pm.collectionVariables.set('tenantId', tenant.id);",
+                  "    const ownerEmail = `admin@${pm.variables.replaceIn('{{tenantSlug}}')}.example`;",
+                  "    pm.collectionVariables.set('tenantOwnerEmail', ownerEmail);",
+                  "    pm.expect(j.created && j.created.ownerIdentityId, 'persisted owner identity id').to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('tenantOwnerIdentityId', j.created.ownerIdentityId);",
+                  "    const activationLink = j.delivery && j.delivery.manualActivationLink;",
+                  "    pm.expect(j.delivery && j.delivery.status, 'owner activation delivery state').to.eql('MANUAL_READY');",
+                  "    pm.expect(activationLink, 'single-use manual owner activation link').to.be.a('string').and.not.empty;",
+                  "    const fragment = activationLink.split('#')[1] || '';",
+                  "    pm.expect(fragment, 'owner activation token fragment').to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('tenantOwnerActivationToken', decodeURIComponent(fragment));",
+                  "    const correlationId = j.correlationId || j.registration?.correlationId || j.registrationLogId || tenant?.correlationId;",
+                  "    pm.expect(correlationId, 'tenant onboarding correlation id').to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('tenantRegistrationCorrelationId', correlationId);",
+                  "    pm.test('registration returned tenant gateway protocol URLs', () => {",
+                  "      const serviceUrls = j.serviceUrls || {};",
+                  "      const expectedTenantOrigin = 'https://' + pm.variables.get('tenantSlug') + '.' + pm.variables.get('baseDomain');",
+                  "      const exactTenantOrigin = (label, value) => pm.expect(String(value || '').replace(/\\/$/, ''), label).to.eql(expectedTenantOrigin);",
+                  "      exactTenantOrigin('tenant URL', j.tenantUrl || j.primaryDomainUrl);",
+                  "      exactTenantOrigin('AS issuer URL', serviceUrls.authorizationServerUrl || j.issuerUrl || j.tenant?.issuerUrl);",
+                  "      exactTenantOrigin('OID4VCI issuer URL', serviceUrls.oid4vciIssuerUrl || j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl);",
+                  "      exactTenantOrigin('OID4VP verifier URL', serviceUrls.oid4vpVerifierUrl || j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl);",
+                  "    });",
+                  "  } catch (registrationPostConditionError) {",
+                  "    console.error('Registration post-condition failed; aborting this tenant run: ' + registrationPostConditionError.message);",
+                  "    postman.setNextRequest(null);",
+                  "    throw registrationPostConditionError;",
+                  "  }",
+                  "}"
                 ]
               }
             }
@@ -727,7 +738,10 @@
             "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/testing-console",
             "description": "Confirms sample-data provisioning automatically enabled the exact issuer instance's PUBLIC testing console and resolves its tenant-gateway URLs.",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{operatorToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              }
             ]
           },
           "event": [
@@ -767,7 +781,10 @@
             "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vp/verifier/instances/{{verifierInstanceId}}/testing-console",
             "description": "Confirms sample-data provisioning automatically enabled the exact verifier instance's PUBLIC testing console and resolves its tenant-gateway URLs.",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{operatorToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              }
             ]
           },
           "event": [
@@ -856,7 +873,9 @@
         },
         {
           "name": "13 Fetch issuer testing-console display page",
-          "protocolProfileBehavior": { "followRedirects": false },
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
           "request": {
             "method": "GET",
             "url": "{{issuerTestingDisplayUrl}}",
@@ -877,7 +896,9 @@
         },
         {
           "name": "14 Fetch verifier testing-console display page",
-          "protocolProfileBehavior": { "followRedirects": false },
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
           "request": {
             "method": "GET",
             "url": "{{verifierTestingDisplayUrl}}",

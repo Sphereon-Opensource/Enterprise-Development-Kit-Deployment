@@ -216,12 +216,13 @@ the platform database and tenant database are separate databases with separate
 credentials and network access can still be constrained by role.
 
 For schema-per-tenant, runtime services select the tenant schema through their
-tenant DB routing configuration and set `search_path` at request time. Tenant
-schema lifecycle belongs to the tenant workload data plane; do not give the
-platform service a tenant DB connection for workload schema or database DDL. The
-system platform tenant is control-plane state and is bound to the platform
-database; customer tenant workload data is never written to the platform
-database.
+tenant DB routing configuration and set `search_path` at request time. The
+platform service is the sole schema-migration owner and therefore receives
+owner-level routes to both logical databases. Satellite services receive only
+runtime tenant-database access and validate the schema version before opening
+their transports; they never issue DDL. The system platform tenant remains
+control-plane state in the platform database, while customer workload state is
+written only to the tenant database.
 
 In Helm, set these under `database`:
 

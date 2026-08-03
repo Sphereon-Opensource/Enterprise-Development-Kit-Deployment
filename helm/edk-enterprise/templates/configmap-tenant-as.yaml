@@ -71,7 +71,22 @@ data:
             issuer:
               client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    {{- else }}
+    oauth2:
     {{- end }}
+      # AS bootstrap trust window: while a tenant has no ACTIVE signing key in this AS,
+      # the signing-key registration command accepts only platform-STS bearers carrying
+      # this role (or the tenant's own internal workload identity). The first registered
+      # key shuts the window permanently.
+      as-admin:
+        provisioning:
+          required-role: {{ (((.Values.tenantAs).asAdmin).provisioningRequiredRole) | default "tenant-provisioning" | quote }}
+        {{- with (((.Values.tenantAs).asAdmin).signingKeyRotationRole) }}
+        # Post-onboarding signing-key changes require this role on the bearer; without it
+        # (and with this key unset) every post-onboarding key change is refused.
+        signing-key:
+          rotation-role: {{ . | quote }}
+        {{- end }}
     # Local, keyless software provider for in-process signature verification.
     # Signing/MAC/encryption route to the tenant KMS over gRPC; this provider only
     # backs the LOCAL verify route below, with an ephemeral keystore under temp.

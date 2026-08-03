@@ -113,7 +113,7 @@ not recreate database volumes.
 
 Use the Helm chart under `helm/edk-enterprise/` for production. The chart renders deployments, services, ingress (or a single-port Gateway API front door), NetworkPolicies, and security defaults for the platform, runtime services, and admin console. The gateway examples under `helm/edk-enterprise/examples/` cover Cilium, GKE, AWS ALB, and Azure AGIC.
 
-For a rollback-on-failure Linux/macOS install or upgrade, run the reusable
+For a platform-first Linux/macOS install or upgrade, run the reusable
 wrapper from the repository root. The command is release-independent: select
 the immutable image tag named by the release you are installing:
 
@@ -137,13 +137,62 @@ shows the direct upgrade and migration checks.
 
 The wrapper preserves existing cryptographic Secrets, creates missing Secrets
 only when safe, backs up the installed release, lints and renders the target
-chart, performs a Helm 3/4-compatible rollback-on-failure upgrade, waits for the
-rollout, and optionally checks the tenant DID document. Secret management is a
-greenfield cutover: it does not import, adopt, or dual-read prior provider or
-migration state. Before upgrading, take a database snapshot and remove any
-obsolete secret-provider state. If live legacy state is detected, startup fails
-with a reset diagnostic and the Helm rollout is rolled back. Restoring the
-pre-upgrade database snapshot is the only supported binary rollback.
+chart, quiesces the complete release, performs a Helm upgrade without automatic
+rollback, waits for the rollout, and optionally checks the tenant DID document.
+
+Before every upgrade, take `pg_dump` snapshots of both databases: the platform
+database and the tenant workload database. Database schema and data migrations
+run in the platform service while every other workload is stopped. If an
+upgrade fails, the wrapper scales the release to zero and leaves Helm at the
+failed revision. Restore both database snapshots first and only then run an
+explicit `helm rollback` or retry. Restoring the pre-upgrade database snapshots
+is the only supported binary rollback.
+
+The 0.25.0-RC2 to 0.25.0-RC3 upgrade migrates the default environment-based
+secret setup automatically. Any other stored secret-provider state fails the
+upgrade closed with a diagnostic that names the offending configuration rows
+by tenant and key; secret values are never printed. Secret management does not
+import, adopt, or dual-read prior provider or migration state.
+
+The 0.25.0-RC2 to 0.25.0-RC3 upgrade path is supported on PostgreSQL only.
+MySQL deployments start at 0.25.0-RC3 as fresh installs; there is no MySQL
+upgrade lineage.
+
+### Upgrading without the wrapper
+
+From 0.25.0-RC3 the backend Deployments use the `Recreate` strategy, so the old
+pod always stops before the new one starts and only one schema generation ever
+reaches the database. A release installed with an earlier version carries the
+`RollingUpdate` default, and Kubernetes rejects an update that leaves
+`spec.strategy.rollingUpdate` set while the type changes to `Recreate`. The
+whole upgrade then fails with:
+
+```
+Deployment.apps "<release>-edk-enterprise-platform" is invalid:
+spec.strategy.rollingUpdate: Forbidden: may not be specified when strategy
+`type` is 'Recreate'
+```
+
+`scripts/upgrade-helm.sh` converts the strategy for you. When you drive
+`helm upgrade` directly, stop the release and convert each backend Deployment
+once, before the upgrade:
+
+```bash
+kubectl -n "$NAMESPACE" scale deployment \
+  -l "app.kubernetes.io/instance=$RELEASE" --replicas=0
+kubectl -n "$NAMESPACE" wait --for=delete pod \
+  -l "app.kubernetes.io/instance=$RELEASE" --timeout=5m
+
+for deployment in $(kubectl -n "$NAMESPACE" get deployment \
+  -l "app.kubernetes.io/instance=$RELEASE" -o name); do
+  kubectl -n "$NAMESPACE" patch "$deployment" --type=merge \
+    -p '{"spec":{"strategy":{"type":"Recreate","rollingUpdate":null}}}'
+done
+```
+
+The patch is idempotent and applies to the admin console as well, which keeps
+its own strategy from the chart on the next render. Releases created at
+0.25.0-RC3 or later need no conversion.
 
 Follow [docs/quickstart-kubernetes.md](docs/quickstart-kubernetes.md).
 

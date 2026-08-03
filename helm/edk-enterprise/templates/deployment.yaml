@@ -18,6 +18,13 @@ metadata:
     app.kubernetes.io/component: {{ $name }}
 spec:
   replicas: {{ $svc.replicas }}
+  {{- if not $isAdminConsole }}
+  {{- /* Database schema migrations are fail-closed single-writer. RollingUpdate
+         would run two schema generations against the same database at once and
+         crash-loop the outgoing release, so the old pod must stop first. */}}
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
@@ -295,9 +302,8 @@ spec:
             # Control-plane datasource: the tenant registry, routing, public-endpoint
             # bindings, and platform configuration live in the platform database. The
             # platform service owns this connection. The system platform tenant is
-            # control-plane state and is bound here via the database.tenants override
-            # mounted from the platform config. Customer tenant workload state remains
-            # in the separate tenant workload database.
+            # control-plane state and is bound here via the database.tenants override.
+            # The platform also owns migrations in the separate tenant workload database.
             - name: DATABASE_APP_DEFAULT_DIALECT
               value: {{ $.Values.database.dialect | quote }}
             - name: DATABASE_APP_DEFAULT_HOST
@@ -316,6 +322,58 @@ spec:
                 secretKeyRef:
                   name: {{ $platformDb.existingSecret }}
                   key: {{ $platformDb.passwordKey }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_ISOLATION
+              value: "shared"
+            - name: DATABASE_APP_TENANT_MIGRATOR_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            - name: DATABASE_TENANTS_DEFAULT_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_ISOLATION
+              value: {{ $tenantDb.isolation | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN
+              value: {{ $tenantDb.schemaPattern | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: DATABASE_TENANTS_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            - name: EDK_TENANT_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: EDK_TENANT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
             # Platform database credentials for the platform tenant datasource overlay,
             # resolved by the database.tenants override mounted from the platform config.
             - name: EDK_PLATFORM_DB_USERNAME
@@ -553,10 +611,13 @@ spec:
                    client_credentials service token and attaches it to its command-transport
                    calls to the platform (config reads + license-state projection) and to
                    its KMS hop. The platform AS issues the token; the satellite authenticates
-                   as its per-service confidential client with the shared internal secret. */}}
+                   as its per-service confidential client with the shared internal secret.
+                   The token endpoint is the platform authority bootstrap Service: satellites must
+                   mint their identity while the platform is deliberately unready during its boot
+                   ceremony, and the regular Service excludes not-ready endpoints. */}}
             {{- if $.Values.serviceIdentity.internalClientExistingSecret }}
             - name: SERVER_SERVICE_IDENTITY_TOKEN_ENDPOINT
-              value: {{ printf "http://%s-platform:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s-platform-authority-bootstrap:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_ID
               value: {{ index $.Values.serviceIdentity.clientIds $name | quote }}
             {{- /* Once tenant configuration is active, select the tenant-scoped
@@ -592,11 +653,12 @@ spec:
             {{- /* Trust anchor for the platform authorization server. Satellites validate
                    platform-issued bearers on east-west calls against this token issuer and
                    fetch its JWKS in-cluster. The issuer must equal the platform AS token `iss`
-                   (its external base URL); the JWKS URI is the in-cluster service. */}}
+                   (its external base URL); the JWKS URI is the in-cluster authority bootstrap
+                   Service, reachable across the platform boot ceremony like the token endpoint. */}}
             - name: SERVER_REST_AUTH_PLATFORM_ISSUER
               value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
-              value: {{ printf "http://%s-platform:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s-platform-authority-bootstrap:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
             {{- $restAudience := include "edk-enterprise.serviceAudience" $name }}
             {{- if $restAudience }}
             - name: SERVER_REST_AUTH_EXPECTED_AUDIENCE
@@ -673,15 +735,29 @@ spec:
             {{- end }}
             {{- end }}
           {{- $probePath := $isAdminConsole | ternary "/admin-console/health" "/health" }}
+          {{- $readyPath := $isAdminConsole | ternary "/admin-console/health" "/ready" }}
           {{- if and $.Values.grpc.enabled $grpcReceiver }}
           # The REST listener becomes healthy before the native process starts its
           # gRPC command server. Keep the pod out of Service endpoints until the
           # command port is actually listening.
+          #
+          # The platform serves its command port first and only opens REST after the
+          # database migrations finish, so its startup budget has to cover a real
+          # migration rather than a process launch. Liveness only begins once this
+          # probe succeeds, which keeps the migration window from being killed.
           startupProbe:
+            {{- if eq $name "platform" }}
+            httpGet:
+              path: {{ $probePath }}
+              port: rest
+            periodSeconds: 5
+            failureThreshold: 180
+            {{- else }}
             tcpSocket:
               port: grpc
             periodSeconds: 1
             failureThreshold: 60
+            {{- end }}
           {{- end }}
           livenessProbe:
             httpGet:
@@ -691,7 +767,7 @@ spec:
             periodSeconds: 20
           readinessProbe:
             httpGet:
-              path: {{ $probePath }}
+              path: {{ $readyPath }}
               port: rest
             initialDelaySeconds: 10
             periodSeconds: 10

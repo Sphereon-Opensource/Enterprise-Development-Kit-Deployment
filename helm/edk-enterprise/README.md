@@ -60,9 +60,10 @@ overlay not already known to the wrapper. The direct procedure is in
 Secret management is a greenfield cutover. It does not import, adopt, backfill,
 or dual-read provider state from an earlier release. Take a database snapshot
 and remove obsolete secret-provider and secret-migration state before upgrading.
-If live legacy state is detected, platform startup stops with a reset diagnostic,
-so the wrapper's rollback-on-failure behavior also covers this safety gate.
-Restoring the pre-upgrade database snapshot is the only supported binary rollback.
+If live legacy state is detected, platform startup stops with a reset diagnostic.
+The wrapper leaves the release stopped and never rolls application pods back
+automatically. Restore the pre-upgrade database snapshots before an explicit
+binary rollback.
 
 Existing `internal-client-secret`, `keystore-password`, BFF credentials, and
 issuer-pipeline keys are preserved. If an existing Secret is missing a key that

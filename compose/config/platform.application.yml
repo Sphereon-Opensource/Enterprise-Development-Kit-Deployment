@@ -154,18 +154,25 @@ database:
       password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
       pool:
         dedicated-pool: true
-  tenants:
-    # The platform process creates tenant registry/control-plane rows during
-    # registration. It does not join the tenant workload DB network, so dynamic
-    # tenant ids must resolve to the platform DB inside this process.
-    default:
+    tenant-migrator:
       dialect: postgresql
       isolation: shared
-      host: ${env:EDK_PLATFORM_DB_HOST}
+      host: ${env:EDK_TENANT_DB_HOST}
       port: 5432
-      database: ${env:EDK_PLATFORM_DB_NAME}
-      username: ${env:EDK_PLATFORM_DB_USERNAME}
-      password: ${env:EDK_PLATFORM_DB_PASSWORD}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+  tenants:
+    # The platform owns customer-tenant schema creation and migration.
+    default:
+      dialect: postgresql
+      isolation: schema
+      schema-pattern: tenant_{id}
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
     platform:
       dialect: postgresql
       isolation: shared

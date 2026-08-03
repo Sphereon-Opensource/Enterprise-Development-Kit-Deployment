@@ -57,7 +57,9 @@ test('rolling-upgrade authorities use RC3-only internal gRPC topologies', () => 
   assert.match(bootstrapService, /^  publishNotReadyAddresses: true$/m)
   assert.match(bootstrapService, /^    edk\.sphereon\.com\/platform-authority-bootstrap: "true"$/m)
   assert.match(bootstrapService, /^    - name: grpc$/m)
-  assert.doesNotMatch(bootstrapService, /^    - name: (?:http|rest)$/m)
+  // The bootstrap Service also carries REST: satellites mint their workload identity and fetch the
+  // platform JWKS while the platform is deliberately unready during its boot ceremony.
+  assert.match(bootstrapService, /^    - name: rest$/m)
 
   assert.match(platformDeployment, /^        edk\.sphereon\.com\/platform-authority-bootstrap: "true"$/m)
   for (const deployment of documents(rendered).filter((candidate) => /^kind: Deployment$/m.test(candidate) && candidate !== platformDeployment)) {
@@ -78,6 +80,25 @@ test('rolling-upgrade authorities use RC3-only internal gRPC topologies', () => 
   assert.doesNotMatch(tenantKmsBootstrapService, /^    - name: (?:http|rest)$/m)
   assert.match(platformDeployment, new RegExp(`TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST[\\s\\S]*${tenantKmsBootstrapName}`))
   assert.equal((platformConfig.match(new RegExp(`grpc://${tenantKmsBootstrapName}:`, 'g')) ?? []).length, 4)
+
+  for (const satellite of ['tenant-kms', 'did', 'tenant-as', 'issuer', 'verifier']) {
+    const satelliteDeployment = namedDocument(rendered, 'Deployment', `${prefix}-${satellite}`)
+    assert.match(
+      satelliteDeployment,
+      new RegExp(`name: SERVER_SERVICE_IDENTITY_TOKEN_ENDPOINT\\s+value: "http://${bootstrapName}:\\d+/token"`),
+      `${satellite} must mint its workload identity against the platform authority bootstrap service`,
+    )
+    assert.match(
+      satelliteDeployment,
+      new RegExp(`name: SERVER_REST_AUTH_PLATFORM_JWKS_URI\\s+value: "http://${bootstrapName}:\\d+/\\.well-known/jwks\\.json"`),
+      `${satellite} must fetch the platform JWKS from the authority bootstrap service`,
+    )
+    assert.doesNotMatch(
+      satelliteDeployment,
+      new RegExp(`name: SERVER_REST_AUTH_PLATFORM_ISSUER\\s+value: "http://${prefix}-platform`),
+      `${satellite} must keep the public platform issuer as its token trust anchor`,
+    )
+  }
 
   for (const route of documents(rendered).filter((candidate) => /^kind: HTTPRoute$/m.test(candidate))) {
     assert.doesNotMatch(route, /(?:platform|tenant-kms)-authority-bootstrap/)

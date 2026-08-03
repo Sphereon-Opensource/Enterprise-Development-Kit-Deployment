@@ -25,6 +25,7 @@ Rendered only for the platform service.
 */ -}}
 {{- if .Values.database.enabled }}
 {{- $platformDb := .Values.database.platform }}
+{{- $tenantDb := .Values.database.tenant }}
 {{- $trustDomainDb := .Values.database.trustDomain }}
 {{- $trustDomainHost := $trustDomainDb.host | default $platformDb.host }}
 {{- $trustDomainPort := $trustDomainDb.port | default $platformDb.port }}
@@ -125,18 +126,25 @@ data:
           password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
           pool:
             dedicated-pool: true
-      tenants:
-        # The platform process creates tenant registry/control-plane rows during
-        # registration. It does not receive tenant workload DB credentials, so
-        # dynamic tenant ids must resolve to the platform DB inside this process.
-        default:
+        tenant-migrator:
           dialect: {{ .Values.database.dialect }}
           isolation: shared
-          host: {{ $platformDb.host }}
-          port: {{ $platformDb.port }}
-          database: {{ $platformDb.name }}
-          username: ${env:EDK_PLATFORM_DB_USERNAME}
-          password: ${env:EDK_PLATFORM_DB_PASSWORD}
+          host: {{ $tenantDb.host }}
+          port: {{ $tenantDb.port }}
+          database: {{ $tenantDb.name }}
+          username: ${env:EDK_TENANT_DB_USERNAME}
+          password: ${env:EDK_TENANT_DB_PASSWORD}
+      tenants:
+        # The platform is the sole migration owner for customer tenant schemas.
+        default:
+          dialect: {{ .Values.database.dialect }}
+          isolation: {{ $tenantDb.isolation }}
+          host: {{ $tenantDb.host }}
+          port: {{ $tenantDb.port }}
+          database: {{ $tenantDb.name }}
+          username: ${env:EDK_TENANT_DB_USERNAME}
+          password: ${env:EDK_TENANT_DB_PASSWORD}
+          schema-pattern: {{ $tenantDb.schemaPattern }}
         platform:
           dialect: {{ .Values.database.dialect }}
           isolation: shared
@@ -463,6 +471,14 @@ data:
         {{- if (index .Values.services "wallet-unit").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" "wallet-unit") -}}{{- end }}
         {{- if (index .Values.services "wallet-interaction").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" "wallet-interaction") -}}{{- end }}
         allowed-audiences: {{ join "," $stsAudiences | quote }}
+        {{- $platformSts := (.Values.platform).sts | default dict }}
+        {{- if and (hasKey $platformSts "provisioningRoleClientIds") (not (kindIs "invalid" $platformSts.provisioningRoleClientIds)) }}
+        # Clients whose exchanged tenant tokens carry the dedicated tenant-provisioning role
+        # required by the tenant AS bootstrap trust window. Omitting the value applies the
+        # built-in default (operator CLI plus the secret-bootstrap workload client ids);
+        # an explicit empty string sanctions nobody.
+        provisioning-role-client-ids: {{ $platformSts.provisioningRoleClientIds | quote }}
+        {{- end }}
       onboarding:
         installation-base-domain: {{ .Values.global.platformBaseDomain | quote }}
         deployment-id: {{ .Values.platform.onboarding.deploymentId | quote }}
@@ -551,8 +567,13 @@ data:
         custom-domain:
           enabled: true
         self:
+          # Every in-cluster name the platform answers HTTP on, including the
+          # bootstrap authority Service satellites mint their workload tokens
+          # against. A name missing here reaches tenant resolution as an
+          # unknown host and fails closed, so east-west calls to /token and
+          # /.well-known/jwks.json are refused before the endpoint runs.
           tenant-id: "platform"
-          hosts: {{ printf "%s,%s:%v,localhost,platform.%s%s" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) .Values.global.platformBaseDomain (.Values.platform.bootstrap.selfHostsExtra | default "") | quote }}
+          hosts: {{ printf "%s,%s:%v,%s-platform-authority-bootstrap,%s-platform-authority-bootstrap:%v,localhost,platform.%s%s" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) (include "edk-enterprise.fullname" .) (include "edk-enterprise.fullname" .) (.Values.services.platform.restPort) .Values.global.platformBaseDomain (.Values.platform.bootstrap.selfHostsExtra | default "") | quote }}
       {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
       platform:
         owner:

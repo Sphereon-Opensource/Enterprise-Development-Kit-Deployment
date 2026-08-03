@@ -224,22 +224,12 @@ secret:
         verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
 {{- end -}}
 
-{{/* Fixed-role database pools used by every tenant workload's local secret broker. */}}
+{{/* Fixed runtime pools used by every tenant workload's local secret broker. */}}
 {{- define "edk-enterprise.secretManagementSatelliteDatabaseConfig" -}}
 {{- $tenantDb := .Values.database.tenant -}}
 database:
   app:
-    # The deployment owner is used only for schema migration and hardening.
-    secret-management-migrator:
-      dialect: {{ .Values.database.dialect }}
-      isolation: shared
-      host: {{ $tenantDb.host }}
-      port: {{ $tenantDb.port }}
-      database: {{ $tenantDb.name }}
-      username: ${env:EDK_TENANT_DB_USERNAME}
-      password: ${env:EDK_TENANT_DB_PASSWORD}
-      pool:
-        dedicated-pool: true
+    # The platform barrier owns DDL; satellites receive runtime roles only.
     secret-management-admin:
       dialect: {{ .Values.database.dialect }}
       isolation: shared

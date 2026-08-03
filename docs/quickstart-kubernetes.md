@@ -46,9 +46,9 @@ bash ./scripts/upgrade-helm.sh \
 wrapper defaults; pass the release name and namespace this install actually uses.
 
 The wrapper preserves existing cryptographic Secrets, backs up the installed
-release, validates the candidate manifests, selects the supported Helm 3 or 4
-rollback-on-failure flag, waits for all Deployments, and optionally verifies
-the tenant DID document. It reads the installed `global.imageTag` and selects
+release, validates the candidate manifests, quiesces the complete release,
+upgrades without automatic rollback, waits for all Deployments, and optionally
+verifies the tenant DID document. It reads the installed `global.imageTag` and selects
 the known ordered migration path automatically. Add `--migration-values <path>`
 only for an additional overlay that is not already known to the wrapper.
 
@@ -110,12 +110,22 @@ RC1-to-RC2 first and RC2-to-RC3 second. Keeping the earlier overlay is intention
 it makes the result independent of whether the maintained values file originated
 from RC1 or RC2.
 
+RC3 also switches the backend Deployments to the `Recreate` strategy so a single
+schema generation reaches the database during the migration. A release installed
+before RC3 carries the `RollingUpdate` default, which Kubernetes refuses to
+combine with `Recreate`, so an unconverted release fails the upgrade with
+`spec.strategy.rollingUpdate: Forbidden`. The wrapper converts every backend
+Deployment while the release is stopped. If you drive `helm upgrade` yourself,
+apply the one-time conversion documented under "Upgrading without the wrapper"
+in the [README](../README.md) before the upgrade.
+
 Secret management is a greenfield cutover. It does not import, adopt, backfill,
 or dual-read provider state from an earlier release. Before the rollout, take a
 database snapshot and remove obsolete secret-provider and secret-migration state.
-If live legacy state is detected, platform startup stops with a reset diagnostic,
-which makes the wrapper roll the Helm release back. Restoring the pre-upgrade
-database snapshot is the only supported way to run the previous binary again.
+If live legacy state is detected, platform startup stops with a reset diagnostic.
+The wrapper stops every release workload; restore both database snapshots before
+running an explicit Helm rollback. That restoration is the only supported way
+to run the previous binary again.
 
 After the rollout, verify both an existing RC2 tenant and a newly created tenant:
 
@@ -144,17 +154,17 @@ The wrapper detects the installed RC1 tag and performs the complete ordered
 upgrade itself:
 
 1. Render and validate RC2 with the RC1-to-RC2 overlay.
-2. Perform a rollback-on-failure Helm upgrade to the official RC2 images and
+2. Quiesce the release, upgrade to the official RC2 images without automatic rollback, and
    wait for every Deployment.
 3. Render RC3 with the RC1-to-RC2 and RC2-to-RC3 overlays in that order.
-4. Perform the final rollback-on-failure Helm upgrade to RC3. Platform startup
+4. Quiesce the release again and perform the final Helm upgrade to RC3. Platform startup
    runs the idempotent registration/KMS data migration before readiness.
 5. Verify the existing tenant DID document when `--tenant-host` is supplied.
 
 The intermediate and final candidate manifests are stored in the upgrade backup
-directory. If the RC2 stage fails, Helm rolls back to RC1 and the script stops.
-If the RC3 stage fails, Helm rolls back to the completed RC2 revision and the
-script stops, so the operator can correct the issue and rerun the same command.
+directory. If either stage fails, the script scales the release to zero and
+stops without rolling application pods back. Restore both database snapshots
+before running an explicit Helm rollback or retry.
 
 ## 1. Create the namespace and pull secret
 
