@@ -26,11 +26,16 @@ server:
     token-endpoint-source: active-as
     active-as-token-endpoint: http://enterprise-tenant-as:18083/token
     active-as-client-role: issuer
+    delegation:
+      enabled: true
     client-id: issuer-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-tenant-kms,enterprise-tenant-as
+    allowed-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as
+east-west:
+  tenant-did:
+    base-url: http://enterprise-did:8080
 applications:
   admin-console:
     public-base-path: ${env:EDK_ADMIN_CONSOLE_PUBLIC_BASE_PATH:/admin-console}
@@ -120,15 +125,24 @@ transport:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
         services:
           config: &platformGrpcRoute
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
       application:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+      secret:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: false
       trust:
         target: SERVER
         transport: GRPC
@@ -139,7 +153,7 @@ config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: crypto.kms.roles,oid4vci,credential-design,statuslists
+      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vci,credential-design,statuslists
     tenant-config-db:
       enabled: false
 license:
@@ -160,6 +174,27 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
+    # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
+    secret-management-admin:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
   tenants:
     default:
       dialect: postgresql
@@ -241,3 +276,19 @@ kv:
 # is seeded into platform config during tenant setup and refreshed through the
 # platform-config-remote provider. Use config.overrides.* for explicit local
 # deployment overrides only.
+
+secret:
+  authority:
+    allowed-clock-skew-millis: 2000
+    satellite:
+      workload-id: service-oid4vci
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Runs the customer Docker Compose topology and its 95-request Postman release gate.
+  Runs the customer Docker Compose topology and its 108-request Postman release gate.
 
 .DESCRIPTION
   This is a non-interactive, fail-closed release gate. Localtest uses the
@@ -60,9 +60,11 @@ $setupHelper = Join-Path $scriptDir 'prepare-compose-postman-setup.mjs'
 $canaryScanner = Join-Path $scriptDir 'assert-plaintext-canary-absent.mjs'
 $supportHelper = Join-Path $scriptDir 'compose-postman-release-gate-support.mjs'
 $lifecycleModule = Join-Path $scriptDir 'ComposePostmanReleaseGateLifecycle.psm1'
+$secretAuthorityGenerator = Join-Path $scriptDir 'generate-secret-authority-keys.ps1'
 $localCa = Join-Path $composeDir 'gateway\certs\local-ca.crt'
 $dockerCommand = 'docker'
 $nodeCommand = 'node'
+$curlCommand = 'curl.exe'
 $releaseImages = @(
   'enterprise-platform',
   'enterprise-tenant-kms',
@@ -99,6 +101,17 @@ function Assert-Ipv4Cidr([string]$Value, [string]$Label) {
 function Write-Utf8NoBom([string]$Path, [string]$Content) {
   [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
 }
+function Publish-NewmanSafeArtifacts([string]$StageDir, [string]$ReportDir) {
+  if (-not (Test-Path -LiteralPath $StageDir -PathType Container)) { return }
+  $newmanReportDir = Join-Path $ReportDir 'newman'
+  New-Item -ItemType Directory -Path $newmanReportDir -Force | Out-Null
+  foreach ($safeArtifact in @('junit.xml', 'failure-summary.json', 'failure-summary.md', 'snapshot-drift.patch')) {
+    $sourceArtifact = Join-Path $StageDir $safeArtifact
+    if (Test-Path -LiteralPath $sourceArtifact -PathType Leaf) {
+      Copy-Item -LiteralPath $sourceArtifact -Destination (Join-Path $newmanReportDir $safeArtifact) -Force
+    }
+  }
+}
 function ConvertTo-ComposeMountPath([string]$Path) {
   return [System.IO.Path]::GetFullPath($Path).Replace('\', '/')
 }
@@ -112,7 +125,7 @@ function Render-BehindEdgeArtifacts {
   $dynamic = @"
 # Generated customer EDK routing for shared-edge mode.
 # TLS is terminated by the shared edge; this stack gateway receives plain HTTP.
-"@ + $publicDynamic.Substring($httpMatch.Index)
+"@ + "`n" + $publicDynamic.Substring($httpMatch.Index)
   $dynamic = $dynamic.Replace('__BASE_DOMAIN_REGEX__', $baseRegex).Replace('__BASE_DOMAIN__', $BaseDomain)
   $dynamic = $dynamic.Replace('entryPoints: ["websecure"]', 'entryPoints: ["web"]')
   $dynamic = [regex]::Replace($dynamic, '(?m)^\s+tls:\s+\{\}\r?\n', '')
@@ -249,10 +262,16 @@ function Invoke-LoggedNative(
   [string]$LogPath,
   [bool]$EchoToConsole = $true
 ) {
-  $lines = @(& $File @Arguments 2>&1 | ForEach-Object { [string]$_ })
-  $exitCode = $LASTEXITCODE
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $lines = @(& $File @Arguments 2>&1 | ForEach-Object { [string]$_ })
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
   $safeText = Protect-SensitiveText ($lines -join "`n")
-  $safeText | Set-Content -LiteralPath $LogPath -Encoding UTF8
+  Write-Utf8NoBom $LogPath "$safeText`n"
   if ($EchoToConsole) {
     foreach ($line in @($safeText -split '\r?\n')) { Write-Host $line }
   }
@@ -260,23 +279,128 @@ function Invoke-LoggedNative(
   return $safeText
 }
 function Invoke-CapturedNative([string]$File, [string[]]$Arguments, [string]$OutputPath) {
-  $lines = @(& $File @Arguments 2>&1 | ForEach-Object { [string]$_ })
-  $exitCode = $LASTEXITCODE
-  $lines | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $lines = @(& $File @Arguments 2>&1 | ForEach-Object { [string]$_ })
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  Write-Utf8NoBom $OutputPath "$(($lines -join "`n"))`n"
   if ($exitCode -ne 0) { Fail "$File failed with exit code $exitCode. See $OutputPath" }
   return ($lines -join "`n")
 }
 function Invoke-NativeText([string]$File, [string[]]$Arguments, [string]$Label) {
-  $lines = @(& $File @Arguments 2>&1 | ForEach-Object { [string]$_ })
-  $exitCode = $LASTEXITCODE
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $lines = @(& $File @Arguments 2>&1 | ForEach-Object { [string]$_ })
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
   if ($exitCode -ne 0) { Fail "$Label failed with exit code $exitCode." }
   return ($lines -join "`n")
 }
 function Invoke-Compose([string[]]$Tail, [string]$LogName) {
   return Invoke-LoggedNative $script:dockerCommand ($script:composeArgs + $Tail) (Join-Path $script:resolvedReportDir $LogName)
 }
+function Capture-DatabaseEvidence([switch]$BestEffort) {
+  $auditSql = @'
+\pset pager off
+\echo === connection ===
+SELECT current_database() AS database_name, current_user AS runtime_role;
+\echo === release roles ===
+SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolinherit, rolbypassrls
+FROM pg_catalog.pg_roles
+WHERE rolname IN (current_user, 'edk_platform', 'edk_tenant', 'secret_management_admin', 'secret_management_tenant_serving')
+ORDER BY rolname;
+\echo === application schemas ===
+SELECT n.nspname AS schema_name,
+       pg_catalog.pg_get_userbyid(n.nspowner) AS owner,
+       pg_catalog.has_schema_privilege(current_user, n.oid, 'USAGE') AS runtime_can_use,
+       pg_catalog.has_schema_privilege(current_user, n.oid, 'CREATE') AS runtime_can_create
+FROM pg_catalog.pg_namespace n
+WHERE n.nspname = 'public' OR n.nspname LIKE 'tenant\_%' ESCAPE '\'
+ORDER BY n.nspname;
+\echo === schema version ownership and readability ===
+SELECT n.nspname AS schema_name,
+       c.relname AS table_name,
+       pg_catalog.pg_get_userbyid(c.relowner) AS owner,
+       c.relacl AS grants,
+       pg_catalog.has_table_privilege(current_user, c.oid, 'SELECT') AS runtime_can_read,
+       pg_catalog.has_table_privilege(current_user, c.oid, 'INSERT,UPDATE,DELETE') AS runtime_can_write
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relname = '_schema_version'
+  AND (n.nspname = 'public' OR n.nspname LIKE 'tenant\_%' ESCAPE '\')
+ORDER BY n.nspname;
+\echo === schema version rows ===
+SELECT format(
+  'SELECT %L AS tenant_schema, schema_name, version FROM %I._schema_version ORDER BY schema_name;',
+  n.nspname,
+  n.nspname
+)
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relname = '_schema_version'
+  AND (n.nspname = 'public' OR n.nspname LIKE 'tenant\_%' ESCAPE '\')
+ORDER BY n.nspname
+\gexec
+'@
+
+  foreach ($database in @(
+    @{service = 'platform-postgres'; label = 'platform'},
+    @{service = 'tenant-postgres'; label = 'tenant'}
+  )) {
+    $evidencePath = Join-Path $resolvedReportDir "$($database.label)-database-audit.txt"
+    if (Test-Path -LiteralPath $evidencePath -PathType Leaf) { continue }
+    $command = @"
+psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "`$POSTGRES_USER" --dbname "`$POSTGRES_DB" <<'SQL'
+$auditSql
+SQL
+"@
+    try {
+      Invoke-CapturedNative $dockerCommand ($composeArgs + @(
+        'exec', '-T', $database.service, 'sh', '-lc', $command
+      )) $evidencePath | Out-Null
+    } catch {
+      if (-not $BestEffort) { throw }
+      Write-Utf8NoBom `
+        (Join-Path $resolvedReportDir "$($database.label)-database-audit-failure.log") `
+        "$([string]$_.Exception.Message)`n"
+    }
+  }
+}
 function Split-NonEmptyLines([string]$Text) {
   return @($Text -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+}
+function Wait-BehindEdgePublicOrigin {
+  $url = "https://platform.$BaseDomain/api/platform/setup/v1/status"
+  $attempts = [System.Collections.Generic.List[string]]::new()
+  for ($attempt = 1; $attempt -le 120; $attempt++) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = 'Continue'
+      $response = @(& $curlCommand `
+        '--silent' '--show-error' '--connect-timeout' '3' '--max-time' '10' `
+        '--output' 'NUL' '--write-out' '%{http_code}' $url 2>&1 | ForEach-Object { [string]$_ })
+      $exitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousErrorActionPreference
+    }
+    $status = @($response | Where-Object { $_ -match '^\d{3}$' } | Select-Object -Last 1)
+    $statusText = if ($status.Count -eq 1) { [string]$status[0] } else { 'none' }
+    $attempts.Add("attempt=$attempt exit=$exitCode status=$statusText")
+    if ($exitCode -eq 0 -and $statusText -in @('200', '404')) {
+      Write-Utf8NoBom (Join-Path $resolvedReportDir 'edge-public-readiness.log') "$(($attempts -join "`n"))`n"
+      return
+    }
+    Start-Sleep -Seconds 2
+  }
+  Write-Utf8NoBom (Join-Path $resolvedReportDir 'edge-public-readiness.log') "$(($attempts -join "`n"))`n"
+  Fail "Shared-edge public origin did not become trusted and reachable: $url"
 }
 function Write-Plan {
   $references = @($releaseImages | ForEach-Object { "nexus.sphereon.com/edk-docker/$($_):$Tag" })
@@ -298,7 +422,7 @@ function Write-Plan {
     composeEnvFile = $resolvedComposeEnv
     collection = $collectionPath
     environment = $resolvedPostmanEnvironment
-    requestCount = 95
+    requestCount = 108
     immutableTag = $Tag
     sourceState = $resolvedSourceState
     expectedSource = $ExpectedSource
@@ -311,7 +435,9 @@ function Write-Plan {
     runner = $runnerPath
     snapshotDir = $snapshotDir
   }
-  $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $resolvedReportDir 'release-gate-plan.json') -Encoding UTF8
+  Write-Utf8NoBom `
+    (Join-Path $resolvedReportDir 'release-gate-plan.json') `
+    "$(($plan | ConvertTo-Json -Depth 8))`n"
 }
 function Invoke-CanaryFileScan([string]$Path, [string]$Label, [string]$EvidencePath) {
   $lines = @(Get-Content -LiteralPath $Path -Raw -ErrorAction Stop |
@@ -336,7 +462,8 @@ $commonRequired = @(
   $setupHelper,
   $canaryScanner,
   $supportHelper,
-  $lifecycleModule
+  $lifecycleModule,
+  $secretAuthorityGenerator
 )
 $modeRequired =
   if ($AccessMode -eq 'Localtest') {
@@ -403,7 +530,7 @@ Require-File $resolvedPostmanEnvironment 'Postman environment'
 Require-File $resolvedSourceState 'Frozen release source-state manifest'
 $collection = Get-Content -LiteralPath $collectionPath -Raw | ConvertFrom-Json
 $requestCount = Count-Requests @($collection.item)
-if ($requestCount -ne 95) { Fail "Customer collection must contain exactly 95 requests; found $requestCount." }
+if ($requestCount -ne 108) { Fail "Customer collection must contain exactly 108 requests; found $requestCount." }
 if ($AccessMode -eq 'Localtest') {
   $gatewayRules = Get-Content -LiteralPath $gatewayDynamic -Raw
   if ($gatewayRules -notmatch [regex]::Escape("platform.$BaseDomain")) {
@@ -413,12 +540,12 @@ if ($AccessMode -eq 'Localtest') {
 Write-Plan
 
 if ($DryRun) {
-  Write-Host "Dry-run passed: customer $AccessMode topology, immutable seven-image plan, and 95-request collection validated."
+  Write-Host "Dry-run passed: customer $AccessMode topology, immutable seven-image plan, and 108-request collection validated."
   Write-Host "Plan: $(Join-Path $resolvedReportDir 'release-gate-plan.json')"
   exit 0
 }
 
-foreach ($tool in @($dockerCommand, $nodeCommand)) {
+foreach ($tool in @($dockerCommand, $nodeCommand) + $(if ($AccessMode -eq 'BehindEdge') { @($curlCommand) } else { @() })) {
   if ($null -eq (Get-Command $tool -ErrorAction SilentlyContinue)) { Fail "$tool is required on PATH." }
 }
 if ($requiresLocalCa) { Require-File $localCa 'Customer gateway local CA' }
@@ -456,6 +583,15 @@ if ([string]$postmanValues['idpClientSecret'] -notmatch '^[A-Za-z0-9_-]{16,128}$
 }
 Import-Module -Name $lifecycleModule -Force
 
+$secretAuthorityRoot = Join-Path $composeDir ('.secret-authority\release-gate-' + $ProjectName + '-' + [guid]::NewGuid().ToString('N'))
+& $secretAuthorityGenerator -OutputDirectory $secretAuthorityRoot
+if ($LASTEXITCODE -ne 0) { Fail "Secret-authority key generation failed with exit code $LASTEXITCODE." }
+$runtimeComposeEnv = Join-Path $secretAuthorityRoot 'compose.env'
+$composeEnvText = (Get-Content -LiteralPath $resolvedComposeEnv -Raw).TrimEnd("`r", "`n")
+$authorityWindow = (Get-Content -LiteralPath (Join-Path $secretAuthorityRoot 'window.env') -Raw).TrimEnd("`r", "`n")
+$authorityHostPath = $secretAuthorityRoot.Replace('\', '/')
+Write-Utf8NoBom $runtimeComposeEnv "$composeEnvText`n$authorityWindow`nEDK_SECRET_AUTHORITY_ROOT=$authorityHostPath`n"
+
 $previousTag = $env:EDK_TAG
 $previousDomain = $env:EDK_PLATFORM_BASE_DOMAIN
 $previousCa = $env:NODE_EXTRA_CA_CERTS
@@ -465,7 +601,7 @@ $env:NODE_EXTRA_CA_CERTS = if ($requiresLocalCa) { $localCa } else { $null }
 $composeArgs = @(
   'compose',
   '--project-name', $ProjectName,
-  '--env-file', $resolvedComposeEnv,
+  '--env-file', $runtimeComposeEnv,
   '-f', $baseCompose,
   '-f', $selectedGatewayCompose
 )
@@ -531,6 +667,9 @@ try {
       Write-Utf8NoBom $temporaryRouterTarget $candidateRouterText
       Move-Item -LiteralPath $temporaryRouterTarget -Destination $edgeRouterTarget
       $edgeRouterInstalledByRun = $true
+      Invoke-NativeText $dockerCommand @(
+        'exec', $EdgeTraefikContainer, 'touch', "/etc/traefik/dynamic/$EdgeEnvironment.yml"
+      ) 'Nudge shared edge router reload' | Out-Null
     }
   }
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('config', '--no-interpolate')) (Join-Path $resolvedReportDir 'compose-config.yml') | Out-Null
@@ -550,23 +689,24 @@ try {
   ) (Join-Path $resolvedReportDir 'enterprise-image-preflight.log') | Out-Null
 
   $projectLabel = "label=com.docker.compose.project=$ProjectName"
-  $containers = Split-NonEmptyLines (Invoke-CapturedNative $dockerCommand @(
+  $containers = @(Split-NonEmptyLines (Invoke-CapturedNative $dockerCommand @(
     'ps', '--all', '--filter', $projectLabel, '--format', '{{.ID}}'
-  ) (Join-Path $resolvedReportDir 'compose-initial-containers.txt'))
-  $networks = Split-NonEmptyLines (Invoke-CapturedNative $dockerCommand @(
+  ) (Join-Path $resolvedReportDir 'compose-initial-containers.txt')))
+  $networks = @(Split-NonEmptyLines (Invoke-CapturedNative $dockerCommand @(
     'network', 'ls', '--filter', $projectLabel, '--format', '{{.ID}}'
-  ) (Join-Path $resolvedReportDir 'compose-initial-networks.txt'))
-  $volumes = Split-NonEmptyLines (Invoke-CapturedNative $dockerCommand @(
+  ) (Join-Path $resolvedReportDir 'compose-initial-networks.txt')))
+  $volumes = @(Split-NonEmptyLines (Invoke-CapturedNative $dockerCommand @(
     'volume', 'ls', '--filter', $projectLabel, '--format', '{{.Name}}'
-  ) (Join-Path $resolvedReportDir 'compose-initial-volumes.txt'))
+  ) (Join-Path $resolvedReportDir 'compose-initial-volumes.txt')))
   $inventoryPath = Join-Path $resolvedReportDir 'compose-project-inventory.json'
-  [ordered]@{
+  $inventory = [ordered]@{
     checkedAt = (Get-Date).ToUniversalTime().ToString('o')
     projectName = $ProjectName
     containers = @($containers)
     networks = @($networks)
     volumes = @($volumes)
-  } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $inventoryPath -Encoding UTF8
+  }
+  Write-Utf8NoBom $inventoryPath "$(($inventory | ConvertTo-Json -Depth 5))`n"
   $dispositionPath = Join-Path $resolvedReportDir 'compose-project-disposition.json'
   Invoke-LoggedNative $nodeCommand @(
     $supportHelper,
@@ -590,23 +730,45 @@ try {
     Invoke-Compose @('down', '--volumes', '--remove-orphans') 'compose-reset.log' | Out-Null
   }
   Invoke-Compose @('up', '-d', '--wait', '--wait-timeout', '300', '--pull', 'never') 'compose-up.log' | Out-Null
+  if ($AccessMode -eq 'BehindEdge') { Wait-BehindEdgePublicOrigin }
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('ps', '--all', '--format', 'json')) (Join-Path $resolvedReportDir 'compose-ps.jsonl') | Out-Null
 
   $imageReport = Get-Content -LiteralPath (Join-Path $resolvedReportDir 'enterprise-image-set.json') -Raw | ConvertFrom-Json
   if ([string]$imageReport.releaseBuild.version -ne $Tag) {
     Fail "Release image label version '$($imageReport.releaseBuild.version)' must exactly equal requested immutable tag '$Tag'."
   }
-  foreach ($identityKey in @('source', 'sourceFingerprint', 'revision', 'created')) {
-    if ([string]::IsNullOrWhiteSpace([string]$imageReport.releaseBuild.$identityKey)) {
-      Fail "Release image report is missing coherent $identityKey provenance."
+  $releaseSource = [string]$imageReport.releaseBuild.source
+  $releaseSourceFingerprint = [string]$imageReport.sourceState.fingerprint
+  $releaseRevision = [string]$imageReport.backendBuild.revision
+  $releaseCreated = [string]$imageReport.backendBuild.created
+  foreach ($identity in ([ordered]@{
+    source = $releaseSource
+    sourceFingerprint = $releaseSourceFingerprint
+    revision = $releaseRevision
+    created = $releaseCreated
+  }).GetEnumerator()) {
+    if ([string]::IsNullOrWhiteSpace([string]$identity.Value)) {
+      Fail "Release image report is missing coherent $($identity.Key) provenance."
+    }
+  }
+  foreach ($buildFamily in @('backendBuild', 'adminConsoleBuild')) {
+    $build = $imageReport.$buildFamily
+    if (
+      [string]$build.version -ne $Tag -or
+      [string]$build.source -ne $releaseSource -or
+      [string]$build.sourceFingerprint -ne $releaseSourceFingerprint -or
+      [string]$build.revision -ne $releaseRevision -or
+      [string]$build.created -ne $releaseCreated
+    ) {
+      Fail "Release image report contains divergent $buildFamily provenance."
     }
   }
   $fingerprintMaterial = @(
     [string]$imageReport.releaseBuild.version,
-    [string]$imageReport.releaseBuild.source,
-    [string]$imageReport.releaseBuild.sourceFingerprint,
-    [string]$imageReport.releaseBuild.revision,
-    [string]$imageReport.releaseBuild.created
+    $releaseSource,
+    $releaseSourceFingerprint,
+    $releaseRevision,
+    $releaseCreated
   ) -join "`n"
   $fingerprintBytes = [System.Text.Encoding]::UTF8.GetBytes($fingerprintMaterial)
   $sha256 = [System.Security.Cryptography.SHA256]::Create()
@@ -615,15 +777,18 @@ try {
   } finally {
     $sha256.Dispose()
   }
-  [ordered]@{
+  $releaseIdentity = [ordered]@{
     tag = $Tag
     version = [string]$imageReport.releaseBuild.version
-    source = [string]$imageReport.releaseBuild.source
-    sourceFingerprint = [string]$imageReport.releaseBuild.sourceFingerprint
-    revision = [string]$imageReport.releaseBuild.revision
-    created = [string]$imageReport.releaseBuild.created
+    source = $releaseSource
+    sourceFingerprint = $releaseSourceFingerprint
+    revision = $releaseRevision
+    created = $releaseCreated
     sha256 = $releaseFingerprint
-  } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $resolvedReportDir 'release-identity.json') -Encoding UTF8
+  }
+  Write-Utf8NoBom `
+    (Join-Path $resolvedReportDir 'release-identity.json') `
+    "$(($releaseIdentity | ConvertTo-Json -Depth 4))`n"
 
   $expectedIds = @{}
   foreach ($image in @($imageReport.images)) {
@@ -640,9 +805,9 @@ try {
     'admin-console',
     'admin-console-tenant'
   )) {
-    $containerIds = Split-NonEmptyLines (Invoke-NativeText $dockerCommand ($composeArgs + @(
+    $containerIds = @(Split-NonEmptyLines (Invoke-NativeText $dockerCommand ($composeArgs + @(
       'ps', '--all', '--quiet', $service
-    )) "Resolve containers for $service")
+    )) "Resolve containers for $service"))
     if ($containerIds.Count -ne 1) {
       Fail "$service must resolve exactly one project container; found $($containerIds.Count)."
     }
@@ -667,7 +832,9 @@ try {
       releaseFingerprint = $releaseFingerprint
     }
   }
-  $serviceImages | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $resolvedReportDir 'compose-service-image-ids.json') -Encoding UTF8
+  Write-Utf8NoBom `
+    (Join-Path $resolvedReportDir 'compose-service-image-ids.json') `
+    "$(($serviceImages | ConvertTo-Json -Depth 5))`n"
 
   $platformUrl = "https://platform.$BaseDomain"
   $setupArgs = @(
@@ -690,8 +857,8 @@ try {
     '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
     '--base-domain', $BaseDomain
   ) (Join-Path $resolvedReportDir 'newman.log') $false
-  if ($runnerOutput -notmatch 'E2E finished:\s+95 requests captured,\s+exit code 0\.') {
-    Fail 'Newman did not execute and capture exactly all 95 requests.'
+  if ($runnerOutput -notmatch 'E2E finished:\s+108 requests captured,\s+exit code 0\.') {
+    Fail 'Newman did not execute and capture exactly all 108 requests.'
   }
   $junitPath = Join-Path $newmanStageDir 'junit.xml'
   Invoke-LoggedNative $nodeCommand @(
@@ -700,14 +867,7 @@ try {
     '--file', $junitPath,
     '--output', (Join-Path $resolvedReportDir 'junit-validation.json')
   ) (Join-Path $resolvedReportDir 'junit-validation.log') | Out-Null
-  $newmanReportDir = Join-Path $resolvedReportDir 'newman'
-  New-Item -ItemType Directory -Path $newmanReportDir -Force | Out-Null
-  foreach ($safeArtifact in @('junit.xml', 'failure-summary.json', 'failure-summary.md', 'snapshot-drift.patch')) {
-    $sourceArtifact = Join-Path $newmanStageDir $safeArtifact
-    if (Test-Path -LiteralPath $sourceArtifact -PathType Leaf) {
-      Copy-Item -LiteralPath $sourceArtifact -Destination (Join-Path $newmanReportDir $safeArtifact) -Force
-    }
-  }
+  Publish-NewmanSafeArtifacts $newmanStageDir $resolvedReportDir
   Remove-Item -LiteralPath $newmanStageDir -Recurse -Force
 
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('logs', '--no-color', '--timestamps')) (Join-Path $resolvedReportDir 'compose-logs.txt') | Out-Null
@@ -719,6 +879,7 @@ try {
     'exec', '-T', 'tenant-postgres', 'sh', '-lc',
     'pg_dump --schema-only --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
   )) (Join-Path $resolvedReportDir 'tenant-schema.sql') | Out-Null
+  Capture-DatabaseEvidence
 
   $canaryEvidence = Join-Path $resolvedReportDir 'plaintext-canary-evidence.jsonl'
   Invoke-CanaryFileScan (Join-Path $resolvedReportDir 'compose-logs.txt') 'compose-logs' $canaryEvidence
@@ -745,12 +906,13 @@ try {
   $workloadPassed = $true
 } catch {
   $primaryError = $_
-  [string]$_.Exception.Message | Set-Content -LiteralPath (Join-Path $resolvedReportDir 'gate-failure.log') -Encoding UTF8
+  Write-Utf8NoBom (Join-Path $resolvedReportDir 'gate-failure.log') "$([string]$_.Exception.Message)`n"
 } finally {
   $teardownStatus = 'not-started'
   $edgeRouterStatus = if ($AccessMode -eq 'BehindEdge') { 'pre-existing' } else { 'not-applicable' }
   try {
     if (Test-Path -LiteralPath $newmanStageDir -PathType Container) {
+      Publish-NewmanSafeArtifacts $newmanStageDir $resolvedReportDir
       Remove-Item -LiteralPath $newmanStageDir -Recurse -Force
     }
     if ($projectMutationAttempted -and
@@ -758,8 +920,13 @@ try {
       try {
         Invoke-CapturedNative $dockerCommand ($composeArgs + @('logs', '--no-color', '--timestamps')) (Join-Path $resolvedReportDir 'compose-logs.txt') | Out-Null
       } catch {
-        [string]$_.Exception.Message | Set-Content -LiteralPath (Join-Path $resolvedReportDir 'compose-log-capture-failure.log') -Encoding UTF8
+        Write-Utf8NoBom `
+          (Join-Path $resolvedReportDir 'compose-log-capture-failure.log') `
+          "$([string]$_.Exception.Message)`n"
       }
+    }
+    if ($projectMutationAttempted) {
+      Capture-DatabaseEvidence -BestEffort
     }
     $teardownAction = Get-ComposeGateTeardownAction -Lifecycle $lifecycle -KeepUp ([bool]$KeepUp)
     if ($teardownAction -eq 'retained-by-request') {
@@ -777,14 +944,17 @@ try {
     } elseif ($teardownAction -eq 'adopted-retained') {
       $teardownStatus = $teardownAction
     }
-    [ordered]@{
+    $teardownEvidence = [ordered]@{
       completedAt = (Get-Date).ToUniversalTime().ToString('o')
       projectMode = if ($null -eq $projectDisposition) { 'unclassified' } else { [string]$projectDisposition.mode }
       gateOwnsProject = $gateOwnsProject
       mutationAttempted = $projectMutationAttempted
       keepUp = [bool]$KeepUp
       status = $teardownStatus
-    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $resolvedReportDir 'compose-teardown.json') -Encoding UTF8
+    }
+    Write-Utf8NoBom `
+      (Join-Path $resolvedReportDir 'compose-teardown.json') `
+      "$(($teardownEvidence | ConvertTo-Json -Depth 4))`n"
   } catch {
     $teardownStatus = 'failed'
     if ($null -eq $primaryError) { $primaryError = $_ }
@@ -816,14 +986,17 @@ try {
       $edgeRouterStatus = 'retained'
     }
   }
-  [ordered]@{
+  $edgeDisposition = [ordered]@{
     accessMode = $AccessMode
     environment = if ($AccessMode -eq 'BehindEdge') { $EdgeEnvironment } else { $null }
     alias = if ($AccessMode -eq 'BehindEdge') { $edgeAlias } else { $null }
     target = if ($AccessMode -eq 'BehindEdge') { $edgeRouterTarget } else { $null }
     installedByRun = $edgeRouterInstalledByRun
     status = $edgeRouterStatus
-  } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $resolvedReportDir 'edge-router-disposition.json') -Encoding UTF8
+  }
+  Write-Utf8NoBom `
+    (Join-Path $resolvedReportDir 'edge-router-disposition.json') `
+    "$(($edgeDisposition | ConvertTo-Json -Depth 4))`n"
 
   $candidateStatus = if ($null -eq $primaryError -and $workloadPassed) { 'passed' } else { 'failed' }
   try {
@@ -835,7 +1008,7 @@ try {
       --teardown-status $teardownStatus `
       --project-name $ProjectName `
       --tag $Tag `
-      --request-count 95 `
+      --request-count 108 `
       --manifest (Join-Path $resolvedReportDir 'evidence-manifest.json') `
       --manifest-hash (Join-Path $resolvedReportDir 'evidence-manifest.sha256')
     $finalizationExit = $LASTEXITCODE
@@ -853,6 +1026,14 @@ try {
     if ($null -eq $primaryError) { $primaryError = $_ }
     else { Write-Warning "Terminal evidence finalization also failed: $($_.Exception.Message)" }
   } finally {
+    try {
+      if (-not $KeepUp -and (Test-Path -LiteralPath $secretAuthorityRoot -PathType Container)) {
+        Remove-Item -LiteralPath $secretAuthorityRoot -Recurse -Force
+      }
+    } catch {
+      if ($null -eq $primaryError) { $primaryError = $_ }
+      else { Write-Warning "Secret-authority staging cleanup also failed: $($_.Exception.Message)" }
+    }
     $env:EDK_TAG = $previousTag
     $env:EDK_PLATFORM_BASE_DOMAIN = $previousDomain
     $env:NODE_EXTRA_CA_CERTS = $previousCa

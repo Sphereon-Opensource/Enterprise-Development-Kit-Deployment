@@ -70,6 +70,16 @@ issuerPipeline:
 portalBff:
   existingSecret: edk-runtime-secrets
 
+# Interactive docs playground (PKCE + PAR public client). Origins match local
+# docusaurus serve and the Sphereon hosted docs site.
+docsPlayground:
+  enabled: true
+  clientId: docs-playground
+  origins:
+    - https://docs.sphereon.com
+    - http://127.0.0.1:3000
+    - http://localhost:3000
+
 license:
   trust:
     existingSecret: edk-license-root-ca

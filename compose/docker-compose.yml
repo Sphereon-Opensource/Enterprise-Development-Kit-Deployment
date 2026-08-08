@@ -44,12 +44,18 @@ x-edk-common-env: &edk-common-env
   EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET}
   EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
   EDK_OWNER_INITIAL_CREDENTIAL: ${EDK_OWNER_INITIAL_CREDENTIAL}
+  SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY: ${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate the secret-authority key window before starting the stack}
+  SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS: ${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate the secret-authority key window before starting the stack}
 
 x-edk-tenant-db-env: &edk-tenant-db-env
   EDK_TENANT_DB_HOST: tenant-postgres
   EDK_TENANT_DB_NAME: ${EDK_TENANT_DB_NAME:-tenant}
   EDK_TENANT_DB_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
   EDK_TENANT_DB_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
+  # Every runtime hosts the secret-use broker and must connect through the two
+  # restricted secret-management roles, never through the general tenant role.
+  EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+  EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
 
 x-edk-runtime-healthcheck-8080: &edk-runtime-healthcheck-8080
   # The runtime image ships no curl or wget; bash /dev/tcp is always available.
@@ -162,6 +168,8 @@ services:
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
       EDK_PLATFORM_DB_HOST: platform-postgres
+      SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY: ${SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY:?Generate the secret-authority key window before starting the stack}
+      SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS: ${SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS:?Generate the secret-authority key window before starting the stack}
       EDK_PLATFORM_DB_NAME: ${EDK_PLATFORM_DB_NAME:-platform}
       EDK_PLATFORM_DB_USERNAME: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
       EDK_PLATFORM_DB_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
@@ -203,6 +211,9 @@ services:
       - ./config:/app/config/external:ro
       - ./config/secret-management-environment.manifest:/app/secret-management/deployment/environment.manifest:ro
       - ./config/secret-provider-private-endpoints.manifest:/app/secret-management/egress/private-endpoints.manifest:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/central:/app/secret-authority/central:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public:/app/secret-authority/public:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-platform:/app/secret-authority/workload:ro
       - platform-keystore:/keystore
     ports:
       - "${EDK_PLATFORM_HOST_PORT:-18080}:18080"
@@ -242,6 +253,8 @@ services:
     volumes:
       - ./config/tenant-as.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-tenant-as:/app/secret-authority/workload:ro
     ports:
       - "${EDK_AS_HOST_PORT:-18083}:18083"
     healthcheck: *edk-runtime-healthcheck-18083
@@ -270,6 +283,8 @@ services:
       GRPC_PORT: "9090"
     volumes:
       - ./config/tenant-kms.application.yml:/app/config/application.yml:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-crypto:/app/secret-authority/workload:ro
       - tenant-kms-keystore:/keystore
     # No host port mapping: tenant KMS is internal-only.
     expose:
@@ -297,6 +312,8 @@ services:
       EXTERNAL_BASE_URL: ${EDK_DID_EXTERNAL_BASE_URL:-http://localhost:18082}
     volumes:
       - ./config/did.application.yml:/app/config/application.yml:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-data:/app/secret-authority/workload:ro
     ports:
       - "${EDK_DID_HOST_PORT:-18082}:8080"
     healthcheck: *edk-runtime-healthcheck-8080
@@ -326,6 +343,8 @@ services:
       EDK_PIPELINE_BLIND_INDEX_KEY: ${EDK_PIPELINE_BLIND_INDEX_KEY}
     volumes:
       - ./config/issuer.application.yml:/app/config/application.yml:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-oid4vci:/app/secret-authority/workload:ro
     ports:
       - "${EDK_ISSUER_HOST_PORT:-18084}:8080"
     healthcheck: *edk-runtime-healthcheck-8080
@@ -355,6 +374,8 @@ services:
       EXTERNAL_BASE_URL: ${EDK_VERIFIER_EXTERNAL_BASE_URL:-http://localhost:18085}
     volumes:
       - ./config/verifier.application.yml:/app/config/application.yml:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-oid4vp:/app/secret-authority/workload:ro
     ports:
       - "${EDK_VERIFIER_HOST_PORT:-18085}:8080"
     healthcheck: *edk-runtime-healthcheck-8080

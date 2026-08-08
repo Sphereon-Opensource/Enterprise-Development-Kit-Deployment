@@ -173,7 +173,7 @@ environment-variable Secret values are read only when a container starts.
 | `secretManagement.egress.allowedHttpsPorts` | `[443]` | Platform-owned HTTPS ports permitted for provider traffic. |
 | `secretManagement.egress.privateEndpointAllowlist` | `{}` | Reviewed hostname-pattern to CIDR-list map. Both DNS name and resolved address must match before private Vault or PrivateLink traffic is permitted. |
 | `secretManagement.authority.defaultTenantOfferingKmsBindingTemplate` | `isolated-tenant-secret-storage` | Server-owned provisioner template; onboarding derives a distinct capability-bound KEK for every tenant binding. |
-| `secretManagement.authority.allowTenantManagedProviders` | `true` | Global policy default for tenant-managed provider candidates. Tenant APIs cannot change the deployment bootstrap itself. |
+| `secretManagement.authority.allowTenantManagedProviders` | `false` | Cloud-provider offerings are absent by default. Enable only for an explicitly configured integration; tenant APIs cannot change the deployment bootstrap itself. |
 | `secretManagement.authority.retentionDays` | `30` | Global migration retention period before an explicitly fenced purge. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |

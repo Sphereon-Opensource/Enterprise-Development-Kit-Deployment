@@ -7,7 +7,8 @@ http:
   routers:
     customer-__ENV__:
       rule: >-
-        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`)
+        Host(`platform.__BASE_DOMAIN__`) || HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`)
+      priority: 20000
       entryPoints: ["websecure"]
       service: customer-__ENV__
       tls:

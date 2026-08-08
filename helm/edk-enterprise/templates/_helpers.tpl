@@ -79,6 +79,13 @@ name, or an empty list for services that are not tenant-routed.
 - /direct_post
 - /api/oid4vp/v1
 - /api/dcql/v1
+{{- else if eq $name "tenant-kms" -}}
+{{/* The runtime KMS API is advertised on the TENANT origin by the bootstrap
+     runtime-config (tenantKms.endpoints.api = /api/kms/v1), so the tenant host
+     must route it. Tenant scoping comes from the bearer, not the host, which is
+     why the Compose gateway routes this path on any host at a priority above the
+     platform catch-all. */}}
+- /api/kms/v1
 {{- else if eq $name "did" -}}
 - /1.0/identifiers
 - /.well-known/did.json
@@ -258,15 +265,18 @@ platform:
   target: SERVER
   transport: GRPC
   endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
   services:
     config:
       target: SERVER
       transport: GRPC
       endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+      serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
 application:
   target: SERVER
   transport: GRPC
   endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
 {{- end -}}
 
 {{/* The platform is both the central permit issuer and a satellite consumer. */}}

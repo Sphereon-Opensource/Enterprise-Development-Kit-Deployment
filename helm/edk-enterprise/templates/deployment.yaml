@@ -209,6 +209,17 @@ spec:
               value: "true"
             - name: TENANT_RESOLUTION_CUSTOM_DOMAIN_ENABLED
               value: "true"
+            {{- /* The EDK strict-auth gate reads the un-prefixed `server.rest.auth.enabled`
+                   property. The EDK property normalizer performs no prefix stripping, so the
+                   SPHEREON_APP_ form below resolves to `sphereon.app.server.rest.auth.enabled`
+                   and never reaches the gate; it is the VDX transport-server name and is kept
+                   only for VDX-based images. This is the variable the gate actually reads, and
+                   it matches the un-prefixed convention every SERVER_REST_AUTH_* sibling below
+                   already uses. Without it the gate falls back to its permissive default
+                   (RestAuthSettings.enabled = false) because the ConfigMap overlays replace the
+                   image's baked application.yml through a subPath mount. */}}
+            - name: SERVER_REST_AUTH_ENABLED
+              value: {{ $.Values.auth.enabled | quote }}
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
             {{- $transportAudience := "" }}
@@ -280,6 +291,8 @@ spec:
               value: {{ $.Values.opentelemetry.endpoint | quote }}
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
               value: {{ $.Values.opentelemetry.protocol | quote }}
+            - name: OTEL_METRICS_EXPORTER
+              value: {{ $.Values.opentelemetry.metricsExporter | quote }}
             - name: OTEL_EXPORTER_OTLP_HEADERS
               value: {{ $.Values.opentelemetry.headers | quote }}
             - name: OTEL_RESOURCE_ATTRIBUTES
@@ -639,6 +652,15 @@ spec:
             - name: SPHEREON_SERVICE_ID
               value: {{ index $.Values.serviceIdentity.serviceIds $name | quote }}
             {{- end }}
+            {{- if eq $name "tenant-as" }}
+            # The tenant-AS opens a long-lived remote platform-config gRPC channel.
+            # Wait for a Health SERVING response in the process before exposing its
+            # HTTP listener; its init container's TCP check alone is not sufficient.
+            - name: PLATFORM_GRPC_HOST
+              value: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") | quote }}
+            - name: PLATFORM_GRPC_PORT
+              value: {{ $.Values.grpc.port | quote }}
+            {{- end }}
             {{- /* In-network surfaces the strict-auth gate admits without an operator bearer.
                    The tenant-AS signing-key provisioning endpoint is intentionally omitted:
                    tenant resolution must validate the platform-issued bearer and use its
@@ -735,7 +757,6 @@ spec:
             {{- end }}
             {{- end }}
           {{- $probePath := $isAdminConsole | ternary "/admin-console/health" "/health" }}
-          {{- $readyPath := $isAdminConsole | ternary "/admin-console/health" "/ready" }}
           {{- if and $.Values.grpc.enabled $grpcReceiver }}
           # The REST listener becomes healthy before the native process starts its
           # gRPC command server. Keep the pod out of Service endpoints until the
@@ -765,9 +786,14 @@ spec:
               port: rest
             initialDelaySeconds: 20
             periodSeconds: 20
+          # Deliberately /health, not /ready: /ready is gated on the platform's boot ceremony,
+          # and that ceremony calls satellites whose init gate waits for the platform Service to
+          # have a ready endpoint. Pointing readiness at /ready deadlocks the two. Flipping it
+          # requires those init gates to dial the bootstrap authority Service first, which
+          # publishes not-ready addresses.
           readinessProbe:
             httpGet:
-              path: {{ $readyPath }}
+              path: {{ $probePath }}
               port: rest
             initialDelaySeconds: 10
             periodSeconds: 10
@@ -829,8 +855,12 @@ spec:
               readOnly: true
             {{- end }}
             {{- if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
-            # Service-specific routing, persistence and trust policy. Enterprise
-            # images do not contain a baked application.yml.
+            # Service-specific routing, persistence and trust policy. This is a
+            # subPath mount, so it REPLACES the image's baked
+            # /app/config/application.yml rather than merging with it. Every key
+            # the baked file supplies must therefore be reproduced here or
+            # rendered as an environment variable (see SERVER_REST_AUTH_ENABLED,
+            # PORT/REST_PORT and GRPC_ENABLED/GRPC_PORT above).
             - name: runtime-service-config
               mountPath: /app/config/application.yml
               subPath: application.yml

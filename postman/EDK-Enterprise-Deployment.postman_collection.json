@@ -30,6 +30,12 @@
       "description": "Opaque tenant KMS resource handle (krh_...) discovered from the typed KMS resource list. It is the only KMS identifier a tenant caller ever sees."
     },
     {
+      "key": "kmsResourceProviderId",
+      "value": "",
+      "type": "string",
+      "description": "Provider id of the tenant setup KMS resource, read from the typed KMS resource list. The runtime KMS REST API addresses the same KMS by this id, and the admin console joins the two planes on it."
+    },
+    {
       "key": "verifierId",
       "value": "",
       "type": "string",
@@ -59,6 +65,12 @@
     {
       "key": "verifierTestingDisplayUrl",
       "value": ""
+    },
+    {
+      "key": "platformTenantId",
+      "value": "",
+      "type": "string",
+      "description": "Platform tenant the operator token binds to. KMS sharing is authored only by the tenant that owns the KMS."
     }
   ],
   "item": [
@@ -299,6 +311,9 @@
                   "const payload = JSON.parse(CryptoJS.enc.Base64.parse(padded).toString(CryptoJS.enc.Utf8));",
                   "const roles = payload.roles || (payload.realm_access && payload.realm_access.roles) || [];",
                   "pm.test('operator token carries platform-admin role', () => pm.expect(roles).to.include('platform-admin'));",
+                  "const platformBinding = payload.tenant_id || payload.tenantId || payload.tenant;",
+                  "pm.test('operator token binds the platform tenant', () => pm.expect(platformBinding).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('platformTenantId', platformBinding);",
                   "pm.collectionVariables.set('operatorToken', j.access_token);"
                 ]
               }
@@ -1427,6 +1442,10 @@
                   "pm.expect(kinds, 'the tenant default SOFTWARE offering is available').to.include('SOFTWARE');",
                   "pm.expect(kinds.filter((kind) => kind === 'SOFTWARE'), 'SOFTWARE is offered once').to.have.lengthOf(1);",
                   "kinds.forEach((kind) => pm.expect(['SOFTWARE', 'AWS_KMS', 'AZURE_KEY_VAULT'], 'offering kind is tenant-visible').to.include(kind));",
+                  "(pm.response.json().offerings || []).forEach((offering) => {",
+                  "  pm.expect(offering.supportedCredentialOwnerships, 'offering advertises credential ownership').to.be.an('array').and.not.empty;",
+                  "  offering.supportedCredentialOwnerships.forEach((ownership) => pm.expect(['PRODUCT_MANAGED', 'TENANT_SUPPLIED'], 'credential ownership').to.include(ownership));",
+                  "});",
                   "const text = pm.response.text();",
                   "['INTERNAL_SOFTWARE_KMS', 'internal-token-verifier', 'providerId', 'keyAlias', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'offerings hide ' + shape).to.not.include(shape));"
                 ]
@@ -1439,7 +1458,7 @@
           "request": {
             "method": "GET",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources",
-            "description": "Lists the tenant's typed KMS resources through the platform configuration API. Every resource is identified by an opaque krh_ handle; no provider id, alias, revision, or locator is exposed.",
+            "description": "Lists the tenant's typed KMS resources through the platform configuration API. Every resource carries the opaque krh_ handle used for management and the operator-chosen providerId that addresses the same KMS on the runtime KMS REST API. Alias, revision, and locator stay hidden.",
             "header": [
               {
                 "key": "Authorization",
@@ -1462,9 +1481,18 @@
                   "const handles = (pm.response.json().resources || []).map((resource) => resource.handle).filter(Boolean);",
                   "pm.expect(handles, 'tenant setup provisioned a KMS resource').to.have.length.of.at.least(1);",
                   "handles.forEach((handle) => pm.expect(handle, 'resource handle is opaque').to.match(/^krh_[A-Za-z0-9_-]+$/));",
+                  "const resources = pm.response.json().resources || [];",
+                  "pm.test('every resource publishes the provider id the runtime KMS plane uses', () => {",
+                  "  resources.forEach((resource) => {",
+                  "    pm.expect(resource.providerId, 'resource provider id').to.match(/^[a-z][a-z0-9-]{2,63}$/);",
+                  "    pm.expect(resource.providerId, 'provider id is not the management handle').to.not.match(/^krh_/);",
+                  "    pm.expect(['PRODUCT_MANAGED', 'TENANT_SUPPLIED'], 'credential ownership').to.include(resource.credentialOwnership);",
+                  "  });",
+                  "});",
                   "pm.collectionVariables.set('kmsResourceHandle', handles[0]);",
+                  "pm.collectionVariables.set('kmsResourceProviderId', resources[0] && resources[0].providerId);",
                   "const text = pm.response.text();",
-                  "['INTERNAL_SOFTWARE_KMS', 'internal-token-verifier', 'providerId', 'keyAlias', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'resources hide ' + shape).to.not.include(shape));"
+                  "['INTERNAL_SOFTWARE_KMS', 'internal-token-verifier', 'keyAlias', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'resources hide ' + shape).to.not.include(shape));"
                 ]
               }
             }
@@ -1514,7 +1542,7 @@
           "request": {
             "method": "POST",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources",
-            "description": "Creates a disposable tenant-owned MEMORY-backed SOFTWARE KMS resource for the complete typed lifecycle. The server issues every internal provider identity and the opaque resource handle.",
+            "description": "Creates a disposable tenant-owned MEMORY-backed SOFTWARE KMS resource for the complete typed lifecycle. The caller chooses the providerId that will address this KMS on the runtime KMS REST API; the server issues every internal provider identity and the opaque resource handle.",
             "header": [
               {
                 "key": "Authorization",
@@ -1532,7 +1560,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"kind\": \"SOFTWARE\",\n  \"displayName\": \"{{kmsLifecycleDisplayName}}\",\n  \"configuration\": {\n    \"storageMode\": \"MEMORY\"\n  }\n}"
+              "raw": "{\n  \"providerId\": \"{{kmsLifecycleProviderId}}\",\n  \"kind\": \"SOFTWARE\",\n  \"displayName\": \"{{kmsLifecycleDisplayName}}\",\n  \"configuration\": {\n    \"storageMode\": \"MEMORY\"\n  }\n}"
             }
           },
           "event": [
@@ -1541,8 +1569,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "['kmsLifecycleDisplayName', 'kmsLifecycleResourceHandle', 'kmsLifecycleResourceVersion', 'kmsLifecycleCredentialSecretRef', 'kmsLifecycleCredential'].forEach((key) => pm.collectionVariables.unset(key));",
-                  "pm.collectionVariables.set('kmsLifecycleDisplayName', 'Customer lifecycle SOFTWARE ' + pm.variables.replaceIn('{{$randomUUID}}'));"
+                  "['kmsLifecycleProviderId', 'kmsLifecycleDisplayName', 'kmsLifecycleResourceHandle', 'kmsLifecycleResourceVersion', 'kmsLifecycleCredentialSecretRef', 'kmsLifecycleCredential'].forEach((key) => pm.collectionVariables.unset(key));",
+                  "pm.collectionVariables.set('kmsLifecycleDisplayName', 'Customer lifecycle SOFTWARE ' + pm.variables.replaceIn('{{$randomUUID}}'));",
+                  "pm.collectionVariables.set('kmsLifecycleProviderId', 'customer-lifecycle-' + pm.variables.replaceIn('{{$randomUUID}}').split('-')[0]);"
                 ]
               }
             },
@@ -1557,11 +1586,12 @@
                   "  pm.expect(j.handle, 'opaque resource handle').to.match(/^krh_[A-Za-z0-9_-]+$/);",
                   "  pm.expect(j.handle, 'resource differs from tenant setup KMS').to.not.eql(pm.collectionVariables.get('kmsResourceHandle'));",
                   "  pm.expect(j.kind, 'kind').to.eql('SOFTWARE');",
+                  "  pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('kmsLifecycleProviderId'));",
                   "  pm.expect(j.displayName, 'display name').to.eql(pm.collectionVariables.get('kmsLifecycleDisplayName'));",
                   "  pm.expect(j.state, 'initial state').to.eql('DEGRADED');",
                   "  pm.expect(j.resourceVersion, 'initial resource version').to.be.a('number').and.eql(1);",
                   "  pm.expect(j.credentialConfigured, 'credential starts absent').to.eql(false);",
-                  "  pm.expect(j.managementMode, 'management mode').to.eql('PLATFORM_MANAGED');",
+                  "  pm.expect(j.credentialOwnership, 'credential ownership').to.eql('PRODUCT_MANAGED');",
                   "  pm.expect(j.softwareStorageMode, 'storage mode').to.eql('MEMORY');",
                   "  pm.expect(j.credentialSecretRef, 'reference-first credential slot').to.match(/^kcr_[A-Za-z0-9_-]{20,180}_software$/);",
                   "  pm.expect(j.availableActions, 'available actions').to.have.members(['VALIDATE', 'UPDATE_CREDENTIAL', 'DETACH']);",
@@ -1570,7 +1600,7 @@
                   "pm.collectionVariables.set('kmsLifecycleResourceVersion', String(j.resourceVersion));",
                   "pm.collectionVariables.set('kmsLifecycleCredentialSecretRef', j.credentialSecretRef);",
                   "const text = pm.response.text();",
-                  "['INTERNAL_SOFTWARE_KMS', 'internal-token-verifier', 'providerId', 'keyAlias', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'created resource hides ' + shape).to.not.include(shape));"
+                  "['INTERNAL_SOFTWARE_KMS', 'internal-token-verifier', 'keyAlias', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'created resource hides ' + shape).to.not.include(shape));"
                 ]
               }
             }
@@ -1855,7 +1885,7 @@
                   "  pm.expect(j.resourceVersion, 'resource version').to.eql(Number(pm.collectionVariables.get('kmsLifecycleResourceVersion')) + 1);",
                   "  pm.expect(j.availableActions, 'terminal resource has no actions').to.deep.eql([]);",
                   "});",
-                  "['kmsLifecycleDisplayName', 'kmsLifecycleResourceHandle', 'kmsLifecycleResourceVersion', 'kmsLifecycleCredentialSecretRef', 'kmsLifecycleCredential'].forEach((key) => pm.collectionVariables.unset(key));"
+                  "['kmsLifecycleProviderId', 'kmsLifecycleDisplayName', 'kmsLifecycleResourceHandle', 'kmsLifecycleResourceVersion', 'kmsLifecycleCredentialSecretRef', 'kmsLifecycleCredential'].forEach((key) => pm.collectionVariables.unset(key));"
                 ]
               }
             }
@@ -2030,6 +2060,547 @@
                   "const assertion = Array.isArray(j.assertionMethod) ? j.assertionMethod : [];",
                   "pm.expect(assertion.length, 'hosted did assertion methods').to.be.at.least(2);",
                   "pm.expect(JSON.stringify(assertion), 'assertion methods point at activation DID').to.include(pm.collectionVariables.get('did') + '#');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06a KMS Provider Model",
+      "description": "Exercises who owns a KMS and who may reach it: the platform tenant offers one of its own KMSes to the walkthrough tenant, the tenant enables it and picks a default, and the runtime KMS REST plane is checked against the management plane. RC3 admits template offers only, so a shared-instance offer must be refused rather than accepted and left to fail later.",
+      "item": [
+        {
+          "name": "01 Create shareable platform KMS resource",
+          "request": {
+            "method": "POST",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources",
+            "description": "Creates a MEMORY-backed SOFTWARE KMS owned by the platform tenant. It exists only to be offered to the walkthrough tenant and is detached and retired at the end of this folder.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{platformKmsProviderId}}\",\n  \"kind\": \"SOFTWARE\",\n  \"displayName\": \"{{platformKmsDisplayName}}\",\n  \"configuration\": {\n    \"storageMode\": \"MEMORY\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "['platformKmsProviderId', 'platformKmsDisplayName', 'platformKmsResourceHandle', 'platformKmsResourceVersion'].forEach((key) => pm.collectionVariables.unset(key));",
+                  "const suffix = pm.variables.replaceIn('{{$randomUUID}}').split('-')[0];",
+                  "pm.collectionVariables.set('platformKmsProviderId', 'platform-shared-' + suffix);",
+                  "pm.collectionVariables.set('platformKmsDisplayName', 'Platform shared SOFTWARE ' + suffix);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('platform-owned KMS resource created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('the platform KMS is addressable on both planes', () => {",
+                  "  pm.expect(j.handle, 'opaque resource handle').to.match(/^krh_[A-Za-z0-9_-]+$/);",
+                  "  pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('platformKmsProviderId'));",
+                  "  pm.expect(j.kind, 'kind').to.eql('SOFTWARE');",
+                  "  pm.expect(j.displayName, 'display name').to.eql(pm.collectionVariables.get('platformKmsDisplayName'));",
+                  "  pm.expect(j.credentialOwnership, 'credential ownership').to.eql('PRODUCT_MANAGED');",
+                  "  pm.expect(j.resourceVersion, 'initial resource version').to.be.a('number').and.eql(1);",
+                  "});",
+                  "pm.collectionVariables.set('platformKmsResourceHandle', j.handle);",
+                  "pm.collectionVariables.set('platformKmsResourceVersion', String(j.resourceVersion));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Offer the platform KMS as a template",
+          "request": {
+            "method": "PUT",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformKmsResourceHandle}}/sharing",
+            "description": "Offers the platform-owned KMS to the walkthrough tenant. A template offer is fulfilled by a clone the tenant owns outright, so each tenant keeps its own credential binding.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fulfillment\": \"TEMPLATE\",\n  \"tenantIds\": [\n    \"{{tenantId}}\"\n  ],\n  \"suggestedDefault\": false,\n  \"expectedResourceVersion\": {{platformKmsResourceVersion}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('template offer accepted', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('the stored offer names the template fulfillment and the offered tenant', () => {",
+                  "  pm.expect(j.fulfillment, 'fulfillment').to.eql('TEMPLATE');",
+                  "  pm.expect(j.tenantIds, 'offered tenants').to.include(pm.collectionVariables.get('tenantId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Refuse a shared-instance offer",
+          "request": {
+            "method": "PUT",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformKmsResourceHandle}}/sharing",
+            "description": "A shared-instance offer attaches a tenant to the platform KMS itself, which needs an authorization concept this release does not have. The refusal happens where the offer is authored, so it can never be accepted and then fail at key generation.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fulfillment\": \"SHARED_INSTANCE\",\n  \"tenantIds\": [\n    \"{{tenantId}}\"\n  ],\n  \"suggestedDefault\": false,\n  \"expectedResourceVersion\": {{platformKmsResourceVersion}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('shared-instance offer refused', () => pm.expect(pm.response.code, 'status').to.eql(501));",
+                  "const j = pm.response.json();",
+                  "pm.test('the refusal names the unsupported capability rather than reading as a bad request', () => {",
+                  "  pm.expect(j.error && j.error.code, 'error code').to.eql('UNSUPPORTED_OPERATION');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Read the KMS sharing allow-list",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformKmsResourceHandle}}/sharing",
+            "description": "Reads the offer back and proves the refused shared-instance request left the accepted template offer untouched.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('sharing allow-list returned', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('the refused offer did not replace the accepted one', () => {",
+                  "  pm.expect(j.fulfillment, 'fulfillment').to.eql('TEMPLATE');",
+                  "  pm.expect(j.tenantIds, 'offered tenants').to.include(pm.collectionVariables.get('tenantId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 List platform KMSes offered to the tenant",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/shared-providers",
+            "description": "Lists the platform KMSes this tenant may enable. The offer carries presentation and fulfillment only; the platform KMS configuration and credentials are never part of it.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('offered platform KMSes listed', () => pm.response.to.have.status(200));",
+                  "const providers = pm.response.json().providers || [];",
+                  "const offered = providers.find((provider) => provider.providerId === pm.collectionVariables.get('platformKmsProviderId'));",
+                  "pm.test('the platform offer reaches the tenant unenabled', () => {",
+                  "  pm.expect(offered, 'offered platform KMS').to.be.an('object');",
+                  "  pm.expect(offered.kind, 'kind').to.eql('SOFTWARE');",
+                  "  pm.expect(offered.displayName, 'display name').to.eql(pm.collectionVariables.get('platformKmsDisplayName'));",
+                  "  pm.expect(offered.fulfillment, 'fulfillment').to.eql('TEMPLATE');",
+                  "  pm.expect(offered.enabled, 'enabled').to.eql(false);",
+                  "  pm.expect(offered.suggestedDefault, 'suggested default').to.eql(false);",
+                  "});",
+                  "const text = pm.response.text();",
+                  "['krh_', 'storageMode', 'credentialSecretRef', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'offers hide ' + shape).to.not.include(shape));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Enable the offered platform KMS",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/shared-providers/{{platformKmsProviderId}}:enable",
+            "description": "The tenant takes up the offer. A template offer is fulfilled by a KMS clone the tenant owns and configures itself.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('offered platform KMS enabled', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('the provider comes back enabled under the same provider id', () => {",
+                  "  pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('platformKmsProviderId'));",
+                  "  pm.expect(j.enabled, 'enabled').to.eql(true);",
+                  "  pm.expect(j.fulfillment, 'fulfillment').to.eql('TEMPLATE');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Read the tenant default KMS provider",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/default-provider",
+            "description": "Reads the provider a key operation reaches when it names none. A tenant with no provider at all has no default, which answers 200 with an absent provider.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('default KMS provider readable', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "if (j.providerId === undefined || j.providerId === null) {",
+                  "  pm.test('a tenant with no default reads as an absent value, not an error', () => {",
+                  "    pm.expect(j.source, 'default source').to.be.oneOf([undefined, null]);",
+                  "  });",
+                  "} else {",
+                  "  pm.test('an existing default names a provider and where it came from', () => {",
+                  "    pm.expect(j.providerId, 'provider id').to.match(/^[a-z][a-z0-9-]{2,63}$/);",
+                  "    pm.expect(['TENANT', 'PLATFORM_SUGGESTED'], 'default source').to.include(j.source);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 Set the tenant default KMS provider",
+          "request": {
+            "method": "PUT",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/default-provider",
+            "description": "Selects the KMS created during tenant setup as the tenant default, addressed by the same provider id the runtime KMS REST plane uses.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{kmsResourceProviderId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tenant default KMS provider set', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('the tenant selection is recorded as the tenant\\'s own', () => {",
+                  "  pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('kmsResourceProviderId'));",
+                  "  pm.expect(j.source, 'default source').to.eql('TENANT');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 List runtime KMS providers",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantKmsApiBaseUrl}}/providers",
+            "description": "Lists the providers the tenant reaches on the runtime KMS REST API. The admin console joins this list to the management-plane resource list on providerId, so the two planes must agree on that identifier exactly, and the runtime plane must never answer with the krh_ management handle.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('runtime KMS providers listed', () => pm.response.to.have.status(200));",
+                  "const providers = pm.response.json().providers || [];",
+                  "pm.expect(providers, 'the tenant reaches at least one provider').to.have.length.of.at.least(1);",
+                  "pm.test('every runtime provider carries the operator-facing projection', () => {",
+                  "  providers.forEach((provider) => {",
+                  "    pm.expect(provider.providerId, 'provider id').to.match(/^[a-z][a-z0-9-]{2,63}$/);",
+                  "    pm.expect(provider.displayName, 'display name').to.be.a('string').and.not.empty;",
+                  "    pm.expect(['PLATFORM', 'TENANT'], 'ownership').to.include(provider.ownership);",
+                  "    pm.expect(provider.sharedFromPlatform, 'shared from platform').to.be.a('boolean');",
+                  "    pm.expect(provider.isDefault, 'is default').to.be.a('boolean');",
+                  "  });",
+                  "});",
+                  "const managementProviderId = pm.collectionVariables.get('kmsResourceProviderId');",
+                  "const runtimeIds = providers.map((provider) => provider.providerId);",
+                  "pm.test('the runtime plane addresses the tenant setup KMS by its management-plane provider id', () => {",
+                  "  pm.expect(runtimeIds, 'runtime provider ids').to.include(managementProviderId);",
+                  "  runtimeIds.forEach((providerId) => pm.expect(providerId, 'runtime provider id is not the management handle').to.not.match(/^krh_/));",
+                  "  pm.expect(runtimeIds, 'the management handle is never a runtime provider id').to.not.include(pm.collectionVariables.get('kmsResourceHandle'));",
+                  "});",
+                  "pm.test('the provider selected as default reports itself as the default', () => {",
+                  "  const selected = providers.find((provider) => provider.providerId === managementProviderId);",
+                  "  pm.expect(selected.isDefault, 'is default').to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Disable the offered platform KMS",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/shared-providers/{{platformKmsProviderId}}:disable",
+            "description": "Stops using the offered platform KMS. Keys the tenant created in it are retained and reappear if it is enabled again. A provider that is the tenant default cannot be disabled.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantHost}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('offered platform KMS disabled', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('the provider stays offered but is no longer enabled', () => {",
+                  "  pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('platformKmsProviderId'));",
+                  "  pm.expect(j.enabled, 'enabled').to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Withdraw the platform KMS offer",
+          "request": {
+            "method": "PUT",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformKmsResourceHandle}}/sharing",
+            "description": "Empties the allow-list so the platform KMS is offered to nobody before it is detached.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fulfillment\": \"TEMPLATE\",\n  \"tenantIds\": [],\n  \"suggestedDefault\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('platform KMS offer withdrawn', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('the allow-list is empty', () => pm.expect(j.tenantIds, 'offered tenants').to.deep.eql([]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 Detach the shareable platform KMS resource",
+          "request": {
+            "method": "POST",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformKmsResourceHandle}}/detach",
+            "description": "Detaches the platform KMS created for this folder, using the resource version returned when it was created.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedResourceVersion\": {{platformKmsResourceVersion}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('platform KMS resource detached', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('detach advances the platform resource to its only legal next state', () => {",
+                  "  pm.expect(j.handle, 'resource handle').to.eql(pm.collectionVariables.get('platformKmsResourceHandle'));",
+                  "  pm.expect(j.state, 'resource state').to.eql('DETACHED');",
+                  "  pm.expect(j.resourceVersion, 'resource version').to.eql(Number(pm.collectionVariables.get('platformKmsResourceVersion')) + 1);",
+                  "});",
+                  "pm.collectionVariables.set('platformKmsResourceVersion', String(j.resourceVersion));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 Retire the shareable platform KMS resource",
+          "request": {
+            "method": "POST",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformKmsResourceHandle}}/retire",
+            "description": "Retires the detached platform KMS and clears the transient variables this folder created.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedResourceVersion\": {{platformKmsResourceVersion}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('platform KMS resource retired', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('retire advances the platform resource to its terminal state', () => {",
+                  "  pm.expect(j.handle, 'resource handle').to.eql(pm.collectionVariables.get('platformKmsResourceHandle'));",
+                  "  pm.expect(j.state, 'resource state').to.eql('RETIRED');",
+                  "  pm.expect(j.availableActions, 'terminal resource has no actions').to.deep.eql([]);",
+                  "});",
+                  "['platformKmsProviderId', 'platformKmsDisplayName', 'platformKmsResourceHandle', 'platformKmsResourceVersion'].forEach((key) => pm.collectionVariables.unset(key));"
                 ]
               }
             }
@@ -2634,7 +3205,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correlationId\": \"eupid-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{tenantGatewayUrl}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/eupid-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
+              "raw": "{\n  \"correlationId\": \"eupid-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{did}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/eupid-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
             },
             "description": "Creates the IETF Token Status List the EuPid configuration references. The request submits no signing selector: the status-list signer resolves its key from a server-owned product role bound to the tenant KMS resource. The deployment configuration declares the list under the statuslists namespace; this call materializes it. The correlation id is the stable business identifier; the signed token is re-issued whenever entries change, and indexes are allocated randomly at issuance time, never sequentially. Issuance refuses to mint when a configured list cannot be resolved."
           },
@@ -2674,7 +3245,7 @@
                   "  const payload = decodeJwtPart(j.signedToken, 1);",
                   "  pm.test('status list signed token claims match hosted list', () => {",
                   "    pm.expect(header.typ).to.eql('statuslist+jwt');",
-                  "    pm.expect(payload.iss).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "    pm.expect(payload.iss).to.eql(pm.variables.get('did'));",
                   "    pm.expect(payload.sub).to.eql(pm.collectionVariables.get('statusListUri'));",
                   "    pm.expect(payload.status_list && payload.status_list.bits).to.eql(1);",
                   "    pm.expect(payload.status_list && payload.status_list.lst).to.be.a('string').and.not.empty;",
@@ -2790,7 +3361,7 @@
                   "pm.test('hosted status list has statuslist JWT media type and claims', () => {",
                   "  pm.expect(pm.response.headers.get('Content-Type') || '', 'content type').to.include('application/statuslist+jwt');",
                   "  pm.expect(hostedHeader.typ).to.eql('statuslist+jwt');",
-                  "  pm.expect(hostedPayload.iss).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "  pm.expect(hostedPayload.iss).to.eql(pm.variables.get('did'));",
                   "  pm.expect(hostedPayload.sub).to.eql(pm.collectionVariables.get('statusListUri'));",
                   "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.bits).to.eql(1);",
                   "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.lst).to.be.a('string').and.not.empty;",

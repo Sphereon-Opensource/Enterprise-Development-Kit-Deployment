@@ -37,16 +37,27 @@ const setupPath = join(scriptDir, 'prepare-compose-postman-setup.mjs')
 const scannerPath = join(scriptDir, 'assert-plaintext-canary-absent.mjs')
 const supportPath = join(scriptDir, 'compose-postman-release-gate-support.mjs')
 const lifecycleModulePath = join(scriptDir, 'ComposePostmanReleaseGateLifecycle.psm1')
+const secretAuthorityGeneratorPath = join(scriptDir, 'generate-secret-authority-keys.ps1')
+const secretAuthorityShellGeneratorPath = join(scriptDir, 'generate-secret-authority-keys.sh')
 const docsPath = join(customerRoot, 'docs', 'compose-postman-release-gate.md')
 const readmePath = join(customerRoot, 'README.md')
 const collectionPath = join(customerRoot, 'postman', 'EDK-Enterprise-Deployment.postman_collection.json')
 const composePath = join(customerRoot, 'compose', 'docker-compose.yml')
+const composeGitignorePath = join(customerRoot, 'compose', '.gitignore')
+const composeConfigRoot = join(customerRoot, 'compose', 'config')
+const helmValuesPath = join(customerRoot, 'helm', 'edk-enterprise', 'values.yaml')
+const e2eHelmValuesPath = join(repoRoot, 'deploy', 'edk', 'e2e', 'helm', 'values.yaml')
 
 const wrapper = readFileSync(wrapperPath, 'utf8')
 const setup = readFileSync(setupPath, 'utf8')
 const docs = readFileSync(docsPath, 'utf8')
 const readme = readFileSync(readmePath, 'utf8')
 const compose = readFileSync(composePath, 'utf8')
+const secretAuthorityGenerator = readFileSync(secretAuthorityGeneratorPath, 'utf8')
+const secretAuthorityShellGenerator = readFileSync(secretAuthorityShellGeneratorPath, 'utf8')
+const composeGitignore = readFileSync(composeGitignorePath, 'utf8')
+const helmValues = readFileSync(helmValuesPath, 'utf8')
+const e2eHelmValues = readFileSync(e2eHelmValuesPath, 'utf8')
 const collection = JSON.parse(readFileSync(collectionPath, 'utf8'))
 const powershell = process.platform === 'win32'
   ? join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
@@ -83,7 +94,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 95, 'shipped customer collection must contain 95 requests')
+assert.equal(requestCount(collection.item), 108, 'shipped customer collection must contain 108 requests')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 const kmsLifecycleContract = [
@@ -163,6 +174,153 @@ const composeReleaseImages = [...new Set(
     .map((match) => match[1]),
 )].sort()
 assert.deepEqual(composeReleaseImages, [...expectedImages].sort(), 'customer Compose must use exactly seven release images')
+const tenantDbEnv = compose.match(/x-edk-tenant-db-env:[\s\S]*?(?=\nx-[a-z]|\nservices:)/u)?.[0] ?? ''
+for (const credential of [
+  'EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD',
+  'EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD',
+]) {
+  assert.ok(tenantDbEnv.includes(`${credential}:`), `customer tenant DB environment must propagate ${credential} to every runtime`)
+}
+for (const workload of ['service-platform', 'service-crypto', 'service-data', 'service-tenant-as', 'service-oid4vci', 'service-oid4vp']) {
+  assert.ok(compose.includes(`/workload/${workload}:/app/secret-authority/workload:ro`), `customer Compose must mount the ${workload} assertion key only into its owner`)
+}
+for (const coordinate of [
+  'SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY',
+  'SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS',
+  'SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY',
+  'SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS',
+]) {
+  assert.ok(compose.includes(coordinate), `customer Compose must require ${coordinate}`)
+}
+assert.ok(secretAuthorityGenerator.includes('-algorithm ED25519'), 'customer key generator must mint Ed25519 keys')
+assert.ok(secretAuthorityGenerator.includes("'..\\compose\\.secret-authority'"), 'customer key generator must confine output below the ignored authority root')
+assert.ok(secretAuthorityShellGenerator.includes('-algorithm ED25519'), 'customer shell key generator must mint Ed25519 keys')
+assert.ok(secretAuthorityShellGenerator.includes('secret-authority output must be below'), 'customer shell key generator must confine destructive replacement')
+assert.ok(composeGitignore.includes('.secret-authority/'), 'customer Compose must ignore generated secret-authority material')
+for (const [configName, workloadId] of [
+  ['platform', 'service-platform'],
+  ['tenant-kms', 'service-crypto'],
+  ['did', 'service-data'],
+  ['tenant-as', 'service-tenant-as'],
+  ['issuer', 'service-oid4vci'],
+  ['verifier', 'service-oid4vp'],
+]) {
+  const config = readFileSync(join(composeConfigRoot, `${configName}.application.yml`), 'utf8')
+  assert.ok(config.includes('secret:\n  authority:'), `${configName} must configure the secret authority role`)
+  assert.ok(config.includes(`workload-id: ${workloadId}`), `${configName} must bind secret assertions to ${workloadId}`)
+  assert.ok(config.includes('verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}'), `${configName} must verify central permits`)
+  if (configName !== 'platform') {
+    assert.match(
+      config,
+      /\n {6}secret:\n {8}target: SERVER\n {8}transport: GRPC\n {8}endpoint: grpc:\/\/enterprise-platform:9090\n {8}serviceTokenAudience: enterprise-platform\n(?: {8}#[^\n]*\n)* {8}preferServiceTokenOverSessionBearer: false\n/u,
+      `${configName} must route the central secret-authority module to the platform with its downscoped bearer`,
+    )
+  }
+  for (const [route, username, passwordEnvironment] of [
+    ['secret-management-admin', 'secret_management_admin', 'EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD'],
+    ['secret-management-tenant', 'secret_management_tenant_serving', 'EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD'],
+  ]) {
+    const marker = `    ${route}:\n`
+    const roleStart = config.indexOf(marker)
+    assert.notEqual(roleStart, -1, `${configName} must configure the ${route} database route`)
+    const roleTail = config.slice(roleStart + marker.length)
+    const nextRoute = roleTail.search(/\n {4}[a-z0-9-]+:\n/u)
+    const roleBlock = nextRoute === -1 ? roleTail : roleTail.slice(0, nextRoute)
+    assert.ok(roleBlock.includes(`username: ${username}`), `${configName} ${route} must use its restricted SQL role`)
+    assert.ok(roleBlock.includes(`password: \${env:${passwordEnvironment}}`), `${configName} ${route} must use its dedicated password`)
+    assert.ok(roleBlock.includes('dedicated-pool: true'), `${configName} ${route} must not reuse the default runtime pool`)
+  }
+}
+const tenantAsConfig = readFileSync(join(composeConfigRoot, 'tenant-as.application.yml'), 'utf8')
+assert.ok(
+  tenantAsConfig.includes(
+    '      auth:\n' +
+      '        # Identity and credential storage is owned by the platform control plane. Hosted login\n' +
+      '        # stays local, but password verification must use the same central credential authority.\n' +
+      '        serviceTokenAudience: enterprise-platform\n' +
+      '        preferServiceTokenOverSessionBearer: true\n' +
+      '        services:\n' +
+      '          credentials:\n' +
+      '            commands:\n' +
+      '              "[auth.credentials.verify-remote]":\n' +
+      '                target: SERVER\n' +
+      '                transport: GRPC\n' +
+      '                endpoint: grpc://enterprise-platform:9090\n',
+  ),
+  'customer Compose tenant AS must verify passwords through the platform credential authority',
+)
+const platformConfig = readFileSync(join(composeConfigRoot, 'platform.application.yml'), 'utf8')
+assert.doesNotMatch(
+  platformConfig,
+  /operator@example\.com|EDK_PLATFORM_OPERATOR_EMAIL/u,
+  'customer Compose must not ship a synthetic platform operator identity',
+)
+assert.doesNotMatch(helmValues, /operator@example\.com/u, 'customer Helm must not ship a synthetic platform operator identity')
+assert.match(helmValues, /allowTenantManagedProviders: false/u, 'customer Helm must not publish cloud-provider fixtures by default')
+assert.match(e2eHelmValues, /allowTenantManagedProviders: true/u, 'E2E Helm must opt into its cloud-provider fixtures explicitly')
+assert.match(
+  rootYamlBlock(platformConfig, 'secret-management'),
+  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: false\n/u,
+  'customer Compose must not publish cloud-provider fixtures by default',
+)
+assert.match(
+  rootYamlBlock(platformConfig, 'sphereon'),
+  /\n {2}service:\n {4}id: service-platform\n/u,
+  'customer Compose platform must attest its local secret-bound workload as service-platform',
+)
+
+function rootYamlBlock(config, key) {
+  const marker = `${key}:\n`
+  const rootMarker = new RegExp(`(?:^|\\n)${key}:\\n`, 'u')
+  const match = rootMarker.exec(config)
+  assert.ok(match, `${key} must be a root YAML key`)
+  const start = match.index + (match[0].startsWith('\n') ? 1 : 0)
+  const bodyStart = start + marker.length
+  const tail = config.slice(bodyStart)
+  const nextRootOffset = tail.search(/\n(?=[a-z0-9][a-z0-9-]*:\n)/u)
+  return config.slice(start, nextRootOffset === -1 ? config.length : bodyStart + nextRootOffset)
+}
+
+const tenantConfig = rootYamlBlock(platformConfig, 'tenant')
+assert.match(
+  tenantConfig,
+  /\n {2}registration:\n(?: {4}#[^\n]*\n)* {4}signing-key:\n {6}auto-generate: true\n/u,
+  'customer Compose must opt fresh tenant registration into typed product-key provisioning under tenant.registration',
+)
+assert.doesNotMatch(
+  rootYamlBlock(platformConfig, 'platform'),
+  /\n {2}registration:\n/u,
+  'typed product-key provisioning must not be misconfigured under platform.registration',
+)
+assert.match(
+  rootYamlBlock(platformConfig, 'secret-management'),
+  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,verifier-service=service-oid4vp\n/u,
+  'customer Compose must map authenticated service clients to their authorized secret workload identities',
+)
+assert.ok(
+  platformConfig.includes(
+    '      kms:\n' +
+      '        serviceTokenAudience: enterprise-tenant-kms\n' +
+      '        # Tenant KMS accepts the platform\'s dedicated workload identity. Never forward the\n' +
+      '        # incoming operator or tenant-AS STS bearer across this trust boundary.\n' +
+      '        preferServiceTokenOverSessionBearer: true\n',
+  ),
+  'customer Compose platform must mint its dedicated tenant-KMS workload token instead of forwarding a foreign-audience bearer',
+)
+assert.ok(
+  platformConfig.includes(
+    '      "[oauth2-as-admin]":\n' +
+      '        target: SERVER\n' +
+      '        serviceTokenAudience: enterprise-tenant-as\n' +
+      '        preferServiceTokenOverSessionBearer: false\n' +
+      '        services:\n' +
+      '          "[signing-key]":\n' +
+      '            target: SERVER\n' +
+      '            transport: HTTP\n' +
+      '            endpoint: http://enterprise-tenant-as:18083\n',
+  ),
+  'customer Compose platform must route tenant signing-key registration with the tenant-bound STS session',
+)
 
 for (const sourceInvariant of [
   "'docker-compose.yml'",
@@ -170,7 +328,7 @@ for (const sourceInvariant of [
   'verify-enterprise-image-set.mjs',
   'compose-postman-release-gate-support.mjs',
   "'--pull', 'never'",
-  "'E2E finished:\\s+95 requests captured,\\s+exit code 0\\.'",
+  "'E2E finished:\\s+108 requests captured,\\s+exit code 0\\.'",
   "'pg_dump --schema-only --no-owner --no-privileges",
   "'scan-producer'",
   'finalize-evidence',
@@ -178,6 +336,22 @@ for (const sourceInvariant of [
   'Assert-BehindEdgeMergedCompose',
   "'config', '--format', 'json'",
   "host_ip -ne '127.0.0.1'",
+  'generate-secret-authority-keys.ps1',
+  'EDK_SECRET_AUTHORITY_ROOT=',
+  '"@ + "`n" + $publicDynamic.Substring($httpMatch.Index)',
+  "'Nudge shared edge router reload'",
+  'Wait-BehindEdgePublicOrigin',
+  "'edge-public-readiness.log'",
+  'if (-not $KeepUp -and (Test-Path -LiteralPath $secretAuthorityRoot',
+  'Write-Utf8NoBom $inventoryPath',
+  '$imageReport.sourceState.fingerprint',
+  "$imageReport.backendBuild.revision",
+  '$containerIds = @(Split-NonEmptyLines',
+  "foreach ($buildFamily in @('backendBuild', 'adminConsoleBuild'))",
+  'Capture-DatabaseEvidence',
+  "c.relname = '_schema_version'",
+  'runtime_can_read',
+  'Publish-NewmanSafeArtifacts',
 ]) {
   assert.ok(wrapper.includes(sourceInvariant), `wrapper must retain '${sourceInvariant}'`)
 }
@@ -185,7 +359,8 @@ assert.ok(!wrapper.includes("'--skip-snapshots'") && !wrapper.includes("'--updat
 assert.ok(setup.includes('/api/platform/setup/v1/license/import/preview'), 'setup must preview the protected bundle')
 assert.ok(setup.includes('/api/platform/setup/v1/bootstrap'), 'setup must use the product bootstrap API')
 assert.ok(docs.includes('-ResetVolumes') && docs.includes('-DryRun'), 'docs must cover destructive authorization and static validation')
-assert.ok(docs.includes('95-request') && docs.includes('exactly 95 requests'), 'docs must retain the exact customer collection count')
+assert.ok(docs.includes('108-request') && docs.includes('exactly 108 requests'), 'docs must retain the exact customer collection count')
+assert.ok(docs.includes('run-scoped Ed25519') && docs.includes('compose/.secret-authority/'), 'release gate docs must describe ephemeral authority key handling')
 assert.ok(readme.includes('docs/compose-postman-release-gate.md'), 'README must route operators to the gate')
 
 // A stopped project still owns its labeled networks and volumes and cannot be
@@ -339,7 +514,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     teardownStatus: 'failed',
     projectName: 'contract_project',
     tag: '0.25.0-RC3-contract',
-    requestCount: 95,
+    requestCount: 108,
     manifestPath: failedManifest,
     manifestHashPath: failedManifestHash,
   })
@@ -368,7 +543,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     teardownStatus: 'passed',
     projectName: 'contract_project',
     tag: '0.25.0-RC3-contract',
-    requestCount: 95,
+    requestCount: 108,
     manifestPath: sanitizedManifest,
     manifestHashPath: sanitizedHash,
   })
@@ -479,7 +654,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 95)
+  assert.equal(plan.requestCount, 108)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -569,6 +744,8 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
 
   const edgeRouter = readFileSync(edgePlan.edgeRouterCandidate, 'utf8')
   assert.match(edgeRouter, /HostRegexp\(`\^\[a-z0-9-\]\+\\\.compose-rc3\\\.nk\\\.sphereon\\\.com\$`\)/u)
+  assert.match(edgeRouter, /Host\(`platform\.compose-rc3\.nk\.sphereon\.com`\)/u)
+  assert.equal(edgeRouter.includes('priority: 20000'), true)
   assert.match(edgeRouter, /url: "http:\/\/gw-compose-rc3:80"/u)
   assert.match(edgeRouter, /certResolver: le/u)
 } finally {

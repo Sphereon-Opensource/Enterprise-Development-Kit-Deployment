@@ -60,6 +60,25 @@ Set, at minimum:
 - The image tag for the enterprise images. The image repository is pinned to `nexus.sphereon.com/edk-docker` in the Compose file.
 - The platform and tenant database passwords. The default Compose file starts `platform-postgres` and `tenant-postgres`; use external databases only when you intentionally replace those evaluation services. Keep the two databases separate. They may share a PostgreSQL server, but not a database name, credential, or authorization boundary.
 - The required secrets: keystore password, internal client secret, and the issuer pipeline keys.
+- A fresh secret-authority key window. Generate it before the first start and
+  after intentionally rotating the authority keys:
+
+  ```powershell
+  ..\scripts\generate-secret-authority-keys.ps1 -OutputDirectory .\.secret-authority\current
+  ```
+
+  On Linux or macOS:
+
+  ```bash
+  ../scripts/generate-secret-authority-keys.sh ./.secret-authority/current
+  ```
+
+  Set `EDK_SECRET_AUTHORITY_ROOT=./.secret-authority/current` in `.env`, then
+  copy the four `SECRET_AUTHORITY_*` assignments from
+  `.secret-authority/current/window.env` into `.env`. The platform receives the
+  central private key and workload public keys; each satellite container mounts
+  only its own assertion private key plus the central public key. The generated
+  directory is ignored by Git and must not be copied into release evidence.
 - No external secret provider is required at startup. The baseline uses the
   persisted platform software KMS. Configure Vault or a cloud provider only
   through an explicit provider setup after the platform is running.

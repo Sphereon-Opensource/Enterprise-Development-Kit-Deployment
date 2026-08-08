@@ -109,9 +109,10 @@ secretManagement:
     platformStorageKmsBindingKey: platform-secret-storage
     defaultTenantOfferingKmsProviderId: software
     defaultTenantOfferingKmsBindingTemplate: isolated-tenant-secret-storage
-    allowTenantManagedProviders: true
+    # Customer deployments start without synthetic cloud-provider offerings.
+    # Enable only after the corresponding provider integration is configured.
+    allowTenantManagedProviders: false
     # The baseline publishes only the per-tenant software-KMS offering.
-    # Vault and cloud offerings are separate opt-in integrations.
     allowPlatformOfferings: true
     retentionDays: 30
   internalResolution:
@@ -267,14 +268,15 @@ platform:
     # true provisions the configured owner automatically during application
     # startup. Set false for setup-API-driven first installation: the setup API
     # imports the protected license before it writes and provisions the owner.
-    automatic: true
+    automatic: false
     # Hosted authorization-server issuer URL for the `platform` tenant. The
     # operator signs in here and the admin console exchanges operator tokens for
     # tenant tokens against it. Set to the platform's external base URL.
     issuer: https://platform.example.com
     owner:
-      # The platform operator owner provisioned at first boot.
-      email: operator@example.com
+      # Used only when automatic=true. Interactive setup supplies the real
+      # operator identity request-scoped and needs no deployment placeholder.
+      email: ""
       displayName: Platform Operator
       # Roles granted to the operator owner. platform-admin authorizes the
       # tenant administration APIs (RegisterTenant and friends).
@@ -365,6 +367,19 @@ serviceIdentity:
     verifier: "/oid4vp/request-uri,/oid4vp/auth/response,/.well-known"
     wallet-unit: ""
     wallet-interaction: ""
+
+# Interactive documentation site (docs playground). When enabled, registers a
+# public OAuth client on the platform AS (authorization code + required PKCE +
+# required PAR) and sets docs.playground.* so tenant AS bootstrap can provision
+# the same client. Origins are both CORS candidates (merge into cors.origins)
+# and OAuth redirect bases ({origin}/docs-env/callback).
+docsPlayground:
+  enabled: false
+  clientId: docs-playground
+  origins:
+    - https://docs.sphereon.com
+    - http://127.0.0.1:3000
+    - http://localhost:3000
 
 # Dedicated confidential client and cryptographic state protection for the
 # public issuer/verifier testing-console BFF. The client secret is independent
@@ -518,6 +533,7 @@ opentelemetry:
   enabled: false
   endpoint: ""
   protocol: http/protobuf
+  metricsExporter: otlp
   headers: ""
   resourceAttributes: ""
 
@@ -536,6 +552,10 @@ gateway:
   # Single-port multi-tenant Gateway API front door. One wildcard HTTPS listener
   # terminates TLS for both the operator host and tenant hosts; HTTPRoutes fan
   # out by host and path to each service per the routing contract.
+  # Envoy Gateway-specific host snapshot/restore is opt-in because other
+  # Gateway implementations already preserve the request authority upstream.
+  envoyGateway:
+    preserveOriginalHost: false
   enabled: true
   className: cilium
   # Optional implementation-specific per-Gateway parameters reference.

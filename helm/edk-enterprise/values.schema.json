@@ -450,7 +450,7 @@
               "type": "object",
               "additionalProperties": true,
               "properties": {
-                "email": { "type": "string", "minLength": 1 },
+                "email": { "type": "string" },
                 "displayName": { "type": "string", "minLength": 1 },
                 "roles": { "type": "string" }
               }
@@ -702,6 +702,7 @@
         "enabled": { "type": "boolean" },
         "endpoint": { "type": "string" },
         "protocol": { "type": "string" },
+        "metricsExporter": { "type": "string" },
         "headers": { "type": "string" },
         "resourceAttributes": { "type": "string" }
       }

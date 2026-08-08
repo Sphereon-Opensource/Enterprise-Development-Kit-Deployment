@@ -108,15 +108,36 @@ transport:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
         services:
           config: &platformGrpcRoute
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
       application:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+      auth:
+        # Identity and credential storage is owned by the platform control plane. Hosted login
+        # stays local, but password verification must use the same central credential authority.
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
+        services:
+          credentials:
+            commands:
+              "[auth.credentials.verify-remote]":
+                target: SERVER
+                transport: GRPC
+                endpoint: grpc://enterprise-platform:9090
+      secret:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: false
 config:
   providers:
     platform-config-remote:
@@ -133,6 +154,27 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
+    # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
+    secret-management-admin:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
   tenants:
     default:
       dialect: postgresql
@@ -213,3 +255,19 @@ license:
     embedded:
       enabled: ${env:EDK_LICENSE_TRUST_EMBEDDED:true}
     root-ca-bundle-path: /app/license/license-root-ca.pem
+
+secret:
+  authority:
+    allowed-clock-skew-millis: 2000
+    satellite:
+      workload-id: service-tenant-as
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}

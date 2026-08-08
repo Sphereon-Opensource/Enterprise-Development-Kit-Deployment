@@ -36,16 +36,21 @@ server:
     tenant-bound-client-id: true
     audience: enterprise-platform
     allowed-audiences: enterprise-tenant-kms
-# Browser CORS allow-list for the setup and admin UI. Set this to the external
-# origin that serves the operator UI. The platform serves the admin site at its
-# own instance root, so this is normally the platform external URL.
+# Browser CORS allow-list for the setup/admin UI and optional documentation sites.
+# ONBOARDING_UI_BASE_URL is the platform operator UI origin. EDK_DOCS_SITE_ORIGINS is a
+# comma-separated list of interactive docs origins (Sphereon hosted docs, local lab,
+# customer-hosted docs mirrors). Leave EDK_DOCS_SITE_ORIGINS empty to skip docs CORS.
 cors:
-  origins: ${env:ONBOARDING_UI_BASE_URL}
+  origins: ${env:ONBOARDING_UI_BASE_URL},${env:EDK_DOCS_SITE_ORIGINS:https://docs.sphereon.com,http://127.0.0.1:3000,http://localhost:3000}
 account-action:
   # The browser page is served by the same admin-console deployment. Tokens are
   # appended as a fragment by the account-action service and never reach access logs.
   public-base-url: ${env:ONBOARDING_UI_BASE_URL}/admin-console
 sphereon:
+  # The platform is both the central permit issuer and a local secret-bound workload. Its
+  # deployment attestor fails closed unless this identity matches secret.authority.satellite.
+  service:
+    id: service-platform
   telemetry:
     enabled: true
     tracing:
@@ -97,6 +102,9 @@ transport:
       # customer-tenant sessions; platform/anonymous sessions remain LOCAL.
       kms:
         serviceTokenAudience: enterprise-tenant-kms
+        # Tenant KMS accepts the platform's dedicated workload identity. Never forward the
+        # incoming operator or tenant-AS STS bearer across this trust boundary.
+        preferServiceTokenOverSessionBearer: true
         services:
           key:
             transport: GRPC
@@ -113,6 +121,19 @@ transport:
           encryption:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
+      # Tenant registration creates the key through tenant KMS, then registers its descriptor
+      # with the tenant authorization server that owns the tenant signing-key store. The STS
+      # session already carries the addressed tenant, so preserve it instead of replacing it
+      # with a workload token. Literal bracket syntax keeps the hyphenated route keys intact.
+      "[oauth2-as-admin]":
+        target: SERVER
+        serviceTokenAudience: enterprise-tenant-as
+        preferServiceTokenOverSessionBearer: false
+        services:
+          "[signing-key]":
+            target: SERVER
+            transport: HTTP
+            endpoint: http://enterprise-tenant-as:18083
 database:
   app:
     default:
@@ -204,14 +225,19 @@ secret-management:
       kms-provider-id: software
       kms-binding-template: isolated-tenant-secret-storage
     tenant-policy:
-      allow-tenant-managed-providers: true
+      # The customer baseline must not publish synthetic cloud-provider offerings.
+      # Dedicated deployments opt into tenant-managed providers explicitly after
+      # configuring and validating the corresponding provider integration.
+      allow-tenant-managed-providers: false
       # Publishes only the self-contained, per-tenant software-KMS offering.
-      # Vault and cloud providers remain explicit optional integrations.
       allow-platform-offerings: true
       retention-days: 30
   internal-resolution:
     expected-audience: enterprise-platform
     allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,verifier-service,email-service
+    # System credentials are authorized to workload identities, not OAuth client principals.
+    # Keep this aligned with each satellite's service identity binding below.
+    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,verifier-service=service-oid4vp
   deployment:
     environment:
       enabled: true
@@ -289,6 +315,13 @@ tenant:
   platform:
     owner:
       initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+  registration:
+    # Customer instance identifiers are server-issued at registration time, so per-instance
+    # `signing-key.auto-generate` rows cannot exist in deployment configuration. This is the one
+    # deployment decision that registration provisions product keys; a deployment bringing
+    # externally provisioned keys leaves it unset and registration fails closed instead.
+    signing-key:
+      auto-generate: true
   onboarding:
     operator:
       enabled: true
@@ -390,6 +423,21 @@ oauth2:
       post-logout-redirect-uris: "${env:EXTERNAL_BASE_URL}/admin-console"
       allowed-scopes: openid
       token-endpoint-auth-method: none
+    # Interactive documentation playground (docs site). Public client: authorization code +
+    # required PKCE (S256) + required PAR. Redirect URIs are one /docs-env/callback per origin.
+    # Disable client registration via EDK_DOCS_PLAYGROUND_ENABLED=false (see docs.playground).
+    docs-playground:
+      client-id: docs-playground
+      client-name: Documentation site playground
+      client-type: public
+      grant-types: "authorization_code,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
+      response-types: code
+      redirect-uris: "${env:EDK_DOCS_PLAYGROUND_REDIRECT_URIS:https://docs.sphereon.com/docs-env/callback,http://127.0.0.1:3000/docs-env/callback,http://localhost:3000/docs-env/callback}"
+      post-logout-redirect-uris: "${env:EDK_DOCS_SITE_ORIGINS:https://docs.sphereon.com,http://127.0.0.1:3000,http://localhost:3000}"
+      allowed-scopes: openid,profile,email
+      require-pkce: true
+      require-pushed-authorization-requests: true
+      token-endpoint-auth-method: none
   servers:
     default:
       mode: HOSTED
@@ -402,6 +450,7 @@ oauth2:
       # re-authenticating on the next /authorize.
       logout: SUPPORTED
       pkce: REQUIRED
+      par: SUPPORTED
       token-format: JWT
       scopes-supported: "openid,profile,email"
       grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
@@ -414,7 +463,7 @@ oauth2:
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
-          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-tenant-as
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as
         kms:
           client-id: kms-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
@@ -468,9 +517,8 @@ application:
     hosted-as:
       issuer: ${env:EXTERNAL_BASE_URL}
     owner:
-      # TODO: set the platform operator identity for this deployment.
-      email: ${env:EDK_PLATFORM_OPERATOR_EMAIL:operator@example.com}
-      display-name: Platform Operator
+      # Interactive first-run setup supplies the real operator email and display
+      # name as a request-scoped override. Never seed a placeholder customer.
       roles: platform-admin
 app:
   # TODO: set to prod for a production deployment. dev unlocks the break-glass
@@ -494,9 +542,8 @@ platform:
     # platform license system KMS on first license-request generation.
     trust-bundle-path: /app/license/license-root-ca.pem
     operator:
-      # TODO: set the platform operator identity for this deployment.
-      email: ${env:EDK_PLATFORM_OPERATOR_EMAIL:operator@example.com}
-      display-name: Platform Operator
+      # Interactive first-run setup supplies the real operator identity. The
+      # customer deployment contains no fallback or example account.
       initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
   setup:
     kms:
@@ -506,6 +553,14 @@ platform:
       default-alias: platform-license-request
       default-algorithm: ECDSA_SHA256
       default-use: sig
+# Documentation site playground. When enabled, every new tenant AS also receives a
+# docs-playground public client at bootstrap. Tenant onboarding that selects sample
+# data also registers that client for the tenant (same origins), independent of this flag.
+docs:
+  playground:
+    enabled: ${env:EDK_DOCS_PLAYGROUND_ENABLED:true}
+    client-id: docs-playground
+    origins: ${env:EDK_DOCS_SITE_ORIGINS:https://docs.sphereon.com,http://127.0.0.1:3000,http://localhost:3000}
 east-west:
   platform:
     base-url: http://enterprise-platform:18080
@@ -540,3 +595,28 @@ license:
     embedded:
       enabled: ${env:EDK_LICENSE_TRUST_EMBEDDED:true}
     root-ca-bundle-path: /app/license/license-root-ca.pem
+
+secret:
+  authority:
+    allowed-clock-skew-millis: 2000
+    central:
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        signing-key: ${env:SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY}
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        verification-keys: ${env:SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS}
+    satellite:
+      workload-id: service-platform
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}

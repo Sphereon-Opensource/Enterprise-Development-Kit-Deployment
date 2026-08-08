@@ -8,9 +8,11 @@ which seeds its signing key here during tenant registration. The target tenant
 must be carried in the cryptographically validated workload
 JWT so the seed lands in the right tenant's key space.
 
-Delivered as the tenant KMS base application.yml; the image bakes no
-application.yml, so this is the KMS file configuration and it merges over the
-environment configuration.
+Delivered as the tenant KMS application.yml through a subPath mount, which
+REPLACES the image's baked /app/config/application.yml rather than merging with
+it. Keys the baked file supplies (server.rest.port, server.rest.auth.enabled,
+transport.grpc.*) must therefore come from environment variables the deployment
+template renders.
 
 Rendered only for the tenant KMS.
 */ -}}
@@ -77,15 +79,18 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
             services:
               config:
                 target: SERVER
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
           application:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
           secret:
             target: SERVER
             transport: GRPC
@@ -95,6 +100,9 @@ data:
             # tenant bootstrap bearer supplied by RemoteOpaqueSecretResolver.
             preferServiceTokenOverSessionBearer: false
     config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: crypto.kms.roles
       overrides:
         transport:
           routing:

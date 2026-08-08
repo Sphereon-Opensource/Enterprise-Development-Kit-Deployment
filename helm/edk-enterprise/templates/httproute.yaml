@@ -4,6 +4,26 @@
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
 {{- $gatewayName := printf "%s-gateway" (include "edk-enterprise.fullname" .) }}
 {{- $platformRouteAnnotations := .Values.gateway.platformAccess.routeAnnotations | default dict }}
+{{- $preserveOriginalHost := .Values.gateway.envoyGateway.preserveOriginalHost | default false }}
+{{- $edgeHostFilterName := printf "%s-preserve-edge-host" (include "edk-enterprise.fullname" .) }}
+{{- if and .Values.gateway.enabled $preserveOriginalHost }}
+# Envoy Gateway can rewrite the authority to a selected pod while forwarding to
+# a Service backend. This restores its own early snapshot after route matching,
+# so host-based tenant resolution receives the public tenant host.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: {{ $edgeHostFilterName }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+spec:
+  urlRewrite:
+    hostname:
+      type: Header
+      header: x-forwarded-host
+    appendXForwardedHost: false
+---
+{{- end }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
 {{- if eq $name "platform" }}
@@ -222,7 +242,15 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
-    - matches:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
         {{- range $path := ($paths | fromYamlArray) }}
         - path:
             type: PathPrefix
@@ -254,7 +282,15 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
-    - matches:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
         - path:
             type: RegularExpression
             value: "^/api/(identity/v1|identity-auth/v1/admin|party/v1|trust-domain/v1)(/.*)?$"
@@ -282,7 +318,15 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
-    - matches:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
         - path:
             type: PathPrefix
             value: /api/theme/v1

@@ -175,20 +175,43 @@ if [[ -n "$RELEASE_SET_EVIDENCE" ]]; then
       const fs = require("node:fs");
       const report = JSON.parse(fs.readFileSync(process.env.RELEASE_EVIDENCE_PATH, "utf8"));
       const build = report.releaseBuild || {};
-      const fields = ["version", "source", "revision", "created", "sourceFingerprint"];
+      const imageProvenance = (image) => ({
+        reference: image.reference,
+        localContentId: image.localContentId,
+        runtimeConfigDigest: image.runtimeConfigDigest,
+        labels: {
+          version: image.labels?.version,
+          source: image.labels?.source,
+          revision: image.labels?.revision,
+          created: image.labels?.created,
+          sourceFingerprint: image.labels?.sourceFingerprint,
+        },
+      });
+      const hasImmutableImageProvenance = (image) =>
+        typeof image.reference === "string" && image.reference.length > 0 &&
+        /^sha256:[a-f0-9]{64}$/.test(image.localContentId || "") &&
+        /^sha256:[a-f0-9]{64}$/.test(image.runtimeConfigDigest || "") &&
+        image.labels?.version === process.env.RELEASE_REQUESTED_TAG &&
+        typeof image.labels?.source === "string" && image.labels.source.length > 0 &&
+        typeof image.labels?.revision === "string" && image.labels.revision.length > 0 &&
+        typeof image.labels?.created === "string" && image.labels.created.length > 0 &&
+        /^sha256:[a-f0-9]{64}$/.test(image.labels?.sourceFingerprint || "");
       if (report.tag !== process.env.RELEASE_REQUESTED_TAG ||
           build.version !== process.env.RELEASE_REQUESTED_TAG ||
           !Array.isArray(report.images) || report.images.length !== 7 ||
-          fields.some((field) => !build[field]) ||
-          !/^sha256:[a-f0-9]{64}$/.test(build.sourceFingerprint) ||
-          report.images.some((image) => !/^sha256:[a-f0-9]{64}$/.test(image.localContentId || ""))) {
-        throw new Error("release-set evidence does not bind the requested tag to seven immutable image bytes and one provenance tuple");
+          typeof build.source !== "string" || build.source.length === 0 ||
+          report.images.some((image) => !hasImmutableImageProvenance(image))) {
+        throw new Error("release-set evidence does not bind the requested tag to seven immutable image bytes with per-image provenance");
       }
-      const canonical = Object.fromEntries(fields.map((field) => [field, build[field]]));
+      const canonical = {
+        tag: report.tag,
+        source: build.source,
+        images: report.images.map(imageProvenance).sort((left, right) => left.reference.localeCompare(right.reference)),
+      };
       const identity = {
         schemaVersion: 1,
         tag: report.tag,
-        releaseBuild: canonical,
+        releaseImages: canonical.images,
         identitySha256: `sha256:${crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex")}`,
       };
       fs.writeFileSync(process.env.RELEASE_IDENTITY_PATH, JSON.stringify(identity, null, 2) + "\n", { mode: 0o600 });

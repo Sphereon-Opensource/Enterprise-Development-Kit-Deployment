@@ -4,7 +4,7 @@
 non-interactive release gate for the customer Compose topology. `Localtest`
 uses the literal self-signed gateway fixture. `BehindEdge` renders a
 customer-owned plain-HTTP stack gateway behind the existing shared edge
-terminator. Both modes run the shipped 95-request Postman collection with the
+terminator. Both modes run the shipped 108-request Postman collection with the
 maintained Newman and snapshot runner.
 
 The customer walkthrough creates a disposable tenant-owned, MEMORY-backed
@@ -20,6 +20,11 @@ activation-created default KMS resource is not mutated.
 - The dependencies under `deploy/edk/e2e/runner` installed.
 - A populated customer Compose `.env`. Do not use `.env.example` for a live
   gate.
+- A Windows-native `openssl.exe`. The gate mints a fresh, run-scoped Ed25519
+  secret-authority window under the ignored `compose/.secret-authority/`
+  directory, injects its coordinates through a disposable environment file,
+  mounts only role-appropriate key material, and removes the directory during
+  terminal cleanup.
 - A populated copy of
   `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`.
   `baseDomain` must equal `-BaseDomain`; all password, PKCE, and IdP client
@@ -204,7 +209,7 @@ The explicit report directory receives:
   dump producer and scanner exit codes are checked independently, and data-only
   dump bytes are streamed to the scanner rather than retained.
 
-The run fails unless Newman captures exactly 95 requests with exit code zero.
+The run fails unless Newman captures exactly 108 requests with exit code zero.
 Skipped requests therefore fail the request-count and snapshot gate. Failed
 requests/assertions, missing/stale/drifted snapshots, incoherent images, an
 unexpectedly open setup gate, image-ID mismatch, empty evidence, or a plaintext

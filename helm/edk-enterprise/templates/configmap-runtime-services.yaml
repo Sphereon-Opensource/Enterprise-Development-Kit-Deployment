@@ -16,6 +16,10 @@ data:
   application.yml: |
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "did")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
     server:
       service-identity:
         token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
@@ -101,6 +105,10 @@ data:
   application.yml: |
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "issuer")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vci,credential-design,statuslists
     server:
       service-identity:
         token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
@@ -108,11 +116,16 @@ data:
         token-endpoint-source: active-as
         active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
         active-as-client-role: issuer
+        delegation:
+          enabled: true
         client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
         audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
-        allowed-audiences: {{ printf "%s,%s" (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "tenant-as") | quote }}
+        allowed-audiences: {{ printf "%s,%s,%s" (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "did") (include "edk-enterprise.serviceAudience" "tenant-as") | quote }}
+    east-west:
+      tenant-did:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -235,6 +248,10 @@ data:
   application.yml: |
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "verifier")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vp
     server:
       service-identity:
         token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}

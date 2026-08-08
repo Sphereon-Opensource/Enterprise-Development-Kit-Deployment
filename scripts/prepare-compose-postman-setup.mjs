@@ -328,7 +328,13 @@ async function main(argv, fetchImpl = fetch) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2)).catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error))
+    const details = []
+    for (let current = error; current; current = current.cause) {
+      const message = current instanceof Error ? current.message : String(current)
+      const code = typeof current?.code === 'string' ? `${current.code}: ` : ''
+      details.push(`${code}${message}`)
+    }
+    console.error(details.join('\ncaused by: '))
     process.exitCode = 1
   })
 }

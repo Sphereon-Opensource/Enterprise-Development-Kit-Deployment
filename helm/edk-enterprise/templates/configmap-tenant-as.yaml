@@ -26,6 +26,10 @@ data:
   application.yml: |
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "tenant-as")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
     {{- if .Values.serviceIdentity.internalClientExistingSecret }}
     # The tenant AS reaches tenant-kms with a tenant-bound workload client.
     # Tokens are still minted at the platform AS to avoid the signing -> KMS ->

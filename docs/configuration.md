@@ -162,6 +162,31 @@ selector/public base is known. Protocol metadata is the exception: OAuth/OIDC,
 OID4VCI, OID4VP, DID, and other `.well-known` documents must keep advertising
 the canonical public endpoint binding for the resolved tenant/service.
 
+### Documentation site playground
+
+Interactive Sphereon (or customer-hosted) documentation can connect to a
+deployment, discover runtime-config, sign in, and run REST examples. That uses a
+dedicated public OAuth client `docs-playground` with **required PKCE (S256)** and
+**required PAR** (RFC 9126). No client secret is issued.
+
+| Control | Compose / env | Helm |
+| --- | --- | --- |
+| Enable platform-wide | `docs.playground.enabled` / `EDK_DOCS_PLAYGROUND_ENABLED` | `docsPlayground.enabled` |
+| Docs site origins | `docs.playground.origins` / `EDK_DOCS_SITE_ORIGINS` (comma-separated) | `docsPlayground.origins` |
+| Client id | `docs.playground.client-id` (default `docs-playground`) | `docsPlayground.clientId` |
+| Redirect URIs | One `{origin}/docs-env/callback` per origin | derived from origins |
+| CORS | Origins are merged into `cors.origins` with the onboarding UI base | same when enabled |
+
+When **enabled**, the platform AS registers the client and every **new tenant AS**
+receives the same client at bootstrap. When tenant onboarding selects **sample
+data**, the client is also provisioned for that tenant even if the platform-wide
+flag is off (so sample-data seeds stay usable from interactive docs if desired).
+
+Local compose defaults enable the client for lab origins
+(`https://docs.sphereon.com`, `http://127.0.0.1:3000`, `http://localhost:3000`).
+Production Helm defaults leave `docsPlayground.enabled: false`; turn it on only
+for deployments that intentionally allow docs-origin OAuth and CORS.
+
 This bootstrap projection is not a general configuration API. It must not carry
 secrets, database settings, secret-provider coordinates, KMS credentials, or
 business-authored artifact bodies. Service definitions and service settings stay

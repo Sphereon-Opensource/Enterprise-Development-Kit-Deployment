@@ -39,6 +39,13 @@ Rendered only for the platform service.
 {{- if (index .Values.services "wallet-interaction").enabled }}
 {{- $secretBootstrapActors = append $secretBootstrapActors (index .Values.serviceIdentity.clientIds "wallet-interaction") }}
 {{- end }}
+{{- $secretWorkloadActorIds := list }}
+{{- range $service, $clientId := .Values.serviceIdentity.clientIds }}
+{{- $workloadId := index $.Values.serviceIdentity.serviceIds $service }}
+{{- if and $workloadId (ne $workloadId $clientId) (has $clientId $secretBootstrapActors) }}
+{{- $secretWorkloadActorIds = append $secretWorkloadActorIds (printf "%s=%s" $clientId $workloadId) }}
+{{- end }}
+{{- end }}
 {{- if ne $bootstrap.issuer .Values.platform.externalBaseUrl }}
 {{- fail "platform.bootstrap.issuer must equal platform.externalBaseUrl; the platform AS issuer has a single canonical public origin" }}
 {{- end }}
@@ -89,7 +96,11 @@ data:
         allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
       {{- end }}
     cors:
+      {{- if and .Values.docsPlayground.enabled .Values.docsPlayground.origins }}
+      origins: ${env:ONBOARDING_UI_BASE_URL},{{ .Values.docsPlayground.origins | join "," }}
+      {{- else }}
       origins: ${env:ONBOARDING_UI_BASE_URL}
+      {{- end }}
     account-action:
       # Tokens are appended as a URL fragment and never reach ingress access logs.
       public-base-url: ${env:ONBOARDING_UI_BASE_URL}/admin-console
@@ -180,6 +191,11 @@ data:
       internal-resolution:
         expected-audience: {{ .Values.secretManagement.internalResolution.expectedAudience | quote }}
         allowed-service-actors: {{ join "," $secretBootstrapActors | quote }}
+        # A system credential is authorized to the workload a satellite attests to, never to its
+        # OAuth client principal: transport authentication and secret authority stay independent.
+        # Both halves already exist per service, so the platform's mapping is derived from them
+        # rather than restated.
+        workload-actor-ids: {{ join "," $secretWorkloadActorIds | quote }}
       deployment:
         environment:
           enabled: {{ ne .Values.portalBff.existingSecret "" }}
@@ -259,8 +275,10 @@ data:
         hosted-as:
           issuer: {{ $bootstrap.issuer | quote }}
         owner:
-          email: {{ $bootstrap.owner.email | quote }}
-          display-name: {{ $bootstrap.owner.displayName | quote }}
+          {{- if $bootstrap.automatic }}
+          email: {{ required "platform.bootstrap.owner.email is required when platform.bootstrap.automatic=true" $bootstrap.owner.email | quote }}
+          display-name: {{ required "platform.bootstrap.owner.displayName is required when platform.bootstrap.automatic=true" $bootstrap.owner.displayName | quote }}
+          {{- end }}
           {{- with $bootstrap.owner.roles }}
           roles: {{ . | quote }}
           {{- end }}
@@ -278,6 +296,7 @@ data:
           oidc: SUPPORTED
           logout: SUPPORTED
           pkce: REQUIRED
+          par: SUPPORTED
           token-format: JWT
           scopes-supported: "openid,profile,email"
           grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
@@ -291,7 +310,7 @@ data:
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
-              allowed-access-token-audiences: {{ join "," (list (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "tenant-as")) | quote }}
+              allowed-access-token-audiences: {{ join "," (list (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "did") (include "edk-enterprise.serviceAudience" "tenant-as")) | quote }}
             kms:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
@@ -360,6 +379,31 @@ data:
           post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/admin-console"
           allowed-scopes: openid
           token-endpoint-auth-method: none
+        {{- if .Values.docsPlayground.enabled }}
+        # Public docs playground client: authorization code + required PKCE + required PAR.
+        docs-playground:
+          client-id: {{ .Values.docsPlayground.clientId | quote }}
+          client-name: Documentation site playground
+          client-type: public
+          grant-types: "authorization_code,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
+          response-types: code
+          redirect-uris:
+            {{- range .Values.docsPlayground.origins }}
+            - {{ printf "%s/docs-env/callback" . | quote }}
+            {{- end }}
+          post-logout-redirect-uris: {{ .Values.docsPlayground.origins | join "," | quote }}
+          allowed-scopes: openid,profile,email
+          require-pkce: true
+          require-pushed-authorization-requests: true
+          token-endpoint-auth-method: none
+        {{- end }}
+    {{- if .Values.docsPlayground.enabled }}
+    docs:
+      playground:
+        enabled: "true"
+        client-id: {{ .Values.docsPlayground.clientId | quote }}
+        origins: {{ .Values.docsPlayground.origins | join "," | quote }}
+    {{- end }}
     # The platform AS itself is the operator sign-in surface; an operator signs
     # in without an application binding and is resolved tenant-wide.
     auth:
@@ -485,12 +529,14 @@ data:
         {{- if $licenseTrust.rootCaPath }}
         trust-bundle-path: {{ $licenseTrust.rootCaPath | quote }}
         {{- end }}
+        {{- if $bootstrap.automatic }}
         operator:
-          email: {{ $bootstrap.owner.email | quote }}
-          display-name: {{ $bootstrap.owner.displayName | quote }}
+          email: {{ required "platform.bootstrap.owner.email is required when platform.bootstrap.automatic=true" $bootstrap.owner.email | quote }}
+          display-name: {{ required "platform.bootstrap.owner.displayName is required when platform.bootstrap.automatic=true" $bootstrap.owner.displayName | quote }}
           {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
           initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
           {{- end }}
+        {{- end }}
       config:
         mount-path: /app/config
     # Software KMS providers. The platform holds its own keystore, the
