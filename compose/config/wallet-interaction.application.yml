@@ -14,6 +14,7 @@ server:
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
+    active-as-client-role: wallet-interaction
     client-id: wallet-interaction-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     audience: enterprise-platform
@@ -40,7 +41,7 @@ otel:
       endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
       protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
 security:
-  header-trust-policy:
+  workload-trust-policy:
     trusted_service_ids:
       - service-oid4vci
       - service-oid4vp
@@ -55,24 +56,55 @@ transport:
     enabled: true
     port: 9090
   routing:
+    configScope: APP
     modules:
+      secret:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: false
       platform:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
         services:
           config: &platformGrpcRoute
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
       application:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+      kms:
+        serviceTokenAudience: enterprise-tenant-kms
+        preferServiceTokenOverSessionBearer: true
+        services:
+          # Client-instance keys are held by this workload's software WSCD.
+          # Keep its key lifecycle local; only the distinct wallet-provider
+          # attestation signature route below uses tenant KMS.
+          key:
+            target: LOCAL
+          keys:
+            target: LOCAL
+          signature:
+            commands:
+              "[kms.signature.create]":
+                target: SERVER
+                transport: GRPC
+                endpoint: grpc://enterprise-tenant-kms:9090
       wallet:
         serviceTokenAudience: enterprise-wallet-unit
         preferServiceTokenOverSessionBearer: true
         services:
+          unit:
+            target: SERVER
+            transport: GRPC
+            endpoint: ${env:WALLET_UNIT_GRPC_ENDPOINT:grpc://enterprise-wallet-unit:9090}
           "[hsm-policy]":
             commands:
               "[wallet.hsm-policy.authorize]":
@@ -84,7 +116,7 @@ config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: kms.providers
+      bootstrap-required-keyspaces: crypto.kms.roles
     tenant-config-db:
       enabled: false
 license:

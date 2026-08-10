@@ -37,17 +37,36 @@ http:
     # platform plane. The canonical platform origin is server configuration;
     # instance origins come only from the exact trusted gateway hop.
     platform-admin-console:
-      rule: "Host(`platform.__BASE_DOMAIN__`) && PathPrefix(`/admin-console`)"
+      rule: "Host(`platform.__BASE_DOMAIN__`) && (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))"
       entryPoints: ["websecure"]
       service: svc-admin-console
       priority: 1100   # above platform catch-all (1000)
       tls: {}
 
-    # --- KMS / DID management APIs: host-agnostic, routed by path ------------
-    # The KMS and DID management APIs are tenant-scoped by the request token,
-    # not by host, so the operator console can call them same-origin on the
-    # platform host. Deliberately no Host() constraint: priority above the
-    # platform catch-all keeps these paths from falling through to platform.
+    # Exact browser-safe platform bootstrap projection for tenant administration.
+    tenant-admin-console-runtime-config:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        Path(`/api/platform/bootstrap/v1/runtime-config/admin-console`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 280
+      tls: {}
+
+    # Registered tenant hosts use the same path but a separate runtime without
+    # platform-management credentials.
+    tenant-admin-console:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      priority: 270
+      tls: {}
+
+    # --- DID management API: host-agnostic, routed by path -------------------
+    # Tenant-KMS command traffic is internal gRPC only. The browser-visible KMS
+    # administration surface is the typed platform-config route below.
     api-kms:
       rule: "PathPrefix(`/api/kms/v1`)"
       entryPoints: ["websecure"]
@@ -60,6 +79,24 @@ http:
       service: svc-did
       priority: 1100
       tls: {}
+    api-blob:
+      rule: "PathPrefix(`/api/theme/v1`) || PathPrefix(`/api/assets/v1`)"
+      entryPoints: ["websecure"]
+      service: svc-blob
+      priority: 1100
+      tls: {}
+    public-blob-assets:
+      rule: "PathRegexp(`^/public/assets/[^/]+/brand/[^/]+$`)"
+      entryPoints: ["websecure"]
+      service: svc-blob
+      priority: 1100
+      tls: {}
+    public-design-assets:
+      rule: "PathRegexp(`^/public/assets/design/[^/]+$`)"
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 1100
+      tls: {}
 
     # --- Tenant hosts: platform-owned tenant-scoped APIs --------------------
     tenant-platform-theme:
@@ -67,13 +104,24 @@ http:
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         PathPrefix(`/api/theme/v1`)
       entryPoints: ["websecure"]
-      service: svc-platform
+      service: svc-blob
       priority: 300
       tls: {}
     tenant-platform-wallet-entitlement:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         PathPrefix(`/api/wallet-entitlement/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 300
+      tls: {}
+    # Typed KMS resource management is part of the platform configuration API and
+    # is served by the platform, which owns the secret authority state; the tenant
+    # host supplies the tenant-routing context.
+    tenant-platform-config-kms:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathRegexp(`^/api/platform/config/v1/tenants/[^/]+/kms(/.*)?$`)
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 300
@@ -87,7 +135,7 @@ http:
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         PathRegexp(`^/testing-console/(issuer|verifier)/[^/]+/?$`)
       entryPoints: ["websecure"]
-      service: svc-admin-console
+      service: svc-admin-console-tenant
       middlewares: ["instance-testing-console-add-admin-prefix"]
       priority: 260
       tls: {}
@@ -105,7 +153,7 @@ http:
          Path(`/testing-console/api/portal-oauth/grant`) ||
          Path(`/testing-console/api/portal-oauth/revoke`))
       entryPoints: ["websecure"]
-      service: svc-admin-console
+      service: svc-admin-console-tenant
       middlewares: ["instance-testing-console-api-rewrite"]
       priority: 265
       tls: {}
@@ -126,7 +174,7 @@ http:
          PathPrefix(`/admin-console/public/assets`) ||
          Path(`/admin-console/health`))
       entryPoints: ["websecure"]
-      service: svc-admin-console
+      service: svc-admin-console-tenant
       priority: 250
       tls: {}
 
@@ -138,7 +186,6 @@ http:
          PathPrefix(`/deferredCredential`) || PathPrefix(`/nonce`) ||
          PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
          PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
-         PathPrefix(`/public/assets`) ||
          PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
          PathPrefix(`/api/statuslist/v1`))
       entryPoints: ["websecure"]
@@ -169,14 +216,25 @@ http:
       priority: 200
       tls: {}
 
-    # --- Tenant hosts: KMS management --------------------------------------
-    tenant-kms:
+    # Customer identities and credentials belong to the workload AS database.
+    tenant-as-identity-admin:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        PathPrefix(`/api/kms/v1`)
+        PathRegexp(`^/api/(identity/v1|identity-auth/v1/admin|party/v1)(/.*)?$`)
       entryPoints: ["websecure"]
-      service: svc-kms
-      priority: 200
+      service: svc-as
+      priority: 220
+      tls: {}
+
+    # Trust-domain policy is platform-owned; the tenant host still supplies
+    # the tenant-routing context to the platform process.
+    tenant-trust-domain:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/trust-domain/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 220
       tls: {}
 
     # --- Tenant hosts: authorization server (lowest tenant priority so the
@@ -184,8 +242,8 @@ http:
     tenant-as:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/authorize`) || PathPrefix(`/token`) ||
-         PathPrefix(`/userinfo`) || PathPrefix(`/oauth2`) || PathPrefix(`/login`) ||
+        (PathPrefix(`/authorize`) || PathPrefix(`/token`) || PathPrefix(`/par`) ||
+         PathPrefix(`/userinfo`) || PathPrefix(`/oauth2`) || PathPrefix(`/login`) || PathPrefix(`/logout`) ||
          PathPrefix(`/.well-known/oauth-authorization-server`) ||
          PathPrefix(`/.well-known/openid-configuration`) ||
          PathPrefix(`/.well-known/jwks.json`))
@@ -229,6 +287,11 @@ http:
         passHostHeader: true
         servers:
           - url: "http://enterprise-did:8080"
+    svc-blob:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-blob:8080"
     svc-kms:
       loadBalancer:
         passHostHeader: true
@@ -239,3 +302,8 @@ http:
         passHostHeader: true
         servers:
           - url: "http://admin-console:3000"
+    svc-admin-console-tenant:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://admin-console-tenant:3000"

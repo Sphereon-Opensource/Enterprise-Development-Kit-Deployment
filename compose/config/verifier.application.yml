@@ -19,9 +19,15 @@ server:
       anonymous-path-prefixes: /oid4vp/request-uri,/oid4vp/auth/response,/.well-known
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
+    token-endpoint-allow-http: true
+    token-endpoint-source: active-as
+    active-as-token-endpoint: http://enterprise-tenant-as:18083/token
+    active-as-client-role: verifier
     client-id: verifier-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    tenant-bound-client-id: true
     audience: enterprise-platform
+    allowed-audiences: enterprise-tenant-kms
 applications:
   admin-console:
     public-base-path: ${env:EDK_ADMIN_CONSOLE_PUBLIC_BASE_PATH:/admin-console}
@@ -54,7 +60,7 @@ otel:
         endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
         protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
 security:
-  header-trust-policy:
+  workload-trust-policy:
     trusted_service_ids:
       - service-crypto
       - service-data
@@ -72,6 +78,7 @@ transport:
     enabled: false
     port: 9090
   routing:
+    configScope: APP
     modules:
       kms:
         serviceTokenAudience: enterprise-tenant-kms
@@ -91,6 +98,7 @@ transport:
                 target: LOCAL
           mac: *tenantKmsGrpcRoute
           encryption: *tenantKmsGrpcRoute
+          ecdh: *tenantKmsGrpcRoute
       did:
         target: SERVER
         transport: HTTP
@@ -99,29 +107,40 @@ transport:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
         services:
           config: &platformGrpcRoute
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
       application:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
-      wallet:
-        serviceTokenAudience: enterprise-wallet-interaction
+        serviceTokenAudience: enterprise-platform
+      secret:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: false
+      # Trust-domain enforcement is ROUTED to the platform, which owns the trust-domain store.
+      # Routes all trust reads (trust.domains.anchors.resolve, trust.domains.oid4vp.resolve,
+      # trust.domains.oid4vp.selections.get, trust.domains.anchors.list) over east-west gRPC to the
+      # platform, reusing the enterprise-platform service token audience (server.service-identity).
+      # The verifier holds no trust-domain store.
+      trust:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: true
-        services:
-          interaction:
-            target: SERVER
-            transport: GRPC
-            endpoint: ${env:WALLET_INTERACTION_GRPC_ENDPOINT:grpc://enterprise-wallet-interaction:9090}
-            timeoutMs: 30000
 config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: kms.providers,oid4vp
+      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vp
     tenant-config-db:
       enabled: false
 license:
@@ -142,6 +161,27 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
+    # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
+    secret-management-admin:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
   tenants:
     default:
       dialect: postgresql
@@ -176,3 +216,19 @@ kms:
         # public keys, so this keystore is ephemeral in the container temp
         # directory and not backed by a shared volume.
         path: "{tempDir}/edk-verify-keystore.p12"
+
+secret:
+  authority:
+    allowed-clock-skew-millis: 5000
+    satellite:
+      workload-id: service-oid4vp
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}

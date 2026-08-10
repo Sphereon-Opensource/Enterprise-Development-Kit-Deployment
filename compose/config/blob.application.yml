@@ -1,0 +1,171 @@
+# Dedicated blob, asset-library, and theme-data service.
+#
+# This workload owns tenant branding bytes and the public asset projection. It
+# is deliberately separate from the platform and protocol services so those
+# processes never fall back to an undeclared local filesystem store.
+server:
+  rest:
+    port: 8080
+    auth:
+      enabled: true
+      platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
+      platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      expected-audience: enterprise-blob
+      trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
+      anonymous-path-prefixes: /health,/public/assets
+  service-identity:
+    token-endpoint: http://enterprise-platform:18080/token
+    token-endpoint-allow-http: true
+    token-endpoint-source: active-as
+    active-as-token-endpoint: http://enterprise-tenant-as:18083/token
+    active-as-client-role: blob
+    client-id: blob-service
+    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    tenant-bound-client-id: true
+    audience: enterprise-platform
+    allowed-audiences: enterprise-platform
+sphereon:
+  service:
+    id: service-blob
+  telemetry:
+    enabled: true
+transport:
+  grpc:
+    enabled: false
+    port: 9090
+  routing:
+    configScope: APP
+    modules:
+      kms:
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
+        services:
+          key: &blobPlatformKmsGrpcRoute
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+          keys: *blobPlatformKmsGrpcRoute
+          signature: *blobPlatformKmsGrpcRoute
+          mac: *blobPlatformKmsGrpcRoute
+          encryption: *blobPlatformKmsGrpcRoute
+          ecdh: *blobPlatformKmsGrpcRoute
+      platform:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        services:
+          config:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
+      application:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+      secret:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: false
+config:
+  providers:
+    platform-config-remote:
+      enabled: true
+      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,theme
+    tenant-config-db:
+      enabled: false
+database:
+  app:
+    default:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+    secret-management-admin:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+  tenants:
+    default:
+      dialect: postgresql
+      isolation: schema
+      schema-pattern: "tenant_{id}"
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+tenant:
+  resolution:
+    remote: true
+    platform:
+      base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+      subdomain:
+        enabled: true
+    custom-domain:
+      enabled: true
+connector:
+  vault:
+    # The vault repository stores encrypted theme/application state in the
+    # dedicated BlobService store below. This binding is deployment-owned and
+    # applies to platform and customer tenant sessions alike.
+    store-id: default
+blob:
+  stores:
+    default:
+      type: filesystem
+      scopeBinding: TENANT
+      rootDir: /app/blobs
+      autoCreateDirs: true
+kv:
+  stores:
+    blob:
+      metadata:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+license:
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
+  installation-id: ${env:EDK_INSTALLATION_ID:}
+  gate:
+    service-role: service-data
+secret:
+  authority:
+    allowed-clock-skew-millis: 5000
+    satellite:
+      workload-id: service-blob
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}

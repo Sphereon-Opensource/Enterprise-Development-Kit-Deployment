@@ -80,6 +80,19 @@ __PUBLIC_CERT_TENANT_ALIASES__
       retries: 30
       start_period: 20s
 
+  enterprise-blob:
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
+      EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EXTERNAL_BASE_URL: ""
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.__BASE_DOMAIN__\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
   enterprise-issuer:
     environment:
       EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__

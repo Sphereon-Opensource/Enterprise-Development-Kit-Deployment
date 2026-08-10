@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 DEPLOYMENT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+# shellcheck source=upgrade-path.sh
+source "$SCRIPT_DIR/upgrade-path.sh"
 
 RELEASE_NAME="sphereon-edk-enterprise"
 NAMESPACE="edk"
@@ -15,7 +18,14 @@ TENANT_HOST=""
 TIMEOUT="15m"
 BACKUP_ROOT="./edk-upgrade-backup"
 CANDIDATE_FILE=""
+INTERMEDIATE_CANDIDATE_FILE=""
 MIGRATION_VALUE_FILES=()
+AUTO_MIGRATION_VALUE_FILES=()
+INTERMEDIATE_MIGRATION_VALUE_FILES=()
+INTERMEDIATE_IMAGE_TAG=""
+INSTALLED_IMAGE_TAG=""
+RELEASE_SET_EVIDENCE=""
+RELEASE_IDENTITY_FILE=""
 
 usage() {
   cat <<'EOF'
@@ -34,13 +44,24 @@ Options:
   --image-tag TAG               Override the target image tag. When omitted, use
                                 the selected chart/site values.
   --migration-values PATH       Optional release-specific values overlay. May be
-                                repeated and is applied after site values.
+                                repeated and is applied after automatically
+                                selected release-transition overlays.
   --runtime-secret NAME         Runtime Secret name (default: edk-runtime-secrets).
   --pipeline-secret NAME        Issuer pipeline Secret name.
   --tenant-host HOST            Verify did.json for this tenant host after rollout.
   --timeout DURATION            Helm/kubectl timeout (default: 15m).
   --backup-root PATH            Backup parent directory.
+  --release-set-evidence PATH   Canonical enterprise-image-set.json for an
+                                immutable RC3 upgrade (required for RC3 tags).
   -h, --help                    Show this help.
+
+Rollback contract:
+  Take pg_dump snapshots of the platform database and the tenant workload
+  database before every upgrade. The wrapper first quiesces the entire release,
+  then starts the platform migration owner ahead of validate-only satellites.
+  Helm rollback is never automatic. If an upgrade fails, all release workloads
+  are stopped; restore both database snapshots first and only then run an
+  explicit 'helm rollback' or retry.
 EOF
 }
 
@@ -101,6 +122,12 @@ cleanup() {
   if [[ -n "$CANDIDATE_FILE" && -f "$CANDIDATE_FILE" ]]; then
     rm -f -- "$CANDIDATE_FILE"
   fi
+  if [[ -n "$INTERMEDIATE_CANDIDATE_FILE" && -f "$INTERMEDIATE_CANDIDATE_FILE" ]]; then
+    rm -f -- "$INTERMEDIATE_CANDIDATE_FILE"
+  fi
+  if [[ -n "$RELEASE_IDENTITY_FILE" && -f "$RELEASE_IDENTITY_FILE" ]]; then
+    rm -f -- "$RELEASE_IDENTITY_FILE"
+  fi
 }
 trap cleanup EXIT
 
@@ -117,6 +144,7 @@ while [[ $# -gt 0 ]]; do
     --tenant-host) TENANT_HOST="${2:-}"; shift 2 ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
     --backup-root) BACKUP_ROOT="${2:-}"; shift 2 ;;
+    --release-set-evidence) RELEASE_SET_EVIDENCE="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown argument: $1" ;;
   esac
@@ -126,40 +154,152 @@ done
 [[ "$NAMESPACE" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid Kubernetes namespace: $NAMESPACE"
 [[ "$RUNTIME_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid runtime Secret name."
 [[ "$PIPELINE_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid pipeline Secret name."
+if [[ "$IMAGE_TAG" =~ ^0\.25\.0-RC3([._-][A-Za-z0-9][A-Za-z0-9._-]*)?$ ]]; then
+  [[ -n "$RELEASE_SET_EVIDENCE" ]] ||
+    die "--release-set-evidence is required for immutable RC3 upgrades."
+fi
 
 require_command helm
 require_command kubectl
 require_command openssl
+require_command node
 
-# Helm 4 renamed the rollback behavior exposed by Helm 3's --atomic flag.
-# Select the supported spelling so this release-independent wrapper works on
-# both currently common Helm major versions.
-HELM_UPGRADE_SAFETY_ARGS=(--wait)
-if helm upgrade --help 2>/dev/null | grep -q -- '--rollback-on-failure'; then
-  HELM_UPGRADE_SAFETY_ARGS+=(--rollback-on-failure --cleanup-on-fail)
-else
-  HELM_UPGRADE_SAFETY_ARGS+=(--atomic)
+if [[ -n "$RELEASE_SET_EVIDENCE" ]]; then
+  RELEASE_SET_EVIDENCE="$(absolute_file "$RELEASE_SET_EVIDENCE")"
+  RELEASE_IDENTITY_FILE="$(mktemp "${TMPDIR:-/tmp}/edk-release-identity.XXXXXX")"
+  RELEASE_EVIDENCE_PATH="$RELEASE_SET_EVIDENCE" \
+  RELEASE_REQUESTED_TAG="$IMAGE_TAG" \
+  RELEASE_IDENTITY_PATH="$RELEASE_IDENTITY_FILE" \
+    node -e '
+      const crypto = require("node:crypto");
+      const fs = require("node:fs");
+      const report = JSON.parse(fs.readFileSync(process.env.RELEASE_EVIDENCE_PATH, "utf8"));
+      const build = report.releaseBuild || {};
+      const imageProvenance = (image) => ({
+        reference: image.reference,
+        localContentId: image.localContentId,
+        runtimeConfigDigest: image.runtimeConfigDigest,
+        labels: {
+          version: image.labels?.version,
+          source: image.labels?.source,
+          revision: image.labels?.revision,
+          created: image.labels?.created,
+          sourceFingerprint: image.labels?.sourceFingerprint,
+        },
+      });
+      const hasImmutableImageProvenance = (image) =>
+        typeof image.reference === "string" && image.reference.length > 0 &&
+        /^sha256:[a-f0-9]{64}$/.test(image.localContentId || "") &&
+        /^sha256:[a-f0-9]{64}$/.test(image.runtimeConfigDigest || "") &&
+        image.labels?.version === process.env.RELEASE_REQUESTED_TAG &&
+        typeof image.labels?.source === "string" && image.labels.source.length > 0 &&
+        typeof image.labels?.revision === "string" && image.labels.revision.length > 0 &&
+        typeof image.labels?.created === "string" && image.labels.created.length > 0 &&
+        /^sha256:[a-f0-9]{64}$/.test(image.labels?.sourceFingerprint || "");
+      if (report.tag !== process.env.RELEASE_REQUESTED_TAG ||
+          build.version !== process.env.RELEASE_REQUESTED_TAG ||
+          !Array.isArray(report.images) || report.images.length !== 7 ||
+          typeof build.source !== "string" || build.source.length === 0 ||
+          report.images.some((image) => !hasImmutableImageProvenance(image))) {
+        throw new Error("release-set evidence does not bind the requested tag to seven immutable image bytes with per-image provenance");
+      }
+      const canonical = {
+        tag: report.tag,
+        source: build.source,
+        images: report.images.map(imageProvenance).sort((left, right) => left.reference.localeCompare(right.reference)),
+      };
+      const identity = {
+        schemaVersion: 1,
+        tag: report.tag,
+        releaseImages: canonical.images,
+        identitySha256: `sha256:${crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex")}`,
+      };
+      fs.writeFileSync(process.env.RELEASE_IDENTITY_PATH, JSON.stringify(identity, null, 2) + "\n", { mode: 0o600 });
+    '
 fi
+
+HELM_UPGRADE_SAFETY_ARGS=(--wait)
 
 VALUES_FILE="$(absolute_file "$VALUES_FILE")"
 CHART_PATH="$(absolute_directory "$CHART_PATH")"
 
-VALUE_ARGS=(
+BASE_VALUE_ARGS=(
   -f "$VALUES_FILE"
 )
-for migration_values in "${MIGRATION_VALUE_FILES[@]}"; do
-  [[ -n "$migration_values" ]] || die "--migration-values requires a path."
-  VALUE_ARGS+=( -f "$(absolute_file "$migration_values")" )
-done
-if [[ -n "$IMAGE_TAG" ]]; then
-  VALUE_ARGS+=( --set-string "global.imageTag=$IMAGE_TAG" )
-fi
-VALUE_ARGS+=(
+SECRET_VALUE_ARGS=(
   --set-string "serviceIdentity.internalClientExistingSecret=$RUNTIME_SECRET_NAME"
   --set-string "keystore.existingSecret=$RUNTIME_SECRET_NAME"
   --set-string "portalBff.existingSecret=$RUNTIME_SECRET_NAME"
   --set-string "issuerPipeline.existingSecret=$PIPELINE_SECRET_NAME"
 )
+
+append_unique_file() {
+  local candidate="$1"
+  shift
+  local existing
+  for existing in "$@"; do
+    [[ "$existing" == "$candidate" ]] && return 1
+  done
+  return 0
+}
+
+RC1_TO_RC2_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml"
+V0_25_0_RC2_TO_V0_25_0_RC3_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc2-to-0.25.0-rc3-values.yaml"
+
+# Resolve the currently installed immutable image tag before rendering. Known
+# release transitions are selected automatically. Compatibility overlays are
+# cumulative for the target release so rerunning an upgrade with the original
+# customer values cannot undo an earlier transition. RC1 -> RC3 is deliberately
+# executed as two Helm revisions (RC1 -> RC2 -> RC3), not collapsed into one.
+if helm status "$RELEASE_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+  INSTALLED_IMAGE_TAG="$(
+    helm get values "$RELEASE_NAME" -n "$NAMESPACE" -a -o json |
+      edk_extract_global_image_tag
+  )"
+fi
+
+if [[ -n "$INSTALLED_IMAGE_TAG" && -n "$IMAGE_TAG" ]]; then
+  if ! edk_plan_known_upgrade_path \
+    "$INSTALLED_IMAGE_TAG" \
+    "$IMAGE_TAG" \
+    "$(absolute_file "$RC1_TO_RC2_VALUES")" \
+    "$(absolute_file "$V0_25_0_RC2_TO_V0_25_0_RC3_VALUES")"; then
+    die "Refusing unsupported release downgrade: $INSTALLED_IMAGE_TAG -> $IMAGE_TAG"
+  fi
+  AUTO_MIGRATION_VALUE_FILES=("${EDK_AUTO_MIGRATION_VALUE_FILES[@]}")
+  INTERMEDIATE_MIGRATION_VALUE_FILES=("${EDK_INTERMEDIATE_MIGRATION_VALUE_FILES[@]}")
+  INTERMEDIATE_IMAGE_TAG="$EDK_INTERMEDIATE_IMAGE_TAG"
+fi
+
+RESOLVED_MIGRATION_VALUE_FILES=("${AUTO_MIGRATION_VALUE_FILES[@]}")
+for migration_values in "${MIGRATION_VALUE_FILES[@]}"; do
+  [[ -n "$migration_values" ]] || die "--migration-values requires a path."
+  migration_values="$(absolute_file "$migration_values")"
+  if append_unique_file "$migration_values" "${RESOLVED_MIGRATION_VALUE_FILES[@]}"; then
+    RESOLVED_MIGRATION_VALUE_FILES+=("$migration_values")
+  fi
+done
+
+VALUE_ARGS=("${BASE_VALUE_ARGS[@]}")
+for migration_values in "${RESOLVED_MIGRATION_VALUE_FILES[@]}"; do
+  VALUE_ARGS+=( -f "$migration_values" )
+done
+if [[ -n "$IMAGE_TAG" ]]; then
+  VALUE_ARGS+=( --set-string "global.imageTag=$IMAGE_TAG" )
+fi
+VALUE_ARGS+=("${SECRET_VALUE_ARGS[@]}")
+
+INTERMEDIATE_VALUE_ARGS=()
+if [[ -n "$INTERMEDIATE_IMAGE_TAG" ]]; then
+  INTERMEDIATE_VALUE_ARGS=("${BASE_VALUE_ARGS[@]}")
+  for migration_values in "${INTERMEDIATE_MIGRATION_VALUE_FILES[@]}"; do
+    INTERMEDIATE_VALUE_ARGS+=( -f "$migration_values" )
+  done
+  INTERMEDIATE_VALUE_ARGS+=(
+    --set-string "global.imageTag=$INTERMEDIATE_IMAGE_TAG"
+    "${SECRET_VALUE_ARGS[@]}"
+  )
+fi
 
 # Reject invalid values before making any cluster changes.
 printf 'Linting and rendering the candidate release.\n'
@@ -167,11 +307,29 @@ helm lint "$CHART_PATH" "${VALUE_ARGS[@]}"
 CANDIDATE_FILE="$(mktemp "${TMPDIR:-/tmp}/edk-helm-candidate.XXXXXX")"
 helm template "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
   "${VALUE_ARGS[@]}" >"$CANDIDATE_FILE"
+if [[ -n "$INTERMEDIATE_IMAGE_TAG" ]]; then
+  printf 'Linting and rendering required intermediate release %s.\n' "$INTERMEDIATE_IMAGE_TAG"
+  helm lint "$CHART_PATH" "${INTERMEDIATE_VALUE_ARGS[@]}"
+  INTERMEDIATE_CANDIDATE_FILE="$(mktemp "${TMPDIR:-/tmp}/edk-helm-intermediate.XXXXXX")"
+  helm template "$RELEASE_NAME" "$CHART_PATH" -n "$NAMESPACE" \
+    "${INTERMEDIATE_VALUE_ARGS[@]}" >"$INTERMEDIATE_CANDIDATE_FILE"
+fi
 
 CONTEXT="$(kubectl config current-context)"
 printf 'Kubernetes context: %s\n' "$CONTEXT"
 printf 'Release: %s; namespace: %s; image override: %s\n' \
   "$RELEASE_NAME" "$NAMESPACE" "${IMAGE_TAG:-<chart/site values>}"
+if [[ -n "$INSTALLED_IMAGE_TAG" ]]; then
+  printf 'Detected installed image tag: %s\n' "$INSTALLED_IMAGE_TAG"
+fi
+if [[ ${#AUTO_MIGRATION_VALUE_FILES[@]} -gt 0 ]]; then
+  printf 'Automatically selected migration values:\n'
+  printf '  %s\n' "${AUTO_MIGRATION_VALUE_FILES[@]}"
+fi
+if [[ -n "$INTERMEDIATE_IMAGE_TAG" ]]; then
+  printf 'Required ordered upgrade path: %s -> %s -> %s\n' \
+    "$INSTALLED_IMAGE_TAG" "$INTERMEDIATE_IMAGE_TAG" "$IMAGE_TAG"
+fi
 
 if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
   kubectl create namespace "$NAMESPACE"
@@ -232,6 +390,10 @@ done
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$BACKUP_ROOT/$RELEASE_NAME-$TIMESTAMP"
 mkdir -p -- "$BACKUP_DIR"
+if [[ -n "$RELEASE_IDENTITY_FILE" ]]; then
+  cp -- "$RELEASE_SET_EVIDENCE" "$BACKUP_DIR/enterprise-image-set.json"
+  cp -- "$RELEASE_IDENTITY_FILE" "$BACKUP_DIR/release-identity.json"
+fi
 
 if helm status "$RELEASE_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
   printf 'Backing up the current Helm release to %s.\n' "$BACKUP_DIR"
@@ -245,23 +407,90 @@ kubectl -n "$NAMESPACE" get pods \
   -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.containerStatuses[*]}{.image}{"\t"}{.imageID}{"\n"}{end}{end}' \
   >"$BACKUP_DIR/image-digests-before.txt"
 cp -- "$CANDIDATE_FILE" "$BACKUP_DIR/candidate-manifest.yaml"
+if [[ -n "$INTERMEDIATE_CANDIDATE_FILE" ]]; then
+  cp -- "$INTERMEDIATE_CANDIDATE_FILE" "$BACKUP_DIR/intermediate-rc2-candidate-manifest.yaml"
+fi
 
-printf 'Performing rollback-on-failure Helm upgrade/install.\n'
-helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
+wait_for_release_deployments() {
+  kubectl -n "$NAMESPACE" get deployment \
+    -l "app.kubernetes.io/instance=$RELEASE_NAME" -o name |
+    while IFS= read -r deployment; do
+      [[ -n "$deployment" ]] || continue
+      kubectl -n "$NAMESPACE" rollout status "$deployment" --timeout "$TIMEOUT"
+    done
+}
+
+quiesce_release_deployments() {
+  local selector="app.kubernetes.io/instance=$RELEASE_NAME"
+  local deployments
+  deployments="$(kubectl -n "$NAMESPACE" get deployment -l "$selector" -o name)"
+  [[ -n "$deployments" ]] || return 0
+  printf 'Quiescing every workload in release %s before the database migration barrier.\n' "$RELEASE_NAME"
+  kubectl -n "$NAMESPACE" scale deployment -l "$selector" --replicas=0
+  if kubectl -n "$NAMESPACE" get pod -l "$selector" -o name | grep -q .; then
+    kubectl -n "$NAMESPACE" wait --for=delete pod -l "$selector" --timeout="$TIMEOUT"
+  fi
+  # A release installed before the migration barrier existed carries the
+  # RollingUpdate default, and its spec.strategy.rollingUpdate survives the Helm
+  # merge (an explicit null in a rendered manifest is dropped before it reaches
+  # the API server). Kubernetes then rejects the whole upgrade because that field
+  # cannot coexist with Recreate. The workloads are already stopped here, so the
+  # strategy can be converted in place before the upgrade renders.
+  local deployment
+  for deployment in $deployments; do
+    if [[ "$(kubectl -n "$NAMESPACE" get "$deployment" -o jsonpath='{.spec.strategy.type}')" == "Recreate" ]]; then
+      continue
+    fi
+    kubectl -n "$NAMESPACE" patch "$deployment" --type=merge \
+      -p '{"spec":{"strategy":{"type":"Recreate","rollingUpdate":null}}}' >/dev/null
+  done
+}
+
+stop_failed_release() {
+  kubectl -n "$NAMESPACE" scale deployment \
+    -l "app.kubernetes.io/instance=$RELEASE_NAME" --replicas=0 >/dev/null 2>&1 || true
+}
+
+warn_post_migration_failure() {
+  cat >&2 <<'EOF'
+WARNING: The Helm upgrade failed. Automatic Helm rollback is disabled and all
+release workloads have been scaled to zero. The platform may already have
+upgraded the platform and tenant databases. Restore both pre-upgrade database
+snapshots before running an explicit 'helm rollback' or retrying. Do not start
+old application pods against the new schema generation.
+EOF
+}
+
+if [[ -n "$INTERMEDIATE_IMAGE_TAG" ]]; then
+  quiesce_release_deployments
+  printf 'Performing required intermediate Helm upgrade to %s.\n' "$INTERMEDIATE_IMAGE_TAG"
+  if ! helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
+    -n "$NAMESPACE" --create-namespace \
+    "${INTERMEDIATE_VALUE_ARGS[@]}" \
+    "${HELM_UPGRADE_SAFETY_ARGS[@]}" --timeout "$TIMEOUT"; then
+    stop_failed_release
+    warn_post_migration_failure
+    die "Intermediate Helm upgrade to $INTERMEDIATE_IMAGE_TAG failed. Read the warning above before any rollback or retry."
+  fi
+  wait_for_release_deployments
+fi
+
+quiesce_release_deployments
+printf 'Performing platform-first Helm upgrade/install with automatic rollback disabled.\n'
+if ! helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
   -n "$NAMESPACE" --create-namespace \
   "${VALUE_ARGS[@]}" \
-  "${HELM_UPGRADE_SAFETY_ARGS[@]}" --timeout "$TIMEOUT"
+  "${HELM_UPGRADE_SAFETY_ARGS[@]}" --timeout "$TIMEOUT"; then
+  stop_failed_release
+  warn_post_migration_failure
+  die "Helm upgrade failed. Read the warning above before any rollback or retry."
+fi
 
-kubectl -n "$NAMESPACE" get deployment \
-  -l "app.kubernetes.io/instance=$RELEASE_NAME" -o name |
-  while IFS= read -r deployment; do
-    [[ -n "$deployment" ]] || continue
-    kubectl -n "$NAMESPACE" rollout status "$deployment" --timeout "$TIMEOUT"
-  done
+wait_for_release_deployments
 
 if [[ -n "$TENANT_HOST" ]]; then
   # Kubernetes resource names cannot contain whitespace, so shell word splitting
-  # is safe here and keeps compatibility with the Bash 3.2 shipped by macOS.
+  # is safe here and works with the Bash 3.2 shipped by macOS.
   DID_SERVICES="$(kubectl -n "$NAMESPACE" get service \
     -l "app.kubernetes.io/instance=$RELEASE_NAME,app.kubernetes.io/component=did" \
     -o jsonpath='{.items[*].metadata.name}')"

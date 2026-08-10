@@ -48,7 +48,7 @@ transport:
 
 Do not place database credentials, signing keys, or any other secret as a
 literal value in a values file or config template. Supply secrets as references
-(see [Secret backends](secret-backends.md)).
+(see [Secret management](secret-management.md)).
 
 ## The installation domain
 
@@ -64,7 +64,7 @@ For example, with `global.platformBaseDomain=example.com`:
 | --- | --- |
 | `platform.example.com` | Platform/operator host: setup, platform admin APIs, platform authorization server, and admin console. |
 | `<tenant-slug>.example.com` | Tenant host: public protocol, resolver, and tenant-scoped authenticated API routes. For the default hosted issuer, the OID4VCI `credential_issuer` identifier is this tenant origin, for example `https://acme.example.com`. |
-| Internal service DNS names | East-west calls between backing services. These names, ports, and probes are not customer URLs. Do not route internal gRPC or KMS command traffic through the public gateway; the authenticated KMS API remains `/api/kms/v1` on the tenant gateway. |
+| Internal service DNS names | East-west calls between backing services. These names, ports, and probes are not customer URLs. Do not route internal gRPC or KMS command traffic through the public gateway. Operators manage typed KMS resources through tenant-scoped platform-config APIs. |
 
 Tenant resolution is host-based. Tenants receive subdomains under the base
 domain (`<slug>.<base-domain>`), and each service receives
@@ -154,16 +154,41 @@ projection:
 Browser runtime config derives the platform public base URL from the incoming
 request origin unless an explicit platform external base URL is configured.
 Platform APIs remain on the platform origin, for example
-`https://platform.<base-domain>/api/platform/admin/v1`. Tenant APIs are not
-platform APIs: tenant-KMS and DID resolve to tenant origins such as
-`https://<tenant>.<base-domain>/api/kms/v1` and
-`https://<tenant>.<base-domain>/api/did/v1`, or are omitted until a tenant
+`https://platform.<base-domain>/api/platform/admin/v1`. The browser projection
+does not expose tenant-KMS as a public service; typed KMS resources are managed
+through tenant-scoped platform-config APIs. DID resolves to a tenant origin such
+as `https://<tenant>.<base-domain>/api/did/v1`, or is omitted until a tenant
 selector/public base is known. Protocol metadata is the exception: OAuth/OIDC,
 OID4VCI, OID4VP, DID, and other `.well-known` documents must keep advertising
 the canonical public endpoint binding for the resolved tenant/service.
 
+### Documentation site playground
+
+Interactive Sphereon (or customer-hosted) documentation can connect to a
+deployment, discover runtime-config, sign in, and run REST examples. That uses a
+dedicated public OAuth client `docs-playground` with **required PKCE (S256)** and
+**required PAR** (RFC 9126). No client secret is issued.
+
+| Control | Compose / env | Helm |
+| --- | --- | --- |
+| Enable platform-wide | `docs.playground.enabled` / `EDK_DOCS_PLAYGROUND_ENABLED` | `docsPlayground.enabled` |
+| Docs site origins | `docs.playground.origins` / `EDK_DOCS_SITE_ORIGINS` (comma-separated) | `docsPlayground.origins` |
+| Client id | `docs.playground.client-id` (default `docs-playground`) | `docsPlayground.clientId` |
+| Redirect URIs | One `{origin}/docs-env/callback` per origin | derived from origins |
+| CORS | Origins are merged into `cors.origins` with the onboarding UI base | same when enabled |
+
+When **enabled**, the platform AS registers the client and every **new tenant AS**
+receives the same client at bootstrap. When tenant onboarding selects **sample
+data**, the client is also provisioned for that tenant even if the platform-wide
+flag is off (so sample-data seeds stay usable from interactive docs if desired).
+
+Local compose defaults enable the client for lab origins
+(`https://docs.sphereon.com`, `http://127.0.0.1:3000`, `http://localhost:3000`).
+Production Helm defaults leave `docsPlayground.enabled: false`; turn it on only
+for deployments that intentionally allow docs-origin OAuth and CORS.
+
 This bootstrap projection is not a general configuration API. It must not carry
-secrets, database settings, secret-backend coordinates, KMS credentials, or
+secrets, database settings, secret-provider coordinates, KMS credentials, or
 business-authored artifact bodies. Service definitions and service settings stay
 in platform config. Credential designs, issuer/verifier designs, DCQL query
 bodies, render assets, and other operational artifacts stay in their dedicated
@@ -216,12 +241,13 @@ the platform database and tenant database are separate databases with separate
 credentials and network access can still be constrained by role.
 
 For schema-per-tenant, runtime services select the tenant schema through their
-tenant DB routing configuration and set `search_path` at request time. Tenant
-schema lifecycle belongs to the tenant workload data plane; do not give the
-platform service a tenant DB connection for workload schema or database DDL. The
-system platform tenant is control-plane state and is bound to the platform
-database; customer tenant workload data is never written to the platform
-database.
+tenant DB routing configuration and set `search_path` at request time. The
+platform service is the sole schema-migration owner and therefore receives
+owner-level routes to both logical databases. Satellite services receive only
+runtime tenant-database access and validate the schema version before opening
+their transports; they never issue DDL. The system platform tenant remains
+control-plane state in the platform database, while customer workload state is
+written only to the tenant database.
 
 In Helm, set these under `database`:
 
@@ -318,18 +344,16 @@ other services. Select the provider that backs key storage:
 
 - Software keystore. Keys live in a PKCS#12 keystore managed by tenant-KMS. The
   platform writes the tenant-specific provider config during tenant registration
-  (`kms.providers.<tenant-slug>`, `type: software`,
+  (`kms.providers.default`, `type: software`,
   `autoCreateCertificate: true`), and tenant-KMS reads it through
   platform-config-remote. Use it for evaluation and for deployments where a
   software keystore meets your key custody requirements.
-- A managed vault or cloud KMS. The provider holds keys in an external system
-  and the service references them. Select the backend through configuration and
-  supply credentials as references, never as literals.
+- A managed vault or cloud KMS. Configure it as a candidate in the Secrets
+  control-plane resource, stage credentials through write-only fields, and
+  preflight a fenced migration before assignment.
 
-The platform setup uses `PLATFORM_SETUP_KMS_PROVIDER_ID` to name the provider
-the first-run setup binds to (the default is `license`). See
-[Secret backends](secret-backends.md) for choosing and wiring a provider and for
-the secret reference syntax.
+See [Secret management](secret-management.md) for storage tiers, database-role
+prerequisites, provider offerings, opaque handles, and migration behavior.
 
 ## East-west service identity and STS
 
@@ -348,20 +372,21 @@ audience. These values must move as one contract:
 | verifier | `verifier-service` | `service-oid4vp` | `enterprise-verifier` |
 | wallet-unit | `wallet-unit-service` | `service-wallet-unit` | `enterprise-wallet-unit` |
 | wallet-interaction | `wallet-interaction-service` | `service-wallet-interaction` | `enterprise-wallet-interaction` |
-| tenant-AS | `tenant-as-service` | `service-tenant-as` | outbound workload caller only |
+| tenant-AS | `tenant-as-service` | `service-tenant-as` | `enterprise-tenant-as` |
 
-In Helm the contract lives under `serviceIdentity.clientIds`,
-`serviceIdentity.serviceIds`, and `serviceIdentity.audiences`. The chart renders
-the platform internal OAuth clients, platform and receiver header trust
-bindings, service token endpoints, receiver audiences, admin-console token
-exchange audiences, and NetworkPolicy peer edges from those values. In Docker
-Compose the same contract is represented by the mounted `compose/config/*.yml`
-files and the admin-console environment variables.
+In Helm the configurable credential bindings live under
+`serviceIdentity.clientIds` and `serviceIdentity.serviceIds`. Audience names are
+fixed protocol identifiers shared with source-level STS and tenant-registration
+contracts; the chart rejects `serviceIdentity.audiences`. The chart renders the
+platform internal OAuth clients, validated-workload bindings, service token
+endpoints, fixed receiver audiences, and NetworkPolicy peer edges. Docker
+Compose uses the same fixed names in the mounted `compose/config/*.yml` files
+and admin-console environment.
 
 Keep these four audience concepts distinct:
 
-- The **receiver expected audience** is the value a receiving service validates
-  in the JWT `aud` claim, normally `serviceIdentity.audiences.<receiver>`.
+- The **receiver expected audience** is the fixed protocol value a receiving
+  service validates in the JWT `aud` claim.
 - The **route-requested audience** is the one audience the caller asks the STS
   to mint for a downstream route, for example
   `transport.routing.modules.kms.serviceTokenAudience`.
@@ -379,18 +404,18 @@ exactly one value, and that value must equal the default or appear in
 `allowed-access-token-audiences`. A missing default, multiple values (including
 duplicate values), or an unregistered value is rejected with `invalid_target`.
 
-The chart derives the registrations below from `serviceIdentity.audiences`; the
-audience strings are not a second independent set of Helm values:
+The chart renders the fixed registrations below; audience strings are not Helm
+values:
 
 | Caller | Client/service binding | `default-access-token-audience` | `allowed-access-token-audiences` | Explicit downstream route |
 | --- | --- | --- | --- | --- |
-| tenant-KMS | `serviceIdentity.clientIds.tenant-kms` / `serviceIdentity.serviceIds.tenant-kms` | `serviceIdentity.audiences.platform` | none | platform |
-| wallet-unit | `serviceIdentity.clientIds.wallet-unit` / `serviceIdentity.serviceIds.wallet-unit` | `serviceIdentity.audiences.platform` | none | platform |
-| tenant-AS | `serviceIdentity.clientIds.tenant-as` / `serviceIdentity.serviceIds.tenant-as` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.tenant-kms` | tenant-KMS |
-| DID | `serviceIdentity.clientIds.did` / `serviceIdentity.serviceIds.did` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.tenant-kms` | tenant-KMS |
-| issuer | `serviceIdentity.clientIds.issuer` / `serviceIdentity.serviceIds.issuer` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.tenant-kms`, `serviceIdentity.audiences.wallet-interaction` | tenant-KMS, wallet-interaction |
-| verifier | `serviceIdentity.clientIds.verifier` / `serviceIdentity.serviceIds.verifier` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.tenant-kms`, `serviceIdentity.audiences.wallet-interaction` | tenant-KMS, wallet-interaction |
-| wallet-interaction | `serviceIdentity.clientIds.wallet-interaction` / `serviceIdentity.serviceIds.wallet-interaction` | `serviceIdentity.audiences.platform` | `serviceIdentity.audiences.wallet-unit` | wallet-unit |
+| tenant-KMS | `serviceIdentity.clientIds.tenant-kms` / `serviceIdentity.serviceIds.tenant-kms` | `enterprise-platform` | none | platform |
+| wallet-unit | `serviceIdentity.clientIds.wallet-unit` / `serviceIdentity.serviceIds.wallet-unit` | `enterprise-platform` | none | platform |
+| tenant-AS | `serviceIdentity.clientIds.tenant-as` / `serviceIdentity.serviceIds.tenant-as` | `enterprise-platform` | `enterprise-tenant-kms` | tenant-KMS |
+| DID | `serviceIdentity.clientIds.did` / `serviceIdentity.serviceIds.did` | `enterprise-platform` | `enterprise-tenant-kms` | tenant-KMS |
+| issuer | `serviceIdentity.clientIds.issuer` / `serviceIdentity.serviceIds.issuer` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-tenant-as` | tenant-KMS, tenant-AS, platform trust-domain |
+| verifier | `serviceIdentity.clientIds.verifier` / `serviceIdentity.serviceIds.verifier` | `enterprise-platform` | `enterprise-tenant-kms` | tenant-KMS, platform trust-domain |
+| wallet-interaction | `serviceIdentity.clientIds.wallet-interaction` / `serviceIdentity.serviceIds.wallet-interaction` | `enterprise-platform` | `enterprise-wallet-unit` | wallet-unit |
 
 The service-identity credential, portal-BFF credential, and software-keystore password are
 deployment bootstrap Secrets. In Kubernetes, create a Secret in the Helm release
@@ -419,20 +444,18 @@ Secret references at render time but Kubernetes verifies the Secret object and
 keys when it creates containers. Secret data changes under the same name do not
 automatically restart pods; roll the platform and satellites after rotation.
 
-The binary/gRPC path is security-sensitive because trusted workload tokens may
-carry tenant context through internal headers. A receiver may honor
-`X-Tenant-Id` or `X-Principal-Id` only after all of these checks succeed:
+The binary/gRPC path is security-sensitive. Tenant, principal, and workload
+identity come only from validated JWT claims. The following checks are required:
 
 - the bearer JWT validates cryptographically;
 - the token is a workload token, not a human/operator token;
-- the JWT client id or subject is bound to the asserted `X-Service-Id`;
+- the JWT client id or subject is bound to a configured workload identity;
 - the JWT `aud` contains the receiving service audience;
-- the receiver's header trust policy explicitly allows the internal override.
+- the receiver's workload trust policy allows that authenticated client.
 
-If any check fails, the request fails closed or the header is ignored. Do not use
-`X-Tenant-Id`, `X-Principal-Id`, or `X-Service-Id` as credentials. They are
-context hints after JWT validation and service binding, never proof of identity
-by themselves.
+If any check fails, the request fails closed. `X-Tenant-Id`, `X-Principal-Id`,
+and `X-Service-Id` are discarded legacy metadata; they are never credentials,
+context hints, consistency inputs, or identity overrides.
 
 KMS and wallet routing are intentionally two-token trust flows whenever the
 inbound bearer is addressed to a route-only service. DID, tenant-AS, issuer, and
@@ -475,12 +498,10 @@ Set the transport globally in Helm under `grpc`:
 
 With `grpc.enabled=true` the chart renders platform, tenant-KMS, wallet-unit,
 and wallet-interaction gRPC receivers and points internal routes at those
-services. Tenant operators and automation use the protected tenant REST API at
-`https://<tenant>.<base-domain>/api/kms/v1` for provider and key
-administration. Runtime DID, tenant-AS, issuer, and verifier services do not use
-that REST/admin surface for signing or key operations; they route KMS service
-commands over the internal east-west gRPC route to tenant-KMS with a workload
-token for the `enterprise-tenant-kms` audience.
+services. Tenant operators and automation manage KMS offerings and resources
+through tenant-scoped platform-config APIs. Runtime DID, tenant-AS, issuer, and
+verifier services route KMS commands over the internal east-west gRPC route to
+tenant-KMS with a workload token for the `enterprise-tenant-kms` audience.
 
 The underlying routing settings follow the pattern below, which you can set as
 per-service environment overrides when a deployment must route an additional
@@ -621,12 +642,10 @@ server public origins. Browser resource API calls stay same-origin through
 | `ADMIN_CONSOLE_TRUSTED_INGRESS_MODE` / `ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS` | `X_FORWARDED` / `1` | Select exactly one trusted gateway hop for the untrusted instance-origin candidate. |
 | `ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS` | Exact internal platform origin | Server-only exception for the configured in-cluster HTTP platform service; wildcards, paths, credentials, and arbitrary HTTP origins are rejected. |
 | `ADMIN_CONSOLE_WORKLOAD_CLIENT_ID` / `ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Dedicated client id / Secret ref | Server-only client_credentials identity for the workload-protected OAuth-client facade. |
-| `ADMIN_CONSOLE_TENANT_KMS_BASE_URL` | Internal tenant-KMS upstream URL | Server-side tenant-KMS API upstream for BFF resource calls. |
 | `ADMIN_CONSOLE_TENANT_DID_BASE_URL` | Internal DID upstream URL | Server-side DID API upstream for BFF resource calls. |
 | `ADMIN_CONSOLE_ISSUER_BASE_URL` | Internal issuer upstream URL | Server-side issuer-owned API upstream for status-list, credential-design, and OID4VCI BFF calls. |
 | `ADMIN_CONSOLE_VERIFIER_BASE_URL` | Internal verifier upstream URL | Server-side verifier-owned API upstream for DCQL and OID4VP BFF calls. |
 | `NEXT_PUBLIC_PLATFORM_AUDIENCE` | `enterprise-platform` | Fallback STS audience if runtime bootstrap is unavailable. |
-| `NEXT_PUBLIC_TENANT_KMS_AUDIENCE` | `enterprise-tenant-kms` | Fallback tenant-KMS audience if runtime bootstrap is unavailable. |
 | `NEXT_PUBLIC_TENANT_DID_AUDIENCE` | `enterprise-tenant-did` | Fallback DID audience if runtime bootstrap is unavailable. |
 | `NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE` | `enterprise-issuer` | Fallback issuer audience for status-list and credential-design APIs if runtime bootstrap is unavailable. |
 | `NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE` | `enterprise-verifier` | Fallback verifier audience for DCQL APIs if runtime bootstrap is unavailable. |
@@ -641,9 +660,10 @@ from build-time `NEXT_PUBLIC_*` values.
 The platform service also has internal east-west upstreams under
 `east-west.tenant-as.base-url`, `east-west.tenant-kms.base-url`,
 and `east-west.tenant-did.base-url`. Tenant activation uses these service URLs
-with the public tenant host in the HTTP `Host` header. Runtime-config service
-URLs exposed to browser applications and customer tooling remain public tenant
-URLs. The DID upstream is required for platform-driven tenant DID provisioning and hosted verification at
+with the public tenant host in the HTTP `Host` header. The tenant-KMS upstream is
+internal only and is not projected into browser runtime config. Other
+runtime-config service URLs exposed to browser applications and customer tooling
+remain public tenant URLs. The DID upstream is required for platform-driven tenant DID provisioning and hosted verification at
 `https://<tenant>.<base-domain>/.well-known/did.json`; the platform does not
 connect to the tenant database or write DID rows directly.
 
@@ -672,10 +692,10 @@ External automation may still call tenant gateway API roots directly, but the
 browser console should not assume `issuer.<base-domain>` or
 `verifier.<base-domain>` hosts.
 
-Platform-admin and platform-config calls use the operator bearer. Tenant-KMS and
-DID calls use RFC 8693 token exchange against the platform AS with the configured
-tenant service audience; the console must not send tenant identity through
-`X-Tenant-Id` headers.
+Platform-admin and platform-config calls use the operator bearer. DID calls use
+RFC 8693 token exchange against the platform AS with the configured tenant
+service audience; the console must not send tenant identity through
+`X-Tenant-Id` headers. KMS authoring stays on the typed platform-config surface.
 
 ### Platform auth and instance portal grants
 

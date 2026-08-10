@@ -4,7 +4,11 @@
 {{- /* admin-console is a Next.js standalone web app, not an EDK Java service:
        it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
        /admin-console/health route rather than the EDK /health endpoint. */}}
-{{- $isAdminConsole := eq $name "admin-console" }}
+{{- $isAdminConsole := or (eq $name "admin-console") (eq $name "admin-console-tenant") }}
+{{- $secretAuthoritySecret := "" }}
+{{- if not $isAdminConsole }}
+{{- $secretAuthoritySecret = index $.Values.secretAuthority.existingSecrets $name }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,6 +18,13 @@ metadata:
     app.kubernetes.io/component: {{ $name }}
 spec:
   replicas: {{ $svc.replicas }}
+  {{- if not $isAdminConsole }}
+  {{- /* Database schema migrations are fail-closed single-writer. RollingUpdate
+         would run two schema generations against the same database at once and
+         crash-loop the outgoing release, so the old pod must stop first. */}}
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
@@ -23,11 +34,12 @@ spec:
       annotations:
         {{- if eq $name "platform" }}
         checksum/platform-config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        checksum/secret-management-manifests: {{ include (print $.Template.BasePath "/configmap-secret-management.yaml") $ | sha256sum }}
         {{- else if eq $name "tenant-as" }}
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-tenant-as.yaml") $ | sha256sum }}
         {{- else if eq $name "tenant-kms" }}
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-tenant-kms.yaml") $ | sha256sum }}
-        {{- else if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+        {{- else if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-runtime-services.yaml") $ | sha256sum }}
         {{- end }}
         {{- with $.Values.podAnnotations }}
@@ -36,8 +48,13 @@ spec:
       {{- end }}
       labels:
         {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 8 }}
+        {{- if eq $name "platform" }}
+        edk.sphereon.com/platform-authority-bootstrap: "true"
+        {{- else if eq $name "tenant-kms" }}
+        edk.sphereon.com/tenant-kms-authority-bootstrap: "true"
+        {{- end }}
     spec:
-      serviceAccountName: {{ include "edk-enterprise.serviceAccountName" $ }}
+      serviceAccountName: {{ if eq $name "platform" }}{{ include "edk-enterprise.platformServiceAccountName" $ }}{{ else }}{{ include "edk-enterprise.serviceAccountName" $ }}{{ end }}
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
       {{- with $.Values.global.imagePullSecrets }}
@@ -46,12 +63,18 @@ spec:
         - name: {{ . }}
         {{- end }}
       {{- end }}
-      {{- if and (eq $name "platform") $.Values.license.trust.existingSecret }}
+      {{- with $.Values.global.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- $waitForPlatformGrpc := and $.Values.grpc.enabled (not $isAdminConsole) (ne $name "platform") }}
+      {{- if or (and (eq $name "platform") $.Values.license.trust.existingSecret) $waitForPlatformGrpc }}
+      initContainers:
+        {{- if and (eq $name "platform") $.Values.license.trust.existingSecret }}
       {{- /* Seed the writable license-state volume with the root-CA trust anchor
              from the Secret on every start, so the platform trusts the activated
              license across restarts. The setup API still writes the imported
              bundle's root CA into the same volume. */}}
-      initContainers:
         - name: seed-license-trust
           image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $.Values.global.imageTag | default $.Chart.AppVersion }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
@@ -67,6 +90,29 @@ spec:
               readOnly: true
             - name: license-state
               mountPath: {{ dir $.Values.license.trust.rootCaPath | quote }}
+        {{- end }}
+        {{- if $waitForPlatformGrpc }}
+        {{- $platformGrpcService := include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
+        {{- if eq $name "tenant-kms" }}
+        {{- $platformGrpcService = printf "%s-platform-authority-bootstrap" (include "edk-enterprise.fullname" $) }}
+        {{- end }}
+        # Do not construct a long-lived gRPC channel while the platform Service
+        # has no ready endpoint. Netty's reconnect backoff can otherwise outlive
+        # the first tenant-registration request even though the platform becomes
+        # ready moments later.
+        - name: wait-for-platform-grpc
+          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $.Values.global.imageTag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          command:
+            - /bin/bash
+            - -ec
+            - >-
+              until (echo > /dev/tcp/{{ $platformGrpcService }}/{{ $.Values.grpc.port }}) 2>/dev/null;
+              do sleep 1;
+              done
+        {{- end }}
       {{- end }}
       containers:
         - name: {{ $name }}
@@ -74,6 +120,14 @@ spec:
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          {{- with $svc.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $svc.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: rest
               containerPort: {{ $svc.restPort }}
@@ -85,6 +139,35 @@ spec:
             {{- end }}
           env:
             {{- if not $isAdminConsole }}
+            # Secret-authority coordinate strings contain key identifiers,
+            # validity windows, and in-container paths. They remain in the
+            # workload-isolated Secret with the corresponding key material.
+            - name: SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretAuthoritySecret | quote }}
+                  key: {{ $.Values.secretAuthority.keys.satelliteAssertionSigningKey | quote }}
+            - name: SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretAuthoritySecret | quote }}
+                  key: {{ $.Values.secretAuthority.keys.satellitePermitVerificationKeys | quote }}
+            {{- if eq $name "platform" }}
+            - name: TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST
+              value: {{ printf "%s-tenant-kms-authority-bootstrap" (include "edk-enterprise.fullname" $) | quote }}
+            - name: TENANT_KMS_AUTHORITY_BOOTSTRAP_PORT
+              value: {{ $.Values.grpc.port | quote }}
+            - name: SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretAuthoritySecret | quote }}
+                  key: {{ $.Values.secretAuthority.keys.centralPermitSigningKey | quote }}
+            - name: SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretAuthoritySecret | quote }}
+                  key: {{ $.Values.secretAuthority.keys.centralAssertionVerificationKeys | quote }}
+            {{- end }}
             - name: APP_PROFILE
               value: "container"
             # Configuration directory the service reads: application.yml plus the
@@ -98,13 +181,15 @@ spec:
             - name: CONFIG_PROVIDERS_PLATFORM_CONFIG_REMOTE_ENABLED
               value: {{ $.Values.config.providers.platformConfigRemote.enabled | quote }}
             - name: CONFIG_PROVIDERS_PLATFORM_CONFIG_REMOTE_BOOTSTRAP_REQUIRED_KEYSPACES
-              {{- $remoteKeyspaces := "kms.providers" -}}
+              {{- $remoteKeyspaces := "crypto.kms.roles" -}}
               {{- if eq $name "tenant-as" -}}
-              {{- $remoteKeyspaces = "oauth2.servers,kms.providers" -}}
+              {{- $remoteKeyspaces = "oauth2.servers,crypto.kms.roles" -}}
+              {{- else if eq $name "blob" -}}
+              {{- $remoteKeyspaces = "oauth2.servers,crypto.kms.roles,theme" -}}
               {{- else if eq $name "issuer" -}}
-              {{- $remoteKeyspaces = "kms.providers,oid4vci,credential-design,statuslists" -}}
+              {{- $remoteKeyspaces = "crypto.kms.roles,oid4vci,credential-design,statuslists" -}}
               {{- else if eq $name "verifier" -}}
-              {{- $remoteKeyspaces = "kms.providers,oid4vp" -}}
+              {{- $remoteKeyspaces = "crypto.kms.roles,oid4vp" -}}
               {{- end }}
               value: {{ $remoteKeyspaces | quote }}
             - name: CONFIG_PROVIDERS_TENANT_CONFIG_DB_ENABLED
@@ -126,10 +211,21 @@ spec:
               value: "true"
             - name: TENANT_RESOLUTION_CUSTOM_DOMAIN_ENABLED
               value: "true"
+            {{- /* The EDK strict-auth gate reads the un-prefixed `server.rest.auth.enabled`
+                   property. The EDK property normalizer performs no prefix stripping, so the
+                   SPHEREON_APP_ form below resolves to `sphereon.app.server.rest.auth.enabled`
+                   and never reaches the gate; it is the VDX transport-server name and is kept
+                   only for VDX-based images. This is the variable the gate actually reads, and
+                   it matches the un-prefixed convention every SERVER_REST_AUTH_* sibling below
+                   already uses. Without it the gate falls back to its permissive default
+                   (RestAuthSettings.enabled = false) because the ConfigMap overlays replace the
+                   image's baked application.yml through a subPath mount. */}}
+            - name: SERVER_REST_AUTH_ENABLED
+              value: {{ $.Values.auth.enabled | quote }}
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
             {{- $transportAudience := "" }}
-            {{- if $grpcReceiver }}{{- $transportAudience = (index $.Values.serviceIdentity.audiences $name) }}{{- end }}
+            {{- if $grpcReceiver }}{{- $transportAudience = include "edk-enterprise.serviceAudience" $name }}{{- end }}
             {{- if $transportAudience }}
             - name: SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE
               value: {{ $transportAudience | quote }}
@@ -146,7 +242,7 @@ spec:
             {{- end }}
             {{- if eq $name "tenant-as" }}
             - name: THEME_CLIENT_BASE_URL
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             {{- end }}
             {{- /* East-west service identity + keystore secrets shared by the service containers.
                    The platform AS mints the service tokens the satellites present; the
@@ -197,6 +293,8 @@ spec:
               value: {{ $.Values.opentelemetry.endpoint | quote }}
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
               value: {{ $.Values.opentelemetry.protocol | quote }}
+            - name: OTEL_METRICS_EXPORTER
+              value: {{ $.Values.opentelemetry.metricsExporter | quote }}
             - name: OTEL_EXPORTER_OTLP_HEADERS
               value: {{ $.Values.opentelemetry.headers | quote }}
             - name: OTEL_RESOURCE_ATTRIBUTES
@@ -219,9 +317,8 @@ spec:
             # Control-plane datasource: the tenant registry, routing, public-endpoint
             # bindings, and platform configuration live in the platform database. The
             # platform service owns this connection. The system platform tenant is
-            # control-plane state and is bound here via the database.tenants override
-            # mounted from the platform config. Customer tenant workload state remains
-            # in the separate tenant workload database.
+            # control-plane state and is bound here via the database.tenants override.
+            # The platform also owns migrations in the separate tenant workload database.
             - name: DATABASE_APP_DEFAULT_DIALECT
               value: {{ $.Values.database.dialect | quote }}
             - name: DATABASE_APP_DEFAULT_HOST
@@ -240,6 +337,58 @@ spec:
                 secretKeyRef:
                   name: {{ $platformDb.existingSecret }}
                   key: {{ $platformDb.passwordKey }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_ISOLATION
+              value: "shared"
+            - name: DATABASE_APP_TENANT_MIGRATOR_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            - name: DATABASE_TENANTS_DEFAULT_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_ISOLATION
+              value: {{ $tenantDb.isolation | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN
+              value: {{ $tenantDb.schemaPattern | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: DATABASE_TENANTS_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            - name: EDK_TENANT_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: EDK_TENANT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
             # Platform database credentials for the platform tenant datasource overlay,
             # resolved by the database.tenants override mounted from the platform config.
             - name: EDK_PLATFORM_DB_USERNAME
@@ -252,6 +401,34 @@ spec:
                 secretKeyRef:
                   name: {{ $platformDb.existingSecret }}
                   key: {{ $platformDb.passwordKey }}
+            - name: EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.secretManagement.existingSecret }}
+                  key: {{ $.Values.database.secretManagement.adminPasswordKey }}
+            - name: EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.secretManagement.existingSecret }}
+                  key: {{ $.Values.database.secretManagement.tenantPasswordKey }}
+            # Trust-domain router credentials, resolved by the database-trust-domain
+            # override mounted from the platform config. Co-located by default: falls
+            # back to the platform database Secret/keys above unless
+            # database.trustDomain.existingSecret points at a dedicated instance.
+            {{- $trustDomainDb := $.Values.database.trustDomain }}
+            {{- $trustDomainSecret := $trustDomainDb.existingSecret | default $platformDb.existingSecret }}
+            {{- $trustDomainUsernameKey := $trustDomainDb.usernameKey | default $platformDb.usernameKey }}
+            {{- $trustDomainPasswordKey := $trustDomainDb.passwordKey | default $platformDb.passwordKey }}
+            - name: EDK_TRUST_DOMAIN_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $trustDomainSecret }}
+                  key: {{ $trustDomainUsernameKey }}
+            - name: EDK_TRUST_DOMAIN_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $trustDomainSecret }}
+                  key: {{ $trustDomainPasswordKey }}
             {{- else }}
             # Tenant workload datasource. Runtime services own tenant workload
             # persistence and never receive platform database credentials.
@@ -277,6 +454,34 @@ spec:
                 secretKeyRef:
                   name: {{ $tenantDb.existingSecret }}
                   key: {{ $tenantDb.passwordKey }}
+            {{- if or (eq $name "tenant-as") (eq $name "verifier") (eq $name "wallet-interaction") }}
+            # Trust-domain persistence has a dedicated router/registry so its
+            # placement can evolve independently from other tenant stores. In
+            # the current same-database topology it deliberately resolves to
+            # the same tenant database and schema isolation as the workload.
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_DIALECT
+              value: {{ $.Values.database.dialect | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_ISOLATION
+              value: {{ $tenantDb.isolation | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_SCHEMA_PATTERN
+              value: {{ $tenantDb.schemaPattern | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            {{- end }}
             # Runtime services keep their app-scope datasource on the tenant database,
             # so any app-scope access stays in the tenant data plane. The control-plane
             # platform database is reachable only by the platform service.
@@ -298,14 +503,34 @@ spec:
                 secretKeyRef:
                   name: {{ $tenantDb.existingSecret }}
                   key: {{ $tenantDb.passwordKey }}
+            - name: EDK_TENANT_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.usernameKey }}
+            - name: EDK_TENANT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tenantDb.existingSecret }}
+                  key: {{ $tenantDb.passwordKey }}
+            - name: EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.secretManagement.existingSecret }}
+                  key: {{ $.Values.database.secretManagement.adminPasswordKey }}
+            - name: EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.secretManagement.existingSecret }}
+                  key: {{ $.Values.database.secretManagement.tenantPasswordKey }}
             {{- end }}
             {{- end }}
             {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICE_TOKEN_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "tenant-kms" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
-            {{- range $kmsService := list "key" "keys" "signature" "mac" "encryption" }}
+            {{- range $kmsService := list "key" "keys" "signature" "mac" "encryption" "ecdh" }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_TARGET
               value: "SERVER"
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICES_{{ $kmsService | upper }}_TRANSPORT
@@ -314,9 +539,9 @@ spec:
               value: {{ printf "grpc://%s-tenant-kms:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
             {{- end }}
             {{- end }}
-            {{- if or (eq $name "issuer") (eq $name "verifier") }}
+            {{- if and (or (eq $name "issuer") (eq $name "verifier")) (index $.Values.services "wallet-interaction").enabled }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "wallet-interaction" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" "wallet-interaction" | quote }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
             - name: WALLET_INTERACTION_GRPC_ENDPOINT
@@ -324,7 +549,7 @@ spec:
             {{- end }}
             {{- if eq $name "wallet-interaction" }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "wallet-unit" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" "wallet-unit" | quote }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
             - name: WALLET_UNIT_GRPC_ENDPOINT
@@ -401,24 +626,42 @@ spec:
                    client_credentials service token and attaches it to its command-transport
                    calls to the platform (config reads + license-state projection) and to
                    its KMS hop. The platform AS issues the token; the satellite authenticates
-                   as its per-service confidential client with the shared internal secret. */}}
+                   as its per-service confidential client with the shared internal secret.
+                   The token endpoint is the platform authority bootstrap Service: satellites must
+                   mint their identity while the platform is deliberately unready during its boot
+                   ceremony, and the regular Service excludes not-ready endpoints. */}}
             {{- if $.Values.serviceIdentity.internalClientExistingSecret }}
             - name: SERVER_SERVICE_IDENTITY_TOKEN_ENDPOINT
-              value: {{ printf "http://%s-platform:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s-platform-authority-bootstrap:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_ID
               value: {{ index $.Values.serviceIdentity.clientIds $name | quote }}
+            {{- /* Once tenant configuration is active, select the tenant-scoped
+                   confidential client registered for this workload. Without this
+                   role the bootstrap client remains in use and its token carries
+                   tenant_id=platform, so tenant KMS routing fails closed. */}}
+            {{- $activeAsClientRoles := dict "tenant-kms" "kms" "tenant-as" "authorization-server" "did" "did" "blob" "blob" "issuer" "issuer" "verifier" "verifier" "wallet-unit" "wallet-unit" "wallet-interaction" "wallet-interaction" }}
+            - name: SERVER_SERVICE_IDENTITY_ACTIVE_AS_CLIENT_ROLE
+              value: {{ index $activeAsClientRoles $name | quote }}
             - name: SERVER_SERVICE_IDENTITY_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "platform" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
                   key: {{ $.Values.serviceIdentity.internalClientSecretKey }}
-            {{- /* Workload identity the satellite asserts on its east-west command-transport
-                   calls (gRPC X-Service-Id). The platform header-trust-policy must list it in
-                   trusted_service_ids and bind it to the service token's client id. */}}
+            {{- /* Local workload label used to select the satellite credential. The platform
+                   workload-trust-policy binds it to the client id in the validated JWT. */}}
             - name: SPHEREON_SERVICE_ID
               value: {{ index $.Values.serviceIdentity.serviceIds $name | quote }}
+            {{- end }}
+            {{- if eq $name "tenant-as" }}
+            # The tenant-AS opens a long-lived remote platform-config gRPC channel.
+            # Wait for a Health SERVING response in the process before exposing its
+            # HTTP listener; its init container's TCP check alone is not sufficient.
+            - name: PLATFORM_GRPC_HOST
+              value: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") | quote }}
+            - name: PLATFORM_GRPC_PORT
+              value: {{ $.Values.grpc.port | quote }}
             {{- end }}
             {{- /* In-network surfaces the strict-auth gate admits without an operator bearer.
                    The tenant-AS signing-key provisioning endpoint is intentionally omitted:
@@ -434,37 +677,47 @@ spec:
             {{- /* Trust anchor for the platform authorization server. Satellites validate
                    platform-issued bearers on east-west calls against this token issuer and
                    fetch its JWKS in-cluster. The issuer must equal the platform AS token `iss`
-                   (its external base URL); the JWKS URI is the in-cluster service. */}}
+                   (its external base URL); the JWKS URI is the in-cluster authority bootstrap
+                   Service, reachable across the platform boot ceremony like the token endpoint. */}}
             - name: SERVER_REST_AUTH_PLATFORM_ISSUER
               value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
-              value: {{ printf "http://%s-platform:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
-            {{- $restAudience := index $.Values.serviceIdentity.audiences $name }}
+              value: {{ printf "http://%s-platform-authority-bootstrap:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+            {{- $restAudience := include "edk-enterprise.serviceAudience" $name }}
             {{- if $restAudience }}
             - name: SERVER_REST_AUTH_EXPECTED_AUDIENCE
               value: {{ $restAudience | quote }}
             {{- end }}
             {{- /* Tenant AS issuers are dynamic. The platform writes
                    OAUTH2_AUTHORIZATION_SERVER public endpoint bindings during
-                   tenant onboarding, and satellites trust tokens only when the
-                   issuer maps to an active binding. */}}
-            {{- if ne $name "tenant-as" }}
+                   tenant onboarding, and workloads trust tokens only when the
+                   issuer maps to an active binding. This includes tenant-AS:
+                   issuer/verifier service clients call its Trust Domain API
+                   with tenant-issued tokens. */}}
             - name: SERVER_REST_AUTH_TRUST_TENANT_REGISTRY_ISSUERS
               value: "true"
             {{- end }}
             {{- end }}
-            {{- end }}
             {{- if $isAdminConsole }}
+            - name: ADMIN_CONSOLE_MODE
+              value: {{ eq $name "admin-console" | ternary "PLATFORM" "TENANT" | quote }}
             - name: ADMIN_CONSOLE_PLATFORM_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            {{- if eq $name "admin-console-tenant" }}
+            - name: ADMIN_CONSOLE_TENANT_CONTEXT_URL
+              value: {{ printf "http://%s:%v/api/platform/bootstrap/v1/admin-console-context" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            {{- end }}
+            {{- if eq $name "admin-console" }}
             - name: ADMIN_CONSOLE_PUBLIC_ORIGIN
               value: {{ $.Values.platform.externalBaseUrl | quote }}
+            {{- end }}
             - name: ADMIN_CONSOLE_TRUSTED_INGRESS_MODE
               value: {{ $.Values.portalBff.trustedIngress.mode | quote }}
             - name: ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS
               value: {{ $.Values.portalBff.trustedIngress.hops | quote }}
             - name: ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+              value: {{ if eq $name "admin-console" }}{{ printf "http://%s:%v,http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}{{ else }}{{ printf "http://%s:%v,http://%s:%v,http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}{{ end }}
+            {{- if eq $name "admin-console" }}
             - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_ID
               value: {{ $.Values.portalBff.clientId | quote }}
             - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
@@ -474,26 +727,33 @@ spec:
                   key: {{ $.Values.portalBff.clientSecretKey }}
             - name: ADMIN_CONSOLE_AUDIT_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            {{- end }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-kms")) (index $.Values.services "tenant-kms").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_DID_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "did")) (index $.Values.services "did").restPort | quote }}
+            - name: ADMIN_CONSOLE_TENANT_AS_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort | quote }}
+            - name: ADMIN_CONSOLE_IDENTITY_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort | quote }}
             - name: ADMIN_CONSOLE_ISSUER_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "issuer")) (index $.Values.services "issuer").restPort | quote }}
             - name: ADMIN_CONSOLE_VERIFIER_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "verifier")) (index $.Values.services "verifier").restPort | quote }}
+            {{- if eq $name "admin-console" }}
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "platform" | quote }}
-            - name: NEXT_PUBLIC_TENANT_KMS_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "tenant-kms" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            {{- end }}
+            - name: NEXT_PUBLIC_THEME_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" "blob" | quote }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "did" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" "did" | quote }}
             - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "issuer" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" "issuer" | quote }}
             - name: NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE
-              value: {{ index $.Values.serviceIdentity.audiences "verifier" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" "verifier" | quote }}
             {{- end }}
             {{- range $env := $svc.env }}
             {{- if not (and (eq $name "platform") (has (get $env "name") (list "EXTERNAL_BASE_URL" "ONBOARDING_UI_BASE_URL"))) }}
@@ -501,12 +761,40 @@ spec:
             {{- end }}
             {{- end }}
           {{- $probePath := $isAdminConsole | ternary "/admin-console/health" "/health" }}
+          {{- if and $.Values.grpc.enabled $grpcReceiver }}
+          # The REST listener becomes healthy before the native process starts its
+          # gRPC command server. Keep the pod out of Service endpoints until the
+          # command port is actually listening.
+          #
+          # The platform serves its command port first and only opens REST after the
+          # database migrations finish, so its startup budget has to cover a real
+          # migration rather than a process launch. Liveness only begins once this
+          # probe succeeds, which keeps the migration window from being killed.
+          startupProbe:
+            {{- if eq $name "platform" }}
+            httpGet:
+              path: {{ $probePath }}
+              port: rest
+            periodSeconds: 5
+            failureThreshold: 180
+            {{- else }}
+            tcpSocket:
+              port: grpc
+            periodSeconds: 1
+            failureThreshold: 60
+            {{- end }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: {{ $probePath }}
               port: rest
             initialDelaySeconds: 20
             periodSeconds: 20
+          # Deliberately /health, not /ready: /ready is gated on the platform's boot ceremony,
+          # and that ceremony calls satellites whose init gate waits for the platform Service to
+          # have a ready endpoint. Pointing readiness at /ready deadlocks the two. Flipping it
+          # requires those init gates to dial the bootstrap authority Service first, which
+          # publishes not-ready addresses.
           readinessProbe:
             httpGet:
               path: {{ $probePath }}
@@ -518,6 +806,11 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if not $isAdminConsole }}
+            - name: secret-authority
+              mountPath: /app/secret-authority
+              readOnly: true
+            {{- end }}
             {{- if and (eq $name "platform") $.Values.database.enabled }}
             # The system platform tenant is control-plane state. This overlay binds its
             # datasource to the platform database while customer tenant workload state
@@ -526,6 +819,27 @@ spec:
             - name: platform-db-override
               mountPath: /app/config/application.yml
               subPath: application.yml
+              readOnly: true
+            {{- end }}
+            {{- if and (eq $name "platform") $.Values.secretManagement.kubernetesMount.enabled }}
+            - name: secret-management-kubernetes-values
+              mountPath: /app/secret-management/kubernetes-mount/values
+              readOnly: true
+            - name: secret-management-kubernetes-manifest
+              mountPath: /app/secret-management/kubernetes-mount/kubernetes-mount.manifest
+              subPath: kubernetes-mount.manifest
+              readOnly: true
+            {{- end }}
+            {{- if and (eq $name "platform") $.Values.portalBff.existingSecret }}
+            - name: secret-management-environment-manifest
+              mountPath: /app/secret-management/deployment/environment.manifest
+              subPath: environment.manifest
+              readOnly: true
+            {{- end }}
+            {{- if and (eq $name "platform") $.Values.secretManagement.egress.privateEndpointAllowlist }}
+            - name: secret-management-private-endpoints
+              mountPath: /app/secret-management/egress/private-endpoints.manifest
+              subPath: private-endpoints.manifest
               readOnly: true
             {{- end }}
             {{- if eq $name "tenant-as" }}
@@ -544,9 +858,13 @@ spec:
               subPath: application.yml
               readOnly: true
             {{- end }}
-            {{- if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
-            # Service-specific routing, persistence and trust policy. Enterprise
-            # images do not contain a baked application.yml.
+            {{- if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+            # Service-specific routing, persistence and trust policy. This is a
+            # subPath mount, so it REPLACES the image's baked
+            # /app/config/application.yml rather than merging with it. Every key
+            # the baked file supplies must therefore be reproduced here or
+            # rendered as an environment variable (see SERVER_REST_AUTH_ENABLED,
+            # PORT/REST_PORT and GRPC_ENABLED/GRPC_PORT above).
             - name: runtime-service-config
               mountPath: /app/config/application.yml
               subPath: application.yml
@@ -571,6 +889,10 @@ spec:
             - name: wallet-interaction-keystore
               mountPath: /keystore
             {{- end }}
+            {{- if and (eq $name "blob") $.Values.blobPersistence.enabled }}
+            - name: blob-store
+              mountPath: /app/blobs
+            {{- end }}
             {{- if eq $name "platform" }}
             {{- /* License state is writable: the setup API writes the imported bundle's
                    root CA to license.trust.rootCaPath here, so the platform trusts the
@@ -587,9 +909,31 @@ spec:
               subPath: license-root-ca.pem
               readOnly: true
             {{- end }}
+            {{- with $svc.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if not $isAdminConsole }}
+        - name: secret-authority
+          secret:
+            secretName: {{ $secretAuthoritySecret | quote }}
+            defaultMode: 0400
+            items:
+              - key: {{ $.Values.secretAuthority.keys.satelliteAssertionPrivateKey | quote }}
+                path: workload/assertion.pem
+              - key: {{ $.Values.secretAuthority.keys.centralPermitPublicKey | quote }}
+                path: public/central-permit.pub.pem
+              {{- if eq $name "platform" }}
+              - key: {{ $.Values.secretAuthority.keys.centralPermitPrivateKey | quote }}
+                path: central/permit-signing.pem
+              {{- range $workloadId, $key := $.Values.secretAuthority.keys.assertionPublicKeys }}
+              - key: {{ $key | quote }}
+                path: {{ printf "public/%s-assertion.pub.pem" $workloadId | quote }}
+              {{- end }}
+              {{- end }}
+        {{- end }}
         {{- if eq $name "platform" }}
         - name: license-state
           emptyDir: {}
@@ -604,7 +948,7 @@ spec:
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-tenant-kms-config
         {{- end }}
-        {{- if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+        {{- if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
         - name: runtime-service-config
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-{{ $name }}-config
@@ -622,6 +966,33 @@ spec:
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-platform-db-override
         {{- end }}
+        {{- if and (eq $name "platform") $.Values.secretManagement.kubernetesMount.enabled }}
+        - name: secret-management-kubernetes-values
+          secret:
+            secretName: {{ $.Values.secretManagement.kubernetesMount.existingSecret | quote }}
+        - name: secret-management-kubernetes-manifest
+          configMap:
+            name: {{ include "edk-enterprise.fullname" $ }}-secret-management-manifests
+            items:
+              - key: kubernetes-mount.manifest
+                path: kubernetes-mount.manifest
+        {{- end }}
+        {{- if and (eq $name "platform") $.Values.portalBff.existingSecret }}
+        - name: secret-management-environment-manifest
+          configMap:
+            name: {{ include "edk-enterprise.fullname" $ }}-secret-management-manifests
+            items:
+              - key: environment.manifest
+                path: environment.manifest
+        {{- end }}
+        {{- if and (eq $name "platform") $.Values.secretManagement.egress.privateEndpointAllowlist }}
+        - name: secret-management-private-endpoints
+          configMap:
+            name: {{ include "edk-enterprise.fullname" $ }}-secret-management-manifests
+            items:
+              - key: private-endpoints.manifest
+                path: private-endpoints.manifest
+        {{- end }}
         {{- if and (eq $name "platform") $.Values.platformKeystore.enabled }}
         - name: keystore
           persistentVolumeClaim:
@@ -636,6 +1007,14 @@ spec:
         - name: wallet-interaction-keystore
           persistentVolumeClaim:
             claimName: {{ $.Values.walletInteractionKeystore.existingClaim | default (printf "%s-wallet-interaction-keystore" (include "edk-enterprise.fullname" $)) }}
+        {{- end }}
+        {{- if and (eq $name "blob") $.Values.blobPersistence.enabled }}
+        - name: blob-store
+          persistentVolumeClaim:
+            claimName: {{ $.Values.blobPersistence.existingClaim | default (printf "%s-blob-store" (include "edk-enterprise.fullname" $)) }}
+        {{- end }}
+        {{- with $svc.volumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- with $.Values.nodeSelector }}
       nodeSelector:

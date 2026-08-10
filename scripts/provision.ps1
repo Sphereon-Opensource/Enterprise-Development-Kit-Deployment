@@ -303,12 +303,20 @@ if ($setupOpen) {
   Write-Host "  License bundle imported." -ForegroundColor Green
 
   Write-Host "Bootstrapping platform operator..." -ForegroundColor Cyan
-  $null = Invoke-Json -Method Post -Uri "$platformUrl/api/platform/setup/v1/bootstrap" -Body @{
+  $bootstrap = Invoke-Json -Method Post -Uri "$platformUrl/api/platform/setup/v1/bootstrap" -Body @{
     adminEmail       = $operatorEmail
     adminDisplayName = $operatorDisplayName
-    adminPassword    = $operatorPassword
   }
-  Write-Host "  Operator bootstrapped; setup gate closed." -ForegroundColor Green
+  $activationLink = [string]$bootstrap.activation.manualActivationLink
+  if ([string]::IsNullOrWhiteSpace($activationLink) -or -not $activationLink.Contains('#')) {
+    Fail "Platform bootstrap did not return the manual activation link required by unattended provisioning (deliveryState=$($bootstrap.activation.deliveryState))."
+  }
+  $activationToken = $activationLink.Split('#', 2)[1]
+  $null = Invoke-Json -Method Post -Uri "$platformUrl/api/account-actions/v1/complete" -Body @{
+    token    = $activationToken
+    password = $operatorPassword
+  }
+  Write-Host "  Operator activated; setup gate closed." -ForegroundColor Green
 }
 
 # --- Step 3: operator sign-in (PKCE authorization-code flow) -------------------

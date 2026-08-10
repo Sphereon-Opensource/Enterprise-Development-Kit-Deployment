@@ -136,7 +136,7 @@ if ($manualDns) {
   Write-Host ""
   Write-Host "Start with:"
   Write-Host "  cd compose"
-  Write-Host "  docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait"
+  Write-Host "  docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait --remove-orphans"
   Write-Host ""
   Write-Host "First-run setup: https://platform.$BaseDomain/setup-license"
   Write-Host "Operator console after setup: https://platform.$BaseDomain/admin-console"
@@ -149,7 +149,7 @@ if ($manualDns) {
   } elseif ($Up) {
     Push-Location $composeDir
     try {
-      docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait
+      docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait --remove-orphans
     } finally {
       Pop-Location
     }
@@ -198,7 +198,7 @@ if ($Challenge -eq 'dns' -and $DnsProvider -eq 'cloudflare') {
 Write-Host ""
 Write-Host "Start with:"
 Write-Host "  cd compose"
-Write-Host "  docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait"
+Write-Host "  docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait --remove-orphans"
 Write-Host ""
 Write-Host "First-run setup: https://platform.$BaseDomain/setup-license"
 Write-Host "Operator console after setup: https://platform.$BaseDomain/admin-console"
@@ -206,7 +206,7 @@ Write-Host "Operator console after setup: https://platform.$BaseDomain/admin-con
 if ($Up) {
   Push-Location $composeDir
   try {
-    docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait
+    docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait --remove-orphans
   } finally {
     Pop-Location
   }

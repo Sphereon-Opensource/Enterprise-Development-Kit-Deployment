@@ -25,8 +25,27 @@ Rendered only for the platform service.
 */ -}}
 {{- if .Values.database.enabled }}
 {{- $platformDb := .Values.database.platform }}
+{{- $tenantDb := .Values.database.tenant }}
+{{- $trustDomainDb := .Values.database.trustDomain }}
+{{- $trustDomainHost := $trustDomainDb.host | default $platformDb.host }}
+{{- $trustDomainPort := $trustDomainDb.port | default $platformDb.port }}
+{{- $trustDomainName := $trustDomainDb.name | default $platformDb.name }}
 {{- $bootstrap := .Values.platform.bootstrap }}
 {{- $licenseTrust := .Values.license.trust }}
+{{- $secretBootstrapActors := .Values.secretManagement.internalResolution.allowedServiceActors }}
+{{- if (index .Values.services "wallet-unit").enabled }}
+{{- $secretBootstrapActors = append $secretBootstrapActors (index .Values.serviceIdentity.clientIds "wallet-unit") }}
+{{- end }}
+{{- if (index .Values.services "wallet-interaction").enabled }}
+{{- $secretBootstrapActors = append $secretBootstrapActors (index .Values.serviceIdentity.clientIds "wallet-interaction") }}
+{{- end }}
+{{- $secretWorkloadActorIds := list }}
+{{- range $service, $clientId := .Values.serviceIdentity.clientIds }}
+{{- $workloadId := index $.Values.serviceIdentity.serviceIds $service }}
+{{- if and $workloadId (ne $workloadId $clientId) (has $clientId $secretBootstrapActors) }}
+{{- $secretWorkloadActorIds = append $secretWorkloadActorIds (printf "%s=%s" $clientId $workloadId) }}
+{{- end }}
+{{- end }}
 {{- if ne $bootstrap.issuer .Values.platform.externalBaseUrl }}
 {{- fail "platform.bootstrap.issuer must equal platform.externalBaseUrl; the platform AS issuer has a single canonical public origin" }}
 {{- end }}
@@ -44,6 +63,7 @@ data:
   # environment variable name cannot express (the platform tenant datasource
   # and the hyphenated control-plane bootstrap keys).
   application.yml: |
+{{ include "edk-enterprise.secretAuthorityPlatformConfig" . | indent 4 }}
     server:
       rest:
         auth:
@@ -54,14 +74,40 @@ data:
           # trust inside the service containers.
           issuer: ${env:EXTERNAL_BASE_URL}
           jwks-uri: {{ printf "http://%s:%v/.well-known/jwks.json" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          # Tenant-scoped platform-config APIs accept only issuers that resolve
+          # to an active OAUTH2_AUTHORIZATION_SERVER registry binding.
+          trust-tenant-registry-issuers: true
+      {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "tenant-kms").enabled }}
+      service-identity:
+        # The platform uses the tenant-bound KMS client registered during
+        # onboarding when routed customer KEK commands target tenant-KMS.
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        # The endpoint above is the in-cluster east-west address; the destination
+        # preauthorizer approves plain http only on this explicit opt-in.
+        token-endpoint-allow-http: true
+        token-endpoint-source: configured
+        active-as-client-role: kms
+        client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        # Routed KMS commands address the tenant-KMS service, so the minted access token may
+        # name it; any audience outside this list is refused before a secret is leased.
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+      {{- end }}
     cors:
+      {{- if and .Values.docsPlayground.enabled .Values.docsPlayground.origins }}
+      origins: ${env:ONBOARDING_UI_BASE_URL},{{ .Values.docsPlayground.origins | join "," }}
+      {{- else }}
       origins: ${env:ONBOARDING_UI_BASE_URL}
+      {{- end }}
+    account-action:
+      # Tokens are appended as a URL fragment and never reach ingress access logs.
+      public-base-url: ${env:ONBOARDING_UI_BASE_URL}/admin-console
     database:
-      tenants:
-        # The platform process creates tenant registry/control-plane rows during
-        # registration. It does not receive tenant workload DB credentials, so
-        # dynamic tenant ids must resolve to the platform DB inside this process.
-        default:
+      app:
+        # Deployment-only owner route. Runtime traffic never uses this pool.
+        secret-management-migrator:
           dialect: {{ .Values.database.dialect }}
           isolation: shared
           host: {{ $platformDb.host }}
@@ -69,6 +115,47 @@ data:
           database: {{ $platformDb.name }}
           username: ${env:EDK_PLATFORM_DB_USERNAME}
           password: ${env:EDK_PLATFORM_DB_PASSWORD}
+          pool:
+            dedicated-pool: true
+        secret-management-admin:
+          dialect: {{ .Values.database.dialect }}
+          isolation: shared
+          host: {{ $platformDb.host }}
+          port: {{ $platformDb.port }}
+          database: {{ $platformDb.name }}
+          username: secret_management_admin
+          password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+          pool:
+            dedicated-pool: true
+        secret-management-tenant:
+          dialect: {{ .Values.database.dialect }}
+          isolation: shared
+          host: {{ $platformDb.host }}
+          port: {{ $platformDb.port }}
+          database: {{ $platformDb.name }}
+          username: secret_management_tenant_serving
+          password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+          pool:
+            dedicated-pool: true
+        tenant-migrator:
+          dialect: {{ .Values.database.dialect }}
+          isolation: shared
+          host: {{ $tenantDb.host }}
+          port: {{ $tenantDb.port }}
+          database: {{ $tenantDb.name }}
+          username: ${env:EDK_TENANT_DB_USERNAME}
+          password: ${env:EDK_TENANT_DB_PASSWORD}
+      tenants:
+        # The platform is the sole migration owner for customer tenant schemas.
+        default:
+          dialect: {{ .Values.database.dialect }}
+          isolation: {{ $tenantDb.isolation }}
+          host: {{ $tenantDb.host }}
+          port: {{ $tenantDb.port }}
+          database: {{ $tenantDb.name }}
+          username: ${env:EDK_TENANT_DB_USERNAME}
+          password: ${env:EDK_TENANT_DB_PASSWORD}
+          schema-pattern: {{ $tenantDb.schemaPattern }}
         platform:
           dialect: {{ .Values.database.dialect }}
           isolation: shared
@@ -77,6 +164,98 @@ data:
           database: {{ $platformDb.name }}
           username: ${env:EDK_PLATFORM_DB_USERNAME}
           password: ${env:EDK_PLATFORM_DB_PASSWORD}
+    secret-management:
+      egress:
+        allowed-https-ports: {{ join "," .Values.secretManagement.egress.allowedHttpsPorts | quote }}
+        {{- if .Values.secretManagement.egress.privateEndpointAllowlist }}
+        private-allowlist-path: /app/secret-management/egress/private-endpoints.manifest
+        {{- end }}
+      bootstrap:
+        kek:
+          mode: {{ .Values.secretManagement.bootstrap.kek.mode | quote }}
+          identity: {{ .Values.secretManagement.bootstrap.kek.identity | quote }}
+          version: {{ .Values.secretManagement.bootstrap.kek.version }}
+          kms-provider-id: {{ .Values.secretManagement.bootstrap.kek.kmsProviderId | quote }}
+          idempotency-mac-key: {{ .Values.secretManagement.bootstrap.kek.idempotencyMacKey | quote }}
+      authority:
+        platform-storage:
+          kms-provider-id: {{ .Values.secretManagement.authority.platformStorageKmsProviderId | quote }}
+          kms-binding-key: {{ .Values.secretManagement.authority.platformStorageKmsBindingKey | quote }}
+        default-tenant-offering:
+          kms-provider-id: {{ .Values.secretManagement.authority.defaultTenantOfferingKmsProviderId | quote }}
+          kms-binding-template: {{ .Values.secretManagement.authority.defaultTenantOfferingKmsBindingTemplate | quote }}
+        tenant-policy:
+          allow-tenant-managed-providers: {{ .Values.secretManagement.authority.allowTenantManagedProviders }}
+          allow-platform-offerings: {{ .Values.secretManagement.authority.allowPlatformOfferings }}
+          retention-days: {{ .Values.secretManagement.authority.retentionDays }}
+      internal-resolution:
+        expected-audience: {{ .Values.secretManagement.internalResolution.expectedAudience | quote }}
+        allowed-service-actors: {{ join "," $secretBootstrapActors | quote }}
+        # A system credential is authorized to the workload a satellite attests to, never to its
+        # OAuth client principal: transport authentication and secret authority stay independent.
+        # Both halves already exist per service, so the platform's mapping is derived from them
+        # rather than restated.
+        workload-actor-ids: {{ join "," $secretWorkloadActorIds | quote }}
+      deployment:
+        environment:
+          enabled: {{ ne .Values.portalBff.existingSecret "" }}
+          {{- if .Values.portalBff.existingSecret }}
+          manifest-path: /app/secret-management/deployment/environment.manifest
+          manifest-sha256: "sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e"
+          {{- end }}
+        kubernetes-mount:
+          enabled: {{ .Values.secretManagement.kubernetesMount.enabled }}
+          {{- if .Values.secretManagement.kubernetesMount.enabled }}
+          root-path: /app/secret-management/kubernetes-mount/values
+          manifest-path: /app/secret-management/kubernetes-mount/kubernetes-mount.manifest
+          manifest-sha256: {{ .Values.secretManagement.kubernetesMount.manifestSha256 | quote }}
+          {{- end }}
+    # Trust domains are stored by the platform, while identity identifiers
+    # live in the tenant-AS database. Resolve anchor identifiers through the
+    # authenticated tenant identity-manager API in this split Helm topology.
+    trust-domain:
+      identifier-source:
+        mode: rest
+      identifier-source-rest:
+        internal-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+        {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "tenant-as").enabled }}
+        # A closed token profile selects these server-authored coordinates; the opaque tenant-bound
+        # client secret is resolved by the secret broker and is never rendered into this ConfigMap.
+        service-identity:
+          token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          token-endpoint-allow-http: true
+          client-id: {{ index .Values.serviceIdentity.clientIds "trust-domain-identifier" | quote }}
+          tenant-bound-client-id: true
+          audience: {{ include "edk-enterprise.serviceAudience" "tenant-as" | quote }}
+        {{- end }}
+    # Dedicated trust-domain router registry, deliberately kept under its own
+    # prefix and separate from database.* above: that registry also backs
+    # every other platform-side tenant-scoped store (auth sessions, signing
+    # keys, DID records), none of which have per-tenant schema provisioning
+    # today. This prefix is read only by the trust-domain providers, so it
+    # alone can carry isolation: schema (schema-per-tenant) with zero effect
+    # on anything else. Co-located by default on the same platform-postgres
+    # instance as database.* above - only the isolation strategy differs,
+    # unless database.trustDomain.host/name/existingSecret split it onto a
+    # dedicated instance. The connecting Postgres user needs CREATE SCHEMA
+    # privilege for the schema-per-tenant auto-provisioning this enables.
+    database-trust-domain:
+      tenants:
+        default:
+          dialect: {{ .Values.database.dialect }}
+          isolation: {{ $trustDomainDb.isolation }}
+          schema-pattern: {{ $trustDomainDb.schemaPattern | quote }}
+          host: {{ $trustDomainHost }}
+          port: {{ $trustDomainPort }}
+          database: {{ $trustDomainName }}
+          username: ${env:EDK_TRUST_DOMAIN_DB_USERNAME}
+          password: ${env:EDK_TRUST_DOMAIN_DB_PASSWORD}
+    kv-stores:
+      # Email catalog templates share one durable platform store. The catalog
+      # namespaces per-tenant published state inside it using the resolved tenant id.
+      vdx.template:
+        type: database
+        scope-binding: APP
     # Control-plane bootstrap inputs for the `platform` tenant, its hosted
     # authorization server, and the operator owner. The platform provisions
     # these on first boot and the steps are idempotent across restarts.
@@ -90,15 +269,16 @@ data:
             provider-id: {{ .Values.portalBff.kms.providerId | quote }}
             encryption-key-id: {{ .Values.portalBff.kms.encryptionKeyAlias | quote }}
             handle-hmac-key-id: {{ .Values.portalBff.kms.handleHmacKeyAlias | quote }}
-      admin:
-        secret-backend:
-          type: {{ .Values.platform.secretBackend.type | quote }}
       tenant:
+        # Canonical control-plane identity used by platform-admin secret transitions.
+        id: "platform"
         hosted-as:
           issuer: {{ $bootstrap.issuer | quote }}
         owner:
-          email: {{ $bootstrap.owner.email | quote }}
-          display-name: {{ $bootstrap.owner.displayName | quote }}
+          {{- if $bootstrap.automatic }}
+          email: {{ required "platform.bootstrap.owner.email is required when platform.bootstrap.automatic=true" $bootstrap.owner.email | quote }}
+          display-name: {{ required "platform.bootstrap.owner.displayName is required when platform.bootstrap.automatic=true" $bootstrap.owner.displayName | quote }}
+          {{- end }}
           {{- with $bootstrap.owner.roles }}
           roles: {{ . | quote }}
           {{- end }}
@@ -116,6 +296,7 @@ data:
           oidc: SUPPORTED
           logout: SUPPORTED
           pkce: REQUIRED
+          par: SUPPORTED
           token-format: JWT
           scopes-supported: "openid,profile,email"
           grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
@@ -127,36 +308,56 @@ data:
             issuer:
               client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
-              allowed-access-token-audiences: {{ join "," (list (index .Values.serviceIdentity.audiences "tenant-kms") (index .Values.serviceIdentity.audiences "wallet-interaction")) | quote }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              allowed-access-token-audiences: {{ join "," (list (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "did") (include "edk-enterprise.serviceAudience" "tenant-as")) | quote }}
             kms:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
             did:
               client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
-              allowed-access-token-audiences: {{ index .Values.serviceIdentity.audiences "tenant-kms" | quote }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            {{- if (index .Values.services "blob").enabled }}
+            blob:
+              client-id: {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" "blob" | quote }}
+            {{- end }}
             verifier:
               client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
-              allowed-access-token-audiences: {{ join "," (list (index .Values.serviceIdentity.audiences "tenant-kms") (index .Values.serviceIdentity.audiences "wallet-interaction")) | quote }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
             tenantas:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
-              allowed-access-token-audiences: {{ index .Values.serviceIdentity.audiences "tenant-kms" | quote }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            {{- if (index .Values.services "wallet-unit").enabled }}
             wallet-unit:
               client-id: {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            {{- end }}
+            {{- if (index .Values.services "wallet-interaction").enabled }}
             wallet-interaction:
               client-id: {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
-              default-access-token-audience: {{ index .Values.serviceIdentity.audiences "platform" | quote }}
-              allowed-access-token-audiences: {{ index .Values.serviceIdentity.audiences "wallet-unit" | quote }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              allowed-access-token-audiences: {{ join "," (list (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "wallet-unit")) | quote }}
+            {{- end }}
           {{- end }}
         platform:
           # Application bootstrap provisions the control-plane AS with slug
@@ -164,15 +365,17 @@ data:
           signing-key:
             auto-generate: true
       clients:
+        {{- if .Values.portalBff.existingSecret }}
         admin-console-portal-bff:
           client-id: {{ .Values.portalBff.clientId | quote }}
           client-name: Admin Console Portal BFF
-          client-secret: ${env:ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
+          client-secret-id: sec_admin_console_portal_bff_01
           client-type: confidential
           grant-types: client_credentials
           allowed-scopes: {{ .Values.portalBff.scope | quote }}
           default-access-token-audience: {{ .Values.portalBff.audience | quote }}
           token-endpoint-auth-method: client_secret_basic
+        {{- end }}
         platform-operator-cli:
           client-id: platform-operator-cli
           client-name: Platform Operator CLI
@@ -184,6 +387,31 @@ data:
           post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/admin-console"
           allowed-scopes: openid
           token-endpoint-auth-method: none
+        {{- if .Values.docsPlayground.enabled }}
+        # Public docs playground client: authorization code + required PKCE + required PAR.
+        docs-playground:
+          client-id: {{ .Values.docsPlayground.clientId | quote }}
+          client-name: Documentation site playground
+          client-type: public
+          grant-types: "authorization_code,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
+          response-types: code
+          redirect-uris:
+            {{- range .Values.docsPlayground.origins }}
+            - {{ printf "%s/docs-env/callback" . | quote }}
+            {{- end }}
+          post-logout-redirect-uris: {{ .Values.docsPlayground.origins | join "," | quote }}
+          allowed-scopes: openid,profile,email
+          require-pkce: true
+          require-pushed-authorization-requests: true
+          token-endpoint-auth-method: none
+        {{- end }}
+    {{- if .Values.docsPlayground.enabled }}
+    docs:
+      playground:
+        enabled: "true"
+        client-id: {{ .Values.docsPlayground.clientId | quote }}
+        origins: {{ .Values.docsPlayground.origins | join "," | quote }}
+    {{- end }}
     # The platform AS itself is the operator sign-in surface; an operator signs
     # in without an application binding and is resolved tenant-wide.
     auth:
@@ -196,28 +424,95 @@ data:
       hosted-as-readiness:
         allow-local-http: true
     {{- end }}
-    # Workload identities the platform trusts on east-west command-transport calls
-    # (the gRPC X-Service-Id), each bound to the client id of the service token the
-    # caller presents. The satellites read config and the license-state projection
-    # through these, so the platform must recognise them.
+    # Authenticated workload clients the platform trusts on east-west command
+    # transport. Each local label is bound to the client id in the validated JWT.
+    # The satellites read config and the license-state projection through these.
     security:
-      header-trust-policy:
+      workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          {{- if (index .Values.services "blob").enabled }}
+          - {{ index .Values.serviceIdentity.serviceIds "blob" | quote }}
+          {{- end }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+          {{- if (index .Values.services "wallet-unit").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-unit" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "wallet-interaction").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
+          {{- end }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          {{- if (index .Values.services "blob").enabled }}
+          "[{{ index .Values.serviceIdentity.serviceIds "blob" }}]": {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
+          {{- end }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+          {{- if (index .Values.services "wallet-unit").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-unit" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "wallet-interaction").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
+          {{- end }}
+    {{- if and .Values.serviceIdentity.internalClientExistingSecret (or (index .Values.services "tenant-kms").enabled (index .Values.services "tenant-as").enabled) }}
+    transport:
+      routing:
+        modules:
+          {{- if (index .Values.services "tenant-kms").enabled }}
+          # Deployment coordinates only. Tenant provisioning selects SERVER for
+          # customer-tenant sessions; platform/anonymous sessions remain LOCAL.
+          kms:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            # Tenant provisioning starts from an operator request, but tenant-KMS
+            # accepts only the platform's dedicated workload identity. Never
+            # forward the incoming operator bearer across this trust boundary.
+            preferServiceTokenOverSessionBearer: true
+            services:
+              key:
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+              # Typed key-resource operations are a separate service namespace.
+              # Customer tenant sessions route them to tenant-KMS while the
+              # application tenant continues to select LOCAL.
+              leaf:
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+              mac:
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+              encryption:
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+          {{- end }}
+          {{- if (index .Values.services "tenant-as").enabled }}
+          # A tenant's authorization server owns its signing-key store. Registration provisions
+          # the key material and hands the descriptor to that service rather than writing into
+          # the store behind its database route. The tenant AS serves no gRPC port, so this
+          # travels over the ordinary command transport.
+          # Unlike the KMS routes, this one is never session-dependent: the platform tenant
+          # registers its own key in process and never issues this command, so every call it does
+          # issue addresses a tenant served elsewhere. The target is pinned rather than defaulted
+          # because the platform deliberately carries no local implementation to fall back to.
+          # Registration exchanges an STS session for the addressed tenant with exactly this
+          # audience before it issues the command, so the bearer on the session already carries
+          # the tenant binding. Preferring a workload token here would discard that binding, and
+          # the platform registers no authorization-server client role to mint one with.
+          "[oauth2-as-admin]":
+            target: SERVER
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-as" | quote }}
+            preferServiceTokenOverSessionBearer: false
+            services:
+              "[signing-key]":
+                target: SERVER
+                transport: HTTP
+                endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) (index .Values.services "tenant-as").restPort | quote }}
+          {{- end }}
+    {{- end }}
     # First-boot operator owner and installation identity for the control-plane.
     app:
       deployment-mode: {{ $bootstrap.deploymentMode | quote }}
@@ -227,21 +522,36 @@ data:
           default-alias: {{ .Values.platform.setup.licenseRequest.defaultAlias | quote }}
           default-algorithm: {{ .Values.platform.setup.licenseRequest.defaultAlgorithm | quote }}
           default-use: {{ .Values.platform.setup.licenseRequest.defaultUse | quote }}
-      admin-console:
-        sts:
-          allowed-audiences: {{ join "," (list (index .Values.serviceIdentity.audiences "platform") (index .Values.serviceIdentity.audiences "tenant-kms") (index .Values.serviceIdentity.audiences "did") (index .Values.serviceIdentity.audiences "issuer") (index .Values.serviceIdentity.audiences "verifier") (index .Values.serviceIdentity.audiences "wallet-unit") (index .Values.serviceIdentity.audiences "wallet-interaction")) | quote }}
+      sts:
+        workload-client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+        secret-bootstrap-workload-client-ids: {{ join "," $secretBootstrapActors | quote }}
+        {{- $stsAudiences := list (include "edk-enterprise.serviceAudience" "platform") (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "did") (include "edk-enterprise.serviceAudience" "tenant-as") (include "edk-enterprise.serviceAudience" "issuer") (include "edk-enterprise.serviceAudience" "verifier") -}}
+        {{- if (index .Values.services "blob").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" "blob") -}}{{- end }}
+        {{- if (index .Values.services "wallet-unit").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" "wallet-unit") -}}{{- end }}
+        {{- if (index .Values.services "wallet-interaction").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" "wallet-interaction") -}}{{- end }}
+        allowed-audiences: {{ join "," $stsAudiences | quote }}
+        {{- $platformSts := (.Values.platform).sts | default dict }}
+        {{- if and (hasKey $platformSts "provisioningRoleClientIds") (not (kindIs "invalid" $platformSts.provisioningRoleClientIds)) }}
+        # Clients whose exchanged tenant tokens carry the dedicated tenant-provisioning role
+        # required by the tenant AS bootstrap trust window. Omitting the value applies the
+        # built-in default (operator CLI plus the secret-bootstrap workload client ids);
+        # an explicit empty string sanctions nobody.
+        provisioning-role-client-ids: {{ $platformSts.provisioningRoleClientIds | quote }}
+        {{- end }}
       onboarding:
         installation-base-domain: {{ .Values.global.platformBaseDomain | quote }}
         deployment-id: {{ .Values.platform.onboarding.deploymentId | quote }}
         {{- if $licenseTrust.rootCaPath }}
         trust-bundle-path: {{ $licenseTrust.rootCaPath | quote }}
         {{- end }}
+        {{- if $bootstrap.automatic }}
         operator:
-          email: {{ $bootstrap.owner.email | quote }}
-          display-name: {{ $bootstrap.owner.displayName | quote }}
+          email: {{ required "platform.bootstrap.owner.email is required when platform.bootstrap.automatic=true" $bootstrap.owner.email | quote }}
+          display-name: {{ required "platform.bootstrap.owner.displayName is required when platform.bootstrap.automatic=true" $bootstrap.owner.displayName | quote }}
           {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
           initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
           {{- end }}
+        {{- end }}
       config:
         mount-path: /app/config
     # Software KMS providers. The platform holds its own keystore, the
@@ -254,6 +564,8 @@ data:
           id: software
           type: software
           enabled: true
+          exposePrivateKeysDuringGeneration: false
+          persistKeysDuringGeneration: true
           autoCreateCertificate: true
           keystore:
             type: pkcs12
@@ -285,6 +597,10 @@ data:
     crypto:
       kms:
         roles:
+          invitation:
+            hmac-kek:
+              # Keep the wrapping key in the persisted platform PKCS12 provider.
+              provider: platform
           oauth2-as:
             algorithm: ES256
             default:
@@ -301,6 +617,10 @@ data:
     # registry lookup.
     tenant:
       resolution:
+        # The platform owns the tenant authority database. Avoid a startup
+        # routing/config-source cycle by selecting the local repository
+        # explicitly; satellite ConfigMaps set this to true.
+        remote: false
         platform:
           base-domain: {{ .Values.global.platformBaseDomain | quote }}
           subdomain:
@@ -308,8 +628,13 @@ data:
         custom-domain:
           enabled: true
         self:
+          # Every in-cluster name the platform answers HTTP on, including the
+          # bootstrap authority Service satellites mint their workload tokens
+          # against. A name missing here reaches tenant resolution as an
+          # unknown host and fails closed, so east-west calls to /token and
+          # /.well-known/jwks.json are refused before the endpoint runs.
           tenant-id: "platform"
-          hosts: {{ printf "%s,%s:%v,localhost,platform.%s%s" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) .Values.global.platformBaseDomain (.Values.platform.bootstrap.selfHostsExtra | default "") | quote }}
+          hosts: {{ printf "%s,%s:%v,%s-platform-authority-bootstrap,%s-platform-authority-bootstrap:%v,localhost,platform.%s%s" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) (include "edk-enterprise.fullname" .) (include "edk-enterprise.fullname" .) (.Values.services.platform.restPort) .Values.global.platformBaseDomain (.Values.platform.bootstrap.selfHostsExtra | default "") | quote }}
       {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
       platform:
         owner:
@@ -318,6 +643,13 @@ data:
       onboarding:
         operator:
           enabled: true
+      registration:
+        # Customer instance identifiers are server-issued at registration time, so per-instance
+        # `signing-key.auto-generate` rows cannot exist in deployment configuration. This is the
+        # one deployment decision that registration provisions product keys; a deployment bringing
+        # externally provisioned keys leaves it unset and registration fails closed instead.
+        signing-key:
+          auto-generate: true
     # East-west reachability for registration-time signing-key provisioning. The
     # platform connects to the tenant services at these internal addresses and
     # carries the public tenant host in the Host header, so a freshly created

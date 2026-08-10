@@ -11,8 +11,7 @@ There are two run modes:
 
 The platform is the configuration authority for tenant workloads. A clean
 first-run installation starts the platform and all workload containers together:
-tenant AS, tenant KMS, DID, wallet unit, wallet interaction, issuer, and verifier
-must already be present when
+tenant AS, tenant KMS, DID, issuer, and verifier must already be present when
 tenant registration later provisions signing material and tenant DID state
 through east-west services. Before the license is imported those workload
 health endpoints can report `licenseStatus: MISSING`; Docker Compose accepts
@@ -61,6 +60,28 @@ Set, at minimum:
 - The image tag for the enterprise images. The image repository is pinned to `nexus.sphereon.com/edk-docker` in the Compose file.
 - The platform and tenant database passwords. The default Compose file starts `platform-postgres` and `tenant-postgres`; use external databases only when you intentionally replace those evaluation services. Keep the two databases separate. They may share a PostgreSQL server, but not a database name, credential, or authorization boundary.
 - The required secrets: keystore password, internal client secret, and the issuer pipeline keys.
+- A fresh secret-authority key window. Generate it before the first start and
+  after intentionally rotating the authority keys:
+
+  ```powershell
+  ..\scripts\generate-secret-authority-keys.ps1 -OutputDirectory .\.secret-authority\current
+  ```
+
+  On Linux or macOS:
+
+  ```bash
+  ../scripts/generate-secret-authority-keys.sh ./.secret-authority/current
+  ```
+
+  Set `EDK_SECRET_AUTHORITY_ROOT=./.secret-authority/current` in `.env`, then
+  copy the four `SECRET_AUTHORITY_*` assignments from
+  `.secret-authority/current/window.env` into `.env`. The platform receives the
+  central private key and workload public keys; each satellite container mounts
+  only its own assertion private key plus the central public key. The generated
+  directory is ignored by Git and must not be copied into release evidence.
+- No external secret provider is required at startup. The baseline uses the
+  persisted platform software KMS. Configure Vault or a cloud provider only
+  through an explicit provider setup after the platform is running.
 - The installation base domain. The platform is published as
   `https://platform.<base-domain>`. Tenant protocol URLs are created during
   onboarding from `<tenant-slug>.<base-domain>`.
@@ -70,18 +91,49 @@ keys `EDK_DB_NAME`, `EDK_DB_USERNAME`, `EDK_DB_PASSWORD`, and
 `EDK_POSTGRES_HOST_PORT` from `.env`. Replace them with `EDK_PLATFORM_DB_*` and
 `EDK_TENANT_DB_*`.
 
-For gateway runs, the default base domain `saas.localtest.me` resolves every
-subdomain to `127.0.0.1` with no host-file edits and no local DNS server, so
+There is no default base domain: Compose fails before startup when
+`EDK_PLATFORM_BASE_DOMAIN` is empty. For an explicitly selected localtest run,
+set it to `saas.localtest.me`; that domain resolves every subdomain to
+`127.0.0.1` with no host-file edits and no local DNS server, so
 `https://platform.saas.localtest.me` and
 `https://<tenant>.saas.localtest.me` both reach your machine. For a real domain,
 set `EDK_PLATFORM_BASE_DOMAIN` to the customer-controlled base domain, point DNS
 for `platform.<base-domain>` and `*.<base-domain>` at the gateway host, and bind
 the tenant endpoints to the tenant host during onboarding.
 
+### Installing and upgrading released images
+
+Use the upgrade wrapper instead of changing `EDK_TAG` and running `docker
+compose up` yourself. It detects the installed platform image, pulls each
+required release, and waits for the complete stack after every step. A direct
+RC1-to-RC3 request therefore runs RC1-to-RC2-to-RC3 so the application database
+migrations execute in release order. Repeating the command is idempotent.
+
+Linux/macOS:
+
+```bash
+bash ../scripts/upgrade-compose.sh --image-tag 0.25.0-RC3
+```
+
+Windows PowerShell:
+
+```powershell
+..\scripts\upgrade-compose.ps1 -ImageTag 0.25.0-RC3
+```
+
+For a gateway deployment, pass both the base file and overlay:
+`--file docker-compose.yml --file docker-compose.gateway.yml` (Bash) or
+`-File docker-compose.yml,docker-compose.gateway.yml` (PowerShell). Supplying a
+file list replaces the wrapper default, so the base file must remain explicit. The wrapper
+detects the running container first, then its recorded release state, then an
+unchanged `.env`. Use the explicit installed-tag option only when an older stack
+was removed and its `.env` was already changed. After success, keep the target
+`EDK_TAG` in `.env` for later direct Compose commands.
+
 ## 3a. Run the base stack (developer diagnostic only)
 
 ```bash
-docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml up -d --remove-orphans
 ```
 
 Compose pulls the published images and starts the full backing stack over plain
@@ -108,13 +160,13 @@ To run the services behind one TLS port, add the gateway overlay.
 First, for local evaluation, generate a wildcard certificate for `*.saas.localtest.me` and the operator host:
 
 ```bash
-../scripts/gen-local-wildcard-cert.sh
+../scripts/gen-local-wildcard-cert.sh --localtest
 ```
 
 On Windows:
 
 ```powershell
-..\scripts\gen-local-wildcard-cert.ps1
+..\scripts\gen-local-wildcard-cert.ps1 -Localtest
 ```
 
 The script writes to `compose/gateway/certs/`. Trust the generated `local-ca.crt` in your operating system or browser so TLS connections succeed. If `mkcert` is installed, run `mkcert -install` once and its CA is trusted automatically. For a real base domain, supply a publicly trusted wildcard certificate or individual host certificates instead and see [tls-and-gateway.md](tls-and-gateway.md).
@@ -131,13 +183,13 @@ Then start the full enterprise stack behind the gateway.
 With the local certificate overlay:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d --remove-orphans
 ```
 
 With the Let's Encrypt overlay:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait
+docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait --remove-orphans
 ```
 
 All public traffic now goes through `443`. Traefik terminates TLS, preserves the inbound Host header, and routes by host and path: the operator plane at `https://platform.<base-domain>` and each tenant at `https://<tenant>.<base-domain>`. Customers and operators call the gateway URLs, not the individual containers.
@@ -159,8 +211,7 @@ to the backing containers internally:
 | `platform.<base-domain>` | Operator OAuth/OIDC metadata, `/authorize`, `/token`, `/userinfo`, `/admin-console` |
 | `<tenant>.<base-domain>` | Public protocol/resolver paths such as `/.well-known/did.json`, tenant OAuth/OIDC metadata and auth paths, OID4VCI issuer paths, OID4VP verifier paths, plus authenticated operator/admin API paths if your gateway policy exposes them |
 
-Runtime probes are internal Docker Compose or Kubernetes concerns. They are not
-routed as tenant public URLs.
+Keep workload health endpoints private. They are not tenant public URLs.
 
 The administrative REST paths (`/api/.../v1`) are controlled operator/admin
 traffic, not public protocol endpoints. Keep them off the open public network
@@ -169,7 +220,7 @@ path protected by JWT and network policy.
 
 ## 5. First-run setup and admin console
 
-The optional `admin-console` service is the Next.js operator admin UI. It comes up with the gateway overlay and is reachable at `https://platform.<base-domain>/admin-console`. The console listens on port `3000` and owns the `/admin-console` path prefix; the gateway routes `/admin-console` to it without stripping the prefix.
+The gateway starts separate platform and tenant admin-console runtimes from the same image. Operators use `https://platform.<base-domain>/admin-console`; tenant administrators use `https://<tenant>.<base-domain>/admin-console`. Both own the `/admin-console` prefix without stripping it, while only the platform runtime receives the platform BFF credential.
 
 On a new installation, open `https://platform.<base-domain>/setup-license`,
 or open `https://platform.<base-domain>/admin-console` and follow the setup

@@ -1,0 +1,58 @@
+# OIDF service-role conformance values for the complete EDK enterprise chart.
+#
+# This file is a narrow deployment overlay, not a replacement chart. Install the
+# normal chart prerequisites and provision the tenant/issuer/verifier instances
+# exactly as in the production E2E journey. All protocol and tenant configuration
+# is written through the production REST APIs. Before applying these values create:
+#
+#   Secret edk-oidf-suite-trust
+#     truststore.p12                    suite callback CA + product edge CA
+#
+# The CI runner must also inject global.hostAliases with the reachable host IP
+# for host.testcontainers.internal. Keeping the address out of this file avoids
+# baking a Docker/Kind implementation detail into the release chart.
+
+global:
+  hostAliases: []
+
+services:
+  tenant-as:
+    args:
+      - -Djavax.net.ssl.trustStore=/app/oidf/truststore.p12
+      - -Djavax.net.ssl.trustStorePassword=changeit
+      - -Djavax.net.ssl.trustStoreType=PKCS12
+    volumeMounts: &oidf-trust-mounts
+      - name: oidf-suite-trust
+        mountPath: /app/oidf
+        readOnly: true
+    volumes: &oidf-trust-volumes
+      - name: oidf-suite-trust
+        secret:
+          secretName: edk-oidf-suite-trust
+          items:
+            - key: truststore.p12
+              path: truststore.p12
+
+  issuer:
+    args:
+      - -Djavax.net.ssl.trustStore=/app/oidf/truststore.p12
+      - -Djavax.net.ssl.trustStorePassword=changeit
+      - -Djavax.net.ssl.trustStoreType=PKCS12
+    volumeMounts: *oidf-trust-mounts
+    volumes: *oidf-trust-volumes
+
+  verifier:
+    args:
+      - -Djavax.net.ssl.trustStore=/app/oidf/truststore.p12
+      - -Djavax.net.ssl.trustStorePassword=changeit
+      - -Djavax.net.ssl.trustStoreType=PKCS12
+    volumeMounts: *oidf-trust-mounts
+    volumes: *oidf-trust-volumes
+
+  wallet-interaction:
+    args:
+      - -Djavax.net.ssl.trustStore=/app/oidf/truststore.p12
+      - -Djavax.net.ssl.trustStorePassword=changeit
+      - -Djavax.net.ssl.trustStoreType=PKCS12
+    volumeMounts: *oidf-trust-mounts
+    volumes: *oidf-trust-volumes

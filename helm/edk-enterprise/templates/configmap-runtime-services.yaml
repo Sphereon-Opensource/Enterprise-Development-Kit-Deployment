@@ -14,8 +14,29 @@ metadata:
     app.kubernetes.io/component: did
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "did")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        token-endpoint-source: active-as
+        active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+        active-as-client-role: did
+        client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+    east-west:
+      tenant-did:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
     security:
-      header-trust-policy:
+      workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
@@ -43,13 +64,115 @@ data:
             path: "{tempDir}/edk-verify-keystore.p12"
     transport:
       routing:
+        configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            # RemoteOpaqueSecretResolver supplies its already downscoped tenant
+            # bootstrap bearer; do not recurse through the credential being unlocked.
+            preferServiceTokenOverSessionBearer: false
           kms:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            preferServiceTokenOverSessionBearer: true
             services:
+              key: &didTenantKmsGrpcRoute
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+              keys: *didTenantKmsGrpcRoute
               signature:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
                 commands:
                   "[kms.signature.verify]":
                     target: LOCAL
+              mac: *didTenantKmsGrpcRoute
+              encryption: *didTenantKmsGrpcRoute
+              ecdh: *didTenantKmsGrpcRoute
+---
+{{- end }}
+{{- if .Values.services.blob.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-blob-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: blob
+data:
+  application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "blob")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,theme
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        token-endpoint-source: active-as
+        active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+        active-as-client-role: blob
+        client-id: {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+    transport:
+      routing:
+        configScope: APP
+        modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          kms:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              key: &blobPlatformKmsGrpcRoute
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+              keys: *blobPlatformKmsGrpcRoute
+              signature: *blobPlatformKmsGrpcRoute
+              mac: *blobPlatformKmsGrpcRoute
+              encryption: *blobPlatformKmsGrpcRoute
+              ecdh: *blobPlatformKmsGrpcRoute
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: false
+    connector:
+      vault:
+        # The dedicated blob workload owns the encrypted vault repository for
+        # both platform and customer tenant theme/application state.
+        store-id: default
+    blob:
+      stores:
+        default:
+          type: filesystem
+          scopeBinding: TENANT
+          rootDir: /app/blobs
+          autoCreateDirs: true
+    kv:
+      stores:
+        blob:
+          metadata:
+            type: KvStoreConfig
+            backendId: database
+            scopeBinding: TENANT
+    license:
+      command-enforcement:
+        enabled: true
+        missing-descriptor-mode: warn
+      gate:
+        service-role: service-data
 ---
 {{- end }}
 {{- if .Values.services.issuer.enabled }}
@@ -62,8 +185,31 @@ metadata:
     app.kubernetes.io/component: issuer
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "issuer")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vci,credential-design,statuslists
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        token-endpoint-source: active-as
+        active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+        active-as-client-role: issuer
+        delegation:
+          enabled: true
+        client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        allowed-audiences: {{ printf "%s,%s,%s" (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "did") (include "edk-enterprise.serviceAudience" "tenant-as") | quote }}
+    east-west:
+      tenant-did:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
     security:
-      header-trust-policy:
+      workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
@@ -95,19 +241,53 @@ data:
             path: "{tempDir}/edk-verify-keystore.p12"
     transport:
       routing:
+        configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: false
           kms:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            preferServiceTokenOverSessionBearer: true
             services:
+              key: &issuerTenantKmsGrpcRoute
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+              keys: *issuerTenantKmsGrpcRoute
               signature:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
                 commands:
                   "[kms.signature.verify]":
                     target: LOCAL
+              mac: *issuerTenantKmsGrpcRoute
+              encryption: *issuerTenantKmsGrpcRoute
+              ecdh: *issuerTenantKmsGrpcRoute
           oauth2:
             target: SERVER
             transport: HTTP
             endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+          "[oauth2-as-admin]":
+            target: SERVER
+            transport: HTTP
+            endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-as" | quote }}
+            preferServiceTokenOverSessionBearer: true
+          trust:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: true
+          {{- if (index .Values.services "wallet-interaction").enabled }}
           wallet:
-            serviceTokenAudience: {{ index .Values.serviceIdentity.audiences "wallet-interaction" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "wallet-interaction" | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               interaction:
@@ -115,6 +295,7 @@ data:
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-interaction")) .Values.grpc.port | quote }}
                 timeoutMs: 30000
+          {{- end }}
     blob:
       stores:
         designs:
@@ -147,8 +328,26 @@ metadata:
     app.kubernetes.io/component: verifier
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "verifier")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vp
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        token-endpoint-source: active-as
+        active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+        active-as-client-role: verifier
+        client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
     security:
-      header-trust-policy:
+      workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
@@ -176,19 +375,53 @@ data:
             path: "{tempDir}/edk-verify-keystore.p12"
     transport:
       routing:
+        # The verifier is a route-only satellite. Keep its tenant-KMS and trust
+        # destinations fixed by deployment configuration so tenant/principal
+        # settings cannot make blind-index MAC generation local.
+        configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: false
           kms:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            preferServiceTokenOverSessionBearer: true
             services:
+              key: &verifierTenantKmsGrpcRoute
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+              keys: *verifierTenantKmsGrpcRoute
               signature:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
                 commands:
                   "[kms.signature.verify]":
                     target: LOCAL
+              mac: *verifierTenantKmsGrpcRoute
+              encryption: *verifierTenantKmsGrpcRoute
+              ecdh: *verifierTenantKmsGrpcRoute
           did:
             target: SERVER
             transport: HTTP
             endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
+          # The platform owns the tenant trust-domain store. Keep the Helm
+          # verifier aligned with the Compose runtime so testing-console reads
+          # and enforcement resolve the same platform-backed selections.
+          trust:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: true
+          {{- if (index .Values.services "wallet-interaction").enabled }}
           wallet:
-            serviceTokenAudience: {{ index .Values.serviceIdentity.audiences "wallet-interaction" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "wallet-interaction" | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               interaction:
@@ -196,6 +429,7 @@ data:
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-interaction")) .Values.grpc.port | quote }}
                 timeoutMs: 30000
+          {{- end }}
 ---
 {{- end }}
 {{- if (index .Values.services "wallet-unit").enabled }}
@@ -208,8 +442,19 @@ metadata:
     app.kubernetes.io/component: wallet-unit
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "wallet-unit")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        active-as-client-role: wallet-unit
+        client-id: {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
     security:
-      header-trust-policy:
+      workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
@@ -225,6 +470,16 @@ data:
       blob.metadata:
         type: database
         scope-binding: TENANT
+    transport:
+      routing:
+        modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: false
 ---
 {{- end }}
 {{- if (index .Values.services "wallet-interaction").enabled }}
@@ -237,8 +492,19 @@ metadata:
     app.kubernetes.io/component: wallet-interaction
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "wallet-interaction")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        active-as-client-role: wallet-interaction
+        client-id: {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
     security:
-      header-trust-policy:
+      workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
@@ -249,11 +515,38 @@ data:
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-unit" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
     transport:
       routing:
+        configScope: APP
         modules:
-          wallet:
-            serviceTokenAudience: {{ index .Values.serviceIdentity.audiences "wallet-unit" | quote }}
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: false
+          kms:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
+              # Client-instance keys stay in this workload's software WSCD.
+              key:
+                target: LOCAL
+              keys:
+                target: LOCAL
+              signature:
+                commands:
+                  "[kms.signature.create]":
+                    target: SERVER
+                    transport: GRPC
+                    endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+          wallet:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "wallet-unit" | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              unit:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-unit")) .Values.grpc.port | quote }}
               "[hsm-policy]":
                 commands:
                   "[wallet.hsm-policy.authorize]":

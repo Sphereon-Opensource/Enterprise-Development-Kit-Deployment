@@ -15,21 +15,27 @@ server:
     auth:
       enabled: true
       # Open prefixes: OAuth protocol surface, login UI, discovery/JWKS, the
-      # internal pre-auth registration channel, the in-network command transport,
-      # and RFC 7662 introspection. The signing-key provisioning endpoint is
+      # internal pre-auth registration channel and RFC 7662 introspection. The signing-key command
+      # transport is
       # intentionally protected: tenant resolution validates the platform-issued
       # bearer and uses its tenant_id claim before the tenant's public host is active.
-      anonymous-path-prefixes: /authorize,/login,/token,/.well-known,/internal/preauth,/api/commands,/introspect
-      # Trust anchor for the platform AS. The /internal/provision/signing-key endpoint validates a
-      # short-lived, platform-issued bearer bound to this tenant (per-tenant audience), so it needs the
-      # platform issuer and JWKS — the same anchor the tenant runtime services trust.
+      anonymous-path-prefixes: /authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect
+      # Trust anchor for the platform AS. The internal east-west surfaces validate a short-lived,
+      # platform-issued bearer bound to this tenant (per-tenant audience), so they need the platform
+      # issuer and JWKS, the same anchor the tenant runtime services trust.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      expected-audience: enterprise-tenant-as
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
+    token-endpoint-allow-http: true
+    token-endpoint-source: configured
+    active-as-client-role: authorization-server
     client-id: tenant-as-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    tenant-bound-client-id: true
     audience: enterprise-platform
+    allowed-audiences: enterprise-tenant-kms
 sphereon:
   telemetry:
     enabled: true
@@ -59,7 +65,7 @@ otel:
         endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
         protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
 security:
-  header-trust-policy:
+  workload-trust-policy:
     trusted_service_ids:
       - service-crypto
       - service-data
@@ -77,6 +83,7 @@ transport:
     enabled: false
     port: 9090
   routing:
+    configScope: APP
     modules:
       kms:
         serviceTokenAudience: enterprise-tenant-kms
@@ -96,24 +103,46 @@ transport:
                 target: LOCAL
           mac: *tenantKmsGrpcRoute
           encryption: *tenantKmsGrpcRoute
+          ecdh: *tenantKmsGrpcRoute
       platform:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
         services:
           config: &platformGrpcRoute
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
       application:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+      auth:
+        # Identity and credential storage is owned by the platform control plane. Hosted login
+        # stays local, but password verification must use the same central credential authority.
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
+        services:
+          credentials:
+            commands:
+              "[auth.credentials.verify-remote]":
+                target: SERVER
+                transport: GRPC
+                endpoint: grpc://enterprise-platform:9090
+      secret:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: false
 config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: oauth2.servers,kms.providers
+      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
     tenant-config-db:
       enabled: false
 database:
@@ -125,6 +154,27 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
+    # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
+    secret-management-admin:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
   tenants:
     default:
       dialect: postgresql
@@ -164,7 +214,7 @@ kms:
         path: "{tempDir}/edk-verify-keystore.p12"
 crypto:
   kms:
-    # The AS signing roles resolve against the tenant-slug provider, which is
+    # The AS signing roles resolve against the tenant default provider, which is
     # served remotely by the tenant KMS via the kms routing module above. No key
     # material is held locally.
     roles:
@@ -205,3 +255,19 @@ license:
     embedded:
       enabled: ${env:EDK_LICENSE_TRUST_EMBEDDED:true}
     root-ca-bundle-path: /app/license/license-root-ca.pem
+
+secret:
+  authority:
+    allowed-clock-skew-millis: 5000
+    satellite:
+      workload-id: service-tenant-as
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}

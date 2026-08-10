@@ -201,18 +201,23 @@ normal customer setup path; they are useful for validation, demos, and repeatabl
 API automation.
 
 Both helpers read `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`.
-The file contains Postman/provision variables only, including `baseDomain`,
-`tenantSlug`, `tenantName`, `licenseBundleZipPath`, `operatorEmail`, and
-`operatorPassword`. These are not Docker Compose or Helm startup variables.
+The supplied file is a post-setup environment. It contains `baseDomain`,
+`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword`,
+`tenantOwnerPassword`, `tenantOwnerCodeVerifier`, and `idpClientSecret`.
+These are Postman/provision variables, not Docker Compose or Helm startup
+variables.
 The operator OAuth callback is derived from the platform URL and the hosted
 session during sign-in; do not add or fill any separate callback variable.
 
 ### Provision script
 
 The all-in-one provision script drives the same REST APIs against an
-already-running stack. It performs setup if the setup gate is still open, signs
-the operator in, creates the tenant, and verifies the tenant gateway endpoint
-bindings.
+already-running stack. With the supplied post-setup environment, run it with
+`-SkipSetup` or `--skip-setup`: it signs the operator in, creates the tenant,
+and verifies the tenant gateway endpoint bindings. To automate an installation
+whose setup gate is still open, pass a separate environment file that also
+defines `licenseBundleZipPath`; the script then imports that bundle and creates
+the first operator before tenant onboarding.
 
 Windows:
 
@@ -248,15 +253,15 @@ issuance and verification examples. Import these files into Postman:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-Run folders in order when validating a fresh installation:
+The supplied collection starts after platform setup. Run its 110 requests in
+folder order:
 
 | Folder | What it does |
 | --- | --- |
-| `00 Gateway Smoke` | Checks platform gateway reachability without requiring a license bundle |
-| `01 Platform Onboarding` | Generates the license request, previews and imports the protected license bundle, then bootstraps the operator account |
+| `00 Before You Start` | Checks the imported environment and gateway contract before authenticated requests |
 | `02 Operator Sign-in` | Signs in as the operator and exchanges the authorization code for an operator token |
 | `03 Tenant Onboarding` | Registers the tenant, waits for onboarding completion, and verifies tenant public endpoint bindings |
-| `04 Tenant Federation` and later | Configure and exercise tenant issuance and verification examples |
+| `04 Tenant Federation` through `15 Authorization Code Offer` | Configure and exercise tenant federation, the disposable SOFTWARE KMS create/write/validate/rotate/detach/retire lifecycle, DID, issuance, status-list, DCQL, and verification examples |
 
 ## After onboarding
 

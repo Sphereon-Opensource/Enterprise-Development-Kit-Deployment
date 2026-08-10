@@ -115,9 +115,8 @@ deployment:
   selector that matches its pods.
 
 A pod that is `Running` but never becomes `Ready`, with database connection
-errors in its logs, points at one of these. Do not diagnose this by publishing
-`/health` or `/ready` through the customer gateway; those probes are internal
-orchestration signals. The platform connects only to the control-plane
+errors in its logs, points at one of these. Keep `/health` and `/ready` private
+while investigating the workload. The platform connects only to the control-plane
 database. Satellite services connect only to the tenant workload database and
 fetch platform-owned configuration from the platform over the internal command
 route.
@@ -140,10 +139,10 @@ an admin call usually means the token failed verification:
   calling the right host and path for the operation.
 
 If a control-plane REST route is reachable publicly when it should not be, review
-the public/internal ingress split. Selected tenant APIs such as authenticated KMS
-REST at `/api/kms/v1` are intentionally exposed through the tenant gateway, while
-other administrative paths belong on the internal hostname behind JWT auth or a
-mesh. See [TLS and gateway](tls-and-gateway.md).
+the public/internal ingress split. Tenant-KMS has no public REST route; operators
+manage typed KMS resources through tenant-scoped platform-config APIs. Other
+administrative paths belong on the internal hostname behind JWT auth or a mesh.
+See [TLS and gateway](tls-and-gateway.md).
 
 ## Ingress, TLS, and tenant routing
 
@@ -179,8 +178,8 @@ Other ingress and TLS symptoms:
 The backing workloads call the platform service for platform configuration and
 control-plane data. Workloads that need key operations route KMS service
 commands to tenant-KMS over internal gRPC with a workload token for the
-`enterprise-tenant-kms` audience; tenant operators use `/api/kms/v1` only for
-the protected tenant REST administration surface. Issuer and verifier call
+`enterprise-tenant-kms` audience; tenant operators manage typed KMS resources
+through tenant-scoped platform-config APIs. Issuer and verifier call
 wallet-interaction, and wallet-interaction calls wallet-unit, over internal
 service DNS for wallet protocol work. If platform-config, signing, or wallet
 operations fail with a connection error:
@@ -262,9 +261,10 @@ order:
    explicit non-default target must appear once in
    `allowed-access-token-audiences`.
 4. **Receiver audience.** Confirm the route target equals the receiver's
-   `serviceIdentity.audiences.<receiver>` and the receiver's effective expected
-   audience. A token can be validly issued yet rejected by the receiver when
-   these differ.
+   fixed protocol audience (`enterprise-platform`, `enterprise-tenant-kms`,
+   `enterprise-tenant-as`, `enterprise-tenant-did`, `enterprise-issuer`, or
+   `enterprise-verifier`) and the receiver's effective expected audience. A
+   token can be validly issued yet rejected by the receiver when these differ.
 
 A partial caller identity fails before token acquisition with
 `Incomplete service identity configuration; missing required keys: <keys>`;
@@ -283,14 +283,18 @@ route registration; do not weaken the receiver audience check.
 
 ## Admin console routing and sign-in
 
-The optional admin console is served under `/admin-console` on the platform host and
-listens on port `3000`. If it does not load or you cannot sign in:
+The admin console is served under `/admin-console` by separate platform and
+tenant runtime instances. If it does not load or you cannot sign in:
 
 - `404` on `https://platform.<base-domain>/admin-console`. The `admin-console` service is not
   enabled, or the gateway has no `/admin-console` route. In Helm set
   `services.admin-console.enabled: true`; in Compose bring the stack up with the
   gateway overlay. Confirm the `/admin-console` route exists and takes precedence over
   the platform catch-all.
+- `404` on `https://<tenant>.<base-domain>/admin-console`. Confirm
+  `admin-console-tenant` is healthy and the wildcard `/admin-console` route
+  points to it, not to the platform console. If routing is correct, an
+  unregistered or disabled tenant host still returns 404 by design.
 - Page loads but assets `404` (for example `/admin-console/_next/...`). The base path or
   the gateway prefix handling is wrong. The container must run with
   `NEXT_PUBLIC_BASE_PATH=/admin-console`, and the route must forward the full path
@@ -305,7 +309,7 @@ listens on port `3000`. If it does not load or you cannot sign in:
   `404`. Confirm the separate direct-support route includes only the two testing
   API prefixes, the exact portal OAuth login/callback/grant/revoke endpoints,
   `_next`, public assets, and health under
-  `/admin-console`. Do not add a generic instance-host `/admin-console` route or
+  `/admin-console`. These requests must reach `admin-console-tenant`; do not add
   a compatibility route for `/admin-console/testing`.
 - Runtime config request `404` or `401` on
   `/api/platform/bootstrap/v1/runtime-config/admin-console`. The platform
@@ -318,17 +322,17 @@ listens on port `3000`. If it does not load or you cannot sign in:
   admin-console BFF cannot resolve runtime-config services or exchange a tenant
   service token. Confirm the container has `ADMIN_CONSOLE_PLATFORM_BASE_URL`
   pointing at the internal platform service, and has the server-side tenant
-  upstreams (`ADMIN_CONSOLE_TENANT_KMS_BASE_URL`,
-  `ADMIN_CONSOLE_TENANT_DID_BASE_URL`, `ADMIN_CONSOLE_ISSUER_BASE_URL`,
+  upstreams (`ADMIN_CONSOLE_TENANT_DID_BASE_URL`, `ADMIN_CONSOLE_ISSUER_BASE_URL`,
   `ADMIN_CONSOLE_VERIFIER_BASE_URL`) pointing at the internal REST services.
   The runtime-config response must still include the expected `data.services`
-  entries and matching service audiences for STS exchange. External automation
-  may still call tenant gateway API roots directly, but the browser console
-  should stay same-origin through `/admin-console/api/*`.
-- `401` or a failed sign-in. The operator token failed, or the redirect URI is
+  entries and matching service audiences for STS exchange, and must not expose a
+  tenant-KMS browser service. KMS authoring uses the typed platform-config BFF
+  surface; other browser console calls stay same-origin through
+  `/admin-console/api/*`.
+- `401` or a failed sign-in. The platform or tenant token failed, or the redirect URI is
   not registered. The console's redirect URI
   `{host}/admin-console/callback` must be registered for the operator
   client in the authorization server for that host (the platform AS on
-  `platform.<base-domain>`). The console resolves its AS same-origin from the host it is
+  `platform.<base-domain>`, otherwise that tenant's default AS). The console resolves its AS from the host it is
   served on, so a host with no matching, correctly configured AS cannot complete
   the flow.

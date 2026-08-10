@@ -11,24 +11,24 @@
 #   1. scripts/gen-local-wildcard-cert.(sh|ps1)   # one time, for local evaluation
 #   2. docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d
 #
-# Base domain is parameterized through EDK_PLATFORM_BASE_DOMAIN (default
-# saas.localtest.me, which resolves every subdomain to 127.0.0.1 for local
-# evaluation). The per-service external base URLs below are derived from it so
+# Base domain is required through EDK_PLATFORM_BASE_DOMAIN. For local evaluation,
+# select the explicit localtest switch in the launcher to use saas.localtest.me.
+# The per-service external base URLs below are derived from it so
 # every advertised issuer URL, metadata document, and redirect flows through the
 # gateway over https. Workload healthchecks remain internal orchestration
 # signals; they are not routed as customer checks.
 #
-# Note: the Traefik file provider (gateway/traefik/dynamic.yml) does not
-# interpolate environment variables. For a base domain other than the default,
-# replace saas.localtest.me throughout dynamic.yml as well as setting
+# Note: the Traefik file provider (gateway/traefik/dynamic.yml) is an explicit
+# localtest fixture and does not interpolate environment variables. For another
+# base domain, provide a matching generated routing file as well as setting
 # EDK_PLATFORM_BASE_DOMAIN here.
 
 x-edk-gateway-public-env: &edk-gateway-public-env
-  EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+  EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
   # The platform AS is the fixed operator issuer. Tenant AS issuers are not
   # configured at deployment time; tenant onboarding creates registry-backed
   # public endpoint bindings such as https://<tenant>.<base-domain>.
-  EDK_PLATFORM_PUBLIC_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+  EDK_PLATFORM_PUBLIC_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
   EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
 
 services:
@@ -55,19 +55,19 @@ services:
         # aliased. Add one alias per tenant slug you onboard so each tenant's
         # JWKS is reachable at https://{tenant}.<base-domain>/ from inside the network.
         aliases:
-          - platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+          - platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
           # Example tenant aliases (uncomment and adjust per onboarded slug):
-          # - acme.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
-          # - globex.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
-          # - initech.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+          # - acme.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+          # - globex.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+          # - initech.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
 
   # Operator / platform plane. The external and onboarding UI URLs point at the
   # gateway operator host so operator login and the admin UI are served over TLS.
   enterprise-platform:
     environment:
       <<: *edk-gateway-public-env
-      EXTERNAL_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
-      ONBOARDING_UI_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+      EXTERNAL_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      ONBOARDING_UI_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
       # LOCAL-EVALUATION-ONLY: trust the local CA so the platform accepts the
       # gateway certificate when it resolves its own AS JWKS over TLS. For
       # production with a publicly-trusted certificate, remove this line and the
@@ -77,7 +77,7 @@ services:
       # LOCAL-EVALUATION-ONLY: remove for production with a publicly-trusted cert.
       - ./gateway/certs:/app/certs:ro
     healthcheck:
-      test: ["CMD", "bash", "-c", "(exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) ') || (exec 4<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -Eq ' (200|404) ')"]
+      test: ["CMD", "bash", "-c", "(exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) ') || (exec 4<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -Eq ' (200|404) ')"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -156,7 +156,16 @@ services:
     networks:
       appnet: {}
     environment:
-      ADMIN_CONSOLE_PUBLIC_ORIGIN: https://platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
+      ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
+      ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
+
+  admin-console-tenant:
+    networks:
+      appnet: {}
+    environment:
+      ADMIN_CONSOLE_MODE: TENANT
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
       ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"

@@ -35,3 +35,21 @@ services:
         value: /admin-console
       - name: PORT
         value: "3000"
+  admin-console-tenant:
+    enabled: true
+    image: admin-console
+    replicas: 1
+    restPort: 3000
+    # Gateway API publishes this service on the wildcard listener at the same
+    # /admin-console path. It receives no portalBff client secret.
+    publicIngress:
+      enabled: false
+      className: public
+      host: "*.example.com"
+      paths:
+        - /admin-console
+    env:
+      - name: NEXT_PUBLIC_BASE_PATH
+        value: /admin-console
+      - name: PORT
+        value: "3000"

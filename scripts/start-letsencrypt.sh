@@ -151,7 +151,7 @@ PY
   echo
   echo "Start with:"
   echo "  cd compose"
-  echo "  docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait"
+  echo "  docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait --remove-orphans"
   echo
   echo "First-run setup: https://platform.$BASE_DOMAIN/setup-license"
   echo "Operator console after setup: https://platform.$BASE_DOMAIN/admin-console"
@@ -163,7 +163,7 @@ PY
       exit 1
     fi
   elif [[ "$UP" == true ]]; then
-    (cd "$COMPOSE_DIR" && docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait)
+    (cd "$COMPOSE_DIR" && docker compose -f docker-compose.yml -f docker-compose.public-cert.yml up -d --wait --remove-orphans)
   fi
 
   exit 0
@@ -218,11 +218,11 @@ fi
 echo
 echo "Start with:"
 echo "  cd compose"
-echo "  docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait"
+echo "  docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait --remove-orphans"
 echo
 echo "First-run setup: https://platform.$BASE_DOMAIN/setup-license"
 echo "Operator console after setup: https://platform.$BASE_DOMAIN/admin-console"
 
 if [[ "$UP" == true ]]; then
-  (cd "$COMPOSE_DIR" && docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait)
+  (cd "$COMPOSE_DIR" && docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d --wait --remove-orphans)
 fi

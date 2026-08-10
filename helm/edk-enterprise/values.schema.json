@@ -1,10 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
+  "required": ["global"],
   "additionalProperties": true,
   "properties": {
     "global": {
       "type": "object",
+      "required": ["platformBaseDomain"],
       "additionalProperties": true,
       "properties": {
         "imageRegistry": {
@@ -20,7 +22,22 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
         },
-        "platformBaseDomain": { "type": "string", "minLength": 1 }
+        "platformBaseDomain": { "type": "string", "minLength": 1 },
+        "hostAliases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["ip", "hostnames"],
+            "properties": {
+              "ip": { "type": "string", "minLength": 1 },
+              "hostnames": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
       }
     },
     "database": {
@@ -30,6 +47,16 @@
         "enabled": { "type": "boolean" },
         "dialect": { "type": "string", "enum": ["postgresql"] },
         "platform": { "$ref": "#/definitions/databaseEndpoint" },
+        "secretManagement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["existingSecret", "adminPasswordKey", "tenantPasswordKey"],
+          "properties": {
+            "existingSecret": { "type": "string", "minLength": 1 },
+            "adminPasswordKey": { "type": "string", "minLength": 1 },
+            "tenantPasswordKey": { "type": "string", "minLength": 1 }
+          }
+        },
         "maintenance": {
           "type": "object",
           "additionalProperties": true,
@@ -55,6 +82,279 @@
               }
             }
           ]
+        },
+        "trustDomain": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "isolation": { "type": "string", "enum": ["schema", "shared", "database", "host"] },
+            "schemaPattern": { "type": "string", "minLength": 1 },
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 0, "maximum": 65535 },
+            "name": { "type": "string" },
+            "existingSecret": { "type": "string" },
+            "usernameKey": { "type": "string", "minLength": 1 },
+            "passwordKey": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "secretManagement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["egress", "bootstrap", "authority", "internalResolution", "kubernetesMount"],
+      "properties": {
+        "egress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allowedHttpsPorts", "privateEndpointAllowlist"],
+          "properties": {
+            "allowedHttpsPorts": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "privateEndpointAllowlist": {
+              "type": "object",
+              "maxProperties": 10000,
+              "propertyNames": {
+                "anyOf": [
+                  {
+                    "pattern": "^(?:\\*\\.)?[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+                  },
+                  {
+                    "pattern": "^(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})(?:\\.(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})){3}$"
+                  },
+                  {
+                    "minLength": 2,
+                    "maxLength": 45,
+                    "pattern": "^[0-9A-Fa-f]*:[0-9A-Fa-f:]*$"
+                  }
+                ]
+              },
+              "additionalProperties": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "oneOf": [
+                    {
+                      "pattern": "^(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})(?:\\.(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})){3}/(?:[89]|[12][0-9]|3[0-2])$"
+                    },
+                    {
+                      "minLength": 4,
+                      "maxLength": 64,
+                      "pattern": "^[0-9A-Fa-f]*:[0-9A-Fa-f:]*/(?:1[6-9]|[2-9][0-9]|1[01][0-9]|12[0-8])$"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "bootstrap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kek"],
+          "properties": {
+            "kek": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mode",
+                "identity",
+                "version",
+                "kmsProviderId",
+                "idempotencyMacKey"
+              ],
+              "properties": {
+                "mode": { "type": "string", "const": "SOFTWARE_KMS" },
+                "identity": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+                },
+                "version": { "type": "integer", "minimum": 1 },
+                "kmsProviderId": {
+                  "type": "string",
+                  "const": "software"
+                },
+                "idempotencyMacKey": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+                }
+              }
+            }
+          }
+        },
+        "authority": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "platformStorageKmsProviderId",
+            "platformStorageKmsBindingKey",
+            "defaultTenantOfferingKmsProviderId",
+            "defaultTenantOfferingKmsBindingTemplate",
+            "allowTenantManagedProviders",
+            "allowPlatformOfferings",
+            "retentionDays"
+          ],
+          "properties": {
+            "platformStorageKmsProviderId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "platformStorageKmsBindingKey": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$"
+            },
+            "defaultTenantOfferingKmsProviderId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "defaultTenantOfferingKmsBindingTemplate": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$"
+            },
+            "allowTenantManagedProviders": { "type": "boolean" },
+            "allowPlatformOfferings": { "type": "boolean" },
+            "retentionDays": { "type": "integer", "minimum": 1, "maximum": 3650 }
+          }
+        },
+        "internalResolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["expectedAudience", "allowedServiceActors"],
+          "properties": {
+            "expectedAudience": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$"
+            },
+            "allowedServiceActors": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$"
+              }
+            }
+          }
+        },
+        "kubernetesMount": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "existingSecret", "manifest", "manifestSha256"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "existingSecret": { "type": "string" },
+            "manifest": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^sec_[A-Za-z0-9_-]{16,128}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 255,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$"
+              }
+            },
+            "manifestSha256": {
+              "type": "string"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": { "enabled": { "const": true } },
+                "required": ["enabled"]
+              },
+              "then": {
+                "properties": {
+                  "existingSecret": { "minLength": 1 },
+                  "manifest": { "minProperties": 1 },
+                  "manifestSha256": {
+                    "pattern": "^sha256:[a-f0-9]{64}$"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "existingSecret": { "maxLength": 0 },
+                  "manifest": { "maxProperties": 0 },
+                  "manifestSha256": { "maxLength": 0 }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "secretAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["existingSecrets", "keys"],
+      "properties": {
+        "existingSecrets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "properties": {
+            "platform": { "type": "string" },
+            "tenant-kms": { "type": "string" },
+            "tenant-as": { "type": "string" },
+            "did": { "type": "string" },
+            "blob": { "type": "string" },
+            "issuer": { "type": "string" },
+            "verifier": { "type": "string" },
+            "wallet-unit": { "type": "string" },
+            "wallet-interaction": { "type": "string" }
+          }
+        },
+        "keys": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "centralPermitSigningKey",
+            "centralAssertionVerificationKeys",
+            "satelliteAssertionSigningKey",
+            "satellitePermitVerificationKeys",
+            "centralPermitPrivateKey",
+            "centralPermitPublicKey",
+            "satelliteAssertionPrivateKey",
+            "assertionPublicKeys"
+          ],
+          "properties": {
+            "centralPermitSigningKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "centralAssertionVerificationKeys": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "satelliteAssertionSigningKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "satellitePermitVerificationKeys": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "centralPermitPrivateKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "centralPermitPublicKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "satelliteAssertionPrivateKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+            "assertionPublicKeys": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["service-platform", "service-crypto", "service-data", "service-blob", "service-tenant-as", "service-oid4vci", "service-oid4vp", "service-wallet-unit", "service-wallet-interaction"],
+              "properties": {
+                "service-platform": { "type": "string", "minLength": 1 },
+                "service-crypto": { "type": "string", "minLength": 1 },
+                "service-data": { "type": "string", "minLength": 1 },
+                "service-blob": { "type": "string", "minLength": 1 },
+                "service-tenant-as": { "type": "string", "minLength": 1 },
+                "service-oid4vci": { "type": "string", "minLength": 1 },
+                "service-oid4vp": { "type": "string", "minLength": 1 },
+                "service-wallet-unit": { "type": "string", "minLength": 1 },
+                "service-wallet-interaction": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
         }
       }
     },
@@ -113,19 +413,12 @@
     "platformKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "tenantKmsKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "walletInteractionKeystore": { "$ref": "#/definitions/keystorePersistence" },
+    "blobPersistence": { "$ref": "#/definitions/keystorePersistence" },
     "platform": {
       "type": "object",
       "additionalProperties": true,
       "properties": {
         "externalBaseUrl": { "type": "string", "minLength": 1 },
-        "secretBackend": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type"],
-          "properties": {
-            "type": { "type": "string", "minLength": 1 }
-          }
-        },
         "setup": {
           "type": "object",
           "additionalProperties": false,
@@ -160,7 +453,7 @@
               "type": "object",
               "additionalProperties": true,
               "properties": {
-                "email": { "type": "string", "minLength": 1 },
+                "email": { "type": "string" },
                 "displayName": { "type": "string", "minLength": 1 },
                 "roles": { "type": "string" }
               }
@@ -174,19 +467,20 @@
     },
     "serviceIdentity": {
       "type": "object",
-      "additionalProperties": true,
-      "required": ["clientIds", "serviceIds", "audiences"],
+      "additionalProperties": false,
+      "required": ["clientIds", "serviceIds"],
       "properties": {
         "internalClientExistingSecret": { "type": "string" },
         "internalClientSecretKey": { "type": "string", "minLength": 1 },
         "clientIds": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
           "properties": {
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
             "did": { "type": "string", "minLength": 1 },
+            "blob": { "type": "string", "minLength": 1 },
             "issuer": { "type": "string", "minLength": 1 },
             "verifier": { "type": "string", "minLength": 1 },
             "wallet-unit": { "type": "string", "minLength": 1 },
@@ -196,25 +490,12 @@
         "serviceIds": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
           "properties": {
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
             "did": { "type": "string", "minLength": 1 },
-            "issuer": { "type": "string", "minLength": 1 },
-            "verifier": { "type": "string", "minLength": 1 },
-            "wallet-unit": { "type": "string", "minLength": 1 },
-            "wallet-interaction": { "type": "string", "minLength": 1 }
-          }
-        },
-        "audiences": {
-          "type": "object",
-          "additionalProperties": true,
-          "required": ["platform", "tenant-kms", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
-          "properties": {
-            "platform": { "type": "string", "minLength": 1 },
-            "tenant-kms": { "type": "string", "minLength": 1 },
-            "did": { "type": "string", "minLength": 1 },
+            "blob": { "type": "string", "minLength": 1 },
             "issuer": { "type": "string", "minLength": 1 },
             "verifier": { "type": "string", "minLength": 1 },
             "wallet-unit": { "type": "string", "minLength": 1 },
@@ -224,12 +505,13 @@
         "anonymousPathPrefixes": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["platform", "tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
           "properties": {
             "platform": { "type": "string" },
             "tenant-kms": { "type": "string" },
             "tenant-as": { "type": "string" },
             "did": { "type": "string" },
+            "blob": { "type": "string" },
             "issuer": { "type": "string" },
             "verifier": { "type": "string" },
             "wallet-unit": { "type": "string" },
@@ -327,7 +609,24 @@
       "additionalProperties": true,
       "properties": {
         "create": { "type": "boolean" },
-        "name": { "type": "string" }
+        "name": { "type": "string" },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "platform": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["create", "name", "annotations"],
+          "properties": {
+            "create": { "type": "boolean" },
+            "name": { "type": "string" },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        }
       }
     },
     "networkPolicy": {
@@ -336,6 +635,40 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "allowDnsEgress": { "type": "boolean" },
+        "secretProviderEgress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "namespaceSelector", "podSelector", "ipBlocks", "ports"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "namespaceSelector": { "type": "object" },
+            "podSelector": { "type": "object" },
+            "ipBlocks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["cidr"],
+                "properties": {
+                  "cidr": { "type": "string", "minLength": 1 },
+                  "except": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            },
+            "ports": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            }
+          }
+        },
         "ingressController": {
           "type": "object",
           "additionalProperties": true,
@@ -375,6 +708,7 @@
         "enabled": { "type": "boolean" },
         "endpoint": { "type": "string" },
         "protocol": { "type": "string" },
+        "metricsExporter": { "type": "string" },
         "headers": { "type": "string" },
         "resourceAttributes": { "type": "string" }
       }
@@ -430,6 +764,14 @@
         },
         "operatorHost": { "type": "string", "minLength": 1 },
         "baseDomain": { "type": "string" },
+        "requestTimeout": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(ms|s|m|h)$"
+        },
+        "backendRequestTimeout": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(ms|s|m|h)$"
+        },
         "httpRedirect": { "type": "boolean" },
         "tls": {
           "type": "object",
@@ -445,9 +787,9 @@
     "services": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform", "tenant-kms", "did", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
+      "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
       "patternProperties": {
-        "^(platform|tenant-kms|did|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console)$": {
+        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console|admin-console-tenant)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {
@@ -458,7 +800,11 @@
             "publicIngress": { "$ref": "#/definitions/ingressBlock" },
             "internalIngress": { "$ref": "#/definitions/ingressBlock" },
             "resources": { "type": "object" },
-            "env": { "type": "array" }
+            "env": { "type": "array" },
+            "command": { "type": "array", "items": { "type": "string" } },
+            "args": { "type": "array", "items": { "type": "string" } },
+            "volumeMounts": { "type": "array", "items": { "type": "object" } },
+            "volumes": { "type": "array", "items": { "type": "object" } }
           }
         }
       }

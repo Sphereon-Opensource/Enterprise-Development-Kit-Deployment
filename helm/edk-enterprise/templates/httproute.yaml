@@ -3,6 +3,27 @@
 {{- $wildcard := printf "*.%s" $base }}
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
 {{- $gatewayName := printf "%s-gateway" (include "edk-enterprise.fullname" .) }}
+{{- $platformRouteAnnotations := .Values.gateway.platformAccess.routeAnnotations | default dict }}
+{{- $preserveOriginalHost := .Values.gateway.envoyGateway.preserveOriginalHost | default false }}
+{{- $edgeHostFilterName := printf "%s-preserve-edge-host" (include "edk-enterprise.fullname" .) }}
+{{- if and .Values.gateway.enabled $preserveOriginalHost }}
+# Envoy Gateway can rewrite the authority to a selected pod while forwarding to
+# a Service backend. This restores its own early snapshot after route matching,
+# so host-based tenant resolution receives the public tenant host.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: {{ $edgeHostFilterName }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+spec:
+  urlRewrite:
+    hostname:
+      type: Header
+      header: x-forwarded-host
+    appendXForwardedHost: false
+---
+{{- end }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
 {{- if eq $name "platform" }}
@@ -10,6 +31,44 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - timeouts:
+        request: {{ $.Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+{{- else if eq $name "admin-console" }}
+# The one-request Secrets delegation issuer is east-west/BFF-only. Shadow its
+# exact public path to the admin-console service without Next's /admin-console
+# basePath, which deliberately returns 404. The BFF itself calls the platform
+# service directly over the cluster network.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "secret-delegation-hidden") }}
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   labels:
     {{- include "edk-enterprise.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
@@ -22,13 +81,12 @@ spec:
   rules:
     - matches:
         - path:
-            type: PathPrefix
-            value: /
+            type: Exact
+            value: /api/platform/admin/v1/application/secrets/internal/delegated-token
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
 ---
-{{- else if eq $name "admin-console" }}
 # Operator/admin console on the operator host. The explicit /admin-console PathPrefix is
 # more specific than the platform route's / catch-all, so Gateway API path
 # precedence (longest prefix wins) routes /admin-console/* here while everything
@@ -38,6 +96,10 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   labels:
     {{- include "edk-enterprise.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
@@ -48,22 +110,38 @@ spec:
   hostnames:
     - {{ $operatorHost | quote }}
   rules:
-    - matches:
+    # The console BFF keeps the browser request open while synchronous tenant
+    # provisioning completes. Envoy Gateway otherwise applies its 15-second
+    # default to this outer route even though the platform route below permits
+    # the configured provisioning timeout.
+    - timeouts:
+        request: {{ $.Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}
+      matches:
         - path:
             type: PathPrefix
             value: /admin-console
+        - path:
+            type: Exact
+            value: /admin
+        - path:
+            type: PathPrefix
+            value: /admin/
+        - path:
+            type: Exact
+            value: /api/platform/bootstrap/v1/admin-console-context
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
 ---
-# Instance-host testing console. Rewrite only the canonical public page URL to
-# Next's internal /admin-console basePath. Direct BFF/static support paths use a
-# separate rule without URLRewrite. Instance access mode and exact origin remain
-# fail-closed backend endpoint-registry decisions.
+{{- else if eq $name "admin-console-tenant" }}
+# Tenant administration and the existing instance testing console share the
+# tenant-mode runtime. The full /admin-console prefix is safe here because this
+# process has no platform BFF credential and validates the exact tenant host.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" (printf "%s-tenant" $name)) }}
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
   labels:
     {{- include "edk-enterprise.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
@@ -74,6 +152,32 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
+    # Only the browser-safe admin-console runtime projection is exposed from
+    # the platform service on tenant hosts.
+    - matches:
+        - path:
+            type: Exact
+            value: /api/platform/bootstrap/v1/runtime-config/admin-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
+          port: {{ (index $.Values.services "platform").restPort }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /admin-console
+        - path:
+            type: Exact
+            value: /admin
+        - path:
+            type: PathPrefix
+            value: /admin/
+        - path:
+            type: Exact
+            value: /api/platform/bootstrap/v1/admin-console-context
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    # Preserve the neutral public testing-console page and API rewrites.
     - matches:
         - path:
             type: PathPrefix
@@ -138,7 +242,15 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
-    - matches:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
         {{- range $path := ($paths | fromYamlArray) }}
         - path:
             type: PathPrefix
@@ -152,10 +264,147 @@ spec:
 {{- end }}
 {{- end }}
 {{- end }}
+{{- if .Values.services.blob.enabled }}
+# Public tenant branding is content addressed and has three path segments after
+# /public/assets. Keep the issuer's two-segment design-asset contract separate.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-blob-public-tenant
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: blob
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: RegularExpression
+            value: "^/public/assets/[^/]+/brand/[^/]+$"
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "blob") }}
+          port: {{ .Values.services.blob.restPort }}
+---
+# The operator host exposes the same theme/asset API through the dedicated
+# workload instead of the platform catch-all.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-blob-public-platform
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: blob
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/theme/v1
+        - path:
+            type: PathPrefix
+            value: /api/assets/v1
+        - path:
+            type: RegularExpression
+            value: "^/public/assets/[^/]+/brand/[^/]+$"
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "blob") }}
+          port: {{ .Values.services.blob.restPort }}
+---
+{{- end }}
+{{- if .Values.services.issuer.enabled }}
+# Credential-design public assets retain their established two-segment route.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-issuer-design-assets
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: issuer
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: RegularExpression
+            value: "^/public/assets/design/[^/]+$"
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "issuer") }}
+          port: {{ .Values.services.issuer.restPort }}
+---
+{{- end }}
+{{- if (index .Values.services "tenant-as").enabled }}
+# Customer identities and credentials are workload data. Route the canonical
+# identity-manager, identity-auth admin, and Trust Domain APIs to tenant-AS,
+# which owns the tenant database and tenant KMS identifier-protection keys.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-tenant-as-identity-admin
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tenant-as
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: RegularExpression
+            value: "^/api/(identity/v1|identity-auth/v1/admin|party/v1|trust-domain/v1)(/.*)?$"
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as") }}
+          port: {{ (index .Values.services "tenant-as").restPort }}
+---
+{{- end }}
 {{- if .Values.services.platform.enabled }}
-# Tenant-host platform projections used by the theme and wallet-entitlement
-# APIs. These are intentionally narrow; the platform's operator-host catch-all
-# must not become a wildcard tenant-host catch-all.
+# Tenant-host platform projections used by the theme, wallet-entitlement and
+# tenant-scoped platform-config APIs (which include typed KMS resource
+# management). These are intentionally narrow; the platform's operator-host
+# catch-all must not become a wildcard tenant-host catch-all.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -170,27 +419,42 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
-    - matches:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
         - path:
             type: PathPrefix
             value: /api/theme/v1
         - path:
             type: PathPrefix
             value: /api/wallet-entitlement/v1
+        - path:
+            type: PathPrefix
+            value: /api/platform/config/v1/tenants
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
           port: {{ .Values.services.platform.restPort }}
 ---
 {{- end }}
-{{- range $name := list "tenant-kms" "did" }}
+{{- range $name := list "did" }}
 {{- $svc := index $.Values.services $name }}
 {{- if $svc.enabled }}
-# Operator-host management projection. This mirrors the Compose gateway where
-# /api/kms/v1 and /api/did/v1 take precedence over the platform catch-all.
+# Operator-host DID management projection. Typed KMS resources are platform
+# configuration routes; tenant-KMS command traffic remains internal gRPC.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ include "edk-enterprise.fullname" $ }}-{{ $name }}-operator
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   labels:
     {{- include "edk-enterprise.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
@@ -204,7 +468,7 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: {{ eq $name "tenant-kms" | ternary "/api/kms/v1" "/api/did/v1" | quote }}
+            value: "/api/did/v1"
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}

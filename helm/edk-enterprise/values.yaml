@@ -9,7 +9,13 @@ global:
   # when deliberately testing the mutable `latest` tag outside production.
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
-  platformBaseDomain: example.com
+  # Required. Set this explicitly for every installation; the chart has no
+  # implicit public or localtest domain.
+  platformBaseDomain: ""
+  # Optional static pod host mappings for isolated integration environments.
+  # Production normally leaves this empty and uses cluster/public DNS. The
+  # OIDF conformance lane injects its ephemeral suite callback host explicitly.
+  hostAliases: []
 
 database:
   enabled: true
@@ -37,6 +43,13 @@ database:
       podSelector: {}
       namespaceSelector: {}
       ipBlock: {}
+  # Secret management uses two fixed, separately credentialed PostgreSQL runtime roles
+  # in the platform database. Neither role owns or creates schema objects. The deployment-only
+  # migrator reuses the platform database owner during startup, then closes that connection.
+  secretManagement:
+    existingSecret: edk-secret-management-database
+    adminPasswordKey: admin-password
+    tenantPasswordKey: tenant-password
   tenant:
     host: edk-tenant-postgres
     port: 5432
@@ -55,6 +68,112 @@ database:
       podSelector: {}
       namespaceSelector: {}
       ipBlock: {}
+  # Dedicated trust-domain router registry. Co-located by default: it reuses
+  # the platform database connection above (host/port/name/existingSecret
+  # fall back to database.platform.* whenever left empty here) and only adds
+  # isolation: schema, so per-tenant trust-domain state lives in its own
+  # schema instead of the shared pool every other platform-side store uses.
+  # The database.platform Postgres user therefore needs CREATE SCHEMA
+  # privilege. Set host/port/name/existingSecret below only to split
+  # trust-domain onto a separate/dedicated Postgres instance instead.
+  trustDomain:
+    isolation: schema
+    schemaPattern: "tenant_{id}"
+    host: ""
+    port: 0
+    name: ""
+    existingSecret: ""
+    usernameKey: username
+    passwordKey: password
+
+# Self-contained secret-management bootstrap. The persisted software KMS is the
+# baseline. Vault and cloud providers are configured separately and are never
+# required for the default chart to start.
+secretManagement:
+  egress:
+    allowedHttpsPorts:
+      - 443
+    # Platform-owned map of reviewed hostname patterns to exact private CIDRs.
+    # Both the hostname and resolved IP must match; loopback, link-local, and
+    # cloud metadata destinations remain forbidden.
+    privateEndpointAllowlist: {}
+  bootstrap:
+    kek:
+      mode: SOFTWARE_KMS
+      identity: secret-management-bootstrap-kek
+      version: 1
+      kmsProviderId: software
+      idempotencyMacKey: secret-management-idempotency-mac
+  authority:
+    platformStorageKmsProviderId: software
+    platformStorageKmsBindingKey: platform-secret-storage
+    defaultTenantOfferingKmsProviderId: software
+    defaultTenantOfferingKmsBindingTemplate: isolated-tenant-secret-storage
+    # Customer deployments start without synthetic cloud-provider offerings.
+    # Enable only after the corresponding provider integration is configured.
+    allowTenantManagedProviders: false
+    # The baseline publishes only the per-tenant software-KMS offering.
+    allowPlatformOfferings: true
+    retentionDays: 30
+  internalResolution:
+    expectedAudience: enterprise-platform
+    # Standard tenant satellites resolve their opaque, tenant-bound service
+    # credentials through the platform before calling KMS. Keep this list
+    # aligned with the platform AS internal clients below. Optional wallet
+    # actors are appended by the chart only when those workloads are enabled.
+    allowedServiceActors:
+      - tenant-as-service
+      - issuer-service
+      - kms-service
+      - did-service
+      - blob-service
+      - verifier-service
+  # Read-only deployment source for operator-managed Kubernetes Secrets. The
+  # manifest maps opaque `sec_*` IDs to keys/files in existingSecret; no tenant
+  # API can select this source or supply a path.
+  kubernetesMount:
+    enabled: false
+    existingSecret: ""
+    manifest: {}
+    # sha256 digest over the canonical manifest mapping, reported by the
+    # deployment preparation tooling. Plaintext Secret values are not hashed.
+    manifestSha256: ""
+
+# Secret-use authority material is operator supplied and isolated per workload.
+# Each referenced Secret contains only the private key needed by that workload,
+# the central permit public key, and the opaque coordinate strings consumed by
+# the runtime. The platform Secret additionally contains the central permit
+# private key and every workload assertion public key. The chart never creates,
+# copies, or returns this key material.
+secretAuthority:
+  existingSecrets:
+    platform: ""
+    tenant-kms: ""
+    tenant-as: ""
+    did: ""
+    blob: ""
+    issuer: ""
+    verifier: ""
+    wallet-unit: ""
+    wallet-interaction: ""
+  keys:
+    centralPermitSigningKey: central-permit-signing-key
+    centralAssertionVerificationKeys: central-assertion-verification-keys
+    satelliteAssertionSigningKey: satellite-assertion-signing-key
+    satellitePermitVerificationKeys: satellite-permit-verification-keys
+    centralPermitPrivateKey: central-permit-signing.pem
+    centralPermitPublicKey: central-permit.pub.pem
+    satelliteAssertionPrivateKey: assertion.pem
+    assertionPublicKeys:
+      service-platform: service-platform-assertion.pub.pem
+      service-crypto: service-crypto-assertion.pub.pem
+      service-data: service-data-assertion.pub.pem
+      service-blob: service-blob-assertion.pub.pem
+      service-tenant-as: service-tenant-as-assertion.pub.pem
+      service-oid4vci: service-oid4vci-assertion.pub.pem
+      service-oid4vp: service-oid4vp-assertion.pub.pem
+      service-wallet-unit: service-wallet-unit-assertion.pub.pem
+      service-wallet-interaction: service-wallet-interaction-assertion.pub.pem
 
 auth:
   enabled: true
@@ -112,8 +231,16 @@ walletInteractionKeystore:
   # PVC mounted at /keystore in the wallet-interaction service only. This holds
   # server-side headless wallet holder/proof key material. Mobile/IDK wallet apps
   # do not use this VDX volume.
-  enabled: true
+  enabled: false
   size: 1Gi
+  storageClass: ""
+  existingClaim: ""
+
+# Durable filesystem storage owned by the dedicated blob/theme workload. The
+# database contains only tenant-scoped metadata; uploaded bytes live here.
+blobPersistence:
+  enabled: true
+  size: 5Gi
   storageClass: ""
   existingClaim: ""
 
@@ -129,11 +256,6 @@ platform:
   # validating east-west platform bearers. It must equal the EXTERNAL_BASE_URL the
   # platform service stamps on the tokens it mints.
   externalBaseUrl: https://platform.example.com
-  # Backend used for application-admin secrets. The in-memory/config-system
-  # backend is suitable only for local evaluation; production values must select
-  # the durable secret backend configured for the installation.
-  secretBackend:
-    type: config-system-dev-only
   setup:
     licenseRequest:
       # KMS material defaults used when creating the installation-bound license
@@ -146,18 +268,26 @@ platform:
     # Stable installation/deployment handle used by onboarding-owned secrets
     # and operator material. Keep it stable across upgrades.
     deploymentId: deployment-1
+  sts:
+    # Clients whose exchanged tenant tokens carry the dedicated tenant-provisioning role
+    # the tenant AS bootstrap trust window requires. null (default) applies the built-in
+    # sanction list: the operator CLI plus the secret-bootstrap workload client ids. An
+    # explicit "" sanctions nobody; a comma-separated list sanctions exactly those clients.
+    # The admin console is deliberately not sanctioned by default.
+    provisioningRoleClientIds: null
   bootstrap:
     # true provisions the configured owner automatically during application
     # startup. Set false for setup-API-driven first installation: the setup API
     # imports the protected license before it writes and provisions the owner.
-    automatic: true
+    automatic: false
     # Hosted authorization-server issuer URL for the `platform` tenant. The
     # operator signs in here and the admin console exchanges operator tokens for
     # tenant tokens against it. Set to the platform's external base URL.
     issuer: https://platform.example.com
     owner:
-      # The platform operator owner provisioned at first boot.
-      email: operator@example.com
+      # Used only when automatic=true. Interactive setup supplies the real
+      # operator identity request-scoped and needs no deployment placeholder.
+      email: ""
       displayName: Platform Operator
       # Roles granted to the operator owner. platform-admin authorizes the
       # tenant administration APIs (RegisterTenant and friends).
@@ -184,6 +314,18 @@ platform:
     # `kubectl port-forward`. Leading comma required.
     selfHostsExtra: ""
 
+# Tenant AS bootstrap trust window roles.
+tenantAs:
+  asAdmin:
+    # Role a platform-STS bearer must carry to register the first signing key of a tenant
+    # whose authorization server is not fully onboarded yet. Must match the role the
+    # platform STS stamps for provisioning-sanctioned clients (tenant-provisioning).
+    provisioningRequiredRole: tenant-provisioning
+    # Role required on the bearer for post-onboarding signing-key changes. Absent (null)
+    # refuses every post-onboarding key change (fail closed); set a role name to enable
+    # operator-driven rotation.
+    signingKeyRotationRole: null
+
 # Service identity for the platform-issued east-west service tokens. The tenant
 # AS authenticates here as a client_credentials client to mint a platform service
 # token for its KMS hop during tenant registration. Provide the shared internal
@@ -203,32 +345,25 @@ serviceIdentity:
     tenant-kms: kms-service
     tenant-as: tenant-as-service
     did: did-service
+    blob: blob-service
     issuer: issuer-service
     verifier: verifier-service
+    trust-domain-identifier: trust-domain-service
     wallet-unit: wallet-unit-service
     wallet-interaction: wallet-interaction-service
-  # Workload identity each satellite asserts on its east-west command-transport
-  # calls (the gRPC X-Service-Id). The platform header-trust-policy lists these in
-  # trusted_service_ids and binds each to its service token's client id.
+  # Local workload labels used to select credentials and configure the binding
+  # to each platform-issued JWT client id. They are never sent as identity headers.
   serviceIds:
     tenant-kms: service-crypto
     tenant-as: service-tenant-as
     did: service-data
+    blob: service-blob
     issuer: service-oid4vci
     verifier: service-oid4vp
     wallet-unit: service-wallet-unit
     wallet-interaction: service-wallet-interaction
-  # Token audiences for platform-issued east-west service tokens. Receivers use
-  # these to reject a valid workload token minted for a different service before
-  # considering trusted internal identity headers.
-  audiences:
-    platform: enterprise-platform
-    tenant-kms: enterprise-tenant-kms
-    did: enterprise-tenant-did
-    issuer: enterprise-issuer
-    verifier: enterprise-verifier
-    wallet-unit: enterprise-wallet-unit
-    wallet-interaction: enterprise-wallet-interaction
+  # East-west JWT audiences are fixed protocol identifiers in the chart and
+  # source contracts. They are not configurable deployment values.
   # In-network surfaces each satellite admits without an operator bearer. The
   # tenant-AS signing-key provisioning endpoint is deliberately absent here:
   # it must validate the platform-issued bearer during tenant resolution so the
@@ -237,14 +372,28 @@ serviceIdentity:
   # in-network command/introspection channels stay open by design (each enforces
   # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
-    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/api/commands,/introspect,/public/**"
-    tenant-as: "/authorize,/login,/token,/.well-known,/internal/preauth,/api/commands,/introspect"
+    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**"
+    tenant-as: "/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect"
     tenant-kms: ""
-    did: "/.well-known,/api/commands"
+    did: "/.well-known"
+    blob: "/public/assets"
     issuer: "/oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers"
     verifier: "/oid4vp/request-uri,/oid4vp/auth/response,/.well-known"
     wallet-unit: ""
     wallet-interaction: ""
+
+# Interactive documentation site (docs playground). When enabled, registers a
+# public OAuth client on the platform AS (authorization code + required PKCE +
+# required PAR) and sets docs.playground.* so tenant AS bootstrap can provision
+# the same client. Origins are both CORS candidates (merge into cors.origins)
+# and OAuth redirect bases ({origin}/docs-env/callback).
+docsPlayground:
+  enabled: false
+  clientId: docs-playground
+  origins:
+    - https://docs.sphereon.com
+    - http://127.0.0.1:3000
+    - http://localhost:3000
 
 # Dedicated confidential client and cryptographic state protection for the
 # public issuer/verifier testing-console BFF. The client secret is independent
@@ -301,6 +450,7 @@ license:
     platform: enterprise-platform
     tenant-kms: enterprise-tenant-kms
     did: enterprise-did
+    blob: service-data
     tenant-as: enterprise-tenant-as
     issuer: enterprise-issuer
     verifier: enterprise-verifier
@@ -334,6 +484,13 @@ kmsLifecycle:
 serviceAccount:
   create: true
   name: ""
+  annotations: {}
+  # The platform receives its own identity because only the control plane may
+  # unlock the Tier-0 KMS and provision tenant-scoped capabilities.
+  platform:
+    create: true
+    name: ""
+    annotations: {}
 
 podAnnotations: {}
 podSecurityContext:
@@ -358,6 +515,18 @@ affinity: {}
 networkPolicy:
   enabled: true
   allowDnsEgress: true
+  # Provider traffic originates only from the platform control plane. This
+  # network-layer rule is required by the Tier-0 KMS. Select in-cluster provider
+  # pods and/or explicit CIDRs where the deployment has stable ranges. With no
+  # peers it permits only the listed ports to any destination and remains paired
+  # with the runtime HTTPS, DNS-rebinding, and resolved-IP policy.
+  secretProviderEgress:
+    enabled: true
+    namespaceSelector: {}
+    podSelector: {}
+    ipBlocks: []
+    ports:
+      - 443
   ingressController:
     enabled: true
     namespaceSelector: {}
@@ -379,6 +548,7 @@ opentelemetry:
   enabled: false
   endpoint: ""
   protocol: http/protobuf
+  metricsExporter: otlp
   headers: ""
   resourceAttributes: ""
 
@@ -397,6 +567,10 @@ gateway:
   # Single-port multi-tenant Gateway API front door. One wildcard HTTPS listener
   # terminates TLS for both the operator host and tenant hosts; HTTPRoutes fan
   # out by host and path to each service per the routing contract.
+  # Envoy Gateway-specific host snapshot/restore is opt-in because other
+  # Gateway implementations already preserve the request authority upstream.
+  envoyGateway:
+    preserveOriginalHost: false
   enabled: true
   className: cilium
   # Optional implementation-specific per-Gateway parameters reference.
@@ -407,6 +581,16 @@ gateway:
     name: ""
   # Operator host = {operatorHost}.{baseDomain} (the platform plane).
   operatorHost: platform
+  # Optional controller-specific annotations attached only to HTTPRoutes on the
+  # exact platform listener. Use these to reference an IP-allowlist/WAF policy
+  # without applying it to the public tenant wildcard listener.
+  platformAccess:
+    routeAnnotations: {}
+  # Gateway API implementations may otherwise impose a short implementation-
+  # specific default (Envoy Gateway defaults to 15 seconds). Tenant registration
+  # performs fenced provisioning before returning and must be allowed to finish.
+  requestTimeout: "60s"
+  backendRequestTimeout: "60s"
   # Defaults to global.platformBaseDomain when empty.
   baseDomain: ""
   tls:
@@ -488,8 +672,9 @@ services:
       enabled: false
       className: internal
       host: kms.internal.example.com
-      paths:
-        - /api/kms/v1
+      # Tenant-KMS command traffic is east-west gRPC only. Do not publish an
+      # internal REST ingress for the removed generic provider/key API.
+      paths: []
       annotations: {}
     resources:
       requests:
@@ -533,6 +718,39 @@ services:
         memory: 1Gi
     env: []
 
+  # Dedicated tenant blob, asset-library, and theme-data workload. This keeps
+  # tenant branding bytes out of the platform and protocol containers.
+  blob:
+    enabled: true
+    image: service-data
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: false
+      className: ""
+      host: ""
+      paths:
+        - /api/theme/v1
+        - /api/assets/v1
+        - /public/assets
+      annotations: {}
+    internalIngress:
+      enabled: false
+      className: internal
+      host: ""
+      paths:
+        - /api/theme/v1
+        - /api/assets/v1
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    env: []
+
   tenant-as:
     enabled: true
     image: enterprise-tenant-as
@@ -551,6 +769,8 @@ services:
         - /userinfo
         - /oauth2
         - /login
+        - /logout
+        - /api/trust-domain/v1
       annotations: {}
     internalIngress:
       enabled: false
@@ -562,6 +782,7 @@ services:
         - /userinfo
         - /oauth2
         - /login
+        - /logout
       annotations: {}
     resources:
       requests:
@@ -573,7 +794,7 @@ services:
     env: []
 
   wallet-unit:
-    enabled: true
+    enabled: false
     image: enterprise-wallet-unit
     replicas: 1
     restPort: 8080
@@ -599,7 +820,7 @@ services:
     env: []
 
   wallet-interaction:
-    enabled: true
+    enabled: false
     image: enterprise-wallet-interaction
     replicas: 1
     restPort: 8080
@@ -718,6 +939,35 @@ services:
       # platform service public host so the console is served at
       # platform.<baseDomain>/admin-console alongside the platform AS endpoints.
       host: platform.example.com
+      paths:
+        - /admin-console
+      annotations: {}
+    internalIngress:
+      enabled: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    env:
+      - name: NEXT_PUBLIC_BASE_PATH
+        value: /admin-console
+      - name: PORT
+        value: "3000"
+
+  # Tenant administration uses the same immutable image and basePath through a
+  # separate runtime. It receives no platform portal-BFF credential.
+  admin-console-tenant:
+    enabled: true
+    image: admin-console
+    replicas: 1
+    restPort: 3000
+    publicIngress:
+      enabled: false
+      className: public
+      host: "*.example.com"
       paths:
         - /admin-console
       annotations: {}

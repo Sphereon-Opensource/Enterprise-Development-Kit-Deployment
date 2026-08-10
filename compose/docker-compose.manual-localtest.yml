@@ -14,7 +14,7 @@
 services:
   enterprise-platform:
     healthcheck:
-      test: ["CMD", "bash", "-c", "(exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) ') || (exec 4<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -Eq ' (200|404) ')"]
+      test: ["CMD", "bash", "-c", "(exec 3<>/dev/tcp/127.0.0.1/18080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) ') || (exec 4<>/dev/tcp/127.0.0.1/18080 && printf 'GET /api/platform/setup/v1/status HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&4 && head -n1 <&4 | grep -Eq ' (200|404) ')"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -23,7 +23,7 @@ services:
   enterprise-tenant-as:
     profiles: ["runtime"]
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/18083 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -32,7 +32,7 @@ services:
   enterprise-tenant-kms:
     profiles: ["runtime"]
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -41,7 +41,7 @@ services:
   enterprise-did:
     profiles: ["runtime"]
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -50,7 +50,7 @@ services:
   enterprise-issuer:
     profiles: ["runtime"]
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -59,7 +59,7 @@ services:
   enterprise-verifier:
     profiles: ["runtime"]
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:-saas.localtest.me}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -Eq ' (200|503) '"]
       interval: 5s
       timeout: 5s
       retries: 30

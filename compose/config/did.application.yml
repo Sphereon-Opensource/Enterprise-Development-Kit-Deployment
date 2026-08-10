@@ -17,13 +17,24 @@ server:
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
       expected-audience: enterprise-tenant-did
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
-      # Open prefixes: did.json hosting plus the in-network command transport.
-      anonymous-path-prefixes: /.well-known,/api/commands
+      # Open prefixes: did.json hosting only.
+      anonymous-path-prefixes: /.well-known
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
+    token-endpoint-allow-http: true
+    token-endpoint-source: active-as
+    active-as-token-endpoint: http://enterprise-tenant-as:18083/token
+    active-as-client-role: did
     client-id: did-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    tenant-bound-client-id: true
     audience: enterprise-platform
+    allowed-audiences: enterprise-tenant-kms
+east-west:
+  # Preserve the public did:web identifier while avoiding public DNS hairpin
+  # dependencies for DID management reads inside the DID container.
+  tenant-did:
+    base-url: http://enterprise-did:8080
 sphereon:
   telemetry:
     enabled: true
@@ -53,7 +64,7 @@ otel:
         endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
         protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
 security:
-  header-trust-policy:
+  workload-trust-policy:
     trusted_service_ids:
       - service-crypto
       - service-data
@@ -71,6 +82,7 @@ transport:
     enabled: false
     port: 9090
   routing:
+    configScope: APP
     modules:
       kms:
         serviceTokenAudience: enterprise-tenant-kms
@@ -90,24 +102,34 @@ transport:
                 target: LOCAL
           mac: *tenantKmsGrpcRoute
           encryption: *tenantKmsGrpcRoute
+          ecdh: *tenantKmsGrpcRoute
       platform:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
         services:
           config: &platformGrpcRoute
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
       application:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+      secret:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: false
 config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: kms.providers
+      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
     tenant-config-db:
       enabled: false
 database:
@@ -119,6 +141,27 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
+    # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
+    secret-management-admin:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
   tenants:
     default:
       dialect: postgresql
@@ -165,3 +208,19 @@ kms:
         # public keys, so this keystore is ephemeral in the container temp
         # directory and not backed by a shared volume.
         path: "{tempDir}/edk-verify-keystore.p12"
+
+secret:
+  authority:
+    allowed-clock-skew-millis: 5000
+    satellite:
+      workload-id: service-data
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}

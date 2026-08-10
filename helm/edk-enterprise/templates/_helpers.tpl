@@ -14,6 +14,27 @@
 {{- printf "%s-%s" (include "edk-enterprise.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/*
+East-west JWT audiences are protocol identifiers shared with source-level STS
+and tenant-registration contracts. They are intentionally not chart values:
+changing one side would make otherwise valid tokens unusable at another
+receiver.
+*/}}
+{{- define "edk-enterprise.serviceAudience" -}}
+{{- $audiences := dict
+    "platform" "enterprise-platform"
+    "tenant-kms" "enterprise-tenant-kms"
+    "tenant-as" "enterprise-tenant-as"
+    "did" "enterprise-tenant-did"
+    "blob" "enterprise-blob"
+    "issuer" "enterprise-issuer"
+    "verifier" "enterprise-verifier"
+    "wallet-unit" "enterprise-wallet-unit"
+    "wallet-interaction" "enterprise-wallet-interaction"
+-}}
+{{- required (printf "unsupported service audience role %q" .) (index $audiences .) -}}
+{{- end -}}
+
 {{- define "edk-enterprise.labels" -}}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
 app.kubernetes.io/name: {{ include "edk-enterprise.name" . }}
@@ -28,7 +49,8 @@ app.kubernetes.io/component: {{ .name }}
 {{- end -}}
 
 {{- define "edk-enterprise.gateway.baseDomain" -}}
-{{- $base := .Values.gateway.baseDomain | default .Values.global.platformBaseDomain -}}
+{{- $globalBase := required "global.platformBaseDomain is required; set it explicitly for every installation" .Values.global.platformBaseDomain -}}
+{{- $base := .Values.gateway.baseDomain | default $globalBase -}}
 {{- $base -}}
 {{- end -}}
 
@@ -47,7 +69,6 @@ name, or an empty list for services that are not tenant-routed.
 - /notification
 - /public/statuslists
 - /public/schema
-- /public/assets
 - /.well-known/openid-credential-issuer
 - /api/oid4vci/v1
 - /api/credential-design/v1
@@ -58,23 +79,34 @@ name, or an empty list for services that are not tenant-routed.
 - /direct_post
 - /api/oid4vp/v1
 - /api/dcql/v1
+{{- else if eq $name "tenant-kms" -}}
+{{/* The runtime KMS API is advertised on the TENANT origin by the bootstrap
+     runtime-config (tenantKms.endpoints.api = /api/kms/v1), so the tenant host
+     must route it. Tenant scoping comes from the bearer, not the host, which is
+     why the Compose gateway routes this path on any host at a priority above the
+     platform catch-all. */}}
+- /api/kms/v1
 {{- else if eq $name "did" -}}
 - /1.0/identifiers
 - /.well-known/did.json
 - /api/did/v1
-{{- else if eq $name "tenant-kms" -}}
-- /api/kms/v1
+{{- else if eq $name "blob" -}}
+- /api/theme/v1
+- /api/assets/v1
 {{- else if eq $name "tenant-as" -}}
 - /authorize
+- /par
 - /token
 - /userinfo
 - /oauth2
 - /login
+- /logout
+- /api/trust-domain/v1
 - /.well-known/oauth-authorization-server
 - /.well-known/openid-configuration
 - /.well-known/jwks.json
-{{- else if eq $name "admin-console" -}}
-{{/* Direct same-origin BFF/static support paths for the public testing console. */}}
+{{- else if eq $name "admin-console-tenant" -}}
+{{/* Direct public testing-console support paths on the tenant-mode runtime. */}}
 - /admin-console/api/oid4vci/v1/testing
 - /admin-console/api/oid4vp/v1/testing
 - /admin-console/_next
@@ -87,6 +119,14 @@ name, or an empty list for services that are not tenant-routed.
 {{- default (include "edk-enterprise.fullname" .) .Values.serviceAccount.name -}}
 {{- else -}}
 {{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.platformServiceAccountName" -}}
+{{- if .Values.serviceAccount.platform.create -}}
+{{- default (printf "%s-platform" (include "edk-enterprise.fullname" .)) .Values.serviceAccount.platform.name -}}
+{{- else -}}
+{{- required "serviceAccount.platform.name is required when serviceAccount.platform.create=false" .Values.serviceAccount.platform.name -}}
 {{- end -}}
 {{- end -}}
 
@@ -117,11 +157,7 @@ may use `latest`, but only with an Always pull policy.
 {{- end -}}
 {{- end -}}
 
-{{/*
-The Gateway TLS mode is a three-way switch and a typo would silently render a
-broken listener set, so validate it. secret and certManager need an in-cluster
-certificate reference; external explicitly must not carry one.
-*/}}
+{{/* Validate the selected Gateway API TLS termination mode and its required inputs. */}}
 {{- define "edk-enterprise.validateGatewayTls" -}}
 {{- if .Values.gateway.enabled -}}
 {{- $mode := .Values.gateway.tls.mode -}}
@@ -143,7 +179,7 @@ references here prevents otherwise healthy-looking pods from starting without
 east-west Authorization headers or software-keystore access.
 */}}
 {{- define "edk-enterprise.validateRuntimeSecrets" -}}
-{{- $satelliteEnabled := or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled -}}
+{{- $satelliteEnabled := or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled -}}
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
@@ -163,12 +199,118 @@ east-west Authorization headers or software-keystore access.
 {{- if eq .Values.issuerPipeline.masterKekKey .Values.issuerPipeline.blindIndexKey -}}
 {{- fail "issuerPipeline.masterKekKey and issuerPipeline.blindIndexKey must be distinct Secret keys." -}}
 {{- end -}}
-{{- if and (eq (lower .Values.platform.bootstrap.deploymentMode) "prod") (eq (lower .Values.platform.secretBackend.type) "config-system-dev-only") -}}
-{{- fail "platform.secretBackend.type=config-system-dev-only is not allowed when platform.bootstrap.deploymentMode=prod. Configure the installation's durable secret backend." -}}
-{{- end -}}
 {{- if eq .Values.portalBff.kms.encryptionKeyAlias .Values.portalBff.kms.handleHmacKeyAlias -}}
 {{- fail "portalBff.kms.encryptionKeyAlias and portalBff.kms.handleHmacKeyAlias must be distinct." -}}
 {{- end -}}
+{{- range $name := list "platform" "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" -}}
+{{- $service := index $.Values.services $name -}}
+{{- if and $service.enabled (eq (trim (default "" (index $.Values.secretAuthority.existingSecrets $name))) "") -}}
+{{- fail (printf "secretAuthority.existingSecrets.%s is required when services.%s.enabled=true; reference a workload-isolated Secret containing the configured secret-authority coordinates and key files." $name $name) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Runtime configuration shared by every secret-consuming satellite. */}}
+{{- define "edk-enterprise.secretAuthoritySatelliteConfig" -}}
+# The local service identity is cryptographically bound into the execution
+# assertion and must equal secret.authority.satellite.workload-id.
+sphereon:
+  service:
+    id: {{ .workloadId | quote }}
+secret:
+  authority:
+    allowed-clock-skew-millis: 5000
+    satellite:
+      workload-id: {{ .workloadId | quote }}
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+{{- end -}}
+
+{{/* Fixed runtime pools used by every tenant workload's local secret broker. */}}
+{{- define "edk-enterprise.secretManagementSatelliteDatabaseConfig" -}}
+{{- $tenantDb := .Values.database.tenant -}}
+database:
+  app:
+    # The platform barrier owns DDL; satellites receive runtime roles only.
+    secret-management-admin:
+      dialect: {{ .Values.database.dialect }}
+      isolation: shared
+      host: {{ $tenantDb.host }}
+      port: {{ $tenantDb.port }}
+      database: {{ $tenantDb.name }}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: {{ .Values.database.dialect }}
+      isolation: shared
+      host: {{ $tenantDb.host }}
+      port: {{ $tenantDb.port }}
+      database: {{ $tenantDb.name }}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+{{- end -}}
+
+{{/* Platform-owned command families every satellite resolves over gRPC. */}}
+{{- define "edk-enterprise.remotePlatformRoutingModules" -}}
+platform:
+  target: SERVER
+  transport: GRPC
+  endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+  services:
+    config:
+      target: SERVER
+      transport: GRPC
+      endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+      serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+application:
+  target: SERVER
+  transport: GRPC
+  endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+{{- end -}}
+
+{{/* The platform is both the central permit issuer and a satellite consumer. */}}
+{{- define "edk-enterprise.secretAuthorityPlatformConfig" -}}
+sphereon:
+  service:
+    id: service-platform
+secret:
+  authority:
+    allowed-clock-skew-millis: 5000
+    central:
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        signing-key: ${env:SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY}
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        verification-keys: ${env:SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS}
+    satellite:
+      workload-id: service-platform
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
 {{- end -}}
 
 {{/*
@@ -190,9 +332,6 @@ would create endpoints that can never provision or use tenant keys.
 {{- end -}}
 {{- if and .Values.services.verifier.enabled (not .Values.services.did.enabled) -}}
 {{- fail "services.did.enabled must be true while verifier is enabled: the verifier routes DID resolution commands to did." -}}
-{{- end -}}
-{{- if and (or .Values.services.issuer.enabled .Values.services.verifier.enabled) (not (index .Values.services "wallet-interaction").enabled) -}}
-{{- fail "services.wallet-interaction.enabled must be true while issuer or verifier is enabled: both route wallet interaction commands to that service." -}}
 {{- end -}}
 {{- if and (index .Values.services "wallet-interaction").enabled (not (index .Values.services "wallet-unit").enabled) -}}
 {{- fail "services.wallet-unit.enabled must be true while wallet-interaction is enabled: wallet interaction routes HSM policy authorization to wallet-unit." -}}

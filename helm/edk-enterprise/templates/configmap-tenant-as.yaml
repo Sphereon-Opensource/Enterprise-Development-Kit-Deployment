@@ -24,8 +24,31 @@ metadata:
     app.kubernetes.io/component: tenant-as
 data:
   application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "tenant-as")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
+    {{- if .Values.serviceIdentity.internalClientExistingSecret }}
+    # The tenant AS reaches tenant-kms with a tenant-bound workload client.
+    # Tokens are still minted at the platform AS to avoid the signing -> KMS ->
+    # token-mint recursion, but the active customer AS selects the matching
+    # authorization-server client that platform onboarding registered.
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        token-endpoint-source: configured
+        active-as-client-role: authorization-server
+        client-id: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+    {{- end }}
     security:
-      header-trust-policy:
+      workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
@@ -38,6 +61,36 @@ data:
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+    {{- if .Values.serviceIdentity.internalClientExistingSecret }}
+    # Resource servers allowed full RFC 7662 introspection of tenant tokens. The
+    # issuer validates wallet access tokens against this AS; without this
+    # registration the introspection response withholds authorization_details
+    # (credential_identifiers), breaking OID4VCI identifier-based credential
+    # requests. Registered under the static `default` server id: hosted
+    # per-tenant AS instances share the service's internal clients.
+    oauth2:
+      servers:
+        default:
+          internal-clients:
+            issuer:
+              client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    {{- else }}
+    oauth2:
+    {{- end }}
+      # AS bootstrap trust window: while a tenant has no ACTIVE signing key in this AS,
+      # the signing-key registration command accepts only platform-STS bearers carrying
+      # this role (or the tenant's own internal workload identity). The first registered
+      # key shuts the window permanently.
+      as-admin:
+        provisioning:
+          required-role: {{ (((.Values.tenantAs).asAdmin).provisioningRequiredRole) | default "tenant-provisioning" | quote }}
+        {{- with (((.Values.tenantAs).asAdmin).signingKeyRotationRole) }}
+        # Post-onboarding signing-key changes require this role on the bearer; without it
+        # (and with this key unset) every post-onboarding key change is refused.
+        signing-key:
+          rotation-role: {{ . | quote }}
+        {{- end }}
     # Local, keyless software provider for in-process signature verification.
     # Signing/MAC/encryption route to the tenant KMS over gRPC; this provider only
     # backs the LOCAL verify route below, with an ephemeral keystore under temp.
@@ -68,12 +121,22 @@ data:
     # validates the platform bearer in-process against the keyless software provider.
     transport:
       routing:
+        configScope: APP
         modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            # RemoteOpaqueSecretResolver binds a dedicated tenant bootstrap workload
+            # token; replacing it here would recurse through the credential being unlocked.
+            preferServiceTokenOverSessionBearer: false
           kms:
             # Provisioning requests are addressed to tenant-AS, not tenant-KMS,
             # so this routed KMS hop uses the AS workload token for the KMS
             # receiver audience instead of forwarding the inbound bearer.
-            serviceTokenAudience: {{ index .Values.serviceIdentity.audiences "tenant-kms" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               key: &tenantKmsGrpcRoute
@@ -90,6 +153,21 @@ data:
                     target: LOCAL
               mac: *tenantKmsGrpcRoute
               encryption: *tenantKmsGrpcRoute
+              ecdh: *tenantKmsGrpcRoute
+          auth:
+            # Identity and credential storage is owned by the platform control
+            # plane. Without this exact route the standalone tenant AS resolves
+            # verify-remote to its local adapter, which calls the tenant-AS
+            # facade again and recurses until the request times out.
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              credentials:
+                commands:
+                  "[auth.credentials.verify-remote]":
+                    target: SERVER
+                    transport: GRPC
+                    endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
     # The AS holds no application-tenant bootstrap of its own; the platform owns the
     # control-plane ceremony, so the AS skips it on startup.
     application:

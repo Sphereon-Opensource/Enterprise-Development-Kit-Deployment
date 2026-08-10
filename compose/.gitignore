@@ -3,3 +3,4 @@
 config/license-token.txt
 config/license-recipient.jwk.json
 config/license-root-ca.pem
+.secret-authority/

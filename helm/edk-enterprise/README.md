@@ -47,15 +47,23 @@ bash ./scripts/upgrade-helm.sh \
 and `edk` are only the wrapper defaults; pass the release name and namespace this
 install uses. For an upgrade, they must match the existing release.
 
-Supply `--migration-values <path>` only when the release you are installing ships
-an overlay. The one current case is the upgrade from 0.25.0-RC1 to 0.25.0-RC2.
-The overlay `examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml` re-asserts
-the public `serviceIdentity.anonymousPathPrefixes` that RC1 left empty, which is
-what blocked tenant creation on RC1. It is applied after the site values so a
-values file exported from RC1 cannot restore the broken list. It holds no Secret
-values and must not be reused for later releases. Without an overlay, the
-selected chart and maintained site values are authoritative. The full upgrade is
-in [quickstart-kubernetes.md](../../docs/quickstart-kubernetes.md#upgrading-from-0250-rc1-to-0250-rc2).
+The wrapper reads the installed `global.imageTag` and selects known migration
+overlays automatically. RC1 to RC3 is performed as two ordered Helm revisions:
+first RC2 with the RC1-to-RC2 overlay, then RC3 with both cumulative overlays.
+The overlays are applied after site values so an old values export cannot restore
+obsolete public path lists. The same cumulative set is reapplied on an RC2 or RC3
+rerun, making the wrapper idempotent even when the original values file is reused.
+`--migration-values` is only needed for an additional
+overlay not already known to the wrapper. The direct procedure is in
+[quickstart-kubernetes.md](../../docs/quickstart-kubernetes.md#upgrading-directly-from-0250-rc1-to-0250-rc3).
+
+Secret management is a greenfield cutover. It does not import, adopt, backfill,
+or dual-read provider state from an earlier release. Take a database snapshot
+and remove obsolete secret-provider and secret-migration state before upgrading.
+If live legacy state is detected, platform startup stops with a reset diagnostic.
+The wrapper leaves the release stopped and never rolls application pods back
+automatically. Restore the pre-upgrade database snapshots before an explicit
+binary rollback.
 
 Existing `internal-client-secret`, `keystore-password`, BFF credentials, and
 issuer-pipeline keys are preserved. If an existing Secret is missing a key that
@@ -151,16 +159,32 @@ environment-variable Secret values are read only when a container starts.
 | `global.platformBaseDomain` | `example.com` | Customer-controlled base domain. The platform is `platform.<baseDomain>` and tenants are `<tenant-slug>.<baseDomain>`. |
 | `database.enabled` | `true` | Enables database environment wiring. |
 | `database.platform.existingSecret` | `edk-platform-postgres` | Secret with credentials for the control-plane (platform) database. |
+| `database.secretManagement.existingSecret` | `edk-secret-management-database` | Secret with distinct passwords for the fixed non-superuser secret-management admin and tenant-serving runtime roles. Schema migration uses the platform database owner from `database.platform.existingSecret` only during startup. |
 | `database.tenant.existingSecret` | `edk-tenant-postgres` | Secret with credentials for the tenant workload database. |
+| `database.trustDomain.isolation` | `schema` | Isolation strategy for the trust-domain router registry (`database-trust-domain`). |
+| `database.trustDomain.host` | `""` | Trust-domain database host override. Empty co-locates it on `database.platform.host`. |
+| `database.trustDomain.existingSecret` | `""` | Trust-domain database Secret override. Empty co-locates it on `database.platform.existingSecret`. |
+| `secretManagement.bootstrap.kek.mode` | `SOFTWARE_KMS` | Self-contained baseline backed by the persisted platform software KMS. External providers are configured explicitly and are not startup dependencies. |
+| `secretManagement.bootstrap.kek.identity` | `secret-management-bootstrap-kek` | Server-owned software-KMS binding name; it is not a physical path or public API field. |
+| `secretManagement.bootstrap.kek.kmsProviderId` | `software` | Persisted platform software KMS provider that owns the bootstrap key. |
+| `secretManagement.authority.platformStorageKmsProviderId` | `software` | Persisted software KMS provider used by the active platform secret store. |
+| `secretManagement.authority.platformStorageKmsBindingKey` | `platform-secret-storage` | Server-owned KMS capability binding for the active platform secret store. |
+| `secretManagement.authority.allowPlatformOfferings` | `true` | Publishes the isolated per-tenant software-KMS offering. Vault and cloud offerings require explicit platform setup. |
+| `secretManagement.egress.allowedHttpsPorts` | `[443]` | Platform-owned HTTPS ports permitted for provider traffic. |
+| `secretManagement.egress.privateEndpointAllowlist` | `{}` | Reviewed hostname-pattern to CIDR-list map. Both DNS name and resolved address must match before private Vault or PrivateLink traffic is permitted. |
+| `secretManagement.authority.defaultTenantOfferingKmsBindingTemplate` | `isolated-tenant-secret-storage` | Server-owned provisioner template; onboarding derives a distinct capability-bound KEK for every tenant binding. |
+| `secretManagement.authority.allowTenantManagedProviders` | `false` | Cloud-provider offerings are absent by default. Enable only for an explicitly configured integration; tenant APIs cannot change the deployment bootstrap itself. |
+| `secretManagement.authority.retentionDays` | `30` | Global migration retention period before an explicitly fenced purge. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
 | `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, and renders gRPC peer endpoints for routed calls to those receivers. |
 | `config.providers.platformConfigRemote.enabled` | `true` | Enables platform-owned remote config reads for every satellite/workload service. |
 | `config.providers.tenantConfigDb.enabled` | `false` | Disables direct tenant-config DB reads on satellites so platform remains the config authority. |
 | `issuerPipeline.existingSecret` | `""` | Required Secret name for issuer pipeline encryption and blind-index keys. |
-| `platform.secretBackend.type` | `config-system-dev-only` | Application-admin secret backend. The development backend is rejected in production mode. |
 | `license.installationId` | `""` | Optional explicit runtime pin to a known installation id. Leave empty for first-run setup; the protected bundle supplies the installation id. If set, it must match the installed license claims. |
 | `networkPolicy.enabled` | `true` | Renders service ingress/egress NetworkPolicies. |
+| `networkPolicy.secretProviderEgress.enabled` | `true` | Enables platform-only egress to the mandatory Tier-0 KMS and provider endpoints. Pin in-cluster providers with selectors or external services with CIDRs where possible; an empty peer set permits only the configured ports and still relies on the runtime HTTPS/DNS/IP policy. |
+| `networkPolicy.secretProviderEgress.ports` | `[443]` | TCP ports available to provider clients when provider egress is enabled. |
 | `gateway.enabled` | `true` | Renders the single-port customer Gateway and HTTPRoutes. |
 | `ingress.legacy.enabled` | `false` | Keeps legacy per-service Ingress off by default. |
 | `serviceMonitor.enabled` | `false` | Renders Prometheus Operator ServiceMonitors. |
@@ -193,13 +217,14 @@ Default backing components:
 | `wallet-interaction` | `true` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
 | `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
-| `admin-console` | `true` | `admin-console` | Full operator UI on the platform host and isolated testing-console paths on instance hosts |
+| `admin-console` | `true` | `admin-console` | Platform operator UI on the platform host |
+| `admin-console-tenant` | `true` | `admin-console` | Tenant-only UI and testing console on registered tenant hosts |
 
 Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
 wallet-unit, wallet-interaction, issuer, and verifier remain backing workloads
 behind `platform.<baseDomain>` and `<tenant>.<baseDomain>` host/path routes.
-Runtime probes are Kubernetes orchestration concerns and must not be published
-as customer routes.
+Kubernetes uses the workload health endpoints inside the cluster. Do not
+publish those endpoints as customer routes.
 
 ## East-West Service Identity
 
@@ -210,35 +235,33 @@ The chart renders internal service identity from one `serviceIdentity` contract:
 | `serviceIdentity.internalClientExistingSecret` | Secret containing the shared confidential-client secret used by internal service clients. |
 | `serviceIdentity.internalClientSecretKey` | Key in that Secret; defaults to `internal-client-secret`. |
 | `serviceIdentity.clientIds.<service>` | OAuth client id each satellite presents to the platform AS for client-credentials service tokens. |
-| `serviceIdentity.serviceIds.<service>` | Workload id the caller asserts as `X-Service-Id` on internal command transport. |
-| `serviceIdentity.audiences.<service>` | JWT audience expected by the receiving service. |
+| `serviceIdentity.serviceIds.<service>` | Local workload label used to select and configure the service credential. It is not transmitted as identity metadata. |
 
 These values drive platform internal OAuth clients, platform and receiver
-header trust bindings, satellite service-token env, receiver audience env,
-admin-console token-exchange audiences, and STS allowed audiences. Do not change
-one without changing the others.
+validated-workload bindings, and satellite service-token credentials. Receiver
+audiences are fixed protocol identifiers shared with source-level STS and
+tenant-registration contracts; the chart does not expose audience overrides.
 
 The receiver expected audience, route-requested audience, client default, and
-additional allowlist are different controls. The receiver validates
-`serviceIdentity.audiences.<receiver>`. A caller route requests that value with
+additional allowlist are different controls. The receiver validates its
+canonical `enterprise-<role>` audience. A caller route requests that value with
 `serviceTokenAudience`. The platform AS uses the internal registration key
 `default-access-token-audience` when a `client_credentials` request omits an
 audience and permits a non-default explicit target only through
-`allowed-access-token-audiences`. The client id is also bound to the asserted
-service id; `X-Service-Id` does not establish identity by itself.
+`allowed-access-token-audiences`. The validated JWT client id is also bound to
+the configured local workload label.
 
-The chart derives this strict registration matrix from the
-`serviceIdentity.audiences` map:
+The chart renders this fixed registration matrix:
 
 | Caller | Client/service binding | Default | Allowed additional audiences |
 | --- | --- | --- | --- |
-| tenant-KMS | `clientIds.tenant-kms` / `serviceIds.tenant-kms` | `audiences.platform` | none |
-| wallet-unit | `clientIds.wallet-unit` / `serviceIds.wallet-unit` | `audiences.platform` | none |
-| tenant-AS | `clientIds.tenant-as` / `serviceIds.tenant-as` | `audiences.platform` | `audiences.tenant-kms` |
-| DID | `clientIds.did` / `serviceIds.did` | `audiences.platform` | `audiences.tenant-kms` |
-| issuer | `clientIds.issuer` / `serviceIds.issuer` | `audiences.platform` | `audiences.tenant-kms`, `audiences.wallet-interaction` |
-| verifier | `clientIds.verifier` / `serviceIds.verifier` | `audiences.platform` | `audiences.tenant-kms`, `audiences.wallet-interaction` |
-| wallet-interaction | `clientIds.wallet-interaction` / `serviceIds.wallet-interaction` | `audiences.platform` | `audiences.wallet-unit` |
+| tenant-KMS | `clientIds.tenant-kms` / `serviceIds.tenant-kms` | `enterprise-platform` | none |
+| wallet-unit | `clientIds.wallet-unit` / `serviceIds.wallet-unit` | `enterprise-platform` | none |
+| tenant-AS | `clientIds.tenant-as` / `serviceIds.tenant-as` | `enterprise-platform` | `enterprise-tenant-kms` |
+| DID | `clientIds.did` / `serviceIds.did` | `enterprise-platform` | `enterprise-tenant-kms` |
+| issuer | `clientIds.issuer` / `serviceIds.issuer` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-tenant-as` |
+| verifier | `clientIds.verifier` / `serviceIds.verifier` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-wallet-interaction` |
+| wallet-interaction | `clientIds.wallet-interaction` / `serviceIds.wallet-interaction` | `enterprise-platform` | `enterprise-wallet-unit` |
 
 An audience-free client-credentials request is valid only when its default is
 nonblank. Exactly one requested audience is valid only when it equals the
@@ -264,11 +287,10 @@ diagnostic logs. Correct the Secret through the cluster's secret-management
 mechanism and restart affected Deployments after changing data under an existing
 Secret name.
 
-Internal identity headers are not credentials. A receiver may honor
-`X-Tenant-Id` or `X-Principal-Id` only after a bearer JWT validates, the token is
-a workload token, its client id or subject is bound to the asserted
-`X-Service-Id`, the token audience matches the receiver, and the receiver trust
-policy permits that override.
+Internal identity headers are never authority. A receiver derives tenant,
+principal, and workload identity exclusively from a cryptographically validated
+JWT. Legacy `X-Tenant-Id`, `X-Principal-Id`, and `X-Service-Id` metadata is
+discarded and cannot override or supplement token claims.
 
 DID, tenant-AS, issuer, and verifier use this contract for routed KMS commands.
 Issuer and verifier use it for wallet-interaction calls, and wallet-interaction
@@ -309,6 +331,12 @@ separately constrained access. Do not configure `database.platform.name` and
 credentials into tenant-KMS, DID, tenant-AS, issuer, or verifier pods. Do not
 mount tenant database credentials into the platform pod.
 
+The trust-domain router registry (`database-trust-domain`) is co-located on
+the platform database by default: same host/name/Secret as `database.platform`,
+only `isolation: schema` differs, so the connecting Postgres user needs CREATE
+SCHEMA privilege. Set `database.trustDomain.host`/`name`/`existingSecret` to
+split it onto a dedicated instance instead.
+
 ## Domain, Gateway, and TLS
 
 The chart assumes one base domain for the installation. Set
@@ -341,7 +369,7 @@ Host header and set `X-Forwarded-Proto: https`. See
 The single-port Gateway API model is enabled by default with
 `gateway.enabled=true` and `ingress.legacy.enabled=false`. Customer-visible
 ingress is limited to platform and tenant host/path routes; admin REST and
-runtime probes must stay internal or protected.
+workload health endpoints must stay private or protected.
 
 The Gateway has an exact `https-platform` listener for the operator host and a
 separate wildcard `https` listener for tenant/satellite hosts. Platform routes
@@ -352,9 +380,13 @@ TLS modes (with `external` they carry HTTP), so HTTPRoutes attached by
 
 ### Admin console
 
-The `admin-console` service is a Next.js standalone app under `/admin-console`.
-The platform host receives the complete operator console. Wildcard instance
-hosts receive the canonical public page
+The chart runs the same Next.js image twice under `/admin-console`.
+`admin-console` is the platform persona and receives the platform BFF
+credential; `admin-console-tenant` is the tenant persona and deliberately
+receives no platform client id or secret. Exact platform-host and wildcard
+tenant-host HTTPRoutes always target different Services.
+
+Tenant hosts also retain the canonical public page
 `/testing-console/{kind}/{instanceId}`. A page-only `URLRewrite` maps
 `/testing-console` to `/admin-console/testing-console`; a separate rule forwards
 only `/admin-console/api/oid4vci/v1/testing`,
@@ -362,8 +394,9 @@ only `/admin-console/api/oid4vci/v1/testing`,
 required Next/public assets, and health. Both the Gateway route and
 the application host guard enforce the allowlist; the backend endpoint registry
 then validates the exact instance origin and disabled/public/AS-protected mode.
-Normal platform admin UI, auth endpoints, callbacks, previews, tools, and generic
-admin APIs are not routed or served on instance hosts.
+The tenant runtime validates the exact registered host before OAuth and rejects
+platform-management routes even though the complete tenant UI now uses the
+same `/admin-console` path.
 
 The server obtains a dedicated `admin-console-portal-bff` client_credentials
 token with the single `bff.oauth` scope and
@@ -374,12 +407,17 @@ aliases under `portalBff.kms`. The exact internal platform HTTP origin is passed
 through the server-only allowlist; arbitrary insecure HTTP destinations remain
 rejected.
 
-On the Gateway API path the explicit `/admin-console` PathPrefix route is more
+On the Gateway API path the platform `/admin-console` PathPrefix route is more
 specific than the platform service's `/` catch-all, so `/admin-console/*` routes
-to the console while everything else falls through to the platform. Instance
-HTTPRoutes keep the public-page rewrite in its own rule so it cannot alter the
-direct testing-console support paths described above. They provide no
+to the operator console while everything else falls through to the platform.
+The wildcard listener sends the same prefix to `admin-console-tenant`. Its
+HTTPRoute keeps the public-page rewrite in its own rule so it cannot alter the
+direct support paths described above. There is no
 `/admin-console/testing` compatibility alias.
+
+Use `gateway.platformAccess.routeAnnotations` to attach a controller-specific
+IP-allowlist/WAF policy to every exact-platform HTTPRoute without affecting the
+public wildcard tenant listener.
 
 See `examples/admin-console-values.yaml`.
 
