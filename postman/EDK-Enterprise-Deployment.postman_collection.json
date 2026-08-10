@@ -4786,9 +4786,9 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"queryId\": \"mdl-mdoc\",\n  \"name\": \"Driving licence check\",\n  \"description\": \"Requests the holder name and driving privileges from the mobile driving licence\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"driving_privileges\"] }\n        ]\n      }\n    ]\n  }\n}"
+              "raw": "{\n  \"queryId\": \"mdl-mdoc\",\n  \"name\": \"Driving licence check\",\n  \"description\": \"Requests the holder name from the mobile driving licence\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] }\n        ]\n      }\n    ]\n  }\n}"
             },
-            "description": "Selects family_name, given_name, and driving_privileges from the ISO 18013-5 namespace."
+            "description": "Selects family_name and given_name from the ISO 18013-5 namespace."
           },
           "event": [
             {
@@ -4812,7 +4812,7 @@
                   "  const credential = q.dcqlQuery.credentials[0];",
                   "  pm.expect(credential.format).to.eql('mso_mdoc');",
                   "  pm.expect(credential.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
-                  "  pm.expect(credential.claims.map((claim) => claim.path)).to.eql([['org.iso.18013.5.1', 'family_name'], ['org.iso.18013.5.1', 'given_name'], ['org.iso.18013.5.1', 'driving_privileges']]);",
+                  "  pm.expect(credential.claims.map((claim) => claim.path)).to.eql([['org.iso.18013.5.1', 'family_name'], ['org.iso.18013.5.1', 'given_name']]);",
                   "});",
                   "}"
                 ]
@@ -4842,7 +4842,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"queryId\": \"eupid-and-mdl\",\n  \"name\": \"Identity and driving licence\",\n  \"description\": \"Requests the EuPid and the mobile driving licence in one presentation\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] }\n        ]\n      },\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"driving_privileges\"] }\n        ]\n      }\n    ]\n  }\n}"
+              "raw": "{\n  \"queryId\": \"eupid-and-mdl\",\n  \"name\": \"Identity and driving licence\",\n  \"description\": \"Requests the EuPid and the mobile driving licence in one presentation\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] }\n        ]\n      },\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] }\n        ]\n      }\n    ]\n  }\n}"
             },
             "description": "Requests both credentials in a single presentation, each with its own claim selection."
           },
@@ -4870,7 +4870,7 @@
                   "  pm.expect(byId.eupid.meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
                   "  pm.expect(byId.mdl.format).to.eql('mso_mdoc');",
                   "  pm.expect(byId.mdl.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
-                  "  pm.expect(byId.mdl.claims.map((claim) => claim.path)).to.eql([['org.iso.18013.5.1', 'family_name'], ['org.iso.18013.5.1', 'given_name'], ['org.iso.18013.5.1', 'driving_privileges']]);",
+                  "  pm.expect(byId.mdl.claims.map((claim) => claim.path)).to.eql([['org.iso.18013.5.1', 'family_name'], ['org.iso.18013.5.1', 'given_name']]);",
                   "});",
                   "}"
                 ]
