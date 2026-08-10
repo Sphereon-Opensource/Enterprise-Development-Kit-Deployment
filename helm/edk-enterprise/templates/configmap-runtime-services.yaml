@@ -32,6 +32,9 @@ data:
         tenant-bound-client-id: true
         audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
         allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+    east-west:
+      tenant-did:
+        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -91,6 +94,85 @@ data:
               mac: *didTenantKmsGrpcRoute
               encryption: *didTenantKmsGrpcRoute
               ecdh: *didTenantKmsGrpcRoute
+---
+{{- end }}
+{{- if .Values.services.blob.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-blob-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: blob
+data:
+  application.yml: |
+{{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "blob")) | indent 4 }}
+{{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    config:
+      providers:
+        platform-config-remote:
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,theme
+    server:
+      service-identity:
+        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        token-endpoint-allow-http: true
+        token-endpoint-source: active-as
+        active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+        active-as-client-role: blob
+        client-id: {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
+        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        tenant-bound-client-id: true
+        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+    transport:
+      routing:
+        configScope: APP
+        modules:
+{{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          kms:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              key: &blobPlatformKmsGrpcRoute
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+              keys: *blobPlatformKmsGrpcRoute
+              signature: *blobPlatformKmsGrpcRoute
+              mac: *blobPlatformKmsGrpcRoute
+              encryption: *blobPlatformKmsGrpcRoute
+              ecdh: *blobPlatformKmsGrpcRoute
+          secret:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: false
+    connector:
+      vault:
+        # The dedicated blob workload owns the encrypted vault repository for
+        # both platform and customer tenant theme/application state.
+        store-id: default
+    blob:
+      stores:
+        default:
+          type: filesystem
+          scopeBinding: TENANT
+          rootDir: /app/blobs
+          autoCreateDirs: true
+    kv:
+      stores:
+        blob:
+          metadata:
+            type: KvStoreConfig
+            backendId: database
+            scopeBinding: TENANT
+    license:
+      command-enforcement:
+        enabled: true
+        missing-descriptor-mode: warn
+      gate:
+        service-role: service-data
 ---
 {{- end }}
 {{- if .Values.services.issuer.enabled }}

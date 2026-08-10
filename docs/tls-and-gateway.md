@@ -47,8 +47,8 @@ Public exposure is limited to host/path routes through the gateway:
   protocol-BFF/static support paths on registered issuer/verifier hosts.
 
 Those are gateway or ingress routes. Customers and operators do not call the
-workload containers directly. Runtime probes are for Docker Compose or
-Kubernetes orchestration only and must not be exposed as tenant public routes.
+workload containers directly. Keep workload health endpoints private and do
+not expose them as tenant public routes.
 
 Administrative REST under `/api/.../v1` is not anonymous public traffic. In
 Kubernetes the chart can enforce a public/internal split with separate ingress

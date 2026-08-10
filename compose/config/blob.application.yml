@@ -1,82 +1,34 @@
-# enterprise-did runtime config.
+# Dedicated blob, asset-library, and theme-data service.
 #
-# The DID service hosts did.json documents and runs DID create/update/deactivate.
-# It is an outbound command caller: KMS commands route to the tenant KMS over
-# gRPC. Public surface is limited to the DID resolver and did.json hosting; the
-# /api/did/v1 management surface requires a tenant AS bearer.
+# This workload owns tenant branding bytes and the public asset projection. It
+# is deliberately separate from the platform and protocol services so those
+# processes never fall back to an undeclared local filesystem store.
 server:
   rest:
     port: 8080
     auth:
       enabled: true
-      # Tenant bearer issuers are dynamic registry-backed AS endpoints created
-      # during tenant onboarding, not deployment-time URLs.
-      # Trust the platform operator AS as a second fixed issuer so operator->tenant
-      # STS tokens (RFC 8693) from the admin console are accepted.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
-      expected-audience: enterprise-tenant-did
+      expected-audience: enterprise-blob
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
-      # Open prefixes: did.json hosting only.
-      anonymous-path-prefixes: /.well-known
+      anonymous-path-prefixes: /health,/public/assets
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
     token-endpoint-allow-http: true
     token-endpoint-source: active-as
     active-as-token-endpoint: http://enterprise-tenant-as:18083/token
-    active-as-client-role: did
-    client-id: did-service
+    active-as-client-role: blob
+    client-id: blob-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-tenant-kms
-east-west:
-  # Preserve the public did:web identifier while avoiding public DNS hairpin
-  # dependencies for DID management reads inside the DID container.
-  tenant-did:
-    base-url: http://enterprise-did:8080
+    allowed-audiences: enterprise-platform
 sphereon:
+  service:
+    id: service-blob
   telemetry:
     enabled: true
-    tracing:
-      enabled: true
-    metrics:
-      enabled: true
-    sampling:
-      rate: 1.0
-    export:
-      preset: otlp-all
-  service:
-    id: service-data
-otel:
-  traces:
-    exporter: otlp
-  metrics:
-    exporter: otlp
-  exporter:
-    otlp:
-      endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
-      protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
-      traces:
-        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4317}
-        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL:grpc}
-      metrics:
-        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
-        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
-security:
-  workload-trust-policy:
-    trusted_service_ids:
-      - service-crypto
-      - service-data
-      - service-oid4vci
-      - service-oid4vp
-      - service-eidas
-      - service-monolith
-    service_client_bindings:
-      "[service-crypto]": kms-service
-      "[service-data]": did-service
-      "[service-oid4vci]": issuer-service
-      "[service-oid4vp]": verifier-service
 transport:
   grpc:
     enabled: false
@@ -85,31 +37,25 @@ transport:
     configScope: APP
     modules:
       kms:
-        serviceTokenAudience: enterprise-tenant-kms
+        serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: true
         services:
-          key: &tenantKmsGrpcRoute
+          key: &blobPlatformKmsGrpcRoute
             target: SERVER
             transport: GRPC
-            endpoint: grpc://enterprise-tenant-kms:9090
-          keys: *tenantKmsGrpcRoute
-          signature:
-            target: SERVER
-            transport: GRPC
-            endpoint: grpc://enterprise-tenant-kms:9090
-            commands:
-              "[kms.signature.verify]":
-                target: LOCAL
-          mac: *tenantKmsGrpcRoute
-          encryption: *tenantKmsGrpcRoute
-          ecdh: *tenantKmsGrpcRoute
+            endpoint: grpc://enterprise-platform:9090
+          keys: *blobPlatformKmsGrpcRoute
+          signature: *blobPlatformKmsGrpcRoute
+          mac: *blobPlatformKmsGrpcRoute
+          encryption: *blobPlatformKmsGrpcRoute
+          ecdh: *blobPlatformKmsGrpcRoute
       platform:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
         serviceTokenAudience: enterprise-platform
         services:
-          config: &platformGrpcRoute
+          config:
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
@@ -129,19 +75,19 @@ config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
+      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,theme
     tenant-config-db:
       enabled: false
 database:
   app:
     default:
       dialect: postgresql
+      isolation: shared
       host: ${env:EDK_TENANT_DB_HOST}
       port: 5432
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
-    # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
     secret-management-admin:
       dialect: postgresql
       isolation: shared
@@ -181,39 +127,38 @@ tenant:
         enabled: true
     custom-domain:
       enabled: true
+connector:
+  vault:
+    # The vault repository stores encrypted theme/application state in the
+    # dedicated BlobService store below. This binding is deployment-owned and
+    # applies to platform and customer tenant sessions alike.
+    store-id: default
+blob:
+  stores:
+    default:
+      type: filesystem
+      scopeBinding: TENANT
+      rootDir: /app/blobs
+      autoCreateDirs: true
+kv:
+  stores:
+    blob:
+      metadata:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
 license:
   command-enforcement:
     enabled: true
     missing-descriptor-mode: warn
-  # Optional explicit pin. Leave blank for first-run setup; the verified
-  # protected license bundle supplies the installation binding.
   installation-id: ${env:EDK_INSTALLATION_ID:}
   gate:
-    service-role: enterprise-did
-did:
-  persistence:
-    type: postgresql
-kms:
-  providers:
-    software:
-      type: software
-      enabled: true
-      autoCreateCertificate: true
-      keystore:
-        type: pkcs12
-        id: software
-        password: ${env:EDK_KEYSTORE_PASSWORD}
-        # This service routes KMS to the tenant KMS and holds no key material. The
-        # only local use is the [kms.signature.verify] route, which operates on
-        # public keys, so this keystore is ephemeral in the container temp
-        # directory and not backed by a shared volume.
-        path: "{tempDir}/edk-verify-keystore.p12"
-
+    service-role: service-data
 secret:
   authority:
     allowed-clock-skew-millis: 5000
     satellite:
-      workload-id: service-data
+      workload-id: service-blob
       workload-hosting-revision: 1
       assertion:
         issuer: sphereon-secret-workload

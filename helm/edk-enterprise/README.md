@@ -223,8 +223,8 @@ Default backing components:
 Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
 wallet-unit, wallet-interaction, issuer, and verifier remain backing workloads
 behind `platform.<baseDomain>` and `<tenant>.<baseDomain>` host/path routes.
-Runtime probes are Kubernetes orchestration concerns and must not be published
-as customer routes.
+Kubernetes uses the workload health endpoints inside the cluster. Do not
+publish those endpoints as customer routes.
 
 ## East-West Service Identity
 
@@ -369,7 +369,7 @@ Host header and set `X-Forwarded-Proto: https`. See
 The single-port Gateway API model is enabled by default with
 `gateway.enabled=true` and `ingress.legacy.enabled=false`. Customer-visible
 ingress is limited to platform and tenant host/path routes; admin REST and
-runtime probes must stay internal or protected.
+workload health endpoints must stay private or protected.
 
 The Gateway has an exact `https-platform` listener for the operator host and a
 separate wildcard `https` listener for tenant/satellite hosts. Platform routes

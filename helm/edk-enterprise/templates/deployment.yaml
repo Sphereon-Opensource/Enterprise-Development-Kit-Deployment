@@ -39,7 +39,7 @@ spec:
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-tenant-as.yaml") $ | sha256sum }}
         {{- else if eq $name "tenant-kms" }}
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-tenant-kms.yaml") $ | sha256sum }}
-        {{- else if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+        {{- else if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-runtime-services.yaml") $ | sha256sum }}
         {{- end }}
         {{- with $.Values.podAnnotations }}
@@ -184,6 +184,8 @@ spec:
               {{- $remoteKeyspaces := "crypto.kms.roles" -}}
               {{- if eq $name "tenant-as" -}}
               {{- $remoteKeyspaces = "oauth2.servers,crypto.kms.roles" -}}
+              {{- else if eq $name "blob" -}}
+              {{- $remoteKeyspaces = "oauth2.servers,crypto.kms.roles,theme" -}}
               {{- else if eq $name "issuer" -}}
               {{- $remoteKeyspaces = "crypto.kms.roles,oid4vci,credential-design,statuslists" -}}
               {{- else if eq $name "verifier" -}}
@@ -240,7 +242,7 @@ spec:
             {{- end }}
             {{- if eq $name "tenant-as" }}
             - name: THEME_CLIENT_BASE_URL
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             {{- end }}
             {{- /* East-west service identity + keystore secrets shared by the service containers.
                    The platform AS mints the service tokens the satellites present; the
@@ -637,7 +639,7 @@ spec:
                    confidential client registered for this workload. Without this
                    role the bootstrap client remains in use and its token carries
                    tenant_id=platform, so tenant KMS routing fails closed. */}}
-            {{- $activeAsClientRoles := dict "tenant-kms" "kms" "tenant-as" "authorization-server" "did" "did" "issuer" "issuer" "verifier" "verifier" "wallet-unit" "wallet-unit" "wallet-interaction" "wallet-interaction" }}
+            {{- $activeAsClientRoles := dict "tenant-kms" "kms" "tenant-as" "authorization-server" "did" "did" "blob" "blob" "issuer" "issuer" "verifier" "verifier" "wallet-unit" "wallet-unit" "wallet-interaction" "wallet-interaction" }}
             - name: SERVER_SERVICE_IDENTITY_ACTIVE_AS_CLIENT_ROLE
               value: {{ index $activeAsClientRoles $name | quote }}
             - name: SERVER_SERVICE_IDENTITY_AUDIENCE
@@ -714,7 +716,7 @@ spec:
             - name: ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS
               value: {{ $.Values.portalBff.trustedIngress.hops | quote }}
             - name: ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS
-              value: {{ if eq $name "admin-console" }}{{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}{{ else }}{{ printf "http://%s:%v,http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort | quote }}{{ end }}
+              value: {{ if eq $name "admin-console" }}{{ printf "http://%s:%v,http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}{{ else }}{{ printf "http://%s:%v,http://%s:%v,http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}{{ end }}
             {{- if eq $name "admin-console" }}
             - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_ID
               value: {{ $.Values.portalBff.clientId | quote }}
@@ -727,7 +729,7 @@ spec:
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             {{- end }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-kms")) (index $.Values.services "tenant-kms").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_DID_BASE_URL
@@ -744,6 +746,8 @@ spec:
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
             {{- end }}
+            - name: NEXT_PUBLIC_THEME_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" "blob" | quote }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" "did" | quote }}
             - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
@@ -854,7 +858,7 @@ spec:
               subPath: application.yml
               readOnly: true
             {{- end }}
-            {{- if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+            {{- if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
             # Service-specific routing, persistence and trust policy. This is a
             # subPath mount, so it REPLACES the image's baked
             # /app/config/application.yml rather than merging with it. Every key
@@ -884,6 +888,10 @@ spec:
             # proof material. Mobile/IDK wallet apps do not use this VDX volume.
             - name: wallet-interaction-keystore
               mountPath: /keystore
+            {{- end }}
+            {{- if and (eq $name "blob") $.Values.blobPersistence.enabled }}
+            - name: blob-store
+              mountPath: /app/blobs
             {{- end }}
             {{- if eq $name "platform" }}
             {{- /* License state is writable: the setup API writes the imported bundle's
@@ -940,7 +948,7 @@ spec:
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-tenant-kms-config
         {{- end }}
-        {{- if or (eq $name "did") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+        {{- if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
         - name: runtime-service-config
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-{{ $name }}-config
@@ -999,6 +1007,11 @@ spec:
         - name: wallet-interaction-keystore
           persistentVolumeClaim:
             claimName: {{ $.Values.walletInteractionKeystore.existingClaim | default (printf "%s-wallet-interaction-keystore" (include "edk-enterprise.fullname" $)) }}
+        {{- end }}
+        {{- if and (eq $name "blob") $.Values.blobPersistence.enabled }}
+        - name: blob-store
+          persistentVolumeClaim:
+            claimName: {{ $.Values.blobPersistence.existingClaim | default (printf "%s-blob-store" (include "edk-enterprise.fullname" $)) }}
         {{- end }}
         {{- with $svc.volumes }}
         {{- toYaml . | nindent 8 }}

@@ -249,7 +249,7 @@ services:
       # Remote theme resolution (theme.client.base-url): the hosted login page fetches
       # tenant/application branding from the platform service's public theme endpoints.
       # Unset it to serve the neutral login page.
-      THEME_CLIENT_BASE_URL: http://enterprise-platform:18080
+      THEME_CLIENT_BASE_URL: http://enterprise-blob:8080
     volumes:
       - ./config/tenant-as.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
@@ -316,6 +316,36 @@ services:
       - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-data:/app/secret-authority/workload:ro
     ports:
       - "${EDK_DID_HOST_PORT:-18082}:8080"
+    healthcheck: *edk-runtime-healthcheck-8080
+
+  # Dedicated tenant blob and theme-data service. Branding bytes are kept on
+  # their own durable volume and are never stored in the platform container.
+  enterprise-blob:
+    image: nexus.sphereon.com/edk-docker/service-data:${EDK_TAG:-0.25.0-SNAPSHOT}
+    depends_on:
+      tenant-postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-tenant-as:
+        condition: service_healthy
+    networks:
+      - appnet
+      - tenant-db-net
+    environment:
+      <<: [*edk-common-env, *edk-tenant-db-env]
+      EXTERNAL_BASE_URL: ${EDK_BLOB_EXTERNAL_BASE_URL:-http://enterprise-blob:8080}
+      REST_ENABLED: "true"
+      GRPC_ENABLED: "false"
+    volumes:
+      - ./config/blob.application.yml:/app/config/application.yml:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-blob:/app/secret-authority/workload:ro
+      - blob-store-data:/app/blobs
+    expose:
+      - "8080"
     healthcheck: *edk-runtime-healthcheck-8080
 
   # OID4VCI issuer: serves the wallet-facing protocol surface, signs credentials
@@ -391,6 +421,8 @@ services:
     depends_on:
       enterprise-platform:
         condition: service_healthy
+      enterprise-blob:
+        condition: service_healthy
     networks:
       - appnet
     environment:
@@ -401,11 +433,11 @@ services:
       ADMIN_CONSOLE_PUBLIC_ORIGIN: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "true"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: DIRECT
-      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080
+      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-blob:8080
       ADMIN_CONSOLE_WORKLOAD_CLIENT_ID: admin-console-portal-bff
       ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
       ADMIN_CONSOLE_AUDIT_BASE_URL: http://enterprise-platform:18080
-      ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-blob:8080
       ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
       ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
       ADMIN_CONSOLE_TENANT_AS_BASE_URL: http://enterprise-tenant-as:18083
@@ -414,6 +446,7 @@ services:
       ADMIN_CONSOLE_ISSUER_BASE_URL: http://enterprise-issuer:8080
       ADMIN_CONSOLE_VERIFIER_BASE_URL: http://enterprise-verifier:8080
       NEXT_PUBLIC_PLATFORM_AUDIENCE: enterprise-platform
+      NEXT_PUBLIC_THEME_AUDIENCE: enterprise-blob
       NEXT_PUBLIC_TENANT_DID_AUDIENCE: enterprise-tenant-did
       NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE: enterprise-issuer
       NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE: enterprise-verifier
@@ -442,6 +475,8 @@ services:
         condition: service_healthy
       enterprise-tenant-as:
         condition: service_healthy
+      enterprise-blob:
+        condition: service_healthy
     networks:
       - appnet
     environment:
@@ -452,8 +487,8 @@ services:
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
       ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
-      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-tenant-as:18083
-      ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-tenant-as:18083,http://enterprise-blob:8080
+      ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-blob:8080
       ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
       ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://enterprise-did:8080
       ADMIN_CONSOLE_TENANT_AS_BASE_URL: http://enterprise-tenant-as:18083
@@ -462,6 +497,7 @@ services:
       ADMIN_CONSOLE_ISSUER_BASE_URL: http://enterprise-issuer:8080
       ADMIN_CONSOLE_VERIFIER_BASE_URL: http://enterprise-verifier:8080
       NEXT_PUBLIC_TENANT_DID_AUDIENCE: enterprise-tenant-did
+      NEXT_PUBLIC_THEME_AUDIENCE: enterprise-blob
       NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE: enterprise-issuer
       NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE: enterprise-verifier
       PORT: "3000"
@@ -477,8 +513,10 @@ volumes:
   tenant-postgres-data:
   # Platform keystore: platform AS cert/user + the license-request instance cert.
   platform-keystore:
-  # Tenant-KMS keystore: per-tenant key material (software now; AWS/Key Vault later).
+  # Tenant-KMS keystore: per-tenant software key material.
   tenant-kms-keystore:
+  # Tenant branding and theme assets owned by enterprise-blob.
+  blob-store-data:
 networks:
   appnet:
   platform-db-net:

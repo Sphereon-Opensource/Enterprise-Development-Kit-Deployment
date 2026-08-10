@@ -81,6 +81,7 @@ security:
     trusted_service_ids:
       - service-crypto
       - service-data
+      - service-blob
       - service-oid4vci
       - service-oid4vp
       - service-eidas
@@ -89,6 +90,7 @@ security:
     service_client_bindings:
       "[service-crypto]": kms-service
       "[service-data]": did-service
+      "[service-blob]": blob-service
       "[service-oid4vci]": issuer-service
       "[service-oid4vp]": verifier-service
       "[service-tenant-as]": tenant-as-service
@@ -234,10 +236,10 @@ secret-management:
       retention-days: 30
   internal-resolution:
     expected-audience: enterprise-platform
-    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,verifier-service,email-service
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
     # System credentials are authorized to workload identities, not OAuth client principals.
     # Keep this aligned with each satellite's service identity binding below.
-    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,verifier-service=service-oid4vp
+    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp
   deployment:
     environment:
       enabled: true
@@ -476,6 +478,12 @@ oauth2:
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
+        blob:
+          client-id: blob-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-blob
         verifier:
           client-id: verifier-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
@@ -530,8 +538,8 @@ auth:
 platform:
   sts:
     workload-client-id: kms-service
-    secret-bootstrap-workload-client-ids: tenant-as-service,issuer-service,kms-service,did-service,verifier-service,email-service
-    allowed-audiences: "enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier"
+    secret-bootstrap-workload-client-ids: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
+    allowed-audiences: "enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob"
   config:
     mount-path: /app/config
   onboarding:
@@ -598,7 +606,7 @@ license:
 
 secret:
   authority:
-    allowed-clock-skew-millis: 2000
+    allowed-clock-skew-millis: 5000
     central:
       permit:
         issuer: enterprise-platform

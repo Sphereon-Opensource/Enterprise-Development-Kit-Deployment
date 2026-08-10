@@ -279,7 +279,7 @@ kv:
 
 secret:
   authority:
-    allowed-clock-skew-millis: 2000
+    allowed-clock-skew-millis: 5000
     satellite:
       workload-id: service-oid4vci
       workload-hosting-revision: 1

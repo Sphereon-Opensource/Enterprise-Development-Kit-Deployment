@@ -126,6 +126,7 @@ secretManagement:
       - issuer-service
       - kms-service
       - did-service
+      - blob-service
       - verifier-service
   # Read-only deployment source for operator-managed Kubernetes Secrets. The
   # manifest maps opaque `sec_*` IDs to keys/files in existingSecret; no tenant
@@ -150,6 +151,7 @@ secretAuthority:
     tenant-kms: ""
     tenant-as: ""
     did: ""
+    blob: ""
     issuer: ""
     verifier: ""
     wallet-unit: ""
@@ -166,6 +168,7 @@ secretAuthority:
       service-platform: service-platform-assertion.pub.pem
       service-crypto: service-crypto-assertion.pub.pem
       service-data: service-data-assertion.pub.pem
+      service-blob: service-blob-assertion.pub.pem
       service-tenant-as: service-tenant-as-assertion.pub.pem
       service-oid4vci: service-oid4vci-assertion.pub.pem
       service-oid4vp: service-oid4vp-assertion.pub.pem
@@ -230,6 +233,14 @@ walletInteractionKeystore:
   # do not use this VDX volume.
   enabled: false
   size: 1Gi
+  storageClass: ""
+  existingClaim: ""
+
+# Durable filesystem storage owned by the dedicated blob/theme workload. The
+# database contains only tenant-scoped metadata; uploaded bytes live here.
+blobPersistence:
+  enabled: true
+  size: 5Gi
   storageClass: ""
   existingClaim: ""
 
@@ -334,6 +345,7 @@ serviceIdentity:
     tenant-kms: kms-service
     tenant-as: tenant-as-service
     did: did-service
+    blob: blob-service
     issuer: issuer-service
     verifier: verifier-service
     trust-domain-identifier: trust-domain-service
@@ -345,6 +357,7 @@ serviceIdentity:
     tenant-kms: service-crypto
     tenant-as: service-tenant-as
     did: service-data
+    blob: service-blob
     issuer: service-oid4vci
     verifier: service-oid4vp
     wallet-unit: service-wallet-unit
@@ -363,6 +376,7 @@ serviceIdentity:
     tenant-as: "/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect"
     tenant-kms: ""
     did: "/.well-known"
+    blob: "/public/assets"
     issuer: "/oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers"
     verifier: "/oid4vp/request-uri,/oid4vp/auth/response,/.well-known"
     wallet-unit: ""
@@ -436,6 +450,7 @@ license:
     platform: enterprise-platform
     tenant-kms: enterprise-tenant-kms
     did: enterprise-did
+    blob: service-data
     tenant-as: enterprise-tenant-as
     issuer: enterprise-issuer
     verifier: enterprise-verifier
@@ -693,6 +708,39 @@ services:
         - /1.0/create
         - /1.0/update
         - /1.0/deactivate
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    env: []
+
+  # Dedicated tenant blob, asset-library, and theme-data workload. This keeps
+  # tenant branding bytes out of the platform and protocol containers.
+  blob:
+    enabled: true
+    image: service-data
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: false
+      className: ""
+      host: ""
+      paths:
+        - /api/theme/v1
+        - /api/assets/v1
+        - /public/assets
+      annotations: {}
+    internalIngress:
+      enabled: false
+      className: internal
+      host: ""
+      paths:
+        - /api/theme/v1
+        - /api/assets/v1
       annotations: {}
     resources:
       requests:

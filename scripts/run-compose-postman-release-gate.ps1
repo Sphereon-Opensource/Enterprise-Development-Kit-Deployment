@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Runs the customer Docker Compose topology and its 108-request Postman release gate.
+  Runs the customer Docker Compose topology and its 113-request Postman release gate.
 
 .DESCRIPTION
   This is a non-interactive, fail-closed release gate. Localtest uses the
@@ -69,6 +69,7 @@ $releaseImages = @(
   'enterprise-platform',
   'enterprise-tenant-kms',
   'enterprise-did',
+  'service-data',
   'enterprise-tenant-as',
   'enterprise-issuer',
   'enterprise-verifier',
@@ -178,6 +179,7 @@ function Assert-BehindEdgeMergedCompose([string]$ComposeJson) {
     'enterprise-platform',
     'enterprise-tenant-as',
     'enterprise-did',
+    'enterprise-blob',
     'enterprise-issuer',
     'enterprise-verifier'
   )) {
@@ -422,7 +424,7 @@ function Write-Plan {
     composeEnvFile = $resolvedComposeEnv
     collection = $collectionPath
     environment = $resolvedPostmanEnvironment
-    requestCount = 108
+    requestCount = 113
     immutableTag = $Tag
     sourceState = $resolvedSourceState
     expectedSource = $ExpectedSource
@@ -530,7 +532,7 @@ Require-File $resolvedPostmanEnvironment 'Postman environment'
 Require-File $resolvedSourceState 'Frozen release source-state manifest'
 $collection = Get-Content -LiteralPath $collectionPath -Raw | ConvertFrom-Json
 $requestCount = Count-Requests @($collection.item)
-if ($requestCount -ne 108) { Fail "Customer collection must contain exactly 108 requests; found $requestCount." }
+if ($requestCount -ne 113) { Fail "Customer collection must contain exactly 113 requests; found $requestCount." }
 if ($AccessMode -eq 'Localtest') {
   $gatewayRules = Get-Content -LiteralPath $gatewayDynamic -Raw
   if ($gatewayRules -notmatch [regex]::Escape("platform.$BaseDomain")) {
@@ -540,7 +542,7 @@ if ($AccessMode -eq 'Localtest') {
 Write-Plan
 
 if ($DryRun) {
-  Write-Host "Dry-run passed: customer $AccessMode topology, immutable seven-image plan, and 108-request collection validated."
+  Write-Host "Dry-run passed: customer $AccessMode topology, immutable seven-image plan, and 113-request collection validated."
   Write-Host "Plan: $(Join-Path $resolvedReportDir 'release-gate-plan.json')"
   exit 0
 }
@@ -799,6 +801,7 @@ try {
     'enterprise-platform',
     'enterprise-tenant-kms',
     'enterprise-did',
+    'enterprise-blob',
     'enterprise-tenant-as',
     'enterprise-issuer',
     'enterprise-verifier',
@@ -857,8 +860,8 @@ try {
     '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
     '--base-domain', $BaseDomain
   ) (Join-Path $resolvedReportDir 'newman.log') $false
-  if ($runnerOutput -notmatch 'E2E finished:\s+108 requests captured,\s+exit code 0\.') {
-    Fail 'Newman did not execute and capture exactly all 108 requests.'
+  if ($runnerOutput -notmatch 'E2E finished:\s+115 requests captured,\s+exit code 0\.') {
+    Fail 'Newman did not execute and capture exactly all 115 request executions.'
   }
   $junitPath = Join-Path $newmanStageDir 'junit.xml'
   Invoke-LoggedNative $nodeCommand @(
@@ -1008,7 +1011,7 @@ try {
       --teardown-status $teardownStatus `
       --project-name $ProjectName `
       --tag $Tag `
-      --request-count 108 `
+      --request-count 115 `
       --manifest (Join-Path $resolvedReportDir 'evidence-manifest.json') `
       --manifest-hash (Join-Path $resolvedReportDir 'evidence-manifest.sha256')
     $finalizationExit = $LASTEXITCODE

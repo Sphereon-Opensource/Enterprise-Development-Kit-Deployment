@@ -30,6 +30,36 @@
       "description": "Opaque tenant KMS resource handle (krh_...) discovered from the typed KMS resource list. It is the only KMS identifier a tenant caller ever sees."
     },
     {
+      "key": "statusListDidKmsResourceHandle",
+      "value": "",
+      "type": "string",
+      "description": "Exact KMS resource selected by the provisioned EuPid credential configuration."
+    },
+    {
+      "key": "statusListDidKmsKeyAlias",
+      "value": "",
+      "type": "string",
+      "description": "Exact KMS key selected by the provisioned EuPid credential configuration."
+    },
+    {
+      "key": "statusListDidVerificationMethodId",
+      "value": "",
+      "type": "string",
+      "description": "Exact DID assertionMethod selected by the provisioned EuPid credential configuration."
+    },
+    {
+      "key": "statusListX509KmsResourceHandle",
+      "value": "",
+      "type": "string",
+      "description": "Exact KMS resource selected by the provisioned mDL credential configuration."
+    },
+    {
+      "key": "statusListX509KmsKeyAlias",
+      "value": "",
+      "type": "string",
+      "description": "Exact X.509-backed KMS key selected by the provisioned mDL credential configuration."
+    },
+    {
       "key": "kmsResourceProviderId",
       "value": "",
       "type": "string",
@@ -377,7 +407,7 @@
                   "    pm.collectionVariables.set('tenantRegistrationCorrelationId', correlationId);",
                   "    pm.test('registration returned tenant gateway protocol URLs', () => {",
                   "      const serviceUrls = j.serviceUrls || {};",
-                  "      const expectedTenantOrigin = 'https://' + pm.variables.get('tenantSlug') + '.' + pm.variables.get('baseDomain');",
+                  "      const expectedTenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/$/, '');",
                   "      const exactTenantOrigin = (label, value) => pm.expect(String(value || '').replace(/\\/$/, ''), label).to.eql(expectedTenantOrigin);",
                   "      exactTenantOrigin('tenant URL', j.tenantUrl || j.primaryDomainUrl);",
                   "      exactTenantOrigin('AS issuer URL', serviceUrls.authorizationServerUrl || j.issuerUrl || j.tenant?.issuerUrl);",
@@ -554,7 +584,7 @@
                   "  originFor(endpointFor('OID4VP_VERIFIER'), expectedGateway),",
                   "  originFor(endpointFor('OAUTH2_AUTHORIZATION_SERVER'), expectedGateway),",
                   "];",
-                  "const expectedTenantOrigin = 'https://' + pm.variables.get('tenantSlug') + '.' + pm.variables.get('baseDomain');",
+                  "const expectedTenantOrigin = expectedGateway;",
                   "pm.test('tenant public endpoint bindings use the exact HTTPS tenant gateway origin', () => {",
                   "  pm.expect(expectedGateway, 'configured tenant gateway origin').to.eql(expectedTenantOrigin);",
                   "  origins.forEach((origin) => {",
@@ -615,7 +645,7 @@
                   "const tenantDid = service('tenantDid');",
                   "const issuer = service('issuer');",
                   "const verifier = service('verifier');",
-                  "const expectedTenantOrigin = 'https://' + pm.variables.get('tenantSlug') + '.' + pm.variables.get('baseDomain');",
+                  "const expectedTenantOrigin = trimBase(pm.variables.get('tenantGatewayUrl'));",
                   "pm.test('runtime config exposes tenant workload services', () => {",
                   "  ['tenantKms', 'tenantDid', 'issuer', 'verifier'].forEach((key) => {",
                   "    pm.expect(trimBase(services[key] && services[key].baseUrl), key + ' baseUrl').to.eql(expectedTenantOrigin);",
@@ -1426,7 +1456,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -1466,7 +1496,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -1491,6 +1521,7 @@
                   "});",
                   "pm.collectionVariables.set('kmsResourceHandle', handles[0]);",
                   "pm.collectionVariables.set('kmsResourceProviderId', resources[0] && resources[0].providerId);",
+                  "pm.collectionVariables.set('kmsResourceKind', resources[0] && resources[0].kind);",
                   "const text = pm.response.text();",
                   "['INTERNAL_SOFTWARE_KMS', 'internal-token-verifier', 'keyAlias', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'resources hide ' + shape).to.not.include(shape));"
                 ]
@@ -1511,7 +1542,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -1550,7 +1581,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               },
               {
@@ -1619,7 +1650,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -1657,7 +1688,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               },
               {
@@ -1715,7 +1746,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -1753,7 +1784,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               },
               {
@@ -1810,7 +1841,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               },
               {
@@ -1857,7 +1888,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               },
               {
@@ -1904,7 +1935,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -1977,7 +2008,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -2009,7 +2040,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -2025,7 +2056,11 @@
                   "pm.expect(text, 'did appears in methods response').to.include(pm.collectionVariables.get('did'));",
                   "const methods = Array.isArray(pm.response.json()) ? pm.response.json() : (pm.response.json().verificationMethods || pm.response.json().items || []);",
                   "pm.expect(methods.length, 'activation DID has product verification methods').to.be.at.least(2);",
-                  "methods.forEach((method) => pm.expect(String(method.id || method.verificationMethodId || ''), 'verification method belongs to activation DID').to.include(pm.collectionVariables.get('did') + '#'));"
+                  "methods.forEach((method) => pm.expect(String(method.id || method.verificationMethodId || ''), 'verification method belongs to activation DID').to.include(pm.collectionVariables.get('did') + '#'));",
+                  "const verifierMethodId = pm.collectionVariables.get('did') + '#verifier-request-object-' + pm.collectionVariables.get('verifierInstanceId');",
+                  "const verifierMethod = methods.find((method) => String(method.id || method.verificationMethodId || '') === verifierMethodId);",
+                  "pm.expect(verifierMethod, 'verifier request-object verification method is published').to.be.an('object');",
+                  "pm.collectionVariables.set('verifierDidVerificationMethodId', verifierMethodId);"
                 ]
               }
             }
@@ -2040,7 +2075,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -2245,7 +2280,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -2287,7 +2322,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -2323,7 +2358,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -2364,7 +2399,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               },
               {
@@ -2407,7 +2442,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -2469,7 +2504,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -2628,7 +2663,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -2668,7 +2703,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -2713,7 +2748,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -2753,7 +2788,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -2797,7 +2832,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -2837,7 +2872,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -2882,7 +2917,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -2922,7 +2957,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -2962,7 +2997,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3000,7 +3035,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3040,7 +3075,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3085,7 +3120,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3125,7 +3160,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3160,7 +3195,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -3184,6 +3219,78 @@
       "description": "Creates the EuPid token status list, verifies the hosted status-list token, updates an entry, reactivates it, and reads the resulting entry state.",
       "item": [
         {
+          "name": "00a Resolve EuPid DID signing selection",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid",
+            "description": "Reads the provisioned EuPid signing configuration so status-list creation selects the exact KMS resource, key, and DID assertionMethod instead of a generic DID method.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('EuPid signing configuration returned', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const j = body.data || body;",
+                  "pm.test('EuPid carries an exact DID signing selection', () => {",
+                  "  pm.expect(j.signingKeyMode).to.match(/^did:/);",
+                  "  pm.expect(j.kmsResourceHandle).to.match(/^krh_[A-Za-z0-9_-]+$/);",
+                  "  pm.expect(j.kmsKeyAlias).to.be.a('string').and.not.empty;",
+                  "  pm.expect(j.signingVerificationMethodId).to.match(/^did:[^#]+#.+$/);",
+                  "});",
+                  "pm.collectionVariables.set('statusListDidKmsResourceHandle', j.kmsResourceHandle);",
+                  "pm.collectionVariables.set('statusListDidKmsKeyAlias', j.kmsKeyAlias);",
+                  "pm.collectionVariables.set('statusListDidVerificationMethodId', j.signingVerificationMethodId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00b Resolve mDL X.509 signing selection",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Mdl",
+            "description": "Reads the provisioned mDL signing configuration and reuses its exact X.509-backed KMS key for the certificate-signed status-list verification case.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operatorToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('mDL signing configuration returned', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const j = body.data || body;",
+                  "pm.test('mDL carries an exact X.509 signing selection', () => {",
+                  "  pm.expect(j.signingKeyMode).to.eql('x5c');",
+                  "  pm.expect(j.kmsResourceHandle).to.match(/^krh_[A-Za-z0-9_-]+$/);",
+                  "  pm.expect(j.kmsKeyAlias).to.be.a('string').and.not.empty;",
+                  "  pm.expect(j.kmsResourceHandle, 'mDL uses the provisioned tenant KMS').to.eql(pm.collectionVariables.get('kmsResourceHandle'));",
+                  "  pm.expect(pm.collectionVariables.get('kmsResourceKind'), 'mDL uses the Software KMS').to.eql('SOFTWARE');",
+                  "});",
+                  "pm.collectionVariables.set('statusListX509KmsResourceHandle', j.kmsResourceHandle);",
+                  "pm.collectionVariables.set('statusListX509KmsKeyAlias', j.kmsKeyAlias);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "01 Create token status list",
           "request": {
             "method": "POST",
@@ -3199,15 +3306,15 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correlationId\": \"eupid-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{did}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/eupid-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
+              "raw": "{\n  \"correlationId\": \"eupid-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{did}}\",\n  \"signingKeyMode\": \"did:web\",\n  \"kmsResourceHandle\": \"{{statusListDidKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListDidKmsKeyAlias}}\",\n  \"signingVerificationMethodId\": \"{{statusListDidVerificationMethodId}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/eupid-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
             },
-            "description": "Creates the IETF Token Status List the EuPid configuration references. The request submits no signing selector: the status-list signer resolves its key from a server-owned product role bound to the tenant KMS resource. The deployment configuration declares the list under the statuslists namespace; this call materializes it. The correlation id is the stable business identifier; the signed token is re-issued whenever entries change, and indexes are allocated randomly at issuance time, never sequentially. Issuance refuses to mint when a configured list cannot be resolved."
+            "description": "Creates the IETF Token Status List referenced by the EuPid configuration with its exact provisioned KMS resource, key alias, and DID assertionMethod. The platform authority owns that selection; the issuer validates it and does not rewrite tenant configuration."
           },
           "event": [
             {
@@ -3219,7 +3326,7 @@
                   "const j = pm.response.json();",
                   "if (j.id) pm.collectionVariables.set('statusListId', j.id);",
                   "if (j.statusListUri) pm.collectionVariables.set('statusListUri', j.statusListUri);",
-                  "if (!pm.collectionVariables.get('statusListUri')) pm.collectionVariables.set('statusListUri', 'https://' + pm.variables.get('tenantHost') + '/public/statuslists/eupid-revocation');",
+                  "if (!pm.collectionVariables.get('statusListUri')) pm.collectionVariables.set('statusListUri', pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation');",
                   "const decodeJwtPart = (jwt, index) => {",
                   "  const compact = String(jwt || '').split('~')[0];",
                   "  const segment = compact.split('.')[index];",
@@ -3245,6 +3352,9 @@
                   "  const payload = decodeJwtPart(j.signedToken, 1);",
                   "  pm.test('status list signed token claims match hosted list', () => {",
                   "    pm.expect(header.typ).to.eql('statuslist+jwt');",
+                  "    pm.expect(header.kid, 'absolute DID verification-method kid').to.be.a('string').and.not.empty;",
+                  "    pm.expect(header.kid.startsWith(pm.variables.get('did') + '#')).to.eql(true);",
+                  "    pm.expect(header).not.to.have.property('x5c');",
                   "    pm.expect(payload.iss).to.eql(pm.variables.get('did'));",
                   "    pm.expect(payload.sub).to.eql(pm.collectionVariables.get('statusListUri'));",
                   "    pm.expect(payload.status_list && payload.status_list.bits).to.eql(1);",
@@ -3269,7 +3379,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -3309,7 +3419,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -3334,7 +3444,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               }
             ],
             "url": "{{statusListUri}}",
@@ -3361,10 +3471,122 @@
                   "pm.test('hosted status list has statuslist JWT media type and claims', () => {",
                   "  pm.expect(pm.response.headers.get('Content-Type') || '', 'content type').to.include('application/statuslist+jwt');",
                   "  pm.expect(hostedHeader.typ).to.eql('statuslist+jwt');",
+                  "  pm.expect(hostedHeader.kid, 'absolute DID verification-method kid').to.be.a('string').and.not.empty;",
+                  "  pm.expect(hostedHeader.kid.startsWith(pm.variables.get('did') + '#')).to.eql(true);",
+                  "  pm.expect(hostedHeader).not.to.have.property('x5c');",
                   "  pm.expect(hostedPayload.iss).to.eql(pm.variables.get('did'));",
                   "  pm.expect(hostedPayload.sub).to.eql(pm.collectionVariables.get('statusListUri'));",
                   "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.bits).to.eql(1);",
                   "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.lst).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('statusListSignerDid', hostedPayload.iss || '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04a Create X.509 token status list",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantStatusListApiBaseUrl}}/statuslists",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correlationId\": \"x509-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{tenantGatewayUrl}}\",\n  \"signingKeyMode\": \"x5c\",\n  \"kmsResourceHandle\": \"{{statusListX509KmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListX509KmsKeyAlias}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/x509-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
+            },
+            "description": "Creates a second Token Status List using the X.509 public trust mechanism. The server-owned signing key must carry a certificate chain; the protected JWS header uses x5c and deliberately omits kid."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('X.509 status list created or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
+                  "const j = pm.response.json();",
+                  "if (j.id) pm.collectionVariables.set('x5cStatusListId', j.id);",
+                  "if (j.statusListUri) pm.collectionVariables.set('x5cStatusListUri', j.statusListUri);",
+                  "if (!pm.collectionVariables.get('x5cStatusListUri')) pm.collectionVariables.set('x5cStatusListUri', pm.variables.get('tenantGatewayUrl') + '/public/statuslists/x509-revocation');",
+                  "const decodeJwtPart = (jwt, index) => {",
+                  "  const compact = String(jwt || '').split('~')[0];",
+                  "  const segment = compact.split('.')[index];",
+                  "  pm.expect(segment, 'jwt segment ' + index).to.be.a('string').and.not.empty;",
+                  "  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "if (j.signedToken) {",
+                  "  const header = decodeJwtPart(j.signedToken, 0);",
+                  "  const payload = decodeJwtPart(j.signedToken, 1);",
+                  "  pm.test('X.509 status list response uses x5c without kid', () => {",
+                  "    pm.expect(header.typ).to.eql('statuslist+jwt');",
+                  "    pm.expect(header.x5c, 'certificate chain').to.be.an('array').and.not.empty;",
+                  "    pm.expect(header.x5c[0]).to.be.a('string').and.not.empty;",
+                  "    pm.expect(header).not.to.have.property('kid');",
+                  "    pm.expect(payload.iss).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "    pm.expect(payload.sub).to.eql(pm.collectionVariables.get('x5cStatusListUri'));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04b Fetch hosted X.509 status list token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}"
+              }
+            ],
+            "url": "{{x5cStatusListUri}}",
+            "description": "Fetches the hosted X.509-signed status-list token and verifies its protected signer-identification header independently of the create response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('X.509 status list hosted', () => pm.response.to.have.status(200));",
+                  "const decodeJwtPart = (jwt, index) => {",
+                  "  const compact = String(jwt || '').split('~')[0];",
+                  "  const segment = compact.split('.')[index];",
+                  "  pm.expect(segment, 'jwt segment ' + index).to.be.a('string').and.not.empty;",
+                  "  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "const token = pm.response.text().trim();",
+                  "const header = decodeJwtPart(token, 0);",
+                  "const payload = decodeJwtPart(token, 1);",
+                  "pm.test('hosted X.509 status list uses x5c without kid', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type') || '', 'content type').to.include('application/statuslist+jwt');",
+                  "  pm.expect(header.typ).to.eql('statuslist+jwt');",
+                  "  pm.expect(header.x5c, 'certificate chain').to.be.an('array').and.not.empty;",
+                  "  pm.expect(header.x5c[0]).to.be.a('string').and.not.empty;",
+                  "  pm.expect(header).not.to.have.property('kid');",
+                  "  pm.expect(payload.iss).to.eql(pm.variables.get('tenantGatewayUrl'));",
+                  "  pm.expect(payload.sub).to.eql(pm.collectionVariables.get('x5cStatusListUri'));",
+                  "  pm.expect(payload.status_list && payload.status_list.bits).to.eql(1);",
                   "});"
                 ]
               }
@@ -3387,7 +3609,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3425,7 +3647,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3460,7 +3682,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -3498,7 +3720,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               }
             ],
             "description": "Public SD-JWT VC Type Metadata for EuPid. Asserts localized displays (en/nl with lang), rendering.simple logo + colors, content-addressed uri#integrity when hosted, and lowercase claims[].sd."
@@ -3596,7 +3818,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               }
             ],
             "description": "Public OID4VCI issuer metadata. Asserts top-level issuer display (name + logo, en/nl) and the EuPid configuration credential_metadata display (logo, colors, claims) using the locale key."
@@ -3653,7 +3875,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               }
             ],
             "description": "Fetches the public branding asset by its content-addressed path. This verifies that wallet-facing metadata points to a reachable image."
@@ -3833,7 +4055,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3876,7 +4098,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               }
             ],
             "url": "{{credentialOfferUri}}",
@@ -3924,7 +4146,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               }
             ],
             "url": "{{issuerMetadataUrl}}",
@@ -3948,6 +4170,17 @@
                   "  return url;",
                   "};",
                   "const j = pm.response.json();",
+                  "const configurations = j.credential_configurations_supported || {};",
+                  "const eupidConfiguration = configurations.EuPid;",
+                  "const mdlConfiguration = configurations.Mdl;",
+                  "pm.test('sample credential metadata separates PID and mdoc contracts', () => {",
+                  "  pm.expect(eupidConfiguration).to.be.an('object');",
+                  "  pm.expect(eupidConfiguration.format).to.eql('dc+sd-jwt');",
+                  "  pm.expect(mdlConfiguration).to.be.an('object');",
+                  "  pm.expect(mdlConfiguration.format).to.eql('mso_mdoc');",
+                  "  pm.expect(mdlConfiguration.cryptographic_binding_methods_supported).to.eql(['cose_key']);",
+                  "  pm.expect(mdlConfiguration).not.to.have.property('status');",
+                  "});",
                   "if (j.credential_endpoint) pm.collectionVariables.set('credentialEndpoint', rewritePublicUrl(j.credential_endpoint, pm.variables.get('tenantGatewayUrl')));",
                   "const tokenEndpoint = rewritePublicUrl(j.token_endpoint || (pm.variables.get('tenantGatewayUrl') + '/token'), pm.variables.get('tenantGatewayUrl'));",
                   "pm.collectionVariables.set('tokenEndpoint', tokenEndpoint);",
@@ -3969,7 +4202,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -3996,14 +4229,16 @@
                 "exec": [
                   "pm.test('token issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
-                  "pm.test('EuPid token response is bound to requested credential configuration', () => {",
-                  "  const detail = (j.authorization_details || []).find((entry) => entry.type === 'openid_credential');",
-                  "  pm.expect(detail, 'openid credential authorization detail').to.be.an('object');",
-                  "  pm.expect(detail.credential_configuration_id).to.eql('EuPid');",
-                  "  const identifiers = detail.credential_identifiers || [];",
-                  "  pm.expect(identifiers).to.have.length.greaterThan(0);",
-                  "  pm.collectionVariables.set('eupidCredentialIdentifier', identifiers[0]);",
+                  "const credentialAuthorization = Array.isArray(j.authorization_details) ? j.authorization_details.find((detail) => detail && detail.credential_configuration_id === 'EuPid') : undefined;",
+                  "const credentialIdentifiers = credentialAuthorization && credentialAuthorization.credential_identifiers;",
+                  "pm.test('pre-authorized token returns an opaque EuPid credential identifier distinct from its configuration id', () => {",
+                  "  pm.expect(credentialAuthorization).to.be.an('object');",
+                  "  pm.expect(credentialAuthorization.type).to.eql('openid_credential');",
+                  "  pm.expect(credentialIdentifiers).to.be.an('array').with.lengthOf(1);",
+                  "  pm.expect(credentialIdentifiers[0]).to.be.a('string').and.not.empty;",
+                  "  pm.expect(credentialIdentifiers[0]).not.to.eql(credentialAuthorization.credential_configuration_id);",
                   "});",
+                  "pm.collectionVariables.set('credentialIdentifier', credentialIdentifiers ? credentialIdentifiers[0] : '');",
                   "if (j.access_token) pm.collectionVariables.set('walletAccessToken', j.access_token);",
                   "pm.collectionVariables.set('cNonce', j.c_nonce || '');"
                 ]
@@ -4023,7 +4258,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               },
               {
                 "key": "Authorization",
@@ -4032,9 +4267,9 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"credential_identifier\": \"{{eupidCredentialIdentifier}}\",\n  \"proofs\": {\n    \"jwt\": [\"{{proofJwt}}\"]\n  }\n}"
+              "raw": "{\n  \"credential_identifier\": \"{{credentialIdentifier}}\",\n  \"proofs\": {\n    \"jwt\": [\"{{proofJwt}}\"]\n  }\n}"
             },
-            "description": "Credential request with an ES256 proof of possession (typ openid4vci-proof+jwt) signed by the collection-local holder fixture. The private scalar remains in the Postman/Newman sandbox; only its public JWK is sent. The response carries the SD-JWT credential including the status claim that references the hosted status list."
+            "description": "OpenID4VCI 1.0 Final credential request selecting the EuPid credential_identifier returned in the token response and carrying an ES256 proof of possession (typ openid4vci-proof+jwt) signed by the collection-local holder fixture. The private scalar remains in the Postman/Newman sandbox; only its public JWK is sent. The response carries the SD-JWT credential including the status claim that references the hosted status list."
           },
           "event": [
             {
@@ -4054,11 +4289,18 @@
                   "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
                   "  return JSON.parse(atob(padded));",
                   "};",
+                  "const eupidHeader = decodeJwtPart(cred, 0);",
                   "const eupidPayload = decodeJwtPart(cred, 1);",
                   "pm.test('EuPid credential carries expected VCT and status-list reference', () => {",
                   "  pm.expect(eupidPayload.vct).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid');",
                   "  pm.expect(eupidPayload.status && eupidPayload.status.status_list && eupidPayload.status.status_list.uri).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation');",
                   "  pm.expect(eupidPayload.status.status_list.idx).to.be.a('number');",
+                  "});",
+                  "pm.test('EuPid credential and status list use the same did:web signer identity', () => {",
+                  "  pm.expect(eupidPayload.iss).to.eql(pm.variables.get('did'));",
+                  "  pm.expect(eupidPayload.iss).to.eql(pm.collectionVariables.get('statusListSignerDid'));",
+                  "  pm.expect(eupidHeader.kid, 'EuPid DID verification-method kid').to.be.a('string').and.not.empty;",
+                  "  pm.expect(eupidHeader.kid.startsWith(eupidPayload.iss + '#')).to.eql(true);",
                   "});"
                 ]
               }
@@ -4078,7 +4320,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4111,7 +4353,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4153,7 +4395,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               }
             ],
             "url": "{{mdlCredentialOfferUri}}",
@@ -4190,7 +4432,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4217,14 +4459,16 @@
                 "exec": [
                   "pm.test('mdl token issued', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
-                  "pm.test('mDL token response is bound to requested credential configuration', () => {",
-                  "  const detail = (j.authorization_details || []).find((entry) => entry.type === 'openid_credential');",
-                  "  pm.expect(detail, 'openid credential authorization detail').to.be.an('object');",
-                  "  pm.expect(detail.credential_configuration_id).to.eql('Mdl');",
-                  "  const identifiers = detail.credential_identifiers || [];",
-                  "  pm.expect(identifiers).to.have.length.greaterThan(0);",
-                  "  pm.collectionVariables.set('mdlCredentialIdentifier', identifiers[0]);",
+                  "const credentialAuthorization = Array.isArray(j.authorization_details) ? j.authorization_details.find((detail) => detail && detail.credential_configuration_id === 'Mdl') : undefined;",
+                  "const credentialIdentifiers = credentialAuthorization && credentialAuthorization.credential_identifiers;",
+                  "pm.test('pre-authorized token returns an opaque Mdl credential identifier distinct from its configuration id', () => {",
+                  "  pm.expect(credentialAuthorization).to.be.an('object');",
+                  "  pm.expect(credentialAuthorization.type).to.eql('openid_credential');",
+                  "  pm.expect(credentialIdentifiers).to.be.an('array').with.lengthOf(1);",
+                  "  pm.expect(credentialIdentifiers[0]).to.be.a('string').and.not.empty;",
+                  "  pm.expect(credentialIdentifiers[0]).not.to.eql(credentialAuthorization.credential_configuration_id);",
                   "});",
+                  "pm.collectionVariables.set('mdlCredentialIdentifier', credentialIdentifiers ? credentialIdentifiers[0] : '');",
                   "if (j.access_token) pm.collectionVariables.set('walletAccessToken', j.access_token);",
                   "pm.collectionVariables.set('cNonce', j.c_nonce || '');"
                 ]
@@ -4244,7 +4488,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}"
+                "value": "{{tenantPublicAuthority}}"
               },
               {
                 "key": "Authorization",
@@ -4255,7 +4499,7 @@
               "mode": "raw",
               "raw": "{\n  \"credential_identifier\": \"{{mdlCredentialIdentifier}}\",\n  \"proofs\": {\n    \"jwt\": [\"{{proofJwt}}\"]\n  }\n}"
             },
-            "description": "Credential request for the mdoc, using a proof signed by the same collection-local holder fixture. The response carries the base64url-encoded ISO 18013-5 mdoc bound to the holder public key (cose_key binding)."
+            "description": "OpenID4VCI 1.0 Final credential request selecting the Mdl credential_identifier returned in the token response and using a proof signed by the same collection-local holder fixture. The response carries the base64url-encoded ISO 18013-5 mdoc bound to the holder public key (cose_key binding)."
           },
           "event": [
             {
@@ -4301,7 +4545,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4339,7 +4583,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4374,7 +4618,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4404,7 +4648,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4437,7 +4681,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4481,7 +4725,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4536,7 +4780,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4591,7 +4835,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4645,7 +4889,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4688,7 +4932,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4727,7 +4971,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4777,7 +5021,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4815,7 +5059,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4861,13 +5105,13 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"query_id\": \"eupid-and-mdl\",\n  \"verifier_id\": \"{{verifierId}}\",\n  \"client_id\": \"redirect_uri:{{tenantGatewayUrl}}/callback\",\n  \"correlation_id\": \"e2e-verify-001\"\n}"
+              "raw": "{\n  \"query_id\": \"eupid-and-mdl\",\n  \"verifier_id\": \"{{verifierId}}\",\n  \"client_id\": \"decentralized_identifier:{{did}}\",\n  \"correlation_id\": \"e2e-verify-001\"\n}"
             },
             "description": "Creates a verifier session for the combined DCQL query. The response includes the authorization request URI a wallet would open."
           },
@@ -4879,8 +5123,51 @@
                 "exec": [
                   "pm.test('verification session created', () => pm.expect([200, 201]).to.include(pm.response.code));",
                   "const j = pm.response.json();",
-                  "if (j.authorization_request_uri) pm.collectionVariables.set('authorizationRequestUri', j.authorization_request_uri);",
+                  "pm.expect(j.request_uri, 'wallet authorization request URI').to.be.a('string').and.not.empty;",
+                  "const requestObjectMatch = j.request_uri.match(/[?&]request_uri=([^&]+)/);",
+                  "pm.expect(requestObjectMatch, 'authorization request contains request_uri').to.not.eql(null);",
+                  "pm.collectionVariables.set('requestObjectUri', decodeURIComponent(requestObjectMatch[1]));",
                   "pm.collectionVariables.set('verifyCorrelationId', j.correlation_id || 'e2e-verify-001');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01a Fetch signed verification request object",
+          "request": {
+            "method": "GET",
+            "url": "{{requestObjectUri}}",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/oauth-authz-req+jwt, application/jwt"
+              }
+            ],
+            "description": "Fetches the signed verifier request object and proves its issuer and signing key both identify the activation-created tenant DID."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('signed verification request object returned', () => pm.response.to.have.status(200));",
+                  "const compact = pm.response.text().trim();",
+                  "const parts = compact.split('.');",
+                  "pm.expect(parts, 'compact request-object JWT').to.have.length(3);",
+                  "const decodeJwtPart = (index) => {",
+                  "  const normalized = parts[index].replace(/-/g, '+').replace(/_/g, '/');",
+                  "  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);",
+                  "  return JSON.parse(atob(padded));",
+                  "};",
+                  "const header = decodeJwtPart(0);",
+                  "const payload = decodeJwtPart(1);",
+                  "pm.test('verifier request object issuer and kid use the same DID', () => {",
+                  "  pm.expect(payload.iss).to.eql(pm.collectionVariables.get('did'));",
+                  "  pm.expect(header.kid).to.eql(pm.collectionVariables.get('verifierDidVerificationMethodId'));",
+                  "  pm.expect(header.kid.startsWith(payload.iss + '#')).to.eql(true);",
+                  "});"
                 ]
               }
             }
@@ -4899,7 +5186,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4929,7 +5216,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -4968,7 +5255,7 @@
               },
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ],
@@ -4999,7 +5286,7 @@
             "header": [
               {
                 "key": "Host",
-                "value": "{{tenantHost}}",
+                "value": "{{tenantPublicAuthority}}",
                 "type": "text"
               }
             ]
@@ -5080,10 +5367,12 @@
           "setPublic('tenantName', tenantName);",
           "if (baseDomain) {",
           "  const tenantHost = tenantSlug + '.' + baseDomain;",
+          "  const tenantPublicAuthority = tenantHost + publicPort;",
           "  const derivedTenantGatewayUrl = publicScheme + '://' + tenantHost + publicPort;",
           "  const platformUrl = publicScheme + '://platform.' + baseDomain + publicPort;",
           "  tenantGatewayUrl = derivedTenantGatewayUrl;",
           "  setPublic('tenantHost', tenantHost);",
+          "  setPublic('tenantPublicAuthority', tenantPublicAuthority);",
           "  setPublic('platformUrl', platformUrl);",
           "  setPublic('adminConsoleUrl', platformUrl + '/admin-console');",
           "  setPublic('operatorRedirectUri', platformUrl + '/admin-console/callback');",
@@ -5101,15 +5390,18 @@
           "  setRuntimeDefault('tenantDcqlApiBaseUrl', tenantGatewayUrl + '/api/dcql/v1');",
           "  setRuntimeDefault('tenantVerifierBackendBaseUrl', tenantGatewayUrl + '/oid4vp/backend');",
           "  const hostMatch = tenantGatewayUrl.match(/^[a-z][a-z0-9+.-]*:\\/\\/([^/?#]+)/i);",
-          "  if (hostMatch && !pm.collectionVariables.get('tenantHost')) setPublic('tenantHost', hostMatch[1].replace(/:\\d+$/, ''));",
+          "  if (hostMatch) {",
+          "    if (!pm.collectionVariables.get('tenantHost')) setPublic('tenantHost', hostMatch[1].replace(/:\\d+$/, ''));",
+          "    setPublic('tenantPublicAuthority', hostMatch[1]);",
+          "  }",
           "}",
           "for (const key of ['platformUrl', 'adminConsoleUrl', 'operatorRedirectUri', 'tenantGatewayUrl', 'tenantHost']) {",
           "  setPublic(key, pm.environment.get(key));",
           "}",
           "if (!pm.collectionVariables.get('operatorRedirectUri') && pm.collectionVariables.get('platformUrl')) setPublic('operatorRedirectUri', pm.collectionVariables.get('platformUrl') + '/admin-console/callback');",
-          "if (pm.collectionVariables.get('tenantHost')) {",
-          "  const didHost = String(pm.collectionVariables.get('tenantHost')).replace(/:\\d+$/, '');",
-          "  const did = 'did:web:' + didHost.replace(/:/g, '%3A');",
+          "if (pm.collectionVariables.get('tenantPublicAuthority') || pm.collectionVariables.get('tenantHost')) {",
+          "  const didAuthority = String(pm.collectionVariables.get('tenantPublicAuthority') || pm.collectionVariables.get('tenantHost'));",
+          "  const did = 'did:web:' + didAuthority.replace(/:/g, '%3A');",
           "  setPublic('did', did);",
           "  setPublic('didEncoded', encodeURIComponent(did));",
           "  setPublic('didJsonUrl', didWebDocumentUrl(did, pm.collectionVariables.get('tenantGatewayUrl')));",

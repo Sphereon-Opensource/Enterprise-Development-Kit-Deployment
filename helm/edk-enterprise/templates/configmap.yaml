@@ -323,6 +323,14 @@ data:
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            {{- if (index .Values.services "blob").enabled }}
+            blob:
+              client-id: {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
+              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" "blob" | quote }}
+            {{- end }}
             verifier:
               client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
               client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
@@ -424,6 +432,9 @@ data:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          {{- if (index .Values.services "blob").enabled }}
+          - {{ index .Values.serviceIdentity.serviceIds "blob" | quote }}
+          {{- end }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
@@ -436,6 +447,9 @@ data:
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          {{- if (index .Values.services "blob").enabled }}
+          "[{{ index .Values.serviceIdentity.serviceIds "blob" }}]": {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
+          {{- end }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
@@ -512,6 +526,7 @@ data:
         workload-client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
         secret-bootstrap-workload-client-ids: {{ join "," $secretBootstrapActors | quote }}
         {{- $stsAudiences := list (include "edk-enterprise.serviceAudience" "platform") (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "did") (include "edk-enterprise.serviceAudience" "tenant-as") (include "edk-enterprise.serviceAudience" "issuer") (include "edk-enterprise.serviceAudience" "verifier") -}}
+        {{- if (index .Values.services "blob").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" "blob") -}}{{- end }}
         {{- if (index .Values.services "wallet-unit").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" "wallet-unit") -}}{{- end }}
         {{- if (index .Values.services "wallet-interaction").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" "wallet-interaction") -}}{{- end }}
         allowed-audiences: {{ join "," $stsAudiences | quote }}

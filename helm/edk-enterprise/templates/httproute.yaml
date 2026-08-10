@@ -264,6 +264,107 @@ spec:
 {{- end }}
 {{- end }}
 {{- end }}
+{{- if .Values.services.blob.enabled }}
+# Public tenant branding is content addressed and has three path segments after
+# /public/assets. Keep the issuer's two-segment design-asset contract separate.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-blob-public-tenant
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: blob
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: RegularExpression
+            value: "^/public/assets/[^/]+/brand/[^/]+$"
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "blob") }}
+          port: {{ .Values.services.blob.restPort }}
+---
+# The operator host exposes the same theme/asset API through the dedicated
+# workload instead of the platform catch-all.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-blob-public-platform
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: blob
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/theme/v1
+        - path:
+            type: PathPrefix
+            value: /api/assets/v1
+        - path:
+            type: RegularExpression
+            value: "^/public/assets/[^/]+/brand/[^/]+$"
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "blob") }}
+          port: {{ .Values.services.blob.restPort }}
+---
+{{- end }}
+{{- if .Values.services.issuer.enabled }}
+# Credential-design public assets retain their established two-segment route.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-issuer-design-assets
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: issuer
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: RegularExpression
+            value: "^/public/assets/design/[^/]+$"
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "issuer") }}
+          port: {{ .Values.services.issuer.restPort }}
+---
+{{- end }}
 {{- if (index .Values.services "tenant-as").enabled }}
 # Customer identities and credentials are workload data. Route the canonical
 # identity-manager, identity-auth admin, and Trust Domain APIs to tenant-AS,

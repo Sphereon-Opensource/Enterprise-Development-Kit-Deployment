@@ -183,7 +183,7 @@ Do not combine gateway overlays.
 
 | Mode | Files | When to use it |
 | --- | --- | --- |
-| Local TLS evaluation | `docker-compose.yml` and `docker-compose.gateway.yml` | Use this mode with `EDK_PLATFORM_BASE_DOMAIN=saas.localtest.me` and the generated local CA. The committed Traefik routing file is a localtest fixture. |
+| Local TLS evaluation | `docker-compose.yml` and `docker-compose.gateway.yml` | Use this mode with `EDK_PLATFORM_BASE_DOMAIN=saas.localtest.me`, the generated local CA, and the included Traefik routing configuration. |
 | Existing public wildcard certificate | `docker-compose.yml` and the rendered `docker-compose.public-cert.yml` | Use this mode after rendering the public-domain routes and placing `wildcard.crt` and `wildcard.key` in `compose/gateway/certs/`. |
 | Automated Let's Encrypt | `docker-compose.yml` and the rendered `docker-compose.letsencrypt.yml` | Use this mode when Traefik can complete ACME validation. Use DNS-01 for a wildcard certificate. |
 | Base file only | `docker-compose.yml` | Use this mode only for loopback diagnostics. It exposes individual HTTP ports and is not a customer URL model. |
@@ -303,8 +303,7 @@ The detailed Compose guide is in
 The customer Compose baseline creates no example operator and publishes no
 Azure or AWS KMS offering. First-run setup creates only the administrator that
 the installer enters. Cloud-provider offerings require an explicit, validated
-integration; synthetic operator and cloud-provider fixtures live only in the
-E2E deployment configuration.
+integration.
 
 ## Install with Helm
 
@@ -325,8 +324,8 @@ required only when the installation deliberately selects that integration.
 - Provide a default StorageClass or explicit existing claims for the platform
   and tenant KMS keystores.
 - Provide two reachable PostgreSQL 15 or newer databases.
-- Install OpenSSL, Node.js, and Bash on the administration host or CI runner
-  when using `scripts/upgrade-helm.sh`.
+- Install OpenSSL, Node.js, and Bash on the administration host when using
+  `scripts/upgrade-helm.sh`.
 - Obtain `enterprise-image-set.json` with the release when the selected release
   requires immutable image provenance. The current wrapper requires it for
   RC3-named tags.
@@ -708,4 +707,3 @@ start fresh at RC3 and have no earlier supported upgrade lineage.
 | [Secret management](docs/secret-management.md) | This document explains secret storage, database roles, provider egress, and runtime trust boundaries. |
 | [First-run setup and onboarding](docs/onboarding.md) | This document explains license setup, operator creation, tenant registration, and optional validation helpers. |
 | [Troubleshooting](docs/troubleshooting.md) | This document lists common image, Secret, database, routing, TLS, and startup failures. |
-| [Compose and Postman release gate](docs/compose-postman-release-gate.md) | This document describes the non-interactive customer Compose validation lane. |

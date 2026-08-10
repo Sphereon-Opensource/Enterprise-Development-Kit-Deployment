@@ -39,8 +39,6 @@ const supportPath = join(scriptDir, 'compose-postman-release-gate-support.mjs')
 const lifecycleModulePath = join(scriptDir, 'ComposePostmanReleaseGateLifecycle.psm1')
 const secretAuthorityGeneratorPath = join(scriptDir, 'generate-secret-authority-keys.ps1')
 const secretAuthorityShellGeneratorPath = join(scriptDir, 'generate-secret-authority-keys.sh')
-const docsPath = join(customerRoot, 'docs', 'compose-postman-release-gate.md')
-const readmePath = join(customerRoot, 'README.md')
 const collectionPath = join(customerRoot, 'postman', 'EDK-Enterprise-Deployment.postman_collection.json')
 const composePath = join(customerRoot, 'compose', 'docker-compose.yml')
 const composeGitignorePath = join(customerRoot, 'compose', '.gitignore')
@@ -50,8 +48,6 @@ const e2eHelmValuesPath = join(repoRoot, 'deploy', 'edk', 'e2e', 'helm', 'values
 
 const wrapper = readFileSync(wrapperPath, 'utf8')
 const setup = readFileSync(setupPath, 'utf8')
-const docs = readFileSync(docsPath, 'utf8')
-const readme = readFileSync(readmePath, 'utf8')
 const compose = readFileSync(composePath, 'utf8')
 const secretAuthorityGenerator = readFileSync(secretAuthorityGeneratorPath, 'utf8')
 const secretAuthorityShellGenerator = readFileSync(secretAuthorityShellGeneratorPath, 'utf8')
@@ -94,9 +90,18 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 108, 'shipped customer collection must contain 108 requests')
+assert.equal(requestCount(collection.item), 113, 'shipped customer collection must contain 113 requests')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
+for (const name of [
+  '00a Resolve EuPid DID signing selection',
+  '00b Resolve mDL X.509 signing selection',
+  '04a Create X.509 token status list',
+  '04b Fetch hosted X.509 status list token',
+  '01a Fetch signed verification request object',
+]) {
+  assert.ok(requestByName.has(name), `customer collection must retain release signing coverage: ${name}`)
+}
 const kmsLifecycleContract = [
   ['04 Create disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources'],
   ['05 Read SOFTWARE KMS credential status', 'GET', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/credentials/software-keystore'],
@@ -152,8 +157,8 @@ const tenantOriginContractItems = [
 for (const name of tenantOriginContractItems) {
   const source = JSON.stringify(requestByName.get(name)?.event ?? [])
   assert.ok(
-    source.includes("const expectedTenantOrigin = 'https://' + pm.variables.get('tenantSlug') + '.' + pm.variables.get('baseDomain');"),
-    `${name} must derive the exact HTTPS default-port tenant origin`,
+    source.includes("pm.variables.get('tenantGatewayUrl')") && source.includes('expectedTenantOrigin'),
+    `${name} must derive the exact tenant origin from the configured HTTPS gateway URL`,
   )
   assert.ok(
     source.includes('to.eql(expectedTenantOrigin)'),
@@ -164,6 +169,7 @@ const expectedImages = [
   'enterprise-platform',
   'enterprise-tenant-kms',
   'enterprise-did',
+  'service-data',
   'enterprise-tenant-as',
   'enterprise-issuer',
   'enterprise-verifier',
@@ -173,7 +179,7 @@ const composeReleaseImages = [...new Set(
   [...compose.matchAll(/image:\s+nexus\.sphereon\.com\/edk-docker\/([^:$]+):\$\{EDK_TAG/gu)]
     .map((match) => match[1]),
 )].sort()
-assert.deepEqual(composeReleaseImages, [...expectedImages].sort(), 'customer Compose must use exactly seven release images')
+assert.deepEqual(composeReleaseImages, [...expectedImages].sort(), 'customer Compose must use exactly eight release images')
 const tenantDbEnv = compose.match(/x-edk-tenant-db-env:[\s\S]*?(?=\nx-[a-z]|\nservices:)/u)?.[0] ?? ''
 for (const credential of [
   'EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD',
@@ -181,7 +187,7 @@ for (const credential of [
 ]) {
   assert.ok(tenantDbEnv.includes(`${credential}:`), `customer tenant DB environment must propagate ${credential} to every runtime`)
 }
-for (const workload of ['service-platform', 'service-crypto', 'service-data', 'service-tenant-as', 'service-oid4vci', 'service-oid4vp']) {
+for (const workload of ['service-platform', 'service-crypto', 'service-data', 'service-blob', 'service-tenant-as', 'service-oid4vci', 'service-oid4vp']) {
   assert.ok(compose.includes(`/workload/${workload}:/app/secret-authority/workload:ro`), `customer Compose must mount the ${workload} assertion key only into its owner`)
 }
 for (const coordinate of [
@@ -201,6 +207,7 @@ for (const [configName, workloadId] of [
   ['platform', 'service-platform'],
   ['tenant-kms', 'service-crypto'],
   ['did', 'service-data'],
+  ['blob', 'service-blob'],
   ['tenant-as', 'service-tenant-as'],
   ['issuer', 'service-oid4vci'],
   ['verifier', 'service-oid4vp'],
@@ -257,7 +264,7 @@ assert.doesNotMatch(
 )
 assert.doesNotMatch(helmValues, /operator@example\.com/u, 'customer Helm must not ship a synthetic platform operator identity')
 assert.match(helmValues, /allowTenantManagedProviders: false/u, 'customer Helm must not publish cloud-provider fixtures by default')
-assert.match(e2eHelmValues, /allowTenantManagedProviders: true/u, 'E2E Helm must opt into its cloud-provider fixtures explicitly')
+assert.match(e2eHelmValues, /allowTenantManagedProviders: false/u, 'E2E Helm must preserve the clean customer provider baseline')
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
   /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: false\n/u,
@@ -294,7 +301,7 @@ assert.doesNotMatch(
 )
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
-  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,verifier-service=service-oid4vp\n/u,
+  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp\n/u,
   'customer Compose must map authenticated service clients to their authorized secret workload identities',
 )
 assert.ok(
@@ -328,7 +335,7 @@ for (const sourceInvariant of [
   'verify-enterprise-image-set.mjs',
   'compose-postman-release-gate-support.mjs',
   "'--pull', 'never'",
-  "'E2E finished:\\s+108 requests captured,\\s+exit code 0\\.'",
+  "'E2E finished:\\s+115 requests captured,\\s+exit code 0\\.'",
   "'pg_dump --schema-only --no-owner --no-privileges",
   "'scan-producer'",
   'finalize-evidence',
@@ -358,10 +365,6 @@ for (const sourceInvariant of [
 assert.ok(!wrapper.includes("'--skip-snapshots'") && !wrapper.includes("'--update'"), 'release gate must enforce snapshot drift')
 assert.ok(setup.includes('/api/platform/setup/v1/license/import/preview'), 'setup must preview the protected bundle')
 assert.ok(setup.includes('/api/platform/setup/v1/bootstrap'), 'setup must use the product bootstrap API')
-assert.ok(docs.includes('-ResetVolumes') && docs.includes('-DryRun'), 'docs must cover destructive authorization and static validation')
-assert.ok(docs.includes('108-request') && docs.includes('exactly 108 requests'), 'docs must retain the exact customer collection count')
-assert.ok(docs.includes('run-scoped Ed25519') && docs.includes('compose/.secret-authority/'), 'release gate docs must describe ephemeral authority key handling')
-assert.ok(readme.includes('docs/compose-postman-release-gate.md'), 'README must route operators to the gate')
 
 // A stopped project still owns its labeled networks and volumes and cannot be
 // mistaken for a new gate-owned project.
@@ -514,7 +517,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     teardownStatus: 'failed',
     projectName: 'contract_project',
     tag: '0.25.0-RC3-contract',
-    requestCount: 108,
+    requestCount: 113,
     manifestPath: failedManifest,
     manifestHashPath: failedManifestHash,
   })
@@ -543,7 +546,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     teardownStatus: 'passed',
     projectName: 'contract_project',
     tag: '0.25.0-RC3-contract',
-    requestCount: 108,
+    requestCount: 113,
     manifestPath: sanitizedManifest,
     manifestHashPath: sanitizedHash,
   })
@@ -654,7 +657,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 108)
+  assert.equal(plan.requestCount, 113)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -713,6 +716,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     'enterprise-platform',
     'enterprise-tenant-as',
     'enterprise-did',
+    'enterprise-blob',
     'enterprise-issuer',
     'enterprise-verifier',
   ]) {

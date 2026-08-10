@@ -112,6 +112,8 @@ fi
 run_release_step() {
   local tag="$1"
   local is_target="$2"
+  local step_release_number
+  step_release_number="$(edk_release_number "$tag")"
   printf 'Validating Docker Compose release %s.\n' "$tag"
   EDK_TAG="$tag" "${COMPOSE[@]}" config --quiet
   if [[ "$is_target" != true || "$SKIP_TARGET_PULL" != true ]]; then
@@ -119,6 +121,16 @@ run_release_step() {
     EDK_TAG="$tag" "${COMPOSE[@]}" pull
   else
     printf 'Using locally built target images for %s; intermediate releases were still pulled.\n' "$tag"
+  fi
+  if [[ "$(edk_release_number "${INSTALLED_IMAGE_TAG:-}")" -gt 0 &&
+        "$(edk_release_number "${INSTALLED_IMAGE_TAG:-}")" -le 2 &&
+        "$step_release_number" -ge 3 ]]; then
+    # RC3 reconciles durable RC2 tenant signing material during platform startup.
+    # Keep the old platform available while the two target dependencies acquire
+    # their Compose DNS names, then let the normal full-stack up replace platform.
+    printf 'Pre-starting RC3 tenant-AS and tenant-KMS before platform tenant reconciliation.\n'
+    EDK_TAG="$tag" "${COMPOSE[@]}" up -d --no-deps --wait --pull never enterprise-tenant-as
+    EDK_TAG="$tag" "${COMPOSE[@]}" up -d --no-deps --wait --pull never enterprise-tenant-kms
   fi
   printf 'Starting release %s and waiting for health checks.\n' "$tag"
   EDK_TAG="$tag" "${COMPOSE[@]}" up -d --wait --pull never --remove-orphans

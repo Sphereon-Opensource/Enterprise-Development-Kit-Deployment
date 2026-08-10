@@ -115,9 +115,8 @@ deployment:
   selector that matches its pods.
 
 A pod that is `Running` but never becomes `Ready`, with database connection
-errors in its logs, points at one of these. Do not diagnose this by publishing
-`/health` or `/ready` through the customer gateway; those probes are internal
-orchestration signals. The platform connects only to the control-plane
+errors in its logs, points at one of these. Keep `/health` and `/ready` private
+while investigating the workload. The platform connects only to the control-plane
 database. Satellite services connect only to the tenant workload database and
 fetch platform-owned configuration from the platform over the internal command
 route.

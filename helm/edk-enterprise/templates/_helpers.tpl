@@ -26,6 +26,7 @@ receiver.
     "tenant-kms" "enterprise-tenant-kms"
     "tenant-as" "enterprise-tenant-as"
     "did" "enterprise-tenant-did"
+    "blob" "enterprise-blob"
     "issuer" "enterprise-issuer"
     "verifier" "enterprise-verifier"
     "wallet-unit" "enterprise-wallet-unit"
@@ -68,7 +69,6 @@ name, or an empty list for services that are not tenant-routed.
 - /notification
 - /public/statuslists
 - /public/schema
-- /public/assets
 - /.well-known/openid-credential-issuer
 - /api/oid4vci/v1
 - /api/credential-design/v1
@@ -90,6 +90,9 @@ name, or an empty list for services that are not tenant-routed.
 - /1.0/identifiers
 - /.well-known/did.json
 - /api/did/v1
+{{- else if eq $name "blob" -}}
+- /api/theme/v1
+- /api/assets/v1
 {{- else if eq $name "tenant-as" -}}
 - /authorize
 - /par
@@ -176,7 +179,7 @@ references here prevents otherwise healthy-looking pods from starting without
 east-west Authorization headers or software-keystore access.
 */}}
 {{- define "edk-enterprise.validateRuntimeSecrets" -}}
-{{- $satelliteEnabled := or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled -}}
+{{- $satelliteEnabled := or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled -}}
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
@@ -199,7 +202,7 @@ east-west Authorization headers or software-keystore access.
 {{- if eq .Values.portalBff.kms.encryptionKeyAlias .Values.portalBff.kms.handleHmacKeyAlias -}}
 {{- fail "portalBff.kms.encryptionKeyAlias and portalBff.kms.handleHmacKeyAlias must be distinct." -}}
 {{- end -}}
-{{- range $name := list "platform" "tenant-kms" "tenant-as" "did" "issuer" "verifier" "wallet-unit" "wallet-interaction" -}}
+{{- range $name := list "platform" "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" -}}
 {{- $service := index $.Values.services $name -}}
 {{- if and $service.enabled (eq (trim (default "" (index $.Values.secretAuthority.existingSecrets $name))) "") -}}
 {{- fail (printf "secretAuthority.existingSecrets.%s is required when services.%s.enabled=true; reference a workload-isolated Secret containing the configured secret-authority coordinates and key files." $name $name) -}}
@@ -216,7 +219,7 @@ sphereon:
     id: {{ .workloadId | quote }}
 secret:
   authority:
-    allowed-clock-skew-millis: 2000
+    allowed-clock-skew-millis: 5000
     satellite:
       workload-id: {{ .workloadId | quote }}
       workload-hosting-revision: 1
@@ -286,7 +289,7 @@ sphereon:
     id: service-platform
 secret:
   authority:
-    allowed-clock-skew-millis: 2000
+    allowed-clock-skew-millis: 5000
     central:
       permit:
         issuer: enterprise-platform

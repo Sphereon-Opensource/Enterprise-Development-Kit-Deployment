@@ -4,7 +4,7 @@
 {{- include "edk-enterprise.validateRuntimeSecrets" . -}}
 {{- include "edk-enterprise.validateTenantKmsDependency" . -}}
 {{- include "edk-enterprise.validateRuntimeDependencies" . -}}
-{{- $expectedSecretActors := list (index .Values.serviceIdentity.clientIds "tenant-as") (index .Values.serviceIdentity.clientIds "issuer") (index .Values.serviceIdentity.clientIds "tenant-kms") (index .Values.serviceIdentity.clientIds "did") (index .Values.serviceIdentity.clientIds "verifier") | sortAlpha -}}
+{{- $expectedSecretActors := list (index .Values.serviceIdentity.clientIds "tenant-as") (index .Values.serviceIdentity.clientIds "issuer") (index .Values.serviceIdentity.clientIds "tenant-kms") (index .Values.serviceIdentity.clientIds "did") (index .Values.serviceIdentity.clientIds "blob") (index .Values.serviceIdentity.clientIds "verifier") | sortAlpha -}}
 {{- $configuredSecretActors := .Values.secretManagement.internalResolution.allowedServiceActors | sortAlpha -}}
 {{- if ne (join "," $configuredSecretActors) (join "," $expectedSecretActors) -}}
 {{- fail "secretManagement.internalResolution.allowedServiceActors must exactly match the standard signed opaque-secret workload clients" -}}

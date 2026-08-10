@@ -59,13 +59,34 @@ __LE_TLS_DOMAINS__
       priority: 1100
       tls:
         certResolver: le
+    api-blob:
+      rule: "PathPrefix(`/api/theme/v1`) || PathPrefix(`/api/assets/v1`)"
+      entryPoints: ["websecure"]
+      service: svc-blob
+      priority: 1100
+      tls:
+        certResolver: le
+    public-blob-assets:
+      rule: "PathRegexp(`^/public/assets/[^/]+/brand/[^/]+$`)"
+      entryPoints: ["websecure"]
+      service: svc-blob
+      priority: 1100
+      tls:
+        certResolver: le
+    public-design-assets:
+      rule: "PathRegexp(`^/public/assets/design/[^/]+$`)"
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 1100
+      tls:
+        certResolver: le
 
     tenant-platform-theme:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         PathPrefix(`/api/theme/v1`)
       entryPoints: ["websecure"]
-      service: svc-platform
+      service: svc-blob
       priority: 300
       tls:
         certResolver: le
@@ -150,7 +171,7 @@ __LE_TLS_DOMAINS__
          PathPrefix(`/deferredCredential`) || PathPrefix(`/nonce`) ||
          PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
          PathPrefix(`/.well-known/openid-credential-issuer`) ||
-         PathPrefix(`/public/schema`) || PathPrefix(`/public/assets`) ||
+         PathPrefix(`/public/schema`) ||
          PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
          PathPrefix(`/api/statuslist/v1`))
       entryPoints: ["websecure"]
@@ -264,6 +285,11 @@ __LE_TLS_DOMAINS__
         passHostHeader: true
         servers:
           - url: "http://enterprise-did:8080"
+    svc-blob:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-blob:8080"
     svc-kms:
       loadBalancer:
         passHostHeader: true

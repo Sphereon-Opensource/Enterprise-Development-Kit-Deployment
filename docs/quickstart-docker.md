@@ -211,8 +211,7 @@ to the backing containers internally:
 | `platform.<base-domain>` | Operator OAuth/OIDC metadata, `/authorize`, `/token`, `/userinfo`, `/admin-console` |
 | `<tenant>.<base-domain>` | Public protocol/resolver paths such as `/.well-known/did.json`, tenant OAuth/OIDC metadata and auth paths, OID4VCI issuer paths, OID4VP verifier paths, plus authenticated operator/admin API paths if your gateway policy exposes them |
 
-Runtime probes are internal Docker Compose or Kubernetes concerns. They are not
-routed as tenant public URLs.
+Keep workload health endpoints private. They are not tenant public URLs.
 
 The administrative REST paths (`/api/.../v1`) are controlled operator/admin
 traffic, not public protocol endpoints. Keep them off the open public network

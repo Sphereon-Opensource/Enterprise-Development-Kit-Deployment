@@ -69,6 +69,11 @@ services:
 
   enterprise-did:
     ports: !reset []
+
+  enterprise-blob:
+    environment:
+      <<: *edk-public-endpoint-env
+    ports: !reset []
     environment:
       EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
       EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__

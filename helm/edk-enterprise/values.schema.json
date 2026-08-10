@@ -304,12 +304,13 @@
         "existingSecrets": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["platform", "tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
           "properties": {
             "platform": { "type": "string" },
             "tenant-kms": { "type": "string" },
             "tenant-as": { "type": "string" },
             "did": { "type": "string" },
+            "blob": { "type": "string" },
             "issuer": { "type": "string" },
             "verifier": { "type": "string" },
             "wallet-unit": { "type": "string" },
@@ -340,11 +341,12 @@
             "assertionPublicKeys": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["service-platform", "service-crypto", "service-data", "service-tenant-as", "service-oid4vci", "service-oid4vp", "service-wallet-unit", "service-wallet-interaction"],
+              "required": ["service-platform", "service-crypto", "service-data", "service-blob", "service-tenant-as", "service-oid4vci", "service-oid4vp", "service-wallet-unit", "service-wallet-interaction"],
               "properties": {
                 "service-platform": { "type": "string", "minLength": 1 },
                 "service-crypto": { "type": "string", "minLength": 1 },
                 "service-data": { "type": "string", "minLength": 1 },
+                "service-blob": { "type": "string", "minLength": 1 },
                 "service-tenant-as": { "type": "string", "minLength": 1 },
                 "service-oid4vci": { "type": "string", "minLength": 1 },
                 "service-oid4vp": { "type": "string", "minLength": 1 },
@@ -411,6 +413,7 @@
     "platformKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "tenantKmsKeystore": { "$ref": "#/definitions/keystorePersistence" },
     "walletInteractionKeystore": { "$ref": "#/definitions/keystorePersistence" },
+    "blobPersistence": { "$ref": "#/definitions/keystorePersistence" },
     "platform": {
       "type": "object",
       "additionalProperties": true,
@@ -472,11 +475,12 @@
         "clientIds": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
           "properties": {
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
             "did": { "type": "string", "minLength": 1 },
+            "blob": { "type": "string", "minLength": 1 },
             "issuer": { "type": "string", "minLength": 1 },
             "verifier": { "type": "string", "minLength": 1 },
             "wallet-unit": { "type": "string", "minLength": 1 },
@@ -486,11 +490,12 @@
         "serviceIds": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
           "properties": {
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
             "did": { "type": "string", "minLength": 1 },
+            "blob": { "type": "string", "minLength": 1 },
             "issuer": { "type": "string", "minLength": 1 },
             "verifier": { "type": "string", "minLength": 1 },
             "wallet-unit": { "type": "string", "minLength": 1 },
@@ -500,12 +505,13 @@
         "anonymousPathPrefixes": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["platform", "tenant-kms", "tenant-as", "did", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
           "properties": {
             "platform": { "type": "string" },
             "tenant-kms": { "type": "string" },
             "tenant-as": { "type": "string" },
             "did": { "type": "string" },
+            "blob": { "type": "string" },
             "issuer": { "type": "string" },
             "verifier": { "type": "string" },
             "wallet-unit": { "type": "string" },
@@ -781,9 +787,9 @@
     "services": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform", "tenant-kms", "did", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
+      "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
       "patternProperties": {
-        "^(platform|tenant-kms|did|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console|admin-console-tenant)$": {
+        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console|admin-console-tenant)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {

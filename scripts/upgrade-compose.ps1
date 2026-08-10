@@ -23,12 +23,11 @@ function Invoke-DockerCompose {
 }
 
 function Get-ReleaseNumber([string]$Tag) {
-    switch ($Tag.ToUpperInvariant()) {
-        '0.25.0-RC1' { return 1 }
-        '0.25.0-RC2' { return 2 }
-        '0.25.0-RC3' { return 3 }
-        default { return 0 }
-    }
+    $normalized = $Tag.Trim().ToUpperInvariant()
+    if ($normalized -eq '0.25.0-RC1') { return 1 }
+    if ($normalized -eq '0.25.0-RC2') { return 2 }
+    if ($normalized -match '^0\.25\.0-RC3(?:$|[-._].+)$') { return 3 }
+    return 0
 }
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -80,6 +79,7 @@ if ($InstalledImageTag) { Set-Content -LiteralPath (Join-Path $backupDir 'instal
 $originalTag = $env:EDK_TAG
 try {
     function Invoke-ReleaseStep([string]$Tag, [bool]$IsTarget) {
+        $stepRelease = Get-ReleaseNumber $Tag
         $env:EDK_TAG = $Tag
         Write-Host "Validating Docker Compose release $Tag."
         Invoke-DockerCompose config --quiet
@@ -88,6 +88,14 @@ try {
             Invoke-DockerCompose pull
         } else {
             Write-Host "Using locally built target images for $Tag; intermediate releases were still pulled."
+        }
+        if ($installedRelease -gt 0 -and $installedRelease -le 2 -and $stepRelease -ge 3) {
+            # RC3 reconciles durable RC2 tenant signing material during platform startup.
+            # Keep the old platform available while the two target dependencies acquire
+            # their Compose DNS names, then let the normal full-stack up replace platform.
+            Write-Host "Pre-starting RC3 tenant-AS and tenant-KMS before platform tenant reconciliation."
+            Invoke-DockerCompose up -d --no-deps --wait --pull never enterprise-tenant-as
+            Invoke-DockerCompose up -d --no-deps --wait --pull never enterprise-tenant-kms
         }
         Write-Host "Starting release $Tag and waiting for health checks."
         Invoke-DockerCompose up -d --wait --pull never --remove-orphans

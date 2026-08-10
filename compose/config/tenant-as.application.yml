@@ -258,7 +258,7 @@ license:
 
 secret:
   authority:
-    allowed-clock-skew-millis: 2000
+    allowed-clock-skew-millis: 5000
     satellite:
       workload-id: service-tenant-as
       workload-hosting-revision: 1
