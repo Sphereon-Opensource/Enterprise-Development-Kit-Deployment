@@ -424,6 +424,7 @@ oauth2:
       # readStringList, which resolves a delimited string here, not block-sequence items).
       post-logout-redirect-uris: "${env:EXTERNAL_BASE_URL}/admin-console"
       allowed-scopes: openid
+      default-access-token-audience: enterprise-platform
       token-endpoint-auth-method: none
     # Interactive documentation playground (docs site). Public client: authorization code +
     # required PKCE (S256) + required PAR. Redirect URIs are one /docs-env/callback per origin.

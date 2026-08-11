@@ -2,6 +2,8 @@ opentelemetry:
   enabled: true
   endpoint: http://otel-collector.observability.svc.cluster.local:4318
   protocol: http/protobuf
+  metricsExporter: otlp
+  metricsExportIntervalMillis: 60000
   resourceAttributes: deployment.environment=production
 
 serviceMonitor:

@@ -5,6 +5,7 @@
        it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
        /admin-console/health route rather than the EDK /health endpoint. */}}
 {{- $isAdminConsole := or (eq $name "admin-console") (eq $name "admin-console-tenant") }}
+{{- $imageTag := $svc.imageTag | default $.Values.global.imageTag | default $.Chart.AppVersion }}
 {{- $secretAuthoritySecret := "" }}
 {{- if not $isAdminConsole }}
 {{- $secretAuthoritySecret = index $.Values.secretAuthority.existingSecrets $name }}
@@ -76,7 +77,7 @@ spec:
              license across restarts. The setup API still writes the imported
              bundle's root CA into the same volume. */}}
         - name: seed-license-trust
-          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $.Values.global.imageTag | default $.Chart.AppVersion }}"
+          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $imageTag }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
@@ -101,7 +102,7 @@ spec:
         # the first tenant-registration request even though the platform becomes
         # ready moments later.
         - name: wait-for-platform-grpc
-          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $.Values.global.imageTag | default $.Chart.AppVersion }}"
+          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $imageTag }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
@@ -116,7 +117,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ $name }}
-          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $.Values.global.imageTag | default $.Chart.AppVersion }}"
+          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $imageTag }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
@@ -295,6 +296,8 @@ spec:
               value: {{ $.Values.opentelemetry.protocol | quote }}
             - name: OTEL_METRICS_EXPORTER
               value: {{ $.Values.opentelemetry.metricsExporter | quote }}
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              value: {{ $.Values.opentelemetry.metricsExportIntervalMillis | quote }}
             - name: OTEL_EXPORTER_OTLP_HEADERS
               value: {{ $.Values.opentelemetry.headers | quote }}
             - name: OTEL_RESOURCE_ATTRIBUTES

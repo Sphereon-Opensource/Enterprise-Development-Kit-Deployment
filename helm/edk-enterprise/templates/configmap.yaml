@@ -386,6 +386,7 @@ data:
             - ${env:ONBOARDING_UI_BASE_URL}/onboarding/callback
           post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/admin-console"
           allowed-scopes: openid
+          default-access-token-audience: enterprise-platform
           token-endpoint-auth-method: none
         {{- if .Values.docsPlayground.enabled }}
         # Public docs playground client: authorization code + required PKCE + required PAR.
