@@ -228,6 +228,12 @@ spec:
             {{- $transportAudience := "" }}
             {{- if $grpcReceiver }}{{- $transportAudience = include "edk-enterprise.serviceAudience" $name }}{{- end }}
             {{- if $transportAudience }}
+            # TransportServerConfigProvider reads the canonical unprefixed
+            # transport.auth.expected-audience property from AppConfigService.
+            # Keep the SPHEREON_APP_ form as well for assemblies that bind the
+            # direct environment-backed transport provider.
+            - name: TRANSPORT_AUTH_EXPECTED_AUDIENCE
+              value: {{ $transportAudience | quote }}
             - name: SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE
               value: {{ $transportAudience | quote }}
             {{- end }}

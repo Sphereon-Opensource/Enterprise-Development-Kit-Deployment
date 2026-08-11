@@ -205,6 +205,7 @@ services:
       REST_ENABLED: "false"
       GRPC_ENABLED: "true"
       GRPC_PORT: "9090"
+      TRANSPORT_AUTH_EXPECTED_AUDIENCE: enterprise-platform
       SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE: enterprise-platform
     volumes:
       - ./config/platform.application.yml:/app/config/application.yml:ro
