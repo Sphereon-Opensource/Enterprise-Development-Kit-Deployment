@@ -261,7 +261,7 @@ __MONOLITH_PORTS__
       EXTERNAL_BASE_URL: https://platform.__BASE_DOMAIN__
       OAUTH2_AS_ISSUER: https://platform.__BASE_DOMAIN__
       APPLICATION_TENANT_HOSTED_AS_ISSUER: https://platform.__BASE_DOMAIN__
-      OID4VCI_ISSUER_IDENTIFIER: https://platform.__BASE_DOMAIN__/oid4vci
+      OID4VCI_ISSUER_IDENTIFIER: https://platform.__BASE_DOMAIN__
       VDX_MONOLITH_SELF_HOSTS: localhost,svc-monolith,platform.__BASE_DOMAIN__
       TENANT_RESOLUTION_SELF_HOSTS: localhost,svc-monolith,platform.__BASE_DOMAIN__
       CORS_ORIGINS: https://platform.__BASE_DOMAIN__
@@ -863,17 +863,8 @@ Write-Utf8NoBom $runtimeComposeEnv "$composeEnvText`n$authorityWindow`nEDK_SECRE
 if ($Topology -eq 'Monolith') {
   Add-Content -LiteralPath $runtimeComposeEnv -Value "MONOLITH_SECRET_AUTHORITY_ROOT=$authorityHostPath" -Encoding UTF8
   Add-Content -LiteralPath $runtimeComposeEnv -Value @(
-    "POSTGRES_PORT=15937",
-    "KEYCLOAK_PORT=19091",
-    "OTEL_COLLECTOR_GRPC_PORT=14317",
-    "OTEL_COLLECTOR_HTTP_PORT=14318",
-    "MAILPIT_SMTP_PORT=11025",
-    "MAILPIT_UI_PORT=18025",
     "MONOLITH_REST_PORT=19084",
     "VDX_MONOLITH_IMAGE=$MonolithImage",
-    "VDX_POSTGRES_CONTAINER_NAME=$ProjectName-postgres",
-    "VDX_KEYCLOAK_CONTAINER_NAME=$ProjectName-keycloak",
-    "VDX_MAILPIT_CONTAINER_NAME=$ProjectName-mailpit",
     "VDX_MONOLITH_CONTAINER_NAME=$ProjectName-svc-monolith"
   ) -Encoding UTF8
 }
