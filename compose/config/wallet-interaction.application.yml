@@ -3,6 +3,8 @@
 # Server-side headless wallet interaction state is PostgreSQL-backed. Internal
 # callers use gRPC command transport; the REST projection is not public in the
 # default customer stack.
+"wallet.browser.session.issuer": "${env:WALLET_BROWSER_SESSION_ISSUER:https://wallet.example.invalid/wallet}"
+"wallet.browser.session.jwks-uri": "${env:WALLET_BROWSER_SESSION_JWKS_URI:http://enterprise-wallet-browser:8080/wallet/.well-known/session-jwks.json}"
 server:
   rest:
     port: 8080

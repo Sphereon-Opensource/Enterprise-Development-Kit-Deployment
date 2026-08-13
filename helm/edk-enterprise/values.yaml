@@ -708,9 +708,9 @@ services:
       host: ""
       paths:
         - /api/did/v1
-        - /1.0/create
-        - /1.0/update
-        - /1.0/deactivate
+        - /universal-registrar/1.0/create
+        - /universal-registrar/1.0/update
+        - /universal-registrar/1.0/deactivate
       annotations: {}
     resources:
       requests:

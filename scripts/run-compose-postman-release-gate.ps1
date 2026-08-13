@@ -3,10 +3,12 @@
   Runs the customer Docker Compose topology and its 113-request Postman release gate.
 
 .DESCRIPTION
-  This is a non-interactive, fail-closed release gate. Localtest uses the
-  literal customer gateway fixture. BehindEdge renders an isolated plain-HTTP
-  stack gateway behind the existing shared edge terminator. Both modes verify
-  one coherent immutable seven-image release set, perform supported first-run
+  This is a non-interactive, fail-closed release gate. Distributed topology
+  verifies the immutable enterprise image set. Monolith topology projects the
+  same customer gateway and collection onto one local service-monolith image
+  plus the two console processes. Localtest uses the literal customer gateway
+  fixture. BehindEdge renders an isolated plain-HTTP stack gateway behind the
+  existing shared edge terminator. Both topologies perform supported first-run
   setup when required, run the maintained Newman/snapshot runner, and capture
   terminal evidence under an explicit report directory.
 
@@ -15,6 +17,8 @@
 [CmdletBinding(DefaultParameterSetName = 'PreProvisioned')]
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$')][string]$Tag,
+  [ValidateSet('Distributed', 'Monolith')][string]$Topology = 'Distributed',
+  [string]$MonolithImage = '',
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-z0-9][a-z0-9_-]{2,62}$')][string]$ProjectName,
   [Parameter(Mandatory = $true)][string]$ReportDir,
   [Parameter(Mandatory = $true)][ValidateSet('Localtest', 'BehindEdge')][string]$AccessMode,
@@ -23,8 +27,10 @@ param(
   [Parameter(Mandatory = $true)][ValidatePattern('^https://')][string]$ExpectedSource,
   [string]$ComposeEnvFile = (Join-Path $PSScriptRoot '..\compose\.env'),
   [string]$PostmanEnvironmentFile = (Join-Path $PSScriptRoot '..\postman\EDK-Enterprise-Deployment.customer.postman_environment.json'),
+  [string]$MailpitUrl = '',
   [Parameter(Mandatory = $true, ParameterSetName = 'LicenseSetup')][string]$LicenseBundleZipPath,
   [Parameter(Mandatory = $true, ParameterSetName = 'PreProvisioned')][switch]$PreProvisionedSetup,
+  [switch]$AllowMixedSourceFingerprints,
   [ValidatePattern('^[a-z0-9][a-z0-9-]{1,30}$')][string]$EdgeEnvironment = '',
   [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$')][string]$EdgeNetworkName = 'edge',
   [ValidatePattern('^\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}$')][string]$EdgeTrustedSubnet = '172.16.100.0/24',
@@ -45,7 +51,12 @@ if ([string]::IsNullOrWhiteSpace($EdgeRouterDirectory)) {
   $EdgeRouterDirectory = Join-Path $repoRoot 'deploy\edge\dynamic'
 }
 $composeDir = Join-Path $customerRoot 'compose'
-$baseCompose = Join-Path $composeDir 'docker-compose.yml'
+$baseCompose = if ($Topology -eq 'Monolith') {
+  Join-Path $composeDir 'docker-compose.monolith-base.yml'
+} else {
+  Join-Path $composeDir 'docker-compose.yml'
+}
+$monolithServiceCompose = Join-Path $repoRoot 'deploy\docker\docker-compose.monolith.local.yml'
 $gatewayCompose = Join-Path $composeDir 'docker-compose.gateway.yml'
 $gatewayDynamic = Join-Path $composeDir 'gateway\traefik\dynamic.yml'
 $behindEdgeComposeTemplate = Join-Path $composeDir 'docker-compose.behind-edge.template.yml'
@@ -165,6 +176,201 @@ function Render-BehindEdgeArtifacts {
     Fail 'Behind-edge stack routing must be plain HTTP; TLS belongs to the shared edge.'
   }
 }
+function Render-MonolithGatewayArtifacts([switch]$BehindEdge) {
+  $monolithArtifactDir = Join-Path $resolvedReportDir 'monolith'
+  New-Item -ItemType Directory -Path $monolithArtifactDir -Force | Out-Null
+
+  if ($BehindEdge) {
+    $publicDynamic = Get-Content -LiteralPath $behindEdgeDynamicTemplate -Raw
+    $httpMatch = [regex]::Match($publicDynamic, '(?m)^http:\s*$')
+    if (-not $httpMatch.Success) { Fail "Behind-edge routing source has no HTTP configuration: $behindEdgeDynamicTemplate" }
+    $baseRegex = $BaseDomain.Replace('.', '\.')
+    $dynamic = @"
+# Generated monolith routing for shared-edge mode.
+# TLS is terminated by the shared edge; this stack gateway receives plain HTTP.
+"@ + "`n" + $publicDynamic.Substring($httpMatch.Index)
+    $dynamic = $dynamic.Replace('__BASE_DOMAIN_REGEX__', $baseRegex).Replace('__BASE_DOMAIN__', $BaseDomain)
+    $dynamic = $dynamic.Replace('entryPoints: ["websecure"]', 'entryPoints: ["web"]')
+    $dynamic = [regex]::Replace($dynamic, '(?m)^\s+tls:\s+\{\}\r?\n', '')
+  } else {
+    $dynamic = Get-Content -LiteralPath $gatewayDynamic -Raw
+  }
+  foreach ($backend in @(
+    'enterprise-platform:18080',
+    'enterprise-tenant-as:18083',
+    'enterprise-issuer:8080',
+    'enterprise-verifier:8080',
+    'enterprise-did:8080',
+    'enterprise-blob:8080',
+    'enterprise-tenant-kms:8080'
+  )) {
+    $dynamic = $dynamic.Replace("http://$backend", 'http://svc-monolith:8080')
+  }
+  $selectedGatewayDynamic = Join-Path $monolithArtifactDir 'dynamic.monolith.generated.yml'
+  Write-Utf8NoBom $selectedGatewayDynamic $dynamic
+
+  $selectedGatewayCompose = Join-Path $monolithArtifactDir 'docker-compose.monolith.generated.yml'
+  if ($BehindEdge) {
+    $selectedGatewayStatic = Join-Path $monolithArtifactDir 'traefik.monolith.behind-edge.generated.yml'
+    $static = Get-Content -LiteralPath $behindEdgeStaticTemplate -Raw
+    $static = $static.Replace('__EDGE_TRUSTED_SUBNET__', $EdgeTrustedSubnet)
+    Write-Utf8NoBom $selectedGatewayStatic $static
+    $staticPath = ConvertTo-ComposeMountPath $selectedGatewayStatic
+  } else {
+    $staticPath = ConvertTo-ComposeMountPath (Join-Path $composeDir 'gateway\traefik\traefik.yml')
+  }
+  $dynamicPath = ConvertTo-ComposeMountPath $selectedGatewayDynamic
+  $certPath = ConvertTo-ComposeMountPath (Join-Path $composeDir 'gateway\certs')
+  $gatewayPorts = if ($BehindEdge) { '' } else {
+    @(
+      '    ports:',
+      '      - "443:443"',
+      '      - "80:80"'
+    ) -join "`n"
+  }
+  $gatewayNetworks = if ($BehindEdge) {
+    "      vdx-network: {}`n      edge:`n        aliases:`n          - $edgeAlias"
+  } else {
+    "      vdx-network:`n        aliases:`n          - platform.$BaseDomain`n          - $($postmanValues['tenantSlug']).$BaseDomain"
+  }
+  $monolithPorts = if ($BehindEdge) { '    ports: !reset []' } else { '' }
+  $networkDeclaration = if ($BehindEdge) {
+    "`nnetworks:`n  edge:`n    name: $EdgeNetworkName`n    external: true"
+  } else { '' }
+  $compose = @'
+services:
+  traefik:
+    image: traefik:v3.3
+    depends_on:
+      svc-monolith:
+        condition: service_healthy
+    command: []
+__GATEWAY_PORTS__
+    volumes:
+      - __STATIC_PATH__:/etc/traefik/traefik.yml:ro
+      - __DYNAMIC_PATH__:/etc/traefik/dynamic/dynamic.yml:ro
+      - __CERT_PATH__:/etc/traefik/certs:ro
+    networks:
+__GATEWAY_NETWORKS__
+
+  svc-monolith:
+__MONOLITH_PORTS__
+    environment:
+      EDK_PLATFORM_BASE_DOMAIN: __BASE_DOMAIN__
+      EDK_PLATFORM_PUBLIC_URL: https://platform.__BASE_DOMAIN__
+      EXTERNAL_BASE_URL: https://platform.__BASE_DOMAIN__
+      OAUTH2_AS_ISSUER: https://platform.__BASE_DOMAIN__
+      APPLICATION_TENANT_HOSTED_AS_ISSUER: https://platform.__BASE_DOMAIN__
+      OID4VCI_ISSUER_IDENTIFIER: https://platform.__BASE_DOMAIN__/oid4vci
+      VDX_MONOLITH_SELF_HOSTS: localhost,svc-monolith,platform.__BASE_DOMAIN__
+      TENANT_RESOLUTION_SELF_HOSTS: localhost,svc-monolith,platform.__BASE_DOMAIN__
+      CORS_ORIGINS: https://platform.__BASE_DOMAIN__
+      OAUTH2_CLIENTS_ADMIN_CONSOLE_PORTAL_BFF_CLIENT_ID: admin-console-portal-bff
+      OAUTH2_CLIENTS_ADMIN_CONSOLE_PORTAL_BFF_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:-monolith-admin-console-local-only}
+      OAUTH2_CLIENTS_ADMIN_CONSOLE_PORTAL_BFF_GRANT_TYPES: client_credentials
+      OAUTH2_CLIENTS_ADMIN_CONSOLE_PORTAL_BFF_TOKEN_ENDPOINT_AUTH_METHOD: client_secret_post
+      OAUTH2_CLIENTS_ADMIN_CONSOLE_PORTAL_BFF_ALLOWED_SCOPES: openid,profile,email
+    networks:
+      - vdx-network
+
+  admin-console:
+    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG}
+    depends_on:
+      svc-monolith:
+        condition: service_healthy
+    networks:
+      - vdx-network
+    environment:
+      NEXT_PUBLIC_BASE_PATH: /admin-console
+      ADMIN_CONSOLE_MODE: PLATFORM
+      ADMIN_CONSOLE_PLATFORM_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: https://platform.__BASE_DOMAIN__
+      ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
+      ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
+      ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
+      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://svc-monolith:8080
+      ADMIN_CONSOLE_WORKLOAD_CLIENT_ID: admin-console-portal-bff
+      ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:-monolith-admin-console-local-only}
+      ADMIN_CONSOLE_AUDIT_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_THEME_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TENANT_AS_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_IDENTITY_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TRUST_DOMAIN_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_ISSUER_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_VERIFIER_BASE_URL: http://svc-monolith:8080
+      NEXT_PUBLIC_PLATFORM_AUDIENCE: enterprise-platform
+      NEXT_PUBLIC_THEME_AUDIENCE: enterprise-blob
+      NEXT_PUBLIC_TENANT_DID_AUDIENCE: enterprise-tenant-did
+      NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE: enterprise-issuer
+      NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE: enterprise-verifier
+      PORT: "3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/admin-console/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  admin-console-tenant:
+    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG}
+    depends_on:
+      svc-monolith:
+        condition: service_healthy
+    networks:
+      - vdx-network
+    environment:
+      NEXT_PUBLIC_BASE_PATH: /admin-console
+      ADMIN_CONSOLE_MODE: TENANT
+      ADMIN_CONSOLE_PLATFORM_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TENANT_CONTEXT_URL: http://svc-monolith:8080/api/platform/bootstrap/v1/admin-console-context
+      ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
+      ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
+      ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
+      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://svc-monolith:8080
+      ADMIN_CONSOLE_THEME_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TENANT_DID_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TENANT_AS_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_IDENTITY_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_TRUST_DOMAIN_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_ISSUER_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_VERIFIER_BASE_URL: http://svc-monolith:8080
+      NEXT_PUBLIC_TENANT_DID_AUDIENCE: enterprise-tenant-did
+      NEXT_PUBLIC_THEME_AUDIENCE: enterprise-blob
+      NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE: enterprise-issuer
+      NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE: enterprise-verifier
+      PORT: "3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/admin-console/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+__NETWORK_DECLARATION__
+'@
+  $compose = $compose.Replace('__GATEWAY_PORTS__', $gatewayPorts.TrimEnd("`r", "`n"))
+  $compose = $compose.Replace('__GATEWAY_NETWORKS__', $gatewayNetworks)
+  $compose = $compose.Replace('__MONOLITH_PORTS__', $monolithPorts)
+  $compose = $compose.Replace('__NETWORK_DECLARATION__', $networkDeclaration)
+  $compose = $compose.Replace('__STATIC_PATH__', $staticPath)
+  $compose = $compose.Replace('__DYNAMIC_PATH__', $dynamicPath)
+  $compose = $compose.Replace('__CERT_PATH__', $certPath)
+  $compose = $compose.Replace('__BASE_DOMAIN__', $BaseDomain)
+  $compose = $compose.Replace('__TENANT_ALIAS__', "$([string]$postmanValues['tenantSlug']).$BaseDomain")
+  Write-Utf8NoBom $selectedGatewayCompose $compose
+  if ($BehindEdge) {
+    New-Item -ItemType Directory -Path $behindEdgeArtifactDir -Force | Out-Null
+    $router = Get-Content -LiteralPath $edgeRouterTemplate -Raw
+    $router = $router.Replace('__ENV__', $EdgeEnvironment)
+    $router = $router.Replace('__BASE_DOMAIN_REGEX__', $BaseDomain.Replace('.', '\.'))
+    $router = $router.Replace('__BASE_DOMAIN__', $BaseDomain)
+    $router = $router.Replace('__EDGE_ALIAS__', $edgeAlias)
+    Write-Utf8NoBom $edgeRouterCandidate $router
+  }
+  return @($selectedGatewayCompose, $selectedGatewayDynamic)
+}
 function Assert-BehindEdgeMergedCompose([string]$ComposeJson) {
   try {
     $model = $ComposeJson | ConvertFrom-Json -ErrorAction Stop
@@ -173,6 +379,20 @@ function Assert-BehindEdgeMergedCompose([string]$ComposeJson) {
   }
   if ($null -eq $model.services) {
     Fail 'Merged BehindEdge Compose model has no services.'
+  }
+
+  if ($Topology -eq 'Monolith') {
+    foreach ($serviceName in @('svc-monolith', 'admin-console', 'admin-console-tenant', 'traefik')) {
+      $serviceProperty = $model.services.PSObject.Properties[$serviceName]
+      if ($null -eq $serviceProperty) {
+        Fail "Merged BehindEdge monolith model is missing '$serviceName'."
+      }
+      $publishedPorts = @($serviceProperty.Value.ports | Where-Object { $null -ne $_ })
+      if ($publishedPorts.Count -ne 0) {
+        Fail "BehindEdge monolith service '$serviceName' must publish no host ports."
+      }
+    }
+    return
   }
 
   foreach ($serviceName in @(
@@ -302,7 +522,11 @@ function Invoke-NativeText([string]$File, [string[]]$Arguments, [string]$Label) 
   } finally {
     $ErrorActionPreference = $previousErrorActionPreference
   }
-  if ($exitCode -ne 0) { Fail "$Label failed with exit code $exitCode." }
+  if ($exitCode -ne 0) {
+    $diagnostic = Protect-SensitiveText ($lines -join "`n")
+    if ([string]::IsNullOrWhiteSpace($diagnostic)) { $diagnostic = 'no native output' }
+    Fail "$Label failed with exit code $exitCode. Output: $diagnostic"
+  }
   return ($lines -join "`n")
 }
 function Invoke-Compose([string[]]$Tail, [string]$LogName) {
@@ -352,10 +576,15 @@ ORDER BY n.nspname
 \gexec
 '@
 
-  foreach ($database in @(
-    @{service = 'platform-postgres'; label = 'platform'},
-    @{service = 'tenant-postgres'; label = 'tenant'}
-  )) {
+  $databaseTargets = if ($Topology -eq 'Monolith') {
+    @(@{service = 'postgres'; label = 'monolith'})
+  } else {
+    @(
+      @{service = 'platform-postgres'; label = 'platform'},
+      @{service = 'tenant-postgres'; label = 'tenant'}
+    )
+  }
+  foreach ($database in $databaseTargets) {
     $evidencePath = Join-Path $resolvedReportDir "$($database.label)-database-audit.txt"
     if (Test-Path -LiteralPath $evidencePath -PathType Leaf) { continue }
     $command = @"
@@ -405,15 +634,20 @@ function Wait-BehindEdgePublicOrigin {
   Fail "Shared-edge public origin did not become trusted and reachable: $url"
 }
 function Write-Plan {
-  $references = @($releaseImages | ForEach-Object { "nexus.sphereon.com/edk-docker/$($_):$Tag" })
+  $references = if ($Topology -eq 'Monolith') {
+    @($MonolithImage, "nexus.sphereon.com/edk-docker/admin-console:$Tag")
+  } else {
+    @($releaseImages | ForEach-Object { "nexus.sphereon.com/edk-docker/$($_):$Tag" })
+  }
   $plan = [ordered]@{
     mode = if ($DryRun) { 'dry-run' } else { 'execute' }
+    topology = $Topology
     accessMode = $AccessMode
     projectName = $ProjectName
     reportDir = $resolvedReportDir
     baseDomain = $BaseDomain
     publicOrigin = "https://platform.$BaseDomain"
-    composeFiles = @($baseCompose, $selectedGatewayCompose)
+    composeFiles = @($composeFiles)
     gatewayDynamic = $selectedGatewayDynamic
     requiresLocalCa = $requiresLocalCa
     edgeEnvironment = if ($AccessMode -eq 'BehindEdge') { $EdgeEnvironment } else { $null }
@@ -429,6 +663,7 @@ function Write-Plan {
     sourceState = $resolvedSourceState
     expectedSource = $ExpectedSource
     releaseImages = $references
+    monolithImage = if ($Topology -eq 'Monolith') { $MonolithImage } else { $null }
     resetVolumes = [bool]$ResetVolumes
     useExistingProject = [bool]$UseExistingProject
     setupMode = if ($PreProvisionedSetup) { 'pre-provisioned' } else { 'protected-license-bundle' }
@@ -467,6 +702,7 @@ $commonRequired = @(
   $lifecycleModule,
   $secretAuthorityGenerator
 )
+if ($Topology -eq 'Monolith') { $commonRequired += $monolithServiceCompose }
 $modeRequired =
   if ($AccessMode -eq 'Localtest') {
     @($gatewayCompose, $gatewayDynamic)
@@ -496,6 +732,21 @@ if ($ResetVolumes -and $PreProvisionedSetup) {
 }
 if ($UseExistingProject -and $ResetVolumes) { Fail '-UseExistingProject and -ResetVolumes are mutually exclusive.' }
 if ($UseExistingProject -and $RemoveVolumesOnTeardown) { Fail 'Cannot remove volumes from an adopted existing project.' }
+if (-not [string]::IsNullOrWhiteSpace($MailpitUrl)) {
+  $mailpitUri = $null
+  if (-not [System.Uri]::TryCreate($MailpitUrl, [System.UriKind]::Absolute, [ref]$mailpitUri) -or $mailpitUri.Scheme -notin @('http', 'https') -or $mailpitUri.AbsolutePath -ne '/') {
+    Fail "MailpitUrl must be an HTTP(S) origin without a path; got '$MailpitUrl'."
+  }
+  $MailpitUrl = $MailpitUrl.TrimEnd('/')
+}
+if ($Topology -eq 'Monolith') {
+  if ([string]::IsNullOrWhiteSpace($MonolithImage)) {
+    $MonolithImage = "sphereon/vdx-svc-monolith:$Tag"
+  }
+  if ($MonolithImage -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
+    Fail "MonolithImage must be a fully-qualified immutable image reference with a tag; got '$MonolithImage'."
+  }
+}
 
 $resolvedReportDir = [System.IO.Path]::GetFullPath($ReportDir)
 if (Test-Path -LiteralPath $resolvedReportDir) {
@@ -505,9 +756,17 @@ if (Test-Path -LiteralPath $resolvedReportDir) {
   }
 }
 New-Item -ItemType Directory -Path $resolvedReportDir -Force | Out-Null
+$resolvedComposeEnv = [System.IO.Path]::GetFullPath($ComposeEnvFile)
+$resolvedPostmanEnvironment = [System.IO.Path]::GetFullPath($PostmanEnvironmentFile)
+$resolvedSourceState = [System.IO.Path]::GetFullPath($SourceState)
+Require-File $resolvedComposeEnv 'Compose environment'
+Require-File $resolvedPostmanEnvironment 'Postman environment'
+Require-File $resolvedSourceState 'Frozen release source-state manifest'
+$postmanValues = Read-PostmanValues $resolvedPostmanEnvironment
 $requiresLocalCa = $AccessMode -eq 'Localtest'
 $selectedGatewayCompose = $gatewayCompose
 $selectedGatewayDynamic = $gatewayDynamic
+$composeFiles = @($baseCompose)
 $selectedGatewayStatic = $null
 $behindEdgeArtifactDir = $null
 $edgeAlias = $null
@@ -522,14 +781,22 @@ if ($AccessMode -eq 'BehindEdge') {
   $edgeAlias = "gw-$EdgeEnvironment"
   $resolvedEdgeRouterDirectory = [System.IO.Path]::GetFullPath($EdgeRouterDirectory)
   $edgeRouterTarget = Join-Path $resolvedEdgeRouterDirectory "$EdgeEnvironment.yml"
-  Render-BehindEdgeArtifacts
+  if ($Topology -eq 'Monolith') {
+    $monolithArtifacts = @(Render-MonolithGatewayArtifacts -BehindEdge)
+    $selectedGatewayCompose = [string]$monolithArtifacts[0]
+    $selectedGatewayDynamic = [string]$monolithArtifacts[1]
+  } else {
+    Render-BehindEdgeArtifacts
+  }
+} elseif ($Topology -eq 'Monolith') {
+  $monolithArtifacts = @(Render-MonolithGatewayArtifacts)
+  $selectedGatewayCompose = [string]$monolithArtifacts[0]
+  $selectedGatewayDynamic = [string]$monolithArtifacts[1]
 }
-$resolvedComposeEnv = [System.IO.Path]::GetFullPath($ComposeEnvFile)
-$resolvedPostmanEnvironment = [System.IO.Path]::GetFullPath($PostmanEnvironmentFile)
-$resolvedSourceState = [System.IO.Path]::GetFullPath($SourceState)
-Require-File $resolvedComposeEnv 'Compose environment'
-Require-File $resolvedPostmanEnvironment 'Postman environment'
-Require-File $resolvedSourceState 'Frozen release source-state manifest'
+if ($Topology -eq 'Monolith') {
+  $composeFiles += $monolithServiceCompose
+}
+$composeFiles += $selectedGatewayCompose
 $collection = Get-Content -LiteralPath $collectionPath -Raw | ConvertFrom-Json
 $requestCount = Count-Requests @($collection.item)
 if ($requestCount -ne 113) { Fail "Customer collection must contain exactly 113 requests; found $requestCount." }
@@ -542,7 +809,7 @@ if ($AccessMode -eq 'Localtest') {
 Write-Plan
 
 if ($DryRun) {
-  Write-Host "Dry-run passed: customer $AccessMode topology, immutable seven-image plan, and 113-request collection validated."
+  Write-Host "Dry-run passed: customer $Topology/$AccessMode topology, immutable image plan, and 113-request collection validated."
   Write-Host "Plan: $(Join-Path $resolvedReportDir 'release-gate-plan.json')"
   exit 0
 }
@@ -555,7 +822,6 @@ if ($PSCmdlet.ParameterSetName -eq 'LicenseSetup') {
   $LicenseBundleZipPath = [System.IO.Path]::GetFullPath($LicenseBundleZipPath)
   Require-File $LicenseBundleZipPath 'Protected license bundle'
 }
-$postmanValues = Read-PostmanValues $resolvedPostmanEnvironment
 foreach ($key in @(
   'tenantSlug',
   'tenantName',
@@ -575,9 +841,10 @@ if ([string]$postmanValues['baseDomain'] -ne $BaseDomain) {
 }
 if ($AccessMode -eq 'Localtest') {
   $tenantAliasPattern = '(?m)^\s*-\s+' + [regex]::Escape([string]$postmanValues['tenantSlug']) + '\.' + [regex]::Escape($BaseDomain) + '\s*$'
-  $gatewayOverlayText = Get-Content -LiteralPath $gatewayCompose -Raw
+  $gatewayOverlayPath = if ($Topology -eq 'Monolith') { $selectedGatewayCompose } else { $gatewayCompose }
+  $gatewayOverlayText = Get-Content -LiteralPath $gatewayOverlayPath -Raw
   if ($gatewayOverlayText -notmatch $tenantAliasPattern) {
-    Fail "The literal Localtest gateway overlay must contain an active appnet alias for $($postmanValues['tenantSlug']).$BaseDomain so tenant JWKS resolves inside Compose."
+    Fail "The Localtest gateway overlay must contain an active tenant alias for $($postmanValues['tenantSlug']).$BaseDomain so tenant JWKS resolves inside Compose."
   }
 }
 if ([string]$postmanValues['idpClientSecret'] -notmatch '^[A-Za-z0-9_-]{16,128}$') {
@@ -593,6 +860,23 @@ $composeEnvText = (Get-Content -LiteralPath $resolvedComposeEnv -Raw).TrimEnd("`
 $authorityWindow = (Get-Content -LiteralPath (Join-Path $secretAuthorityRoot 'window.env') -Raw).TrimEnd("`r", "`n")
 $authorityHostPath = $secretAuthorityRoot.Replace('\', '/')
 Write-Utf8NoBom $runtimeComposeEnv "$composeEnvText`n$authorityWindow`nEDK_SECRET_AUTHORITY_ROOT=$authorityHostPath`n"
+if ($Topology -eq 'Monolith') {
+  Add-Content -LiteralPath $runtimeComposeEnv -Value "MONOLITH_SECRET_AUTHORITY_ROOT=$authorityHostPath" -Encoding UTF8
+  Add-Content -LiteralPath $runtimeComposeEnv -Value @(
+    "POSTGRES_PORT=15937",
+    "KEYCLOAK_PORT=19091",
+    "OTEL_COLLECTOR_GRPC_PORT=14317",
+    "OTEL_COLLECTOR_HTTP_PORT=14318",
+    "MAILPIT_SMTP_PORT=11025",
+    "MAILPIT_UI_PORT=18025",
+    "MONOLITH_REST_PORT=19084",
+    "VDX_MONOLITH_IMAGE=$MonolithImage",
+    "VDX_POSTGRES_CONTAINER_NAME=$ProjectName-postgres",
+    "VDX_KEYCLOAK_CONTAINER_NAME=$ProjectName-keycloak",
+    "VDX_MAILPIT_CONTAINER_NAME=$ProjectName-mailpit",
+    "VDX_MONOLITH_CONTAINER_NAME=$ProjectName-svc-monolith"
+  ) -Encoding UTF8
+}
 
 $previousTag = $env:EDK_TAG
 $previousDomain = $env:EDK_PLATFORM_BASE_DOMAIN
@@ -604,9 +888,11 @@ $composeArgs = @(
   'compose',
   '--project-name', $ProjectName,
   '--env-file', $runtimeComposeEnv,
-  '-f', $baseCompose,
-  '-f', $selectedGatewayCompose
+  '-f', $composeFiles[0]
 )
+foreach ($composeFile in @($composeFiles | Select-Object -Skip 1)) {
+  $composeArgs += @('-f', $composeFile)
+}
 $projectDisposition = $null
 $lifecycle = $null
 $gateOwnsProject = $false
@@ -681,14 +967,35 @@ try {
   }
   $renderedImages = Join-Path $resolvedReportDir 'compose-images.txt'
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('config', '--images')) $renderedImages | Out-Null
-  Invoke-LoggedNative $nodeCommand @(
-    $imageVerifier,
-    '--tag', $Tag,
-    '--source-state', $resolvedSourceState,
-    '--expected-source', $ExpectedSource,
-    '--rendered-images', $renderedImages,
-    '--output', (Join-Path $resolvedReportDir 'enterprise-image-set.json')
-  ) (Join-Path $resolvedReportDir 'enterprise-image-preflight.log') | Out-Null
+  if ($Topology -eq 'Distributed') {
+    $imageVerifierArgs = @(
+      $imageVerifier,
+      '--tag', $Tag,
+      '--rendered-images', $renderedImages,
+      '--output', (Join-Path $resolvedReportDir 'enterprise-image-set.json')
+    )
+    if ($AllowMixedSourceFingerprints) {
+      $imageVerifierArgs += '--allow-mixed-source-fingerprints'
+    } else {
+      $imageVerifierArgs += @('--source-state', $resolvedSourceState, '--expected-source', $ExpectedSource)
+    }
+    Invoke-LoggedNative $nodeCommand $imageVerifierArgs (Join-Path $resolvedReportDir 'enterprise-image-preflight.log') | Out-Null
+  } else {
+    $monolithPreflight = [ordered]@{
+      topology = 'Monolith'
+      monolithImage = $MonolithImage
+      adminConsoleImage = "nexus.sphereon.com/edk-docker/admin-console:$Tag"
+      composeFiles = @($composeFiles)
+      sourceState = $resolvedSourceState
+    }
+    Write-Utf8NoBom `
+      (Join-Path $resolvedReportDir 'monolith-image-preflight.json') `
+      "$($monolithPreflight | ConvertTo-Json -Depth 6)`n"
+    Invoke-CapturedNative $dockerCommand @('image', 'inspect', '--format', '{{.Id}}', $MonolithImage) `
+      (Join-Path $resolvedReportDir 'monolith-image-inspect.log') | Out-Null
+    Invoke-CapturedNative $dockerCommand @('image', 'inspect', '--format', '{{.Id}}', "nexus.sphereon.com/edk-docker/admin-console:$Tag") `
+      (Join-Path $resolvedReportDir 'admin-console-image-inspect.log') | Out-Null
+  }
 
   $projectLabel = "label=com.docker.compose.project=$ProjectName"
   $containers = @(Split-NonEmptyLines (Invoke-CapturedNative $dockerCommand @(
@@ -735,6 +1042,7 @@ try {
   if ($AccessMode -eq 'BehindEdge') { Wait-BehindEdgePublicOrigin }
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('ps', '--all', '--format', 'json')) (Join-Path $resolvedReportDir 'compose-ps.jsonl') | Out-Null
 
+  if ($Topology -eq 'Distributed') {
   $imageReport = Get-Content -LiteralPath (Join-Path $resolvedReportDir 'enterprise-image-set.json') -Raw | ConvertFrom-Json
   if ([string]$imageReport.releaseBuild.version -ne $Tag) {
     Fail "Release image label version '$($imageReport.releaseBuild.version)' must exactly equal requested immutable tag '$Tag'."
@@ -743,26 +1051,54 @@ try {
   $releaseSourceFingerprint = [string]$imageReport.sourceState.fingerprint
   $releaseRevision = [string]$imageReport.backendBuild.revision
   $releaseCreated = [string]$imageReport.backendBuild.created
-  foreach ($identity in ([ordered]@{
-    source = $releaseSource
-    sourceFingerprint = $releaseSourceFingerprint
-    revision = $releaseRevision
-    created = $releaseCreated
-  }).GetEnumerator()) {
-    if ([string]::IsNullOrWhiteSpace([string]$identity.Value)) {
-      Fail "Release image report is missing coherent $($identity.Key) provenance."
+  if ($AllowMixedSourceFingerprints) {
+    # Mixed mode is an explicit local-run policy: every image still needs its
+    # own provenance, but support images may come from a different source
+    # fingerprint than the already-built backend images.
+    $releaseSourceFingerprint = 'mixed-allowed'
+    foreach ($identity in ([ordered]@{
+      source = $releaseSource
+      revision = $releaseRevision
+      created = $releaseCreated
+    }).GetEnumerator()) {
+      if ([string]::IsNullOrWhiteSpace([string]$identity.Value)) {
+        Fail "Release image report is missing coherent $($identity.Key) provenance."
+      }
     }
-  }
-  foreach ($buildFamily in @('backendBuild', 'adminConsoleBuild')) {
-    $build = $imageReport.$buildFamily
-    if (
-      [string]$build.version -ne $Tag -or
-      [string]$build.source -ne $releaseSource -or
-      [string]$build.sourceFingerprint -ne $releaseSourceFingerprint -or
-      [string]$build.revision -ne $releaseRevision -or
-      [string]$build.created -ne $releaseCreated
-    ) {
-      Fail "Release image report contains divergent $buildFamily provenance."
+    foreach ($buildFamily in @('backendBuild', 'adminConsoleBuild')) {
+      $build = $imageReport.$buildFamily
+      if (
+        [string]$build.version -ne $Tag -or
+        [string]$build.source -ne $releaseSource -or
+        [string]::IsNullOrWhiteSpace([string]$build.sourceFingerprint) -or
+        [string]$build.revision -ne $releaseRevision -or
+        [string]$build.created -ne $releaseCreated
+      ) {
+        Fail "Release image report contains invalid $buildFamily provenance for explicit mixed-source mode."
+      }
+    }
+  } else {
+    foreach ($identity in ([ordered]@{
+      source = $releaseSource
+      sourceFingerprint = $releaseSourceFingerprint
+      revision = $releaseRevision
+      created = $releaseCreated
+    }).GetEnumerator()) {
+      if ([string]::IsNullOrWhiteSpace([string]$identity.Value)) {
+        Fail "Release image report is missing coherent $($identity.Key) provenance."
+      }
+    }
+    foreach ($buildFamily in @('backendBuild', 'adminConsoleBuild')) {
+      $build = $imageReport.$buildFamily
+      if (
+        [string]$build.version -ne $Tag -or
+        [string]$build.source -ne $releaseSource -or
+        [string]$build.sourceFingerprint -ne $releaseSourceFingerprint -or
+        [string]$build.revision -ne $releaseRevision -or
+        [string]$build.created -ne $releaseCreated
+      ) {
+        Fail "Release image report contains divergent $buildFamily provenance."
+      }
     }
   }
   $fingerprintMaterial = @(
@@ -822,7 +1158,11 @@ try {
       'inspect', '--format', '{{.State.Status}}', $containerId
     ) "Inspect state for $service").Trim()
     if ($containerStatus -ne 'running') { Fail "$service container '$containerId' is '$containerStatus', not running." }
-    $releaseName = if ($service -eq 'admin-console-tenant') { 'admin-console' } else { $service }
+    $releaseName = switch ($service) {
+      'admin-console-tenant' { 'admin-console'; break }
+      'enterprise-blob' { 'service-data'; break }
+      default { $service }
+    }
     $reference = "nexus.sphereon.com/edk-docker/$releaseName`:$Tag"
     if ([string]$actualId -ne [string]$expectedIds[$reference]) {
       Fail "$service runs image id '$actualId', expected '$($expectedIds[$reference])'."
@@ -838,6 +1178,76 @@ try {
   Write-Utf8NoBom `
     (Join-Path $resolvedReportDir 'compose-service-image-ids.json') `
     "$(($serviceImages | ConvertTo-Json -Depth 5))`n"
+  } else {
+    $releaseSource = 'local-monolith'
+    $releaseSourceFingerprint = $MonolithImage
+    $releaseRevision = 'local-working-tree'
+    $releaseCreated = (Get-Date).ToUniversalTime().ToString('o')
+    $expectedReferences = [ordered]@{
+      'svc-monolith' = $MonolithImage
+      'admin-console' = "nexus.sphereon.com/edk-docker/admin-console:$Tag"
+      'admin-console-tenant' = "nexus.sphereon.com/edk-docker/admin-console:$Tag"
+    }
+    $expectedIds = @{}
+    foreach ($reference in @($expectedReferences.Values | Select-Object -Unique)) {
+      $expectedIds[$reference] = (Invoke-NativeText $dockerCommand @(
+        'image', 'inspect', '--format', '{{.Id}}', $reference
+      ) "Resolve local monolith image $reference").Trim()
+    }
+    $fingerprintMaterial = @($Tag, $releaseSource, $releaseSourceFingerprint, $releaseRevision, $releaseCreated, $expectedIds.Values) -join "`n"
+    $fingerprintBytes = [System.Text.Encoding]::UTF8.GetBytes($fingerprintMaterial)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $releaseFingerprint = ([System.BitConverter]::ToString($sha256.ComputeHash($fingerprintBytes))).Replace('-', '').ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+    $releaseIdentity = [ordered]@{
+      tag = $Tag
+      version = $Tag
+      topology = 'Monolith'
+      source = $releaseSource
+      sourceFingerprint = $releaseSourceFingerprint
+      revision = $releaseRevision
+      created = $releaseCreated
+      sha256 = $releaseFingerprint
+    }
+    Write-Utf8NoBom `
+      (Join-Path $resolvedReportDir 'release-identity.json') `
+      "$(($releaseIdentity | ConvertTo-Json -Depth 4))`n"
+
+    $serviceImages = [ordered]@{}
+    foreach ($service in @('svc-monolith', 'admin-console', 'admin-console-tenant')) {
+      $containerIds = @(Split-NonEmptyLines (Invoke-NativeText $dockerCommand ($composeArgs + @(
+        'ps', '--all', '--quiet', $service
+      )) "Resolve containers for $service"))
+      if ($containerIds.Count -ne 1) {
+        Fail "$service must resolve exactly one project container; found $($containerIds.Count)."
+      }
+      $containerId = [string]$containerIds[0]
+      $actualId = (Invoke-NativeText $dockerCommand @(
+        'inspect', '--format', '{{.Image}}', $containerId
+      ) "Inspect image for $service").Trim()
+      $containerStatus = (Invoke-NativeText $dockerCommand @(
+        'inspect', '--format', '{{.State.Status}}', $containerId
+      ) "Inspect state for $service").Trim()
+      if ($containerStatus -ne 'running') { Fail "$service container '$containerId' is '$containerStatus', not running." }
+      $reference = [string]$expectedReferences[$service]
+      if ($actualId -ne [string]$expectedIds[$reference]) {
+        Fail "$service runs image id '$actualId', expected '$($expectedIds[$reference])'."
+      }
+      $serviceImages[$service] = [ordered]@{
+        reference = $reference
+        imageId = [string]$actualId
+        containerId = $containerId
+        state = $containerStatus
+        releaseFingerprint = $releaseFingerprint
+      }
+    }
+    Write-Utf8NoBom `
+      (Join-Path $resolvedReportDir 'compose-service-image-ids.json') `
+      "$(($serviceImages | ConvertTo-Json -Depth 5))`n"
+  }
 
   $platformUrl = "https://platform.$BaseDomain"
   $setupArgs = @(
@@ -848,6 +1258,7 @@ try {
   )
   if ($PreProvisionedSetup) { $setupArgs += '--pre-provisioned' }
   else { $setupArgs += @('--license-bundle', $LicenseBundleZipPath) }
+  if (-not [string]::IsNullOrWhiteSpace($MailpitUrl)) { $setupArgs += @('--mailpit-url', $MailpitUrl) }
   Invoke-LoggedNative $nodeCommand $setupArgs (Join-Path $resolvedReportDir 'setup.log') $false | Out-Null
 
   New-Item -ItemType Directory -Path $newmanStageDir -Force | Out-Null
@@ -860,8 +1271,8 @@ try {
     '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
     '--base-domain', $BaseDomain
   ) (Join-Path $resolvedReportDir 'newman.log') $false
-  if ($runnerOutput -notmatch 'E2E finished:\s+115 requests captured,\s+exit code 0\.') {
-    Fail 'Newman did not execute and capture exactly all 115 request executions.'
+  if ($runnerOutput -notmatch 'E2E finished:\s+113 requests captured,\s+exit code 0\.') {
+    Fail 'Newman did not execute and capture exactly all 113 request executions.'
   }
   $junitPath = Join-Path $newmanStageDir 'junit.xml'
   Invoke-LoggedNative $nodeCommand @(
@@ -874,22 +1285,33 @@ try {
   Remove-Item -LiteralPath $newmanStageDir -Recurse -Force
 
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('logs', '--no-color', '--timestamps')) (Join-Path $resolvedReportDir 'compose-logs.txt') | Out-Null
-  Invoke-CapturedNative $dockerCommand ($composeArgs + @(
-    'exec', '-T', 'platform-postgres', 'sh', '-lc',
-    'pg_dump --schema-only --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-  )) (Join-Path $resolvedReportDir 'platform-schema.sql') | Out-Null
-  Invoke-CapturedNative $dockerCommand ($composeArgs + @(
-    'exec', '-T', 'tenant-postgres', 'sh', '-lc',
-    'pg_dump --schema-only --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-  )) (Join-Path $resolvedReportDir 'tenant-schema.sql') | Out-Null
+  $schemaTargets = if ($Topology -eq 'Monolith') {
+    @(@{service = 'postgres'; output = 'monolith-schema.sql'})
+  } else {
+    @(
+      @{service = 'platform-postgres'; output = 'platform-schema.sql'},
+      @{service = 'tenant-postgres'; output = 'tenant-schema.sql'}
+    )
+  }
+  foreach ($schemaTarget in $schemaTargets) {
+    Invoke-CapturedNative $dockerCommand ($composeArgs + @(
+      'exec', '-T', $schemaTarget.service, 'sh', '-lc',
+      'pg_dump --schema-only --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+    )) (Join-Path $resolvedReportDir $schemaTarget.output) | Out-Null
+  }
   Capture-DatabaseEvidence
 
   $canaryEvidence = Join-Path $resolvedReportDir 'plaintext-canary-evidence.jsonl'
   Invoke-CanaryFileScan (Join-Path $resolvedReportDir 'compose-logs.txt') 'compose-logs' $canaryEvidence
-  foreach ($databaseScan in @(
-    @{service = 'platform-postgres'; label = 'platform-db'; log = 'platform-db-canary-scan.log'},
-    @{service = 'tenant-postgres'; label = 'tenant-db'; log = 'tenant-db-canary-scan.log'}
-  )) {
+  $databaseScans = if ($Topology -eq 'Monolith') {
+    @(@{service = 'postgres'; label = 'monolith-db'; log = 'monolith-db-canary-scan.log'})
+  } else {
+    @(
+      @{service = 'platform-postgres'; label = 'platform-db'; log = 'platform-db-canary-scan.log'},
+      @{service = 'tenant-postgres'; label = 'tenant-db'; log = 'tenant-db-canary-scan.log'}
+    )
+  }
+  foreach ($databaseScan in $databaseScans) {
     $producerArgs = @(
       $supportHelper,
       'scan-producer',
@@ -1011,7 +1433,7 @@ try {
       --teardown-status $teardownStatus `
       --project-name $ProjectName `
       --tag $Tag `
-      --request-count 115 `
+      --request-count 113 `
       --manifest (Join-Path $resolvedReportDir 'evidence-manifest.json') `
       --manifest-hash (Join-Path $resolvedReportDir 'evidence-manifest.sha256')
     $finalizationExit = $LASTEXITCODE

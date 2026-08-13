@@ -138,6 +138,17 @@ transport:
         endpoint: grpc://enterprise-platform:9090
         serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: false
+# The issuer is a resource server of every tenant AS and obtains a tenant-scoped
+# token through this confidential client. Helm renders the same registration when
+# the shared internal-client secret is configured; Compose supplies that secret
+# for the enterprise topology as well.
+oauth2:
+  servers:
+    default:
+      internal-clients:
+        issuer:
+          client-id: issuer-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
 config:
   providers:
     platform-config-remote:

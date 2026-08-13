@@ -537,6 +537,8 @@ auth:
   login:
     require-application: false
 platform:
+  config-distribution:
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
   sts:
     workload-client-id: kms-service
     secret-bootstrap-workload-client-ids: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service

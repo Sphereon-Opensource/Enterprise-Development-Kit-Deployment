@@ -518,6 +518,10 @@ data:
     app:
       deployment-mode: {{ $bootstrap.deploymentMode | quote }}
     platform:
+      # Every satellite that consumes the remote platform configuration source must
+      # be authorized from the same canonical actor list as secret resolution.
+      config-distribution:
+        allowed-service-actors: {{ join "," $secretBootstrapActors | quote }}
       setup:
         license-request:
           default-alias: {{ .Values.platform.setup.licenseRequest.defaultAlias | quote }}

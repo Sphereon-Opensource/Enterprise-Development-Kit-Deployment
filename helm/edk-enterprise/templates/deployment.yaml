@@ -725,7 +725,7 @@ spec:
             - name: ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS
               value: {{ $.Values.portalBff.trustedIngress.hops | quote }}
             - name: ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS
-              value: {{ if eq $name "admin-console" }}{{ printf "http://%s:%v,http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}{{ else }}{{ printf "http://%s:%v,http://%s:%v,http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}{{ end }}
+              value: {{ if eq $name "admin-console" }}{{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}{{ else }}{{ printf "http://%s:%v,http://%s:%v,http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}{{ end }}
             {{- if eq $name "admin-console" }}
             - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_ID
               value: {{ $.Values.portalBff.clientId | quote }}
@@ -738,7 +738,7 @@ spec:
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             {{- end }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
+              value: {{ if eq $name "admin-console" }}{{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}{{ else }}{{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}{{ end }}
             - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-kms")) (index $.Values.services "tenant-kms").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_DID_BASE_URL
@@ -756,7 +756,7 @@ spec:
               value: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
             {{- end }}
             - name: NEXT_PUBLIC_THEME_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "blob" | quote }}
+              value: {{ if eq $name "admin-console" }}{{ include "edk-enterprise.serviceAudience" "platform" | quote }}{{ else }}{{ include "edk-enterprise.serviceAudience" "blob" | quote }}{{ end }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" "did" | quote }}
             - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE

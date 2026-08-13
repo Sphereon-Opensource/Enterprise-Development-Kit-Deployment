@@ -335,7 +335,7 @@ for (const sourceInvariant of [
   'verify-enterprise-image-set.mjs',
   'compose-postman-release-gate-support.mjs',
   "'--pull', 'never'",
-  "'E2E finished:\\s+115 requests captured,\\s+exit code 0\\.'",
+  "'E2E finished:\\s+113 requests captured,\\s+exit code 0\\.'",
   "'pg_dump --schema-only --no-owner --no-privileges",
   "'scan-producer'",
   'finalize-evidence',
@@ -665,6 +665,47 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     plan.releaseImages.map((reference) => reference.split('/').at(-1).split(':')[0]),
     expectedImages,
   )
+
+  const monolithReportDir = join(testRoot, 'dry-run-monolith')
+  mkdirSync(monolithReportDir)
+  const monolithDryRun = spawnSync(powershell, [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', wrapperPath,
+    '-Tag', '0.25.0-RC3-contract',
+    '-Topology', 'Monolith',
+    '-MonolithImage', 'sphereon/vdx-svc-monolith:0.25.0-RC3-contract',
+    '-ProjectName', 'edk_customer_monolith_contract',
+    '-ReportDir', monolithReportDir,
+    '-AccessMode', 'Localtest',
+    '-BaseDomain', 'saas.localtest.me',
+    '-SourceState', sourceState,
+    '-ExpectedSource', 'https://github.com/Sphereon-Opensource/VDX-infra',
+    '-ComposeEnvFile', join(customerRoot, 'compose', '.env.example'),
+    '-PostmanEnvironmentFile', join(customerRoot, 'postman', 'EDK-Enterprise-Deployment.customer.postman_environment.json'),
+    '-PreProvisionedSetup',
+    '-DryRun',
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    env: {...process.env, PATH: dirname(process.execPath)},
+  })
+  assert.equal(monolithDryRun.status, 0, `${monolithDryRun.stdout}\n${monolithDryRun.stderr}`)
+  const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
+  assert.equal(monolithPlan.topology, 'Monolith')
+  assert.equal(monolithPlan.accessMode, 'Localtest')
+  assert.equal(monolithPlan.requestCount, 113)
+  assert.equal(monolithPlan.composeFiles.length, 3)
+  assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
+  assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))
+  assert.match(readFileSync(monolithPlan.composeFiles[1], 'utf8'), /LICENSE_GATE_SERVICE_ROLE: \$\{VDX_LICENSE_GATE_SERVICE_ROLE:-platform\}/u)
+  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /svc-monolith/u)
+  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /acme\.saas\.localtest\.me/u)
+  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /TENANT_RESOLUTION_SELF_HOSTS: localhost,svc-monolith,platform\.saas\.localtest\.me/u)
+  assert.match(readFileSync(monolithPlan.gatewayDynamic, 'utf8'), /http:\/\/svc-monolith:8080/u)
+  assert.doesNotMatch(readFileSync(monolithPlan.gatewayDynamic, 'utf8'), /http:\/\/enterprise-/u)
 
   const edgeReportDir = join(testRoot, 'dry-run-behind-edge')
   const edgeEnvironment = join(testRoot, 'behind-edge.postman_environment.json')

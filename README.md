@@ -47,6 +47,23 @@ use authenticated east-west gRPC calls for platform configuration and KMS
 operations. These gRPC endpoints must remain inside the Compose network or
 Kubernetes cluster.
 
+## Run the customer collection against the monolith
+
+The maintained customer Postman collection can also be run against a clean
+monolith projection. Pass `-Topology Monolith` to
+`scripts/run-compose-postman-release-gate.ps1` and provide the locally built
+`service-monolith` image through `-MonolithImage`. The projection keeps the
+same gateway hosts and public API paths, with the two admin-console processes
+retained only for the HTML testing-console surfaces.
+
+Use a fresh Compose project and volume set for this check. The monolith uses
+the normal application database migrations to create or update its schema; the
+gate does not migrate or rewrite an existing monolith installation.
+
+```powershell
+./scripts/run-compose-postman-release-gate.ps1 -Tag 0.25.0-RC3 -Topology Monolith -MonolithImage sphereon/vdx-svc-monolith:<local-immutable-tag> -ProjectName edk_customer_monolith -ReportDir ./reports/customer-monolith -AccessMode Localtest -BaseDomain saas.localtest.me -SourceState ./release-source-state.json -ExpectedSource https://github.com/Sphereon-Opensource/VDX-infra -ComposeEnvFile ./compose/.env -PostmanEnvironmentFile ./postman/EDK-Enterprise-Deployment.customer.postman_environment.json -LicenseBundleZipPath ../../deploy/edk/e2e/build/license-cache/saas.localtest.me/license-bundle.zip
+```
+
 ## Domain, DNS, and TLS model
 
 Every installation uses one customer-controlled base domain. The platform and
