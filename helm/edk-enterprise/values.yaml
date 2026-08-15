@@ -423,7 +423,7 @@ serviceIdentity:
   # in-network command/introspection channels stay open by design (each enforces
   # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
-    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**,/public/catalogues"
+    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**,/public/catalogs"
     tenant-as: "/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect"
     tenant-kms: ""
     did: "/.well-known"
@@ -689,8 +689,8 @@ services:
         - /api/platform/setup/v1
         - /api/platform/bootstrap/v1
         - /api/platform/admin/v1
-        - /api/catalogues/v1
-        - /public/catalogues
+        - /api/catalog/v1
+        - /public/catalogs
       annotations: {}
     internalIngress:
       enabled: true
@@ -921,7 +921,7 @@ services:
         - /notification
         - /public/statuslists
         - /public/schema
-        - /public/catalogues
+        - /public/catalogs
         - /api/oid4vci/v1
         - /api/credential-design/v1
         - /api/statuslist/v1

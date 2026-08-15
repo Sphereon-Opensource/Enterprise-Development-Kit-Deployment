@@ -439,10 +439,10 @@ spec:
             value: /api/platform/config/v1/tenants
         - path:
             type: PathPrefix
-            value: /api/catalogues/v1
+            value: /api/catalog/v1
         - path:
             type: PathPrefix
-            value: /public/catalogues
+            value: /public/catalogs
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
           port: {{ .Values.services.platform.restPort }}

@@ -261,11 +261,11 @@ http:
       tls: {}
 
     # TS 11 catalogues are platform-owned. Public SchemaMeta stays anonymous
-    # under /public/catalogues; management is /api/catalogues/v1.
+    # under /public/catalogs; management is /api/catalog/v1.
     tenant-catalogues:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        (PathPrefix(`/public/catalogues`) || PathPrefix(`/api/catalogues/v1`))
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 220
