@@ -297,6 +297,7 @@ data:
           oidc: SUPPORTED
           logout: SUPPORTED
           pkce: REQUIRED
+{{ include "edk-enterprise.platformWebAuthnConfig" . | indent 10 }}
           par: SUPPORTED
           token-format: JWT
           scopes-supported: "openid,profile,email"

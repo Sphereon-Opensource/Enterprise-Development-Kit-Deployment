@@ -77,6 +77,24 @@ app.kubernetes.io/component: {{ .name }}
 {{- $base -}}
 {{- end -}}
 
+{{- /*
+Platform AS WebAuthn policy. Keep this topology-neutral: both the distributed
+platform ConfigMap and the monolith container profile use this exact policy,
+derived from the one customer-facing platform origin.
+*/ -}}
+{{- define "edk-enterprise.platformWebAuthnConfig" -}}
+webauthn:
+  enabled: true
+  rp-id: {{ printf "%s.%s" .Values.gateway.operatorHost (include "edk-enterprise.gateway.baseDomain" .) | quote }}
+  allowed-origins: {{ .Values.platform.externalBaseUrl | quote }}
+  attestation-policy: none
+  user-verification: required
+  allowed-transports: "internal,hybrid"
+  backup-state-policy: allow-any
+  challenge-ttl-seconds: 300
+  level3-prf-enabled: false
+{{- end -}}
+
 {{/*
 Tenant-host path-prefix routing table per service, mirroring the single-port
 gateway contract. Returns a YAML list of path prefixes for the given service

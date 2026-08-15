@@ -453,6 +453,20 @@ oauth2:
       # re-authenticating on the next /authorize.
       logout: SUPPORTED
       pkce: REQUIRED
+      # Native platform passkey login uses the same public platform origin in
+      # every deployment topology. A verified WebAuthn assertion is the AAL2
+      # factor; device biometrics, device PIN, or screen lock stay inside the
+      # authenticator and never enter platform state.
+      webauthn:
+        enabled: true
+        rp-id: "platform.${env:EDK_PLATFORM_BASE_DOMAIN}"
+        allowed-origins: "${env:EXTERNAL_BASE_URL}"
+        attestation-policy: none
+        user-verification: required
+        allowed-transports: "internal,hybrid"
+        backup-state-policy: allow-any
+        challenge-ttl-seconds: 300
+        level3-prf-enabled: false
       par: SUPPORTED
       token-format: JWT
       scopes-supported: "openid,profile,email"

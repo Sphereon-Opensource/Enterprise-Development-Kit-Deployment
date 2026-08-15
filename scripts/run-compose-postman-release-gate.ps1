@@ -1034,7 +1034,14 @@ try {
     Invoke-Compose @('down', '--volumes', '--remove-orphans') 'compose-reset.log' | Out-Null
   }
   Invoke-Compose @('up', '-d', '--wait', '--wait-timeout', '300', '--pull', 'never') 'compose-up.log' | Out-Null
-  if ($AccessMode -eq 'BehindEdge') { Wait-BehindEdgePublicOrigin }
+  if ($AccessMode -eq 'BehindEdge') {
+    # The route may have existed before this run while its target Compose
+    # network and gateway alias were recreated by -ResetVolumes. Restart the
+    # owning edge after the target is ready so Traefik resolves the current
+    # gateway endpoint before the public-origin readiness gate starts.
+    Invoke-NativeText $dockerCommand @('restart', $EdgeTraefikContainer) 'Restart shared edge Traefik after Compose startup' | Out-Null
+    Wait-BehindEdgePublicOrigin
+  }
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('ps', '--all', '--format', 'json')) (Join-Path $resolvedReportDir 'compose-ps.jsonl') | Out-Null
 
   if ($Topology -eq 'Distributed') {

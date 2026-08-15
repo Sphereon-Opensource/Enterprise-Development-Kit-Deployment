@@ -1,0 +1,537 @@
+{{- if eq (include "edk-enterprise.topologyMode" .) "monolith" }}
+{{- $name := include "edk-enterprise.monolithServiceName" . }}
+{{- $imageTag := .Values.monolith.imageTag | default .Values.global.imageTag | default .Chart.AppVersion }}
+{{- $platformDb := .Values.database.platform }}
+{{- $tenantDb := .Values.database.tenant }}
+{{- $trustDb := .Values.database.trustDomain }}
+{{- $trustHost := $trustDb.host | default $platformDb.host }}
+{{- $trustPort := $trustDb.port | default $platformDb.port }}
+{{- $trustName := $trustDb.name | default $platformDb.name }}
+{{- $trustSecret := $trustDb.existingSecret | default $platformDb.existingSecret }}
+{{- $trustUsernameKey := $trustDb.usernameKey | default $platformDb.usernameKey }}
+{{- $trustPasswordKey := $trustDb.passwordKey | default $platformDb.passwordKey }}
+{{- $gatewayName := printf "%s-gateway" (include "edk-enterprise.fullname" .) }}
+{{- $base := include "edk-enterprise.gateway.baseDomain" . }}
+{{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
+{{- $wildcard := printf "*.%s" $base }}
+{{- $adminImage := printf "%s/%s:%s" .Values.global.imageRegistry (index .Values.services "admin-console").image (.Values.global.imageTag | default .Chart.AppVersion) }}
+{{- if and .Values.platformKeystore.enabled (not .Values.platformKeystore.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-monolith-keystore
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monolith
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if .Values.platformKeystore.storageClass }}
+  storageClassName: {{ .Values.platformKeystore.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.platformKeystore.size | quote }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-monolith-runtime
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monolith
+data:
+  application-container.yml: |
+    oauth2:
+      servers:
+        default:
+{{ include "edk-enterprise.platformWebAuthnConfig" . | indent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monolith
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "monolith") | nindent 4 }}
+  ports:
+    - name: rest
+      port: {{ .Values.monolith.restPort }}
+      targetPort: rest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monolith
+spec:
+  replicas: {{ .Values.monolith.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "monolith") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "monolith") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "edk-enterprise.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: monolith
+          image: "{{ .Values.monolith.image }}:{{ $imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: rest
+              containerPort: {{ .Values.monolith.restPort }}
+          env:
+            # The same database value names configure normal platform and tenant
+            # routing in both process topologies. The two data planes stay separate.
+            - name: DATABASE_APP_DEFAULT_DIALECT
+              value: {{ .Values.database.dialect | quote }}
+            - name: DATABASE_APP_DEFAULT_HOST
+              value: {{ $platformDb.host | quote }}
+            - name: DATABASE_APP_DEFAULT_PORT
+              value: {{ $platformDb.port | quote }}
+            - name: DATABASE_APP_DEFAULT_DATABASE
+              value: {{ $platformDb.name | quote }}
+            - name: DATABASE_APP_DEFAULT_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ $platformDb.existingSecret | quote }}, key: {{ $platformDb.usernameKey | quote }} } }
+            - name: DATABASE_APP_DEFAULT_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $platformDb.existingSecret | quote }}, key: {{ $platformDb.passwordKey | quote }} } }
+            # Tenant registration performs ordinary tenant-schema migration
+            # before fixture provisioning. Keep the same migrator contract as
+            # the distributed platform service; this is composition-neutral
+            # database routing, not a monolith-specific migration path.
+            - name: DATABASE_APP_TENANT_MIGRATOR_DIALECT
+              value: {{ .Values.database.dialect | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_APP_TENANT_MIGRATOR_ISOLATION
+              value: "shared"
+            - name: DATABASE_APP_TENANT_MIGRATOR_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ $tenantDb.existingSecret | quote }}, key: {{ $tenantDb.usernameKey | quote }} } }
+            - name: DATABASE_APP_TENANT_MIGRATOR_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $tenantDb.existingSecret | quote }}, key: {{ $tenantDb.passwordKey | quote }} } }
+            - name: DATABASE_TENANTS_DEFAULT_DIALECT
+              value: {{ .Values.database.dialect | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_HOST
+              value: {{ $tenantDb.host | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_PORT
+              value: {{ $tenantDb.port | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_DATABASE
+              value: {{ $tenantDb.name | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ $tenantDb.existingSecret | quote }}, key: {{ $tenantDb.usernameKey | quote }} } }
+            - name: DATABASE_TENANTS_DEFAULT_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $tenantDb.existingSecret | quote }}, key: {{ $tenantDb.passwordKey | quote }} } }
+            - name: DATABASE_TENANTS_DEFAULT_ISOLATION
+              value: {{ $tenantDb.isolation | quote }}
+            - name: DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN
+              value: {{ $tenantDb.schemaPattern | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_DIALECT
+              value: {{ .Values.database.dialect | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_HOST
+              value: {{ $trustHost | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_PORT
+              value: {{ $trustPort | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_DATABASE
+              value: {{ $trustName | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_ISOLATION
+              value: {{ $trustDb.isolation | quote }}
+            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_SCHEMA_PATTERN
+              value: {{ $trustDb.schemaPattern | quote }}
+            # The local process still uses the shared trust-domain router
+            # contract. Its credentials must follow the same dedicated-secret
+            # override and platform-secret fallback as distributed mode.
+            - name: EDK_TRUST_DOMAIN_DB_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ $trustSecret | quote }}, key: {{ $trustUsernameKey | quote }} } }
+            - name: EDK_TRUST_DOMAIN_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $trustSecret | quote }}, key: {{ $trustPasswordKey | quote }} } }
+            - name: EDK_PLATFORM_DB_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ $platformDb.existingSecret | quote }}, key: {{ $platformDb.usernameKey | quote }} } }
+            - name: EDK_PLATFORM_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $platformDb.existingSecret | quote }}, key: {{ $platformDb.passwordKey | quote }} } }
+            - name: EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.database.secretManagement.existingSecret | quote }}, key: {{ .Values.database.secretManagement.adminPasswordKey | quote }} } }
+            - name: EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.database.secretManagement.existingSecret | quote }}, key: {{ .Values.database.secretManagement.tenantPasswordKey | quote }} } }
+            {{- if .Values.issuerPipeline.existingSecret }}
+            - name: EDK_PIPELINE_MASTER_KEK
+              valueFrom: { secretKeyRef: { name: {{ .Values.issuerPipeline.existingSecret | quote }}, key: {{ .Values.issuerPipeline.masterKekKey | quote }} } }
+            - name: EDK_PIPELINE_BLIND_INDEX_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.issuerPipeline.existingSecret | quote }}, key: {{ .Values.issuerPipeline.blindIndexKey | quote }} } }
+            {{- end }}
+            - name: APP_PROFILE
+              value: container
+            - name: PORT
+              value: {{ .Values.monolith.restPort | quote }}
+            - name: REST_PORT
+              value: {{ .Values.monolith.restPort | quote }}
+            - name: GRPC_ENABLED
+              value: "false"
+            - name: EDK_PLATFORM_BASE_DOMAIN
+              value: {{ $base | quote }}
+            - name: EDK_PLATFORM_PUBLIC_URL
+              value: {{ .Values.platform.externalBaseUrl | quote }}
+            - name: EXTERNAL_BASE_URL
+              value: {{ .Values.platform.externalBaseUrl | quote }}
+            {{- include "edk-enterprise.emailEnv" . | nindent 12 }}
+            - name: OAUTH2_AS_ISSUER
+              value: {{ .Values.platform.externalBaseUrl | quote }}
+            # Keep the platform's configured operator-store mode identical in
+            # both topologies. In particular, `local` delegates first-install
+            # owner provisioning to the normal setup lifecycle rather than the
+            # monolith image's local-config development account fallback.
+            - name: OAUTH2_USER_PROVIDER_MODE
+              value: {{ .Values.platform.bootstrap.userProviderMode | quote }}
+            - name: APPLICATION_TENANT_HOSTED_AS_ISSUER
+              value: {{ .Values.platform.externalBaseUrl | quote }}
+            - name: OID4VCI_ISSUER_IDENTIFIER
+              value: {{ .Values.platform.externalBaseUrl | quote }}
+            - name: TENANT_RESOLUTION_SELF_TENANT_ID
+              value: platform
+            - name: TENANT_RESOLUTION_SELF_HOSTS
+              value: {{ printf "localhost,%s,%s" $name $operatorHost | quote }}
+            - name: TENANT_RESOLUTION_PLATFORM_BASE_DOMAIN
+              value: {{ $base | quote }}
+            - name: CORS_ORIGINS
+              value: {{ .Values.platform.externalBaseUrl | quote }}
+            # One in-process persisted software KMS serves platform and tenant
+            # data through database routing. No remote module or self-gRPC route is rendered.
+            - name: SPHEREON_SERVICE_ID
+              value: service-platform
+            - name: SECRET_AUTHORITY_SATELLITE_WORKLOAD_ID
+              value: service-crypto
+            - name: SECRET_MANAGEMENT_BOOTSTRAP_KEK_MODE
+              value: {{ .Values.secretManagement.bootstrap.kek.mode | quote }}
+            - name: SECRET_MANAGEMENT_BOOTSTRAP_KEK_IDENTITY
+              value: {{ .Values.secretManagement.bootstrap.kek.identity | quote }}
+            - name: SECRET_MANAGEMENT_BOOTSTRAP_KEK_VERSION
+              value: {{ .Values.secretManagement.bootstrap.kek.version | quote }}
+            - name: SECRET_MANAGEMENT_BOOTSTRAP_KEK_KMS_PROVIDER_ID
+              value: {{ .Values.secretManagement.bootstrap.kek.kmsProviderId | quote }}
+            - name: SECRET_MANAGEMENT_AUTHORITY_PLATFORM_STORAGE_KMS_PROVIDER_ID
+              value: {{ .Values.secretManagement.authority.platformStorageKmsProviderId | quote }}
+            - name: SECRET_MANAGEMENT_AUTHORITY_DEFAULT_TENANT_OFFERING_KMS_PROVIDER_ID
+              value: {{ .Values.secretManagement.authority.defaultTenantOfferingKmsProviderId | quote }}
+            - name: EDK_KEYSTORE_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.keystore.existingSecret | quote }}, key: {{ .Values.keystore.passwordKey | quote }} } }
+            - name: SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.secretAuthority.existingSecrets.platform | quote }}, key: {{ .Values.secretAuthority.keys.centralPermitSigningKey | quote }} } }
+            - name: SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS
+              valueFrom: { secretKeyRef: { name: {{ .Values.secretAuthority.existingSecrets.platform | quote }}, key: {{ .Values.secretAuthority.keys.centralAssertionVerificationKeys | quote }} } }
+            - name: SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.secretAuthority.existingSecrets.platform | quote }}, key: {{ .Values.secretAuthority.keys.satelliteAssertionSigningKey | quote }} } }
+            - name: SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS
+              valueFrom: { secretKeyRef: { name: {{ .Values.secretAuthority.existingSecrets.platform | quote }}, key: {{ .Values.secretAuthority.keys.satellitePermitVerificationKeys | quote }} } }
+            - name: LICENSE_GATE_SERVICE_ROLE
+              value: platform
+            - name: LICENSE_COMMAND_ENFORCEMENT_ENABLED
+              value: {{ .Values.license.commandEnforcement.enabled | quote }}
+            - name: LICENSE_COMMAND_ENFORCEMENT_MISSING_DESCRIPTOR_MODE
+              value: {{ .Values.license.commandEnforcement.missingDescriptorMode | quote }}
+            {{- with .Values.monolith.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet: { path: /health, port: rest }
+            failureThreshold: 60
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: rest }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /health, port: rest }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.monolith.resources | nindent 12 }}
+          volumeMounts:
+            - name: runtime-config
+              mountPath: /app/config/application-container.yml
+              subPath: application-container.yml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: keystore
+              mountPath: /keystore
+            - name: secret-authority
+              mountPath: /app/secret-authority
+              readOnly: true
+      volumes:
+        - name: runtime-config
+          configMap:
+            name: {{ include "edk-enterprise.fullname" . }}-monolith-runtime
+        - name: tmp
+          emptyDir: {}
+        - name: keystore
+          persistentVolumeClaim:
+            claimName: {{ .Values.platformKeystore.existingClaim | default (printf "%s-monolith-keystore" (include "edk-enterprise.fullname" .)) }}
+        - name: secret-authority
+          secret:
+            secretName: {{ .Values.secretAuthority.existingSecrets.platform | quote }}
+            defaultMode: 0400
+            items:
+              - key: {{ .Values.secretAuthority.keys.satelliteAssertionPrivateKey | quote }}
+                path: workload/assertion.pem
+              - key: {{ .Values.secretAuthority.keys.centralPermitPublicKey | quote }}
+                path: public/central-permit.pub.pem
+              - key: {{ .Values.secretAuthority.keys.centralPermitPrivateKey | quote }}
+                path: central/permit-signing.pem
+              {{- range $workloadId, $key := .Values.secretAuthority.keys.assertionPublicKeys }}
+              - key: {{ $key | quote }}
+                path: {{ printf "public/%s-assertion.pub.pem" $workloadId | quote }}
+              {{- end }}
+---
+{{- range $console := list "admin-console" "admin-console-tenant" }}
+{{- $isPlatform := eq $console "admin-console" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $console) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $console }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $console) | nindent 4 }}
+  ports:
+    - name: rest
+      port: {{ (index $.Values.services $console).restPort }}
+      targetPort: rest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $console) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $console }}
+spec:
+  replicas: {{ (index $.Values.services $console).replicas }}
+  selector:
+    matchLabels:
+      {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $console) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $console) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "edk-enterprise.serviceAccountName" $ }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $console }}
+          image: {{ $adminImage | quote }}
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: rest
+              containerPort: {{ (index $.Values.services $console).restPort }}
+          env:
+            - name: NEXT_PUBLIC_BASE_PATH
+              value: /admin-console
+            - name: ADMIN_CONSOLE_MODE
+              value: {{ if $isPlatform }}PLATFORM{{ else }}TENANT{{ end }}
+            - name: ADMIN_CONSOLE_TRUSTED_INGRESS_MODE
+              value: {{ $.Values.portalBff.trustedIngress.mode | quote }}
+            - name: ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS
+              value: {{ $.Values.portalBff.trustedIngress.hops | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            {{- if $isPlatform }}
+            # Runtime discovery deliberately projects logical Audit to the public platform
+            # origin. The BFF must still use the in-cluster monolith for that authenticated
+            # hop, otherwise the public base path makes it re-enter itself without its session.
+            - name: ADMIN_CONSOLE_AUDIT_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            {{- end }}
+            - name: ADMIN_CONSOLE_THEME_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_TENANT_DID_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_TENANT_AS_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_IDENTITY_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_TRUST_DOMAIN_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_ISSUER_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_VERIFIER_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: NEXT_PUBLIC_THEME_AUDIENCE
+              value: enterprise-blob
+            - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
+              value: enterprise-tenant-did
+            - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
+              value: enterprise-issuer
+            - name: NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE
+              value: enterprise-verifier
+            - name: PORT
+              value: {{ (index $.Values.services $console).restPort | quote }}
+            {{- if $isPlatform }}
+            - name: ADMIN_CONSOLE_PUBLIC_ORIGIN
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_ID
+              value: {{ $.Values.portalBff.clientId | quote }}
+            - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ $.Values.portalBff.existingSecret | quote }}, key: {{ $.Values.portalBff.clientSecretKey | quote }} } }
+            - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
+              value: enterprise-platform
+            {{- else }}
+            - name: ADMIN_CONSOLE_TENANT_CONTEXT_URL
+              value: {{ printf "http://%s:%v/api/platform/bootstrap/v1/admin-console-context" $name $.Values.monolith.restPort | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /admin-console/health, port: rest }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /admin-console/health, port: rest }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml (index $.Values.services $console).resources | nindent 12 }}
+---
+{{- end }}
+{{- if .Values.gateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-platform
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monolith
+spec:
+  parentRefs: [{ name: {{ $gatewayName | quote }}, sectionName: https-platform }]
+  hostnames: [{{ $operatorHost | quote }}]
+  rules:
+    # The one-request Secrets delegation issuer is east-west/BFF-only. Keep the
+    # public platform listener intentionally unable to reach it, while the BFF
+    # continues to use the monolith Service directly over the cluster network.
+    # Exact-match precedence keeps this one path ahead of the platform catch-all.
+    - matches:
+        - path:
+            type: Exact
+            value: /api/platform/admin/v1/application/secrets/internal/delegated-token
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console") }}
+          port: {{ (index .Values.services "admin-console").restPort }}
+    # Tenant provisioning is synchronous. Keep the same shared Gateway timeout
+    # contract as the distributed platform route rather than inheriting the
+    # implementation-specific (and too short) Gateway default.
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: PathPrefix, value: /admin-console }
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console") }}
+          port: {{ (index .Values.services "admin-console").restPort }}
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: PathPrefix, value: / }
+      backendRefs:
+        - name: {{ $name }}
+          port: {{ .Values.monolith.restPort }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-tenant
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monolith
+spec:
+  parentRefs: [{ name: {{ $gatewayName | quote }}, sectionName: https }]
+  hostnames: [{{ $wildcard | quote }}]
+  rules:
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: PathPrefix, value: /admin-console }
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
+          port: {{ (index .Values.services "admin-console-tenant").restPort }}
+    # Keep the neutral testing-console public contract on tenant origins.  The
+    # browser runtime remains the existing tenant console; only the public
+    # prefix is projected differently, exactly as it is in distributed mode.
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /testing-console
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/testing-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
+          port: {{ (index .Values.services "admin-console-tenant").restPort }}
+    # Testing-console API requests use the same neutral public path.  Each
+    # rewrite stays explicit so Gateway longest-prefix matching selects it over
+    # the page projection above.
+    {{- range $apiPrefix := list "/api/oid4vci/v1/testing" "/api/oid4vp/v1/testing" "/api/portal-oauth/login" "/api/portal-oauth/callback" "/api/portal-oauth/grant" "/api/portal-oauth/revoke" }}
+    - timeouts:
+        request: {{ $.Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: {{ printf "/testing-console%s" $apiPrefix | quote }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: {{ printf "/admin-console%s" $apiPrefix | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "admin-console-tenant") }}
+          port: {{ (index $.Values.services "admin-console-tenant").restPort }}
+    {{- end }}
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: PathPrefix, value: / }
+      backendRefs:
+        - name: {{ $name }}
+          port: {{ .Values.monolith.restPort }}
+{{- end }}
+{{- end }}
