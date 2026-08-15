@@ -15,6 +15,29 @@
 {{- end -}}
 
 {{/*
+The chart has one deployment model. `topology.mode` changes only the process
+composition: distributed exposes the individual logical workloads; monolith
+hosts the same logical services in one application process. Shared deployment
+settings remain under their existing value names.
+*/}}
+{{- define "edk-enterprise.topologyMode" -}}
+{{- lower (default "distributed" .Values.topology.mode) -}}
+{{- end -}}
+
+{{- define "edk-enterprise.monolithServiceName" -}}
+{{- printf "%s-monolith" (include "edk-enterprise.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/* Map a logical service target to the actual in-cluster backend. */}}
+{{- define "edk-enterprise.logicalServiceName" -}}
+{{- if eq (include "edk-enterprise.topologyMode" .root) "monolith" -}}
+{{- include "edk-enterprise.monolithServiceName" .root -}}
+{{- else -}}
+{{- include "edk-enterprise.serviceName" . -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 East-west JWT audiences are protocol identifiers shared with source-level STS
 and tenant-registration contracts. They are intentionally not chart values:
 changing one side would make otherwise valid tokens unusable at another
@@ -179,7 +202,8 @@ references here prevents otherwise healthy-looking pods from starting without
 east-west Authorization headers or software-keystore access.
 */}}
 {{- define "edk-enterprise.validateRuntimeSecrets" -}}
-{{- $satelliteEnabled := or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled -}}
+{{- $mode := include "edk-enterprise.topologyMode" . -}}
+{{- $satelliteEnabled := and (eq $mode "distributed") (or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled) -}}
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
@@ -202,11 +226,88 @@ east-west Authorization headers or software-keystore access.
 {{- if eq .Values.portalBff.kms.encryptionKeyAlias .Values.portalBff.kms.handleHmacKeyAlias -}}
 {{- fail "portalBff.kms.encryptionKeyAlias and portalBff.kms.handleHmacKeyAlias must be distinct." -}}
 {{- end -}}
-{{- range $name := list "platform" "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" -}}
+{{- $secretWorkloads := list "platform" -}}
+{{- if eq $mode "distributed" -}}
+{{- $secretWorkloads = list "platform" "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" -}}
+{{- end -}}
+{{- range $name := $secretWorkloads -}}
 {{- $service := index $.Values.services $name -}}
 {{- if and $service.enabled (eq (trim (default "" (index $.Values.secretAuthority.existingSecrets $name))) "") -}}
 {{- fail (printf "secretAuthority.existingSecrets.%s is required when services.%s.enabled=true; reference a workload-isolated Secret containing the configured secret-authority coordinates and key files." $name $name) -}}
 {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.validateTopology" -}}
+{{- $mode := include "edk-enterprise.topologyMode" . -}}
+{{- if not (has $mode (list "distributed" "monolith")) -}}
+{{- fail (printf "topology.mode must be distributed or monolith (got %q)" $mode) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Email is optional in either topology. When present, render one shared account
+configuration into the application process that owns EmailService. SMTP secrets
+remain resource-bound secret-management data and never become Helm values.
+*/}}
+{{- define "edk-enterprise.validateEmail" -}}
+{{- if .Values.email.enabled -}}
+{{- $account := index .Values.email.accounts "default" -}}
+{{- if ne $account.transportId "smtp" -}}
+{{- fail "email.accounts.default.transportId must be smtp; the chart's deployment account renderer supports SMTP only" -}}
+{{- end -}}
+{{- if eq (trim $account.fromAddress) "" -}}
+{{- fail "email.accounts.default.fromAddress is required when email.enabled=true" -}}
+{{- end -}}
+{{- if eq (trim $account.smtp.host) "" -}}
+{{- fail "email.accounts.default.smtp.host is required when email.enabled=true" -}}
+{{- end -}}
+{{- if and $account.smtp.useStarttls $account.smtp.useSsl -}}
+{{- fail "email.accounts.default.smtp.useStarttls and useSsl cannot both be true" -}}
+{{- end -}}
+{{- if and (ne (trim $account.smtp.username) "") (not (or $account.smtp.useStarttls $account.smtp.useSsl)) -}}
+{{- fail "authenticated SMTP requires email.accounts.default.smtp.useStarttls or useSsl" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.emailEnv" -}}
+{{- if .Values.email.enabled -}}
+{{- $account := index .Values.email.accounts "default" -}}
+- name: VDX_SERVICE_EMAIL_ROUTING_DEFAULT_ACCOUNT_ID
+  value: {{ .Values.email.routing.defaultAccountId | quote }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_TRANSPORT_ID
+  value: {{ $account.transportId | quote }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_FROM_ADDRESS
+  value: {{ $account.fromAddress | quote }}
+{{- with $account.fromName }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_FROM_NAME
+  value: {{ . | quote }}
+{{- end }}
+{{- with $account.replyTo }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_REPLY_TO
+  value: {{ . | quote }}
+{{- end }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_SMTP_HOST
+  value: {{ $account.smtp.host | quote }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_SMTP_PORT
+  value: {{ $account.smtp.port | quote }}
+{{- with $account.smtp.username }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_SMTP_USERNAME
+  value: {{ . | quote }}
+{{- end }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_SMTP_USE_STARTTLS
+  value: {{ $account.smtp.useStarttls | quote }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_SMTP_USE_SSL
+  value: {{ $account.smtp.useSsl | quote }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_SMTP_CONNECTION_TIMEOUT_MS
+  value: {{ $account.smtp.connectionTimeoutMs | quote }}
+- name: VDX_SERVICE_EMAIL_ACCOUNTS_DEFAULT_SMTP_READ_TIMEOUT_MS
+  value: {{ $account.smtp.readTimeoutMs | quote }}
+{{- with .Values.email.allowedPrivateDestinations }}
+- name: VDX_SERVICE_EMAIL_SMTP_ALLOWED_PRIVATE_DESTINATIONS
+  value: {{ . | quote }}
+{{- end }}
 {{- end -}}
 {{- end -}}
 
@@ -319,14 +420,17 @@ tenant-KMS target override, so rendering those services without tenant-kms
 would create endpoints that can never provision or use tenant keys.
 */}}
 {{- define "edk-enterprise.validateTenantKmsDependency" -}}
+{{- if eq (include "edk-enterprise.topologyMode" .) "distributed" -}}
 {{- $kmsConsumerEnabled := or .Values.services.did.enabled (index .Values.services "tenant-as").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled -}}
 {{- if and $kmsConsumerEnabled (not (index .Values.services "tenant-kms").enabled) -}}
 {{- fail "services.tenant-kms.enabled must be true while did, tenant-as, issuer, or verifier is enabled: these route-only services send tenant key operations to the in-chart tenant-kms service." -}}
 {{- end -}}
 {{- end -}}
+{{- end -}}
 
 {{/* Validate the service graph represented by the service-specific routes. */}}
 {{- define "edk-enterprise.validateRuntimeDependencies" -}}
+{{- if eq (include "edk-enterprise.topologyMode" .) "distributed" -}}
 {{- if and .Values.services.issuer.enabled (not (index .Values.services "tenant-as").enabled) -}}
 {{- fail "services.tenant-as.enabled must be true while issuer is enabled: the issuer routes OAuth2 commands to tenant-as." -}}
 {{- end -}}
@@ -335,5 +439,6 @@ would create endpoints that can never provision or use tenant keys.
 {{- end -}}
 {{- if and (index .Values.services "wallet-interaction").enabled (not (index .Values.services "wallet-unit").enabled) -}}
 {{- fail "services.wallet-unit.enabled must be true while wallet-interaction is enabled: wallet interaction routes HSM policy authorization to wallet-unit." -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}

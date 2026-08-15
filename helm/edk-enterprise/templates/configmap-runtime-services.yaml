@@ -4,7 +4,7 @@ shared Deployment environment. The enterprise images do not bake an
 application.yml, so every service with service-specific routing, persistence, or
 security policy receives an explicit base file here.
 */ -}}
-{{- if .Values.services.did.enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.did.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -96,7 +96,7 @@ data:
               ecdh: *didTenantKmsGrpcRoute
 ---
 {{- end }}
-{{- if .Values.services.blob.enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.blob.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -175,7 +175,7 @@ data:
         service-role: service-data
 ---
 {{- end }}
-{{- if .Values.services.issuer.enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.issuer.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -313,12 +313,19 @@ data:
           scopeBinding: TENANT
         design-assets: *tenantDatabaseKv
         oid4vci:
+          # Public offer and protocol-continuation state remain tenant isolated
+          # while sharing the tenant database across issuer requests and replicas.
+          offers: *tenantDatabaseKv
+          sessions: *tenantDatabaseKv
+          nonces: *tenantDatabaseKv
+          deferred: *tenantDatabaseKv
+          notifications: *tenantDatabaseKv
           credential-request-identities: *tenantDatabaseKv
         blob:
           metadata: *tenantDatabaseKv
 ---
 {{- end }}
-{{- if .Values.services.verifier.enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.verifier.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -419,6 +426,12 @@ data:
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
             serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
             preferServiceTokenOverSessionBearer: true
+          catalogue:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            preferServiceTokenOverSessionBearer: true
           {{- if (index .Values.services "wallet-interaction").enabled }}
           wallet:
             serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "wallet-interaction" | quote }}
@@ -432,7 +445,7 @@ data:
           {{- end }}
 ---
 {{- end }}
-{{- if (index .Values.services "wallet-unit").enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "wallet-unit").enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -482,7 +495,7 @@ data:
             preferServiceTokenOverSessionBearer: false
 ---
 {{- end }}
-{{- if (index .Values.services "wallet-interaction").enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "wallet-interaction").enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

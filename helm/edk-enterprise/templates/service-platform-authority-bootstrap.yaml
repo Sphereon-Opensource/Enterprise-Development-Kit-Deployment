@@ -1,4 +1,4 @@
-{{- if (index .Values.services "platform").enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "platform").enabled }}
 apiVersion: v1
 kind: Service
 metadata:

@@ -206,6 +206,10 @@ function Render-MonolithGatewayArtifacts([switch]$BehindEdge) {
   )) {
     $dynamic = $dynamic.Replace("http://$backend", 'http://svc-monolith:8080')
   }
+  if (-not $dynamic.Contains('platform-secret-delegation-hidden:') -or
+      -not $dynamic.Contains('Path(`/api/platform/admin/v1/application/secrets/internal/delegated-token`)')) {
+    Fail 'Monolith gateway routing must shadow the BFF-only delegated-token issuer at the public edge.'
+  }
   $selectedGatewayDynamic = Join-Path $monolithArtifactDir 'dynamic.monolith.generated.yml'
   Write-Utf8NoBom $selectedGatewayDynamic $dynamic
 

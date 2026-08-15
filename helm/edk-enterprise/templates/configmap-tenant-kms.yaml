@@ -16,7 +16,7 @@ template renders.
 
 Rendered only for the tenant KMS.
 */ -}}
-{{- if (index .Values.services "tenant-kms").enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "tenant-kms").enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

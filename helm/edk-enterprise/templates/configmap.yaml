@@ -1,3 +1,4 @@
+{{- if eq (include "edk-enterprise.topologyMode" .) "distributed" }}
 {{- /*
 Platform active-profile configuration overlay.
 
@@ -702,4 +703,5 @@ data:
         {{- if $licenseTrust.rootCaPath }}
         root-ca-bundle-path: {{ $licenseTrust.rootCaPath | quote }}
         {{- end }}
+{{- end }}
 {{- end }}

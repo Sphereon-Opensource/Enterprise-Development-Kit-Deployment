@@ -10,6 +10,12 @@ This chart deploys the EDK enterprise backing workloads:
 - OID4VP verifier backing workload
 - Admin console (operator web UI served at `platform.<baseDomain>/admin-console`)
 
+`topology.mode=distributed` is the established default and renders the backing
+workloads individually. `topology.mode=monolith` renders one application
+process, while retaining the same database, licence, origin, tenant, and email
+value names. The two admin-console personas remain separate web deployments in
+both modes.
+
 These workload names are deployment components, not public service hosts. The
 customer-facing contract is the Gateway route table: `platform.<baseDomain>`
 for the operator/platform plane and `<tenant>.<baseDomain>` for tenant protocol
@@ -157,6 +163,8 @@ environment-variable Secret values are read only when a container starts.
 | `global.imagePullPolicy` | `IfNotPresent` | Kubernetes image pull policy. Non-production `latest` requires `Always` to avoid silently reusing a stale node-local image. |
 | `global.imagePullSecrets` | `[]` | Pull secrets rendered into every service pod. |
 | `global.platformBaseDomain` | `example.com` | Customer-controlled base domain. The platform is `platform.<baseDomain>` and tenants are `<tenant-slug>.<baseDomain>`. |
+| `topology.mode` | `distributed` | `distributed` renders the established backing workloads. `monolith` renders one application workload with local implementations and no gRPC receiver. |
+| `monolith.image` | `sphereon/vdx-svc-monolith` | Monolith application image. The tag defaults to `global.imageTag`; use only an immutable, release-approved image. |
 | `database.enabled` | `true` | Enables database environment wiring. |
 | `database.platform.existingSecret` | `edk-platform-postgres` | Secret with credentials for the control-plane (platform) database. |
 | `database.secretManagement.existingSecret` | `edk-secret-management-database` | Secret with distinct passwords for the fixed non-superuser secret-management admin and tenant-serving runtime roles. Schema migration uses the platform database owner from `database.platform.existingSecret` only during startup. |
@@ -175,6 +183,9 @@ environment-variable Secret values are read only when a container starts.
 | `secretManagement.authority.defaultTenantOfferingKmsBindingTemplate` | `isolated-tenant-secret-storage` | Server-owned provisioner template; onboarding derives a distinct capability-bound KEK for every tenant binding. |
 | `secretManagement.authority.allowTenantManagedProviders` | `false` | Cloud-provider offerings are absent by default. Enable only for an explicitly configured integration; tenant APIs cannot change the deployment bootstrap itself. |
 | `secretManagement.authority.retentionDays` | `30` | Global migration retention period before an explicitly fenced purge. |
+| `email.enabled` | `false` | Enables the optional shared deployment SMTP account. It is rendered into the distributed platform process or the monolith process, never into a topology-specific configuration branch. |
+| `email.accounts.default.*` | see `values.yaml` | Non-secret default SMTP account metadata. When enabled, `fromAddress` and `smtp.host` are required. |
+| `email.allowedPrivateDestinations` | `""` | Comma-separated reviewed private SMTP relay `host:port` pairs. Empty retains the public-unicast-only runtime default; loopback is always rejected. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
 | `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, and renders gRPC peer endpoints for routed calls to those receivers. |
@@ -189,6 +200,38 @@ environment-variable Secret values are read only when a container starts.
 | `ingress.legacy.enabled` | `false` | Keeps legacy per-service Ingress off by default. |
 | `serviceMonitor.enabled` | `false` | Renders Prometheus Operator ServiceMonitors. |
 | `opentelemetry.enabled` | `false` | Renders OTLP exporter environment variables. |
+
+## Optional Email
+
+Email is disabled unless `email.enabled=true`. When enabled, configure the
+shared default account once, independently of topology:
+
+```yaml
+email:
+  enabled: true
+  routing:
+    defaultAccountId: default
+  accounts:
+    default:
+      transportId: smtp
+      fromAddress: notifications@example.com
+      fromName: VDX Notifications
+      smtp:
+        host: smtp.example.com
+        port: 587
+        username: mailer
+        useStarttls: true
+        useSsl: false
+```
+
+The chart never accepts or renders an SMTP password. If `username` is set,
+the password is a resource-bound `smtp-password` secret managed through the
+email account and secret-management APIs. For an internal relay, add its exact
+`host:port` to `email.allowedPrivateDestinations`; this is an explicit security
+exception and does not permit loopback, link-local, or arbitrary private
+destinations. The chart does not deploy or assume Mailpit. Any Mailpit test
+must be installed and configured as an explicit email environment choice, in
+either topology.
 
 ## Service Values
 

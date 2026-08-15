@@ -17,6 +17,14 @@ server:
       expected-audience: enterprise-issuer
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
       anonymous-path-prefixes: /oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers
+
+# Public TS 11 SchemaMeta GET signing. Unset keys keep public catalogue GETs at 503.
+catalogue:
+  public:
+    iss: ${env:EDK_ISSUER_PUBLIC_URL:}
+    jku: ${env:EDK_ISSUER_PUBLIC_URL:}/.well-known/jwks.json
+    signing:
+      alias: ${env:EDK_CATALOGUE_SIGNING_ALIAS:}
   # Wallet-driven issuance signs credentials by routing KMS commands, but the
   # wallet session carries no operator bearer. The issuer presents its own token
   # for those system calls, obtained from the tenant AS via client_credentials.
@@ -260,6 +268,29 @@ kv:
     # Pins token-derived OID4VCI protocol sessions to their first routed issuer
     # instance using the database KV backend's atomic version chains.
     oid4vci:
+      # Public offer and protocol-continuation state must be shared across
+      # issuer requests and replicas. Local hosts retain in-memory fallbacks
+      # when these explicit deployment entries are absent.
+      offers:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+      sessions:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+      nonces:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+      deferred:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+      notifications:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
       credential-request-identities:
         type: KvStoreConfig
         backendId: database

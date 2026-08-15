@@ -136,6 +136,12 @@ transport:
         endpoint: grpc://enterprise-platform:9090
         serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: true
+      catalogue:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
 config:
   providers:
     platform-config-remote:

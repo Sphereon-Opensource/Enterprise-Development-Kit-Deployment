@@ -17,6 +17,29 @@ global:
   # OIDF conformance lane injects its ephemeral suite callback host explicitly.
   hostAliases: []
 
+# Select process composition without renaming topology-neutral deployment
+# settings. `distributed` is the established customer deployment; `monolith`
+# hosts the same platform and tenant capability set in one application process.
+topology:
+  mode: distributed
+
+# Settings that exist only because the monolith is one Kubernetes workload.
+# Database, license, origin, email, tenant, and secret values remain in their
+# normal shared sections above and below.
+monolith:
+  image: sphereon/vdx-svc-monolith
+  imageTag: ""
+  replicas: 1
+  restPort: 8080
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+  env: []
+
 database:
   enabled: true
   dialect: postgresql
@@ -138,6 +161,34 @@ secretManagement:
     # sha256 digest over the canonical manifest mapping, reported by the
     # deployment preparation tooling. Plaintext Secret values are not hashed.
     manifestSha256: ""
+
+# Optional deployment-wide SMTP account. The same configuration belongs to the
+# application process in both topologies: platform in distributed mode and the
+# monolith process in monolith mode. It intentionally has no development relay
+# default. An authenticated account receives its password through the normal
+# email account / secret-management lifecycle, never through Helm values.
+email:
+  enabled: false
+  routing:
+    defaultAccountId: default
+  accounts:
+    default:
+      transportId: smtp
+      fromAddress: ""
+      fromName: ""
+      replyTo: ""
+      smtp:
+        host: ""
+        port: 587
+        username: ""
+        useStarttls: true
+        useSsl: false
+        connectionTimeoutMs: 5000
+        readTimeoutMs: 10000
+  # Comma-separated exact host:port pairs for reviewed private SMTP relays.
+  # Empty preserves the runtime's public-unicast-only default; loopback remains
+  # rejected even if listed here.
+  allowedPrivateDestinations: ""
 
 # Secret-use authority material is operator supplied and isolated per workload.
 # Each referenced Secret contains only the private key needed by that workload,
@@ -372,7 +423,7 @@ serviceIdentity:
   # in-network command/introspection channels stay open by design (each enforces
   # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
-    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**"
+    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**,/public/catalogues"
     tenant-as: "/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect"
     tenant-kms: ""
     did: "/.well-known"
@@ -638,6 +689,8 @@ services:
         - /api/platform/setup/v1
         - /api/platform/bootstrap/v1
         - /api/platform/admin/v1
+        - /api/catalogues/v1
+        - /public/catalogues
       annotations: {}
     internalIngress:
       enabled: true
@@ -867,6 +920,8 @@ services:
         - /nonce
         - /notification
         - /public/statuslists
+        - /public/schema
+        - /public/catalogues
         - /api/oid4vci/v1
         - /api/credential-design/v1
         - /api/statuslist/v1

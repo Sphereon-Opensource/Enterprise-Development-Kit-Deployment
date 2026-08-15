@@ -1,4 +1,4 @@
-{{- if .Values.gateway.enabled }}
+{{- if and .Values.gateway.enabled (eq (include "edk-enterprise.topologyMode" .) "distributed") }}
 {{- $base := include "edk-enterprise.gateway.baseDomain" . }}
 {{- $wildcard := printf "*.%s" $base }}
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
@@ -437,6 +437,12 @@ spec:
         - path:
             type: PathPrefix
             value: /api/platform/config/v1/tenants
+        - path:
+            type: PathPrefix
+            value: /api/catalogues/v1
+        - path:
+            type: PathPrefix
+            value: /public/catalogues
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
           port: {{ .Values.services.platform.restPort }}

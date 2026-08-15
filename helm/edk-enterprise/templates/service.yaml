@@ -1,3 +1,4 @@
+{{- if eq (include "edk-enterprise.topologyMode" .) "distributed" }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
 {{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
@@ -24,5 +25,6 @@ spec:
       protocol: TCP
     {{- end }}
 ---
+{{- end }}
 {{- end }}
 {{- end }}

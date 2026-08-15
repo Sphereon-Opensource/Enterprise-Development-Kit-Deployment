@@ -40,6 +40,27 @@
         }
       }
     },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["distributed", "monolith"] }
+      }
+    },
+    "monolith": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "imageTag", "replicas", "restPort", "resources", "env"],
+      "properties": {
+        "image": { "type": "string", "minLength": 1 },
+        "imageTag": { "type": "string" },
+        "replicas": { "type": "integer", "minimum": 1 },
+        "restPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "resources": { "type": "object" },
+        "env": { "type": "array", "items": { "type": "object" } }
+      }
+    },
     "database": {
       "type": "object",
       "additionalProperties": true,
@@ -356,6 +377,55 @@
             }
           }
         }
+      }
+    },
+    "email": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "routing", "accounts", "allowedPrivateDestinations"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "routing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["defaultAccountId"],
+          "properties": {
+            "defaultAccountId": { "type": "string", "minLength": 1 }
+          }
+        },
+        "accounts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["default"],
+          "properties": {
+            "default": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["transportId", "fromAddress", "fromName", "replyTo", "smtp"],
+              "properties": {
+                "transportId": { "type": "string", "minLength": 1 },
+                "fromAddress": { "type": "string" },
+                "fromName": { "type": "string" },
+                "replyTo": { "type": "string" },
+                "smtp": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["host", "port", "username", "useStarttls", "useSsl", "connectionTimeoutMs", "readTimeoutMs"],
+                  "properties": {
+                    "host": { "type": "string" },
+                    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                    "username": { "type": "string" },
+                    "useStarttls": { "type": "boolean" },
+                    "useSsl": { "type": "boolean" },
+                    "connectionTimeoutMs": { "type": "integer", "minimum": 1 },
+                    "readTimeoutMs": { "type": "integer", "minimum": 1 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "allowedPrivateDestinations": { "type": "string" }
       }
     },
     "auth": {

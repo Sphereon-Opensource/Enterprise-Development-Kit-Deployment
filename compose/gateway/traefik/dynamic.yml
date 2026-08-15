@@ -30,6 +30,16 @@ tls:
 http:
   routers:
     # --- Operator / platform host -------------------------------------------
+    # Keep the one-request Secrets delegation issuer east-west/BFF-only. The
+    # public exact path is shadowed to the absent platform console route (404);
+    # the BFF calls the platform service directly.
+    platform-secret-delegation-hidden:
+      rule: "Host(`platform.saas.localtest.me`) && Path(`/api/platform/admin/v1/application/secrets/internal/delegated-token`)"
+      entryPoints: ["websecure"]
+      service: svc-admin-console
+      priority: 1200
+      tls: {}
+
     # No path constraint: the platform plane owns this host entirely (setup,
     # admin, operator login AS, onboarding + admin UI). Higher priority than the
     # tenant wildcard so platform.saas.localtest.me never falls through to it.
@@ -245,6 +255,17 @@ http:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
         PathPrefix(`/api/trust-domain/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 220
+      tls: {}
+
+    # TS 11 catalogues are platform-owned. Public SchemaMeta stays anonymous
+    # under /public/catalogues; management is /api/catalogues/v1.
+    tenant-catalogues:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (PathPrefix(`/public/catalogues`) || PathPrefix(`/api/catalogues/v1`))
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 220
