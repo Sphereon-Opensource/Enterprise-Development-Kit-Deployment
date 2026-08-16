@@ -18,13 +18,13 @@ server:
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
       anonymous-path-prefixes: /oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers
 
-# Public TS 11 SchemaMeta GET signing. Unset keys keep public catalogue GETs at 503.
-catalogue:
+# Public TS 11 SchemaMeta GET signing. Unset keys keep public catalog GETs at 503.
+catalog:
   public:
     iss: ${env:EDK_ISSUER_PUBLIC_URL:}
     jku: ${env:EDK_ISSUER_PUBLIC_URL:}/.well-known/jwks.json
     signing:
-      alias: ${env:EDK_CATALOGUE_SIGNING_ALIAS:}
+      alias: ${env:EDK_CATALOG_SIGNING_ALIAS:}
   # Wallet-driven issuance signs credentials by routing KMS commands, but the
   # wallet session carries no operator bearer. The issuer presents its own token
   # for those system calls, obtained from the tenant AS via client_credentials.

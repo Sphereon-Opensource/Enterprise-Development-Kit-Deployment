@@ -136,7 +136,7 @@ transport:
         endpoint: grpc://enterprise-platform:9090
         serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: true
-      catalogue:
+      catalog:
         target: SERVER
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090

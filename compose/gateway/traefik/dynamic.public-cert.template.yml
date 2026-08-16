@@ -247,7 +247,7 @@ http:
       priority: 220
       tls: {}
 
-    tenant-catalogues:
+    tenant-catalogs:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
