@@ -192,9 +192,7 @@ http:
     tenant-issuer:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/oid4vci`) || PathPrefix(`/credential`) ||
-         PathPrefix(`/deferredCredential`) || PathPrefix(`/nonce`) ||
-         PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
+        (PathPrefix(`/oid4vci`) || PathPrefix(`/public/statuslists`) ||
          PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
          PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
          PathPrefix(`/api/statuslist/v1`))
@@ -207,8 +205,7 @@ http:
     tenant-verifier:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/oid4vp`) || PathPrefix(`/request_uri`) ||
-         PathPrefix(`/direct_post`) || PathPrefix(`/api/oid4vp/v1`) ||
+        (PathPrefix(`/oid4vp`) || PathPrefix(`/api/oid4vp/v1`) ||
          PathPrefix(`/api/dcql/v1`))
       entryPoints: ["websecure"]
       service: svc-verifier
@@ -261,8 +258,7 @@ http:
     tenant-as:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/authorize`) || PathPrefix(`/token`) || PathPrefix(`/par`) ||
-         PathPrefix(`/userinfo`) || PathPrefix(`/oauth2`) || PathPrefix(`/login`) || PathPrefix(`/logout`) ||
+        (PathPrefix(`/as`) ||
          PathPrefix(`/.well-known/oauth-authorization-server`) ||
          PathPrefix(`/.well-known/openid-configuration`) ||
          PathPrefix(`/.well-known/jwks.json`))

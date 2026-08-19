@@ -349,6 +349,18 @@ kms:
         # mounted at /keystore. The file path is derived as
         # /keystore/<tenantId>/<providerId>.p12.
         keystoreRoot: /keystore
+    softwaresym:
+      id: softwaresym
+      type: software
+      enabled: true
+      exposePrivateKeysDuringGeneration: false
+      persistKeysDuringGeneration: true
+      autoCreateCertificate: false
+      keystore:
+        type: pkcs12
+        id: softwaresym
+        path: ${env:EDK_SOFTWARESYM_KEYSTORE_PATH:/keystore/softwaresym.p12}
+        password: ${env:EDK_KEYSTORE_PASSWORD}
     license:
       id: license
       type: software

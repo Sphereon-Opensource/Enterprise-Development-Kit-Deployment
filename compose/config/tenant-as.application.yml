@@ -19,7 +19,7 @@ server:
       # transport is
       # intentionally protected: tenant resolution validates the platform-issued
       # bearer and uses its tenant_id claim before the tenant's public host is active.
-      anonymous-path-prefixes: /authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect
+      anonymous-path-prefixes: /authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect,/account-action,/api/account-actions,/as
       # Trust anchor for the platform AS. The internal east-west surfaces validate a short-lived,
       # platform-issued bearer bound to this tenant (per-tenant audience), so they need the platform
       # issuer and JWKS, the same anchor the tenant runtime services trust.

@@ -424,7 +424,7 @@ serviceIdentity:
   # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
     platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**,/public/catalogs"
-    tenant-as: "/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect"
+    tenant-as: "/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect,/account-action,/api/account-actions"
     tenant-kms: ""
     did: "/.well-known"
     blob: "/public/assets"
