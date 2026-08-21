@@ -91,23 +91,28 @@ database:
       podSelector: {}
       namespaceSelector: {}
       ipBlock: {}
-  # Dedicated trust-domain router registry. Co-located by default: it reuses
-  # the platform database connection above (host/port/name/existingSecret
-  # fall back to database.platform.* whenever left empty here) and only adds
-  # isolation: schema, so per-tenant trust-domain state lives in its own
-  # schema instead of the shared pool every other platform-side store uses.
-  # The database.platform Postgres user therefore needs CREATE SCHEMA
-  # privilege. Set host/port/name/existingSecret below only to split
-  # trust-domain onto a separate/dedicated Postgres instance instead.
-  trustDomain:
-    isolation: schema
-    schemaPattern: "tenant_{id}"
-    host: ""
-    port: 0
-    name: ""
-    existingSecret: ""
-    usernameKey: username
-    passwordKey: password
+# Metadata for the explicit post-provision WeBuild TS 119 612 operator command.
+# Helm never performs this authenticated mutation and never renders the token.
+# Leave these values empty until the operator has the real domain, URL, scheme,
+# signer-anchor references, and current ETags. The command reads its credential
+# from TRUST_DOMAIN_OPERATOR_TOKEN_FILE or the runtime environment.
+trustDomainBootstrap:
+  mode: ""
+  apiBaseUrl: ""
+  domainId: ""
+  operatorTokenExistingSecret: ""
+  operatorTokenKey: ""
+  eu:
+    enabled: ""
+    ifMatch: ""
+  custom:
+    sourceId: ""
+    url: ""
+    schemeIdentity: ""
+    allowedHost: ""
+    signerAnchorIds: []
+    enabled: ""
+    ifMatch: ""
 
 # Self-contained secret-management bootstrap. The persisted software KMS is the
 # baseline. Vault and cloud providers are configured separately and are never

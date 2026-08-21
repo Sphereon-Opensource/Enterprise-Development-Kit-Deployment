@@ -239,7 +239,7 @@ secret-management:
     allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
     # System credentials are authorized to workload identities, not OAuth client principals.
     # Keep this aligned with each satellite's service identity binding below.
-    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp
+    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email
   deployment:
     environment:
       enabled: true
@@ -270,27 +270,6 @@ trust-domain:
       client-id: trust-domain-service
       tenant-bound-client-id: true
       audience: enterprise-tenant-as
-# Dedicated trust-domain router registry, deliberately kept under its own
-# prefix and separate from database.* above: that shared registry also backs
-# every other platform-side tenant-scoped store (auth sessions, signing keys,
-# DID records, the blob metadata KV), none of which have per-tenant schema
-# provisioning today. This prefix is read only by the trust-domain providers,
-# so it alone can carry isolation: schema (schema-per-tenant) with zero effect
-# on anything else. Still the same platform-postgres instance as database.*
-# above - only the isolation strategy differs. The platform DB user needs
-# CREATE SCHEMA privilege for the schema-per-tenant auto-provisioning this
-# enables.
-database-trust-domain:
-  tenants:
-    default:
-      dialect: postgresql
-      isolation: schema
-      schema-pattern: tenant_{id}
-      host: ${env:EDK_PLATFORM_DB_HOST}
-      port: 5432
-      database: ${env:EDK_PLATFORM_DB_NAME}
-      username: ${env:EDK_PLATFORM_DB_USERNAME}
-      password: ${env:EDK_PLATFORM_DB_PASSWORD}
 kv-stores:
   # Email catalog templates share one durable platform store. The catalog
   # namespaces per-tenant published state inside it using the resolved tenant id.

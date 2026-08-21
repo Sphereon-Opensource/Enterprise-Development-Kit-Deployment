@@ -101,6 +101,60 @@
       "value": "",
       "type": "string",
       "description": "Platform tenant the operator token binds to. KMS sharing is authored only by the tenant that owns the KMS."
+    },
+    {
+      "key": "tenantKmsApiBaseUrl",
+      "value": "",
+      "type": "string",
+      "description": "Collection-local tenant KMS API base. Request 06a / 09 derives it from tenantGatewayUrl; do not add it to the customer environment."
+    },
+    {
+      "key": "externalAwsKmsProviderId",
+      "value": "replace-with-authorized-aws-provider-id",
+      "type": "string",
+      "description": "Customer-chosen tenant provider id for the optional AWS KMS examples. The provider must already be active and authorized for this tenant."
+    },
+    {
+      "key": "externalAzureKmsProviderId",
+      "value": "replace-with-authorized-azure-provider-id",
+      "type": "string",
+      "description": "Customer-chosen tenant provider id for the optional Azure Key Vault example. The provider must already be active and authorized for this tenant."
+    },
+    {
+      "key": "externalKeyAlias",
+      "value": "customer-external-key",
+      "type": "string",
+      "description": "Customer-chosen alias for an existing external key. This is a logical tenant reference, not a private key or secret handle."
+    },
+    {
+      "key": "externalKeyKid",
+      "value": "replace-with-provider-canonical-kid",
+      "type": "string",
+      "description": "Optional provider-canonical kid for the external key. The alias-only example omits this field; when supplied, the service verifies that alias and kid identify the same key."
+    },
+    {
+      "key": "externalAwsCertificateAlias",
+      "value": "customer-aws-certificate-chain",
+      "type": "string",
+      "description": "Customer-chosen alias for the public certificate chain linked to the AWS KMS key."
+    },
+    {
+      "key": "externalAwsCertificateDerBase64",
+      "value": "replace-with-base64-der-certificate",
+      "type": "string",
+      "description": "Public leaf-to-root DER certificate material encoded as Base64. Replace the placeholder with public bytes only; never paste a private key or credential."
+    },
+    {
+      "key": "externalAzureCertificateAlias",
+      "value": "customer-azure-leaf-certificate",
+      "type": "string",
+      "description": "Customer-chosen alias for the Azure Key Vault provider-native leaf certificate."
+    },
+    {
+      "key": "externalAzureProviderCertificateId",
+      "value": "replace-with-azure-certificate-id-or-version",
+      "type": "string",
+      "description": "Optional provider-native Azure certificate identifier or immutable version used by the leaf read."
     }
   ],
   "item": [
@@ -2104,7 +2158,7 @@
     },
     {
       "name": "06a KMS Provider Model",
-      "description": "Exercises who owns a KMS and who may reach it: the platform tenant offers one of its own KMSes to the walkthrough tenant, the tenant enables it and picks a default, and the runtime KMS REST plane is checked against the management plane. RC3 admits template offers only, so a shared-instance offer must be refused rather than accepted and left to fail later.",
+      "description": "Exercises who owns a KMS and who may reach it: the platform tenant first offers one of its own KMSes as a template, then changes the offer to a shared instance. The walkthrough tenant enables the shared provider, verifies that provider configuration and credentials are not exposed, and checks the runtime KMS REST plane against the management plane.",
       "item": [
         {
           "name": "01 Create shareable platform KMS resource",
@@ -2194,18 +2248,19 @@
                   "pm.test('the stored offer names the template fulfillment and the offered tenant', () => {",
                   "  pm.expect(j.fulfillment, 'fulfillment').to.eql('TEMPLATE');",
                   "  pm.expect(j.tenantIds, 'offered tenants').to.include(pm.collectionVariables.get('tenantId'));",
-                  "});"
+                  "});",
+                  "pm.collectionVariables.set('platformKmsResourceVersion', String(j.resourceVersion));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "03 Refuse a shared-instance offer",
+          "name": "03 Offer the platform KMS as a shared instance",
           "request": {
             "method": "PUT",
             "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformKmsResourceHandle}}/sharing",
-            "description": "A shared-instance offer attaches a tenant to the platform KMS itself, which needs an authorization concept this release does not have. The refusal happens where the offer is authored, so it can never be accepted and then fail at key generation.",
+            "description": "Changes the offer from template fulfillment to shared-instance fulfillment. The tenant receives access to the platform-owned provider connection through its own entitlement, while tenant key and certificate references, aliases, listings, and audit identity remain tenant-scoped.",
             "header": [
               {
                 "key": "Authorization",
@@ -2227,11 +2282,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('shared-instance offer refused', () => pm.expect(pm.response.code, 'status').to.eql(501));",
+                  "pm.test('shared-instance offer accepted', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
-                  "pm.test('the refusal names the unsupported capability rather than reading as a bad request', () => {",
-                  "  pm.expect(j.error && j.error.code, 'error code').to.eql('UNSUPPORTED_OPERATION');",
-                  "});"
+                  "pm.test('the stored offer names shared-instance fulfillment and the offered tenant', () => {",
+                  "  pm.expect(j.fulfillment, 'fulfillment').to.eql('SHARED_INSTANCE');",
+                  "  pm.expect(j.tenantIds, 'offered tenants').to.include(pm.collectionVariables.get('tenantId'));",
+                  "});",
+                  "pm.collectionVariables.set('platformKmsResourceVersion', String(j.resourceVersion));"
                 ]
               }
             }
@@ -2242,7 +2299,7 @@
           "request": {
             "method": "GET",
             "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformKmsResourceHandle}}/sharing",
-            "description": "Reads the offer back and proves the refused shared-instance request left the accepted template offer untouched.",
+            "description": "Reads the offer back and proves that the platform stores shared-instance fulfillment without exposing the provider configuration or credentials.",
             "header": [
               {
                 "key": "Authorization",
@@ -2258,8 +2315,8 @@
                 "exec": [
                   "pm.test('sharing allow-list returned', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
-                  "pm.test('the refused offer did not replace the accepted one', () => {",
-                  "  pm.expect(j.fulfillment, 'fulfillment').to.eql('TEMPLATE');",
+                  "pm.test('the shared-instance offer replaced the template offer', () => {",
+                  "  pm.expect(j.fulfillment, 'fulfillment').to.eql('SHARED_INSTANCE');",
                   "  pm.expect(j.tenantIds, 'offered tenants').to.include(pm.collectionVariables.get('tenantId'));",
                   "});"
                 ]
@@ -2298,7 +2355,7 @@
                   "  pm.expect(offered, 'offered platform KMS').to.be.an('object');",
                   "  pm.expect(offered.kind, 'kind').to.eql('SOFTWARE');",
                   "  pm.expect(offered.displayName, 'display name').to.eql(pm.collectionVariables.get('platformKmsDisplayName'));",
-                  "  pm.expect(offered.fulfillment, 'fulfillment').to.eql('TEMPLATE');",
+                  "  pm.expect(offered.fulfillment, 'fulfillment').to.eql('SHARED_INSTANCE');",
                   "  pm.expect(offered.enabled, 'enabled').to.eql(false);",
                   "  pm.expect(offered.suggestedDefault, 'suggested default').to.eql(false);",
                   "});",
@@ -2314,7 +2371,7 @@
           "request": {
             "method": "POST",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/shared-providers/{{platformKmsProviderId}}:enable",
-            "description": "The tenant takes up the offer. A template offer is fulfilled by a KMS clone the tenant owns and configures itself.",
+            "description": "The tenant takes up the shared-instance offer. The typed provider resource and credentials remain platform-owned; only this tenant's entitlement and tenant-scoped reference namespace become active.",
             "header": [
               {
                 "key": "Authorization",
@@ -2338,7 +2395,7 @@
                   "pm.test('the provider comes back enabled under the same provider id', () => {",
                   "  pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('platformKmsProviderId'));",
                   "  pm.expect(j.enabled, 'enabled').to.eql(true);",
-                  "  pm.expect(j.fulfillment, 'fulfillment').to.eql('TEMPLATE');",
+                  "  pm.expect(j.fulfillment, 'fulfillment').to.eql('SHARED_INSTANCE');",
                   "});"
                 ]
               }
@@ -2544,7 +2601,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fulfillment\": \"TEMPLATE\",\n  \"tenantIds\": [],\n  \"suggestedDefault\": false\n}"
+              "raw": "{\n  \"fulfillment\": \"SHARED_INSTANCE\",\n  \"tenantIds\": [],\n  \"suggestedDefault\": false\n}"
             }
           },
           "event": [
@@ -2636,6 +2693,403 @@
                   "  pm.expect(j.availableActions, 'terminal resource has no actions').to.deep.eql([]);",
                   "});",
                   "['platformKmsProviderId', 'platformKmsDisplayName', 'platformKmsResourceHandle', 'platformKmsResourceVersion'].forEach((key) => pm.collectionVariables.unset(key));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06b External KMS Registration (optional)",
+      "description": "Optional customer templates for registering references to existing cloud-provider resources. Every request is disabled by default because it requires a provider that is already active and authorized for this tenant. Replace only the collection-local example values, enable the requests you need, and run them through the tenant gateway. Registration never creates or imports private key material. The DELETE examples remove only the EDK reference for externally managed resources and never delete the provider resource.",
+      "item": [
+        {
+          "name": "01 Register existing external key with optional kid",
+          "disabled": true,
+          "request": {
+            "method": "POST",
+            "url": "{{tenantKmsApiBaseUrl}}/keys/register",
+            "description": "Registers an existing customer-chosen key alias in an authorized provider. The kid is optional on this route; when supplied, EDK verifies that alias and kid identify the same provider key. This does not create, import, or export key material.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{externalAwsKmsProviderId}}\",\n  \"alias\": \"{{externalKeyAlias}}\",\n  \"kid\": \"{{externalKeyKid}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external key reference registered', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.registered, 'registered').to.eql(true);",
+                  "pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('externalAwsKmsProviderId'));",
+                  "pm.expect(j.origin, 'origin').to.eql('external');",
+                  "pm.expect(j.controlMode, 'control mode').to.eql('externally_managed');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Register existing external key by alias only",
+          "disabled": true,
+          "request": {
+            "method": "POST",
+            "url": "{{tenantKmsApiBaseUrl}}/keys/register",
+            "description": "Alias-only variant of external key registration. Omit kid when the provider does not expose a stable identifier to the customer. EDK resolves and persists the provider's canonical identity without importing key material.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{externalAwsKmsProviderId}}\",\n  \"alias\": \"{{externalKeyAlias}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external key reference registered without optional selector', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.registered, 'registered').to.eql(true);",
+                  "pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('externalAwsKmsProviderId'));",
+                  "pm.expect(j.origin, 'origin').to.eql('external');",
+                  "pm.expect(j.controlMode, 'control mode').to.eql('externally_managed');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02a Read external key public metadata",
+          "disabled": true,
+          "request": {
+            "method": "GET",
+            "url": "{{tenantKmsApiBaseUrl}}/keys/{{externalKeyAlias}}?providerId={{externalAwsKmsProviderId}}",
+            "description": "Reads the registered external key through the tenant gateway. When the provider public JWK contains x5c, x5t, or x5t#S256, those public members remain visible on the key response without creating a certificate-management resource. Private JWK members and x5u must not be returned.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external key public metadata returned', () => pm.response.to.have.status(200));",
+                  "const jwk = pm.response.json().keyInfo.key;",
+                  "pm.test('private and remote-locator JWK members are absent', () => {",
+                  "  ['d', 'p', 'q', 'dp', 'dq', 'qi', 'oth', 'k', 'x5u'].forEach((member) => pm.expect(jwk, member).not.to.have.property(member));",
+                  "});",
+                  "pm.test('provider certificate metadata keeps its public wire shape when present', () => {",
+                  "  if (Object.prototype.hasOwnProperty.call(jwk, 'x5c')) pm.expect(jwk.x5c, 'x5c').to.be.an('array');",
+                  "  if (Object.prototype.hasOwnProperty.call(jwk, 'x5t')) pm.expect(jwk.x5t, 'x5t').to.be.a('string');",
+                  "  if (Object.prototype.hasOwnProperty.call(jwk, 'x5t#S256')) pm.expect(jwk['x5t#S256'], 'x5t#S256').to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Register AWS-linked stored public certificate",
+          "disabled": true,
+          "request": {
+            "method": "POST",
+            "url": "{{tenantKmsApiBaseUrl}}/certificates/register",
+            "description": "Registers a public leaf-to-root DER chain linked to the existing AWS KMS key. The wire source value is stored_public_material, corresponding to STORED_PUBLIC_MATERIAL. AWS KMS supplies key operations but is not a certificate store, so only public DER is sent and persisted.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{externalAwsKmsProviderId}}\",\n  \"alias\": \"{{externalAwsCertificateAlias}}\",\n  \"kind\": \"key_certificate_chain\",\n  \"source\": \"stored_public_material\",\n  \"linkedKeyAlias\": \"{{externalKeyAlias}}\",\n  \"linkedKeyKid\": \"{{externalKeyKid}}\",\n  \"certificateChain\": [\n    \"{{externalAwsCertificateDerBase64}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('AWS-linked public certificate reference registered', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('externalAwsKmsProviderId'));",
+                  "pm.expect(j.kind, 'kind').to.eql('key_certificate_chain');",
+                  "pm.expect(j.source, 'source').to.eql('stored_public_material');",
+                  "pm.expect(j.origin, 'origin').to.eql('external');",
+                  "pm.expect(j.controlMode, 'control mode').to.eql('externally_managed');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Register Azure provider-native leaf certificate",
+          "disabled": true,
+          "request": {
+            "method": "POST",
+            "url": "{{tenantKmsApiBaseUrl}}/certificates/register",
+            "description": "Registers an Azure Key Vault provider-native leaf certificate. The wire source value is provider_native, corresponding to PROVIDER_NATIVE. Azure leaf reads are delegated to the provider; this example does not submit a chain, follow AIA URLs, or export a PFX.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{externalAzureKmsProviderId}}\",\n  \"alias\": \"{{externalAzureCertificateAlias}}\",\n  \"providerCertificateId\": \"{{externalAzureProviderCertificateId}}\",\n  \"kind\": \"trusted_certificate\",\n  \"source\": \"provider_native\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Azure provider-native leaf reference registered', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('externalAzureKmsProviderId'));",
+                  "pm.expect(j.kind, 'kind').to.eql('trusted_certificate');",
+                  "pm.expect(j.source, 'source').to.eql('provider_native');",
+                  "pm.expect(j.origin, 'origin').to.eql('external');",
+                  "pm.expect(j.controlMode, 'control mode').to.eql('externally_managed');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Read Azure provider-native leaf certificate",
+          "disabled": true,
+          "request": {
+            "method": "GET",
+            "url": "{{tenantKmsApiBaseUrl}}/certificates/{{externalAzureCertificateAlias}}?providerId={{externalAzureKmsProviderId}}",
+            "description": "Reads the registered Azure provider-native leaf through the tenant gateway. The provider performs the read; the walkthrough does not enumerate the provider or expose a backend locator.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Azure provider-native leaf returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Delete external key reference only",
+          "disabled": true,
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantKmsApiBaseUrl}}/keys/{{externalKeyAlias}}?providerId={{externalAwsKmsProviderId}}",
+            "description": "Reference-only DELETE for an EXTERNALLY_MANAGED key. It removes the tenant-local EDK reference and must not delete or modify the existing provider key. Repeating DELETE after the local reference is removed is idempotent and returns 204. Enable only after the registration example has been verified.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external key reference removal is idempotent', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Delete external certificate reference only",
+          "disabled": true,
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantKmsApiBaseUrl}}/certificate-chains/{{externalAwsCertificateAlias}}?providerId={{externalAwsKmsProviderId}}",
+            "description": "Reference-only DELETE for an EXTERNALLY_MANAGED certificate reference. It removes the tenant-local EDK reference and leaves the AWS-linked public certificate material and KMS key untouched. Repeating DELETE after the local reference is removed is idempotent and returns 204.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');",
+                  "pm.collectionVariables.set('tenantKmsApiBaseUrl', tenantOrigin + '/api/kms/v1');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external certificate reference removal is idempotent', () => pm.response.to.have.status(204));"
                 ]
               }
             }

@@ -169,9 +169,6 @@ environment-variable Secret values are read only when a container starts.
 | `database.platform.existingSecret` | `edk-platform-postgres` | Secret with credentials for the control-plane (platform) database. |
 | `database.secretManagement.existingSecret` | `edk-secret-management-database` | Secret with distinct passwords for the fixed non-superuser secret-management admin and tenant-serving runtime roles. Schema migration uses the platform database owner from `database.platform.existingSecret` only during startup. |
 | `database.tenant.existingSecret` | `edk-tenant-postgres` | Secret with credentials for the tenant workload database. |
-| `database.trustDomain.isolation` | `schema` | Isolation strategy for the trust-domain router registry (`database-trust-domain`). |
-| `database.trustDomain.host` | `""` | Trust-domain database host override. Empty co-locates it on `database.platform.host`. |
-| `database.trustDomain.existingSecret` | `""` | Trust-domain database Secret override. Empty co-locates it on `database.platform.existingSecret`. |
 | `secretManagement.bootstrap.kek.mode` | `SOFTWARE_KMS` | Self-contained baseline backed by the persisted platform software KMS. External providers are configured explicitly and are not startup dependencies. |
 | `secretManagement.bootstrap.kek.identity` | `secret-management-bootstrap-kek` | Server-owned software-KMS binding name; it is not a physical path or public API field. |
 | `secretManagement.bootstrap.kek.kmsProviderId` | `software` | Persisted platform software KMS provider that owns the bootstrap key. |
@@ -374,11 +371,12 @@ separately constrained access. Do not configure `database.platform.name` and
 credentials into tenant-KMS, DID, tenant-AS, issuer, or verifier pods. Do not
 mount tenant database credentials into the platform pod.
 
-The trust-domain router registry (`database-trust-domain`) is co-located on
-the platform database by default: same host/name/Secret as `database.platform`,
-only `isolation: schema` differs, so the connecting Postgres user needs CREATE
-SCHEMA privilege. Set `database.trustDomain.host`/`name`/`existingSecret` to
-split it onto a dedicated instance instead.
+Trust-domain persistence uses the shared AppScope `DatabaseRouter` and the
+explicit tenant id on each repository operation. Its physical placement and
+isolation therefore follow the existing `database.tenants.*` configuration;
+there is no trust-domain-specific database value or fallback. Keep the tenant
+database credentials and isolation settings available to every service that
+owns tenant-scoped persistence.
 
 ## Domain, Gateway, and TLS
 
@@ -493,3 +491,27 @@ Gateway/HTTPRoute rendering, no legacy public service hosts, KMS internal-only
 behavior, platform/KMS-only gRPC receiver rendering, external Postgres secret
 wiring, resource/security defaults, NetworkPolicies, ServiceMonitor, and
 OpenTelemetry values.
+
+## WeBuild TS 119 612 trust-domain configuration
+
+The chart exposes `trustDomainBootstrap` as operator metadata and secret
+wiring only. It does not run an install hook or Job that mutates the
+platform-owned Trust Domain API. This is intentional because an authenticated
+credential and current ETags are not safely available during every Helm
+install or upgrade.
+
+Copy `examples/webuild-trust-domain-values.yaml`, fill it with the real
+operator-supplied values, and provide the credential through the referenced
+existing Secret or a protected runtime file. Then run the shared command from
+the deployment checkout:
+
+```bash
+node customer/edk/scripts/configure-webuild-trust-domain.mjs
+```
+
+The canonical API is version `0.1.0` at `/api/trust-domain/v1`. The EU source
+accepts only its explicit enabled flag. The WeBuild source is a custom ETSI TS
+119 612 XML LoTL with an HTTPS URL, matching allowed host, scheme identity, and
+pinned signer-anchor IDs. The command creates, validates, and activates in
+three separate requests and never activates a candidate whose validation did
+not succeed. TS 119 602 LoTE profiles are not accepted by this path.

@@ -192,7 +192,9 @@ http:
     tenant-issuer:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/oid4vci`) || PathPrefix(`/public/statuslists`) ||
+        (PathPrefix(`/oid4vci`) || PathPrefix(`/credential`) ||
+         PathPrefix(`/deferredCredential`) || PathPrefix(`/nonce`) ||
+         PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
          PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
          PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
          PathPrefix(`/api/statuslist/v1`))
@@ -258,7 +260,7 @@ http:
     tenant-as:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/as`) ||
+        (PathPrefix(`/as`) || PathPrefix(`/par`) || PathPrefix(`/logout`) ||
          PathPrefix(`/.well-known/oauth-authorization-server`) ||
          PathPrefix(`/.well-known/openid-configuration`) ||
          PathPrefix(`/.well-known/jwks.json`))

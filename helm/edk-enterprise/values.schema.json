@@ -120,6 +120,44 @@
         }
       }
     },
+    "trustDomainBootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "apiBaseUrl", "domainId", "operatorTokenExistingSecret", "operatorTokenKey", "eu", "custom"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["", "eu", "custom", "all"] },
+        "apiBaseUrl": { "type": "string" },
+        "domainId": { "type": "string" },
+        "operatorTokenExistingSecret": { "type": "string" },
+        "operatorTokenKey": { "type": "string" },
+        "eu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "ifMatch"],
+          "properties": {
+            "enabled": { "type": ["boolean", "string"] },
+            "ifMatch": { "type": "string" }
+          }
+        },
+        "custom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceId", "url", "schemeIdentity", "allowedHost", "signerAnchorIds", "enabled", "ifMatch"],
+          "properties": {
+            "sourceId": { "type": "string" },
+            "url": { "type": "string" },
+            "schemeIdentity": { "type": "string" },
+            "allowedHost": { "type": "string" },
+            "signerAnchorIds": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "enabled": { "type": ["boolean", "string"] },
+            "ifMatch": { "type": "string" }
+          }
+        }
+      }
+    },
     "secretManagement": {
       "type": "object",
       "additionalProperties": false,

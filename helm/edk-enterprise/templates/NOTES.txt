@@ -21,3 +21,18 @@ Platform port-forward example:
 
 Backing services and runtime probes are Kubernetes-internal and must not be
 exposed as customer endpoints.
+
+Trust-domain WeBuild configuration is deliberately not a Helm install hook.
+After the platform is provisioned and an authenticated operator credential is
+available, run the shared post-provision command from the deployment checkout:
+
+  node customer/edk/scripts/configure-webuild-trust-domain.mjs
+
+Provide its required values through a protected operator environment or file.
+`trustDomainBootstrap.operatorTokenExistingSecret` and
+`trustDomainBootstrap.operatorTokenKey` identify the existing Secret/key that
+the operator uses to supply `TRUST_DOMAIN_OPERATOR_TOKEN_FILE`; the token is
+never rendered into a ConfigMap, values output, or this note. The command uses
+the platform-owned `/api/trust-domain/v1` surface, validates a custom candidate
+before activation, and stops on authentication, ETag, validation, or
+concurrency failures.

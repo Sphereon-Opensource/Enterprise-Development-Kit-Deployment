@@ -27,10 +27,6 @@ Rendered only for the platform service.
 {{- if .Values.database.enabled }}
 {{- $platformDb := .Values.database.platform }}
 {{- $tenantDb := .Values.database.tenant }}
-{{- $trustDomainDb := .Values.database.trustDomain }}
-{{- $trustDomainHost := $trustDomainDb.host | default $platformDb.host }}
-{{- $trustDomainPort := $trustDomainDb.port | default $platformDb.port }}
-{{- $trustDomainName := $trustDomainDb.name | default $platformDb.name }}
 {{- $bootstrap := .Values.platform.bootstrap }}
 {{- $licenseTrust := .Values.license.trust }}
 {{- $secretBootstrapActors := .Values.secretManagement.internalResolution.allowedServiceActors }}
@@ -229,28 +225,6 @@ data:
           tenant-bound-client-id: true
           audience: {{ include "edk-enterprise.serviceAudience" "tenant-as" | quote }}
         {{- end }}
-    # Dedicated trust-domain router registry, deliberately kept under its own
-    # prefix and separate from database.* above: that registry also backs
-    # every other platform-side tenant-scoped store (auth sessions, signing
-    # keys, DID records), none of which have per-tenant schema provisioning
-    # today. This prefix is read only by the trust-domain providers, so it
-    # alone can carry isolation: schema (schema-per-tenant) with zero effect
-    # on anything else. Co-located by default on the same platform-postgres
-    # instance as database.* above - only the isolation strategy differs,
-    # unless database.trustDomain.host/name/existingSecret split it onto a
-    # dedicated instance. The connecting Postgres user needs CREATE SCHEMA
-    # privilege for the schema-per-tenant auto-provisioning this enables.
-    database-trust-domain:
-      tenants:
-        default:
-          dialect: {{ .Values.database.dialect }}
-          isolation: {{ $trustDomainDb.isolation }}
-          schema-pattern: {{ $trustDomainDb.schemaPattern | quote }}
-          host: {{ $trustDomainHost }}
-          port: {{ $trustDomainPort }}
-          database: {{ $trustDomainName }}
-          username: ${env:EDK_TRUST_DOMAIN_DB_USERNAME}
-          password: ${env:EDK_TRUST_DOMAIN_DB_PASSWORD}
     kv-stores:
       # Email catalog templates share one durable platform store. The catalog
       # namespaces per-tenant published state inside it using the resolved tenant id.

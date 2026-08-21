@@ -422,24 +422,6 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.database.secretManagement.existingSecret }}
                   key: {{ $.Values.database.secretManagement.tenantPasswordKey }}
-            # Trust-domain router credentials, resolved by the database-trust-domain
-            # override mounted from the platform config. Co-located by default: falls
-            # back to the platform database Secret/keys above unless
-            # database.trustDomain.existingSecret points at a dedicated instance.
-            {{- $trustDomainDb := $.Values.database.trustDomain }}
-            {{- $trustDomainSecret := $trustDomainDb.existingSecret | default $platformDb.existingSecret }}
-            {{- $trustDomainUsernameKey := $trustDomainDb.usernameKey | default $platformDb.usernameKey }}
-            {{- $trustDomainPasswordKey := $trustDomainDb.passwordKey | default $platformDb.passwordKey }}
-            - name: EDK_TRUST_DOMAIN_DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $trustDomainSecret }}
-                  key: {{ $trustDomainUsernameKey }}
-            - name: EDK_TRUST_DOMAIN_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $trustDomainSecret }}
-                  key: {{ $trustDomainPasswordKey }}
             {{- else }}
             # Tenant workload datasource. Runtime services own tenant workload
             # persistence and never receive platform database credentials.
@@ -465,34 +447,6 @@ spec:
                 secretKeyRef:
                   name: {{ $tenantDb.existingSecret }}
                   key: {{ $tenantDb.passwordKey }}
-            {{- if or (eq $name "tenant-as") (eq $name "verifier") (eq $name "wallet-interaction") }}
-            # Trust-domain persistence has a dedicated router/registry so its
-            # placement can evolve independently from other tenant stores. In
-            # the current same-database topology it deliberately resolves to
-            # the same tenant database and schema isolation as the workload.
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_DIALECT
-              value: {{ $.Values.database.dialect | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_HOST
-              value: {{ $tenantDb.host | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_PORT
-              value: {{ $tenantDb.port | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_DATABASE
-              value: {{ $tenantDb.name | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_ISOLATION
-              value: {{ $tenantDb.isolation | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_SCHEMA_PATTERN
-              value: {{ $tenantDb.schemaPattern | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $tenantDb.existingSecret }}
-                  key: {{ $tenantDb.usernameKey }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $tenantDb.existingSecret }}
-                  key: {{ $tenantDb.passwordKey }}
-            {{- end }}
             # Runtime services keep their app-scope datasource on the tenant database,
             # so any app-scope access stays in the tenant data plane. The control-plane
             # platform database is reachable only by the platform service.

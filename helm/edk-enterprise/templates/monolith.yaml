@@ -3,13 +3,6 @@
 {{- $imageTag := .Values.monolith.imageTag | default .Values.global.imageTag | default .Chart.AppVersion }}
 {{- $platformDb := .Values.database.platform }}
 {{- $tenantDb := .Values.database.tenant }}
-{{- $trustDb := .Values.database.trustDomain }}
-{{- $trustHost := $trustDb.host | default $platformDb.host }}
-{{- $trustPort := $trustDb.port | default $platformDb.port }}
-{{- $trustName := $trustDb.name | default $platformDb.name }}
-{{- $trustSecret := $trustDb.existingSecret | default $platformDb.existingSecret }}
-{{- $trustUsernameKey := $trustDb.usernameKey | default $platformDb.usernameKey }}
-{{- $trustPasswordKey := $trustDb.passwordKey | default $platformDb.passwordKey }}
 {{- $gatewayName := printf "%s-gateway" (include "edk-enterprise.fullname" .) }}
 {{- $base := include "edk-enterprise.gateway.baseDomain" . }}
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
@@ -149,25 +142,6 @@ spec:
               value: {{ $tenantDb.isolation | quote }}
             - name: DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN
               value: {{ $tenantDb.schemaPattern | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_DIALECT
-              value: {{ .Values.database.dialect | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_HOST
-              value: {{ $trustHost | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_PORT
-              value: {{ $trustPort | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_DATABASE
-              value: {{ $trustName | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_ISOLATION
-              value: {{ $trustDb.isolation | quote }}
-            - name: DATABASE_TRUST_DOMAIN_TENANTS_DEFAULT_SCHEMA_PATTERN
-              value: {{ $trustDb.schemaPattern | quote }}
-            # The local process still uses the shared trust-domain router
-            # contract. Its credentials must follow the same dedicated-secret
-            # override and platform-secret fallback as distributed mode.
-            - name: EDK_TRUST_DOMAIN_DB_USERNAME
-              valueFrom: { secretKeyRef: { name: {{ $trustSecret | quote }}, key: {{ $trustUsernameKey | quote }} } }
-            - name: EDK_TRUST_DOMAIN_DB_PASSWORD
-              valueFrom: { secretKeyRef: { name: {{ $trustSecret | quote }}, key: {{ $trustPasswordKey | quote }} } }
             - name: EDK_PLATFORM_DB_USERNAME
               valueFrom: { secretKeyRef: { name: {{ $platformDb.existingSecret | quote }}, key: {{ $platformDb.usernameKey | quote }} } }
             - name: EDK_PLATFORM_DB_PASSWORD

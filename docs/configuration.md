@@ -17,6 +17,10 @@ mounts the config templates under `compose/config/`. Both surfaces map to the
 same underlying settings, so the table values below are the inputs you supply
 once and apply through whichever surface you use.
 
+The explicit WeBuild trust-domain command and its fail-closed operator inputs
+are documented in [trust-domain-webuild.md](trust-domain-webuild.md). It is a
+post-provision operation and is not an automatic Compose or Helm hook.
+
 ## Configuration mount and file layout
 
 Configuration files are read from the config location the images set to
