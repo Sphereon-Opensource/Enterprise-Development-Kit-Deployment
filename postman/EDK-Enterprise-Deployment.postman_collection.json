@@ -155,6 +155,158 @@
       "value": "replace-with-azure-certificate-id-or-version",
       "type": "string",
       "description": "Optional provider-native Azure certificate identifier or immutable version used by the leaf read."
+    },
+    {
+      "key": "authorizationServerSlug",
+      "value": "walkthrough-as"
+    },
+    {
+      "key": "externalAuthorizationServerSlug",
+      "value": "platform-upstream"
+    },
+    {
+      "key": "hostedAuthorizationServerId",
+      "value": ""
+    },
+    {
+      "key": "hostedAuthorizationServerRevision",
+      "value": ""
+    },
+    {
+      "key": "hostedAuthorizationServerStaleRevision",
+      "value": ""
+    },
+    {
+      "key": "externalAuthorizationServerId",
+      "value": ""
+    },
+    {
+      "key": "externalAuthorizationServerRevision",
+      "value": ""
+    },
+    {
+      "key": "staleExternalAuthorizationServerId",
+      "value": ""
+    },
+    {
+      "key": "staleExternalAuthorizationServerRevision",
+      "value": ""
+    },
+    {
+      "key": "otherTenantId",
+      "value": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "key": "publicHostedClientId",
+      "value": "walkthrough-public-client"
+    },
+    {
+      "key": "confidentialHostedClientId",
+      "value": "walkthrough-confidential-client"
+    },
+    {
+      "key": "hostedClientSecret",
+      "value": ""
+    },
+    {
+      "key": "authorizationServerIdentityId",
+      "value": ""
+    },
+    {
+      "key": "federationBindingId",
+      "value": ""
+    },
+    {
+      "key": "federationBindingRevision",
+      "value": ""
+    },
+    {
+      "key": "federationClientId",
+      "value": "walkthrough-federation-client"
+    },
+    {
+      "key": "federationClientSecret",
+      "value": ""
+    },
+    {
+      "key": "issuerAuthorizationServerBindingId",
+      "value": ""
+    },
+    {
+      "key": "issuerAuthorizationServerBindingRevision",
+      "value": ""
+    },
+    {
+      "key": "secondaryIssuerAuthorizationServerBindingId",
+      "value": ""
+    },
+    {
+      "key": "secondaryIssuerAuthorizationServerBindingRevision",
+      "value": ""
+    },
+    {
+      "key": "issuanceTemplateId",
+      "value": "eupid-default"
+    },
+    {
+      "key": "oid4vciTargetProfile",
+      "value": "OID4VCI_1_1_DRAFT_2A1F0513"
+    },
+    {
+      "key": "oid4vciProfileRevision",
+      "value": ""
+    },
+    {
+      "key": "oid4vciProfileUpgradeIdempotencyKey",
+      "value": "00000000-0000-4000-8000-000000000101"
+    },
+    {
+      "key": "blockingOid4vciIssuerId",
+      "value": ""
+    },
+    {
+      "key": "blockingOid4vciProfileRevision",
+      "value": ""
+    },
+    {
+      "key": "changedMigrationId",
+      "value": ""
+    },
+    {
+      "key": "changedMigrationRevision",
+      "value": ""
+    },
+    {
+      "key": "changedMigrationRecordedDigest",
+      "value": ""
+    },
+    {
+      "key": "changedMigrationCurrentDigest",
+      "value": ""
+    },
+    {
+      "key": "unchangedMigrationId",
+      "value": ""
+    },
+    {
+      "key": "unchangedMigrationRevision",
+      "value": ""
+    },
+    {
+      "key": "unchangedMigrationSourceDigest",
+      "value": ""
+    },
+    {
+      "key": "resumedMigrationTargetAuthorizationServerId",
+      "value": ""
+    },
+    {
+      "key": "credentialAuthorizationServerOverrideRevision",
+      "value": ""
+    },
+    {
+      "key": "templateAuthorizationServerOverrideRevision",
+      "value": ""
     }
   ],
   "item": [
@@ -1020,7 +1172,7 @@
     },
     {
       "name": "04 Tenant Federation",
-      "description": "Activates the tenant owner, signs that owner in through the tenant authorization server with authorization code and PKCE, stores the federation credential through the write-only tenant secret API, and registers an external OpenID Connect identity provider using only the returned opaque secretId. Platform operator and generic token-exchange tokens are never used for tenant secret access.",
+      "description": "Activates and authenticates the tenant owner, then exercises the canonical tenant-scoped authorization-server resource, federation binding, hosted client and identity, OID4VCI selection/profile, and coded-migration remediation contracts by stable UUID.",
       "item": [
         {
           "name": "01 Resolve tenant owner activation",
@@ -1320,51 +1472,20 @@
           ]
         },
         {
-          "name": "08 Register federation IdP",
-          "request": {
-            "method": "POST",
-            "url": "{{platformUrl}}/api/platform/admin/v1/federation/idps",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{operatorToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"displayName\": \"{{tenantName}} Corporate IdP\",\n  \"issuer\": \"https://idp.{{tenantSlug}}.example\",\n  \"clientId\": \"{{tenantSlug}}-portal\",\n  \"scopes\": [\"openid\", \"profile\", \"email\"],\n  \"claimsMapping\": {\n    \"subject\": \"sub\",\n    \"email\": \"email\",\n    \"displayName\": \"name\"\n  },\n  \"enabled\": false\n}"
-            },
-            "description": "Registers an external OpenID Connect identity provider for the tenant. Tenant IdPs are public clients, so the registration carries no client secret, secret reference, or secret id."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('idp register succeeds', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                  "const j = pm.response.json();",
-                  "pm.expect(j.idpId, 'idpId').to.be.a('string').and.not.empty;",
-                  "pm.collectionVariables.set('idpId', j.idpId);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "09 List federation IdPs",
+          "name": "08 List authorization servers and locate the stale discovery fixture",
           "request": {
             "method": "GET",
-            "url": "{{platformUrl}}/api/platform/admin/v1/federation/idps",
-            "description": "Lists the tenant's configured identity providers.",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers?page=0&size=100",
+            "description": "Lists tenant-owned UUID resources and locates the deliberately seeded stale-discovery fixture used by the activation rejection gate.",
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{operatorToken}}"
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
               }
             ]
           },
@@ -1374,7 +1495,1919 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('idps listed', () => pm.response.to.have.status(200));"
+                  "pm.test('authorization servers listed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.items, 'items').to.be.an('array');",
+                  "const stale = j.items.find((item) => item.deployment === 'EXTERNAL' && item.discovery && item.discovery.freshness === 'STALE');",
+                  "pm.expect(stale, 'seeded stale external authorization-server fixture').to.be.an('object');",
+                  "pm.collectionVariables.set('staleExternalAuthorizationServerId', stale.id);",
+                  "pm.collectionVariables.set('staleExternalAuthorizationServerRevision', String(stale.revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 Create hosted authorization server",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"{{authorizationServerSlug}}\",\n  \"displayName\": \"{{tenantName}} Hosted Authorization Server\",\n  \"issuer\": \"{{tenantGatewayUrl}}/oauth2/{{authorizationServerSlug}}\",\n  \"deployment\": \"HOSTED\",\n  \"authenticationMode\": \"HYBRID\",\n  \"purposes\": [\n    \"GENERAL\",\n    \"CREDENTIAL_ISSUANCE\",\n    \"WALLET_LOGIN\"\n  ],\n  \"usages\": [\n    \"OID4VCI_AUTHORIZATION_SERVER\"\n  ],\n  \"allowedGrantTypes\": [\n    \"authorization_code\",\n    \"refresh_token\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted authorization server created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.id, 'resource UUID').to.match(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i);",
+                  "pm.collectionVariables.set('hostedAuthorizationServerId', j.id);",
+                  "pm.collectionVariables.set('hostedAuthorizationServerRevision', String(j.revision));",
+                  "pm.expect(pm.response.json().lifecycle).to.eql('DRAFT');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Get hosted authorization server by UUID",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted authorization server read', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.id).to.eql(pm.collectionVariables.get('hostedAuthorizationServerId'));",
+                  "pm.expect(j.deployment).to.eql('HOSTED');",
+                  "pm.expect(j.capabilities).to.include.members(['OAUTH2', 'OIDC']);",
+                  "pm.expect(j).to.include.all.keys('id','tenantId','slug','displayName','issuer','deployment','lifecycle','capabilities','expectedCapabilities','authenticationMode','purposes','usages','allowedGrantTypes','system','defaultForPurposes','revision','createdAt','updatedAt');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Replace hosted authorization server metadata",
+          "request": {
+            "method": "PUT",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"{{tenantName}} Primary Hosted Authorization Server\",\n  \"expectedRevision\": \"{{hostedAuthorizationServerRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('hostedAuthorizationServerStaleRevision', pm.collectionVariables.get('hostedAuthorizationServerRevision'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted authorization server replaced', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('hostedAuthorizationServerRevision', String(j.revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 Reject stale hosted authorization server revision",
+          "request": {
+            "method": "PUT",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"This stale write must not win\",\n  \"expectedRevision\": \"{{hostedAuthorizationServerStaleRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('stale resource revision rejected', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 Reject platform tenant authorization server access",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{platformTenantId}}/authorization-servers",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('platform tenant rejected', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 Reject cross-tenant authorization server access",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{otherTenantId}}/authorization-servers/{{hostedAuthorizationServerId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cross-tenant resource is not disclosed', () => pm.expect([403, 404]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 Activate hosted authorization server",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/activate",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{hostedAuthorizationServerRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted authorization server activated', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('hostedAuthorizationServerRevision', String(j.revision));",
+                  "pm.expect(pm.response.json().lifecycle).to.eql('ACTIVE');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16 Register public hosted client",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/clients",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{publicHostedClientId}}\",\n  \"clientName\": \"{{tenantName}} public wallet\",\n  \"clientType\": \"public\",\n  \"enabled\": true,\n  \"grantTypes\": [\n    \"authorization_code\",\n    \"refresh_token\"\n  ],\n  \"responseTypes\": [\n    \"code\"\n  ],\n  \"redirectUris\": [\n    \"{{tenantGatewayUrl}}/wallet/oauth/callback\"\n  ],\n  \"allowedScopes\": [\n    \"openid\",\n    \"profile\"\n  ],\n  \"tokenEndpointAuthMethod\": \"none\",\n  \"requirePkce\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('public client registered', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.clientId).to.eql(pm.variables.replaceIn('{{publicHostedClientId}}'));",
+                  "pm.expect(j.tokenEndpointAuthMethod).to.eql('none');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 Register confidential hosted client with write-only secret",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/clients",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{confidentialHostedClientId}}\",\n  \"clientName\": \"{{tenantName}} confidential issuer\",\n  \"clientType\": \"confidential\",\n  \"enabled\": true,\n  \"grantTypes\": [\n    \"authorization_code\"\n  ],\n  \"responseTypes\": [\n    \"code\"\n  ],\n  \"redirectUris\": [\n    \"{{tenantGatewayUrl}}/issuer/oauth/callback\"\n  ],\n  \"allowedScopes\": [\n    \"openid\"\n  ],\n  \"tokenEndpointAuthMethod\": \"client_secret_basic\",\n  \"clientCredential\": {\n    \"method\": \"client_secret_basic\",\n    \"clientId\": \"{{confidentialHostedClientId}}\",\n    \"secretValue\": \"{{hostedClientSecret}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('hostedClientSecret')) pm.collectionVariables.set('hostedClientSecret', pm.variables.replaceIn('{{$randomUUID}}') + pm.variables.replaceIn('{{$randomUUID}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('confidential client registered', () => pm.response.to.have.status(201));",
+                  "const secret = pm.collectionVariables.get('hostedClientSecret');",
+                  "const j = pm.response.json();",
+                  "pm.expect(JSON.stringify(j)).not.to.include(secret);",
+                  "pm.expect(j.clientCredential).not.to.have.property('secretValue');",
+                  "pm.expect(j.clientCredential.secretReference.resourceHandle, 'opaque secret handle').to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.unset('hostedClientSecret');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18 Confirm confidential client readback redaction",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/clients/{{confidentialHostedClientId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('confidential client read', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.clientCredential).not.to.have.property('secretValue');",
+                  "pm.expect(JSON.stringify(j)).not.to.match(/clientSecret|secret_value|secretValue/);",
+                  "pm.expect(j.clientCredential.secretReference.purpose).to.eql('OAUTH_CLIENT_SECRET');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 Create hosted identity",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/identities",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"{{tenantName}} Authorization Operator\",\n  \"email\": \"authorization-operator@{{tenantSlug}}.example\",\n  \"givenName\": \"Authorization\",\n  \"familyName\": \"Operator\",\n  \"roles\": [\n    \"tenant-admin\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted identity created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.identity.identityId, 'identity UUID').to.match(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i);",
+                  "pm.collectionVariables.set('authorizationServerIdentityId', j.identity.identityId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20 Get hosted identity by UUID",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/identities/{{authorizationServerIdentityId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted identity read', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().identityId).to.eql(pm.collectionVariables.get('authorizationServerIdentityId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "21 Suspend hosted identity binding",
+          "request": {
+            "method": "PATCH",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/identities/{{authorizationServerIdentityId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted identity suspended', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().state).to.eql('SUSPENDED');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "22 Enable hosted identity binding",
+          "request": {
+            "method": "PATCH",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/identities/{{authorizationServerIdentityId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true,\n  \"roles\": [\n    \"tenant-admin\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted identity enabled', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().roles).to.eql(['tenant-admin']);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "23 Suspend hosted authorization server",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/suspend",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{hostedAuthorizationServerRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted authorization server suspended', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('hostedAuthorizationServerRevision', String(j.revision));",
+                  "pm.expect(pm.response.json().lifecycle).to.eql('SUSPENDED');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "24 Reactivate hosted authorization server",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/activate",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{hostedAuthorizationServerRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted authorization server reactivated', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('hostedAuthorizationServerRevision', String(j.revision));",
+                  "pm.expect(pm.response.json().lifecycle).to.eql('ACTIVE');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "25 Create external authorization server from discovery",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"{{externalAuthorizationServerSlug}}\",\n  \"displayName\": \"Platform external authorization server\",\n  \"issuer\": \"{{platformUrl}}\",\n  \"deployment\": \"EXTERNAL\",\n  \"expectedCapabilities\": [\n    \"OAUTH2\",\n    \"OIDC\"\n  ],\n  \"purposes\": [\n    \"GENERAL\",\n    \"CREDENTIAL_ISSUANCE\",\n    \"WALLET_LOGIN\"\n  ],\n  \"usages\": [\n    \"OID4VCI_AUTHORIZATION_SERVER\",\n    \"HOSTED_LOGIN_UPSTREAM\"\n  ],\n  \"allowedGrantTypes\": [\n    \"authorization_code\",\n    \"refresh_token\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external authorization server created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.id, 'resource UUID').to.match(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i);",
+                  "pm.collectionVariables.set('externalAuthorizationServerId', j.id);",
+                  "pm.collectionVariables.set('externalAuthorizationServerRevision', String(j.revision));",
+                  "pm.expect(j.expectedCapabilities).to.have.members(['OAUTH2','OIDC']);",
+                  "pm.expect(j.capabilities).to.include.members(['OAUTH2','OIDC']);",
+                  "pm.expect(j.discovery.digest).to.match(/^[a-f0-9]{64}$/);",
+                  "pm.expect(j.discovery.userinfoEndpoint).to.match(/^https:\\/\\//);",
+                  "pm.expect(j.discovery.tokenEndpointAuthMethodsSupported).to.be.an('array');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "26 Validate external authorization server discovery",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{externalAuthorizationServerId}}/validate",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external discovery validated', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.valid).to.eql(true);",
+                  "pm.expect(j.snapshot.freshness).to.eql('CURRENT');",
+                  "pm.expect(j.snapshot.digest).to.match(/^[a-f0-9]{64}$/);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "27 Refresh external authorization server discovery",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{externalAuthorizationServerId}}/discovery/refresh",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external discovery refreshed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('externalAuthorizationServerRevision', String(j.revision));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.discovery.freshness).to.eql('CURRENT');",
+                  "pm.expect(j.capabilities).to.include.members(j.expectedCapabilities);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "28 Reject activation with stale discovery",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{staleExternalAuthorizationServerId}}/activate",
+            "description": "Uses the stale external resource located by request 08. The gate environment must seed this resource; the collection never fabricates freshness state.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{staleExternalAuthorizationServerRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('stale discovery activation rejected', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "29 Activate external authorization server",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{externalAuthorizationServerId}}/activate",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{externalAuthorizationServerRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('external authorization server activated', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('externalAuthorizationServerRevision', String(j.revision));",
+                  "pm.expect(pm.response.json().lifecycle).to.eql('ACTIVE');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "30 Create disabled federation binding",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/federation-bindings",
+            "description": "Creates the disabled binding with an operator-provided client id and a write-once secret. The server persists only the typed OAUTH_CLIENT_SECRET reference and never returns raw secret material.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"externalAuthorizationServerId\": \"{{externalAuthorizationServerId}}\",\n  \"order\": 0,\n  \"enabled\": false,\n  \"scopes\": [\n    \"openid\",\n    \"profile\",\n    \"email\"\n  ],\n  \"claimsMapping\": {\n    \"subject\": \"sub\",\n    \"email\": \"email\",\n    \"displayName\": \"name\"\n  },\n  \"clientAuthentication\": {\n    \"method\": \"client_secret_basic\",\n    \"clientId\": \"{{federationClientId}}\",\n    \"secretValue\": \"{{federationClientSecret}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('federationClientSecret')) pm.collectionVariables.set('federationClientSecret', pm.variables.replaceIn('{{$randomUUID}}') + pm.variables.replaceIn('{{$randomUUID}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('disabled federation binding created', () => pm.response.to.have.status(201));",
+                  "const secret = pm.collectionVariables.get('federationClientSecret');",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.id, 'binding UUID').to.match(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i);",
+                  "pm.expect(j.status).to.eql('UNVALIDATED');",
+                  "pm.expect(JSON.stringify(j)).not.to.include(secret);",
+                  "pm.expect(JSON.stringify(j)).not.to.match(/secretValue|clientSecret/);",
+                  "pm.expect(j.clientAuthentication).not.to.have.property('secretValue');",
+                  "pm.expect(j.clientAuthentication.secretReference.purpose).to.eql('OAUTH_CLIENT_SECRET');",
+                  "pm.collectionVariables.set('federationBindingId', j.id);",
+                  "pm.collectionVariables.set('federationBindingRevision', String(j.revision));",
+                  "pm.collectionVariables.unset('federationClientSecret');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "31 Validate federation binding",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/federation-bindings/{{federationBindingId}}/validate",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('federation binding validated', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.status).to.eql('VALID');",
+                  "pm.expect(j.lastValidatedAt).to.be.a('string');",
+                  "pm.collectionVariables.set('federationBindingRevision', String(j.revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "32 Update federation binding order under revision CAS",
+          "request": {
+            "method": "PATCH",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/federation-bindings/{{federationBindingId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/merge-patch+json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order\": 1,\n  \"expectedRevision\": \"{{federationBindingRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('federation binding order updated', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.order).to.eql(1);",
+                  "pm.collectionVariables.set('federationBindingRevision', String(j.revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "33 Reorder federation bindings under resource revision CAS",
+          "request": {
+            "method": "PUT",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/federation-bindings/order",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bindingIds\": [\n    \"{{federationBindingId}}\"\n  ],\n  \"expectedRevision\": \"{{hostedAuthorizationServerRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('federation bindings ordered', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "34 Enable validated federation binding",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/federation-bindings/{{federationBindingId}}/enable",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('federation binding enabled', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.enabled).to.eql(true);",
+                  "pm.expect(j.status).to.eql('VALID');",
+                  "pm.collectionVariables.set('federationBindingRevision', String(j.revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "35 Disable federation binding",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/federation-bindings/{{federationBindingId}}/disable",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('federation binding disabled', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.enabled).to.eql(false);",
+                  "pm.expect(j.status).to.eql('DISABLED');",
+                  "pm.collectionVariables.set('federationBindingRevision', String(j.revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "36 Create default issuer authorization server binding",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/authorization-server-bindings",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"authorizationServerId\": \"{{hostedAuthorizationServerId}}\",\n  \"enabled\": true,\n  \"default\": true,\n  \"allowedGrantTypes\": [\n    \"authorization_code\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('default issuer AS binding created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('issuerAuthorizationServerBindingId', j.id);",
+                  "pm.collectionVariables.set('issuerAuthorizationServerBindingRevision', String(j.revision));",
+                  "pm.expect(j.default).to.eql(true);",
+                  "pm.expect(j.allowedGrantTypes).to.eql(['authorization_code']);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "37 Create secondary issuer authorization server binding",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/authorization-server-bindings",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"authorizationServerId\": \"{{externalAuthorizationServerId}}\",\n  \"enabled\": true,\n  \"default\": false,\n  \"allowedGrantTypes\": [\n    \"authorization_code\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('secondary issuer AS binding created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('secondaryIssuerAuthorizationServerBindingId', j.id);",
+                  "pm.collectionVariables.set('secondaryIssuerAuthorizationServerBindingRevision', String(j.revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "38 Select the secondary authorization server as issuer default",
+          "request": {
+            "method": "PUT",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/authorization-server-bindings/{{secondaryIssuerAuthorizationServerBindingId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"authorizationServerId\": \"{{externalAuthorizationServerId}}\",\n  \"enabled\": true,\n  \"default\": true,\n  \"allowedGrantTypes\": [\n    \"authorization_code\"\n  ],\n  \"expectedRevision\": \"{{secondaryIssuerAuthorizationServerBindingRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer default AS changed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.default).to.eql(true);",
+                  "pm.collectionVariables.set('secondaryIssuerAuthorizationServerBindingRevision', String(j.revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "39 Apply credential authorization server override",
+          "request": {
+            "method": "PUT",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/credential-configurations/EuPid/authorization-server",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"authorizationServerId\": \"{{hostedAuthorizationServerId}}\",\n  \"allowedGrantTypes\": [\n    \"authorization_code\"\n  ],\n  \"expectedRevision\": 0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('credential AS override stored', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().authorizationServerId).to.eql(pm.collectionVariables.get('hostedAuthorizationServerId'));",
+                  "pm.expect(pm.response.json().revision).to.be.a('number');",
+                  "pm.collectionVariables.set('credentialAuthorizationServerOverrideRevision', String(pm.response.json().revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "40 Apply template authorization server override",
+          "request": {
+            "method": "PUT",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/issuance-templates/{{issuanceTemplateId}}/authorization-server",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"authorizationServerId\": \"{{externalAuthorizationServerId}}\",\n  \"allowedGrantTypes\": [\n    \"authorization_code\"\n  ],\n  \"expectedRevision\": 0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('template AS override stored', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().authorizationServerId).to.eql(pm.collectionVariables.get('externalAuthorizationServerId'));",
+                  "pm.expect(pm.response.json().revision).to.be.a('number');",
+                  "pm.collectionVariables.set('templateAuthorizationServerOverrideRevision', String(pm.response.json().revision));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "41 Delete template authorization server override under revision CAS",
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/issuance-templates/{{issuanceTemplateId}}/authorization-server",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{templateAuthorizationServerOverrideRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('template AS override deleted under revision CAS', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "42 Delete credential authorization server override under revision CAS",
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/credential-configurations/EuPid/authorization-server",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{credentialAuthorizationServerOverrideRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('credential AS override deleted under revision CAS', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "43 Verify issuer default selection precedence",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/authorization-server-bindings",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer AS bindings listed', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "pm.expect(items.filter((item) => item.enabled && item.default)).to.have.length(1);",
+                  "pm.expect(items.find((item) => item.enabled && item.default).authorizationServerId).to.eql(pm.collectionVariables.get('externalAuthorizationServerId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "44 Read issuer protocol profile",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/protocol-profile",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer protocol profile read', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('oid4vciProfileRevision', String(j.revision));",
+                  "pm.expect(j.profile).to.be.oneOf(['OID4VCI_1_0_FINAL','OID4VCI_1_1_DRAFT_2A1F0513']);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "45 Dry-run compatible OID4VCI protocol profile upgrade",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/protocol-profile/upgrade/dry-run",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetProfile\": \"{{oid4vciTargetProfile}}\",\n  \"expectedRevision\": \"{{oid4vciProfileRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('profile upgrade dry-run completed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.compatible, 'compatible fixture').to.eql(true);",
+                  "pm.expect(j.issues).to.eql([]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "46 Dry-run blocking OID4VCI protocol profile upgrade",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{blockingOid4vciIssuerId}}/protocol-profile/upgrade/dry-run",
+            "description": "The live gate must seed blockingOid4vciIssuerId and its current revision with an incompatible credential, metadata, grant, binding, or template fixture.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetProfile\": \"{{oid4vciTargetProfile}}\",\n  \"expectedRevision\": \"{{blockingOid4vciProfileRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('blocking profile upgrade dry-run completed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.compatible, 'blocking fixture').to.eql(false);",
+                  "pm.expect(j.issues, 'blocking compatibility issues').to.be.an('array').and.not.empty;"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "47 Apply OID4VCI protocol profile upgrade",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/protocol-profile/upgrade/apply",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetProfile\": \"{{oid4vciTargetProfile}}\",\n  \"expectedRevision\": \"{{oid4vciProfileRevision}}\",\n  \"reason\": \"Validated by the customer deployment authorization-server walkthrough\",\n  \"idempotencyKey\": \"{{oid4vciProfileUpgradeIdempotencyKey}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('profile upgrade applied', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.profile).to.eql(pm.variables.replaceIn('{{oid4vciTargetProfile}}'));",
+                  "pm.expect(Number(j.revision)).to.be.greaterThan(Number(pm.collectionVariables.get('oid4vciProfileRevision')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "48 List failed authorization server migrations",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations?status=FAILED&page=0&size=100",
+            "description": "Requires the live migration fixture to expose one failed unchanged source and one failed changed source. No source configuration or secret locator is returned.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('failed migrations listed', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "const changed = items.find((item) => item.failureCode === 'SOURCE_DIGEST_CHANGED' && item.currentSourceDigest);",
+                  "const unchanged = items.find((item) => item.failureCode !== 'SOURCE_DIGEST_CHANGED');",
+                  "pm.expect(changed, 'seeded changed-source migration').to.be.an('object');",
+                  "pm.expect(unchanged, 'seeded unchanged-source migration').to.be.an('object');",
+                  "pm.collectionVariables.set('changedMigrationId', changed.id);",
+                  "pm.collectionVariables.set('changedMigrationRevision', String(changed.revision));",
+                  "pm.collectionVariables.set('changedMigrationRecordedDigest', changed.sourceDigest);",
+                  "pm.collectionVariables.set('changedMigrationCurrentDigest', changed.currentSourceDigest);",
+                  "pm.collectionVariables.set('unchangedMigrationId', unchanged.id);",
+                  "pm.collectionVariables.set('unchangedMigrationRevision', String(unchanged.revision));",
+                  "pm.collectionVariables.set('unchangedMigrationSourceDigest', unchanged.sourceDigest);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "49 Inspect changed authorization server migration",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('changed migration inspected', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.status).to.eql('FAILED');",
+                  "pm.expect(j.failureCode).to.eql('SOURCE_DIGEST_CHANGED');",
+                  "pm.expect(j.sourceDigest).to.eql(pm.collectionVariables.get('changedMigrationRecordedDigest'));",
+                  "pm.expect(j.currentSourceDigest).to.eql(pm.collectionVariables.get('changedMigrationCurrentDigest'));",
+                  "pm.expect(JSON.stringify(j)).not.to.match(/secretValue|clientSecret|password|stackTrace/);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "50 Reject ordinary resume for changed migration source",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}/resume",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{changedMigrationRevision}}\",\n  \"expectedSourceDigest\": \"{{changedMigrationRecordedDigest}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('ordinary resume rejects changed digest', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "51 Resume unchanged authorization server migration",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{unchangedMigrationId}}/resume",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{unchangedMigrationRevision}}\",\n  \"expectedSourceDigest\": \"{{unchangedMigrationSourceDigest}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('unchanged migration resumed', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.status).to.eql('APPLIED');",
+                  "pm.expect(j.targetAuthorizationServerId).to.match(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i);",
+                  "pm.collectionVariables.set('resumedMigrationTargetAuthorizationServerId', j.targetAuthorizationServerId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "52 Accept reviewed authorization server migration source change",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}/accept-source-change",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{changedMigrationRevision}}\",\n  \"expectedRecordedSourceDigest\": \"{{changedMigrationRecordedDigest}}\",\n  \"expectedCurrentSourceDigest\": \"{{changedMigrationCurrentDigest}}\",\n  \"reason\": \"Reviewed source change approved by the tenant administrator\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('reviewed source change accepted', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.status).to.eql('APPLIED');",
+                  "pm.expect(j.sourceDigest).to.eql(pm.collectionVariables.get('changedMigrationCurrentDigest'));",
+                  "pm.expect(j.currentSourceDigest == null).to.eql(true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "53 Reject stale authorization server source-change acceptance",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}/accept-source-change",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{changedMigrationRevision}}\",\n  \"expectedRecordedSourceDigest\": \"{{changedMigrationRecordedDigest}}\",\n  \"expectedCurrentSourceDigest\": \"{{changedMigrationCurrentDigest}}\",\n  \"reason\": \"This stale acceptance must not mutate the ledger\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('stale source-change acceptance rejected', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "54 Verify stale acceptance did not mutate migration ledger",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('accepted migration re-read', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.status).to.eql('APPLIED');",
+                  "pm.expect(j.sourceDigest).to.eql(pm.collectionVariables.get('changedMigrationCurrentDigest'));",
+                  "pm.expect(j.currentSourceDigest == null).to.eql(true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "55 Delete disabled federation binding",
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/federation-bindings/{{federationBindingId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('disabled federation binding deleted', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "56 Delete hosted identity binding",
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/identities/{{authorizationServerIdentityId}}",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted identity binding deleted', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().deleted).to.eql(true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "57 Decommission hosted authorization server",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{hostedAuthorizationServerId}}/decommission",
+            "description": "",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{hostedAuthorizationServerRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('hosted authorization server decommissioned', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('hostedAuthorizationServerRevision', String(j.revision));",
+                  "pm.expect(pm.response.json().lifecycle).to.eql('DECOMMISSIONED');"
                 ]
               }
             }

@@ -282,6 +282,16 @@ validated-workload bindings, and satellite service-token credentials. Receiver
 audiences are fixed protocol identifiers shared with source-level STS and
 tenant-registration contracts; the chart does not expose audience overrides.
 
+The following notation identifies the fixed, chart-owned receiver-audience
+matrix. It is documentation notation, not a `values.yaml` override surface:
+
+| Fixed matrix entry | Protocol audience |
+| --- | --- |
+| `audiences.platform` | `enterprise-platform` |
+| `audiences.tenant-kms` | `enterprise-tenant-kms` |
+| `audiences.wallet-interaction` | `enterprise-wallet-interaction` |
+| `audiences.wallet-unit` | `enterprise-wallet-unit` |
+
 The receiver expected audience, route-requested audience, client default, and
 additional allowlist are different controls. The receiver validates its
 canonical `enterprise-<role>` audience. A caller route requests that value with

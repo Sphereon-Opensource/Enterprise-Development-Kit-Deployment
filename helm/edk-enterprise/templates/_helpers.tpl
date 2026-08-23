@@ -152,6 +152,8 @@ name, or an empty list for services that are not tenant-routed.
 - /admin-console/api/oid4vp/v1/testing
 - /admin-console/_next
 - /admin-console/public/assets
+{{- else if eq $name "business-wallet" -}}
+- /wallets
 {{- end -}}
 {{- end -}}
 

@@ -3,6 +3,7 @@
 {{- if $svc.enabled }}
 {{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
 {{- $isAdminConsole := or (eq $name "admin-console") (eq $name "admin-console-tenant") }}
+{{- $isBusinessWallet := eq $name "business-wallet" }}
 {{- $tenantGatewayPaths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
 {{- $gatewayRouted := and $.Values.gateway.enabled (or (eq $name "platform") (eq $name "admin-console") (eq $name "admin-console-tenant") (ne $tenantGatewayPaths "")) }}
 {{- $peersIn := list }}
@@ -27,6 +28,7 @@
 {{- if eq $name "verifier" }}{{- $peersOut = list "tenant-kms" "tenant-as" "did" "platform" "wallet-interaction" }}{{- end }}
 {{- if eq $name "admin-console" }}{{- $peersOut = list "platform" "did" "blob" "issuer" "verifier" }}{{- end }}
 {{- if eq $name "admin-console-tenant" }}{{- $peersOut = list "platform" "tenant-as" "did" "blob" "issuer" "verifier" }}{{- end }}
+{{- if $isBusinessWallet }}{{- $peersOut = list "platform" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" }}{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

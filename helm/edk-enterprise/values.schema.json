@@ -897,7 +897,7 @@
       "additionalProperties": false,
       "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
       "patternProperties": {
-        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console|admin-console-tenant)$": {
+        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console|admin-console-tenant|business-wallet)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {

@@ -6,9 +6,11 @@
        it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
        /admin-console/health route rather than the EDK /health endpoint. */}}
 {{- $isAdminConsole := or (eq $name "admin-console") (eq $name "admin-console-tenant") }}
+{{- $isBusinessWallet := eq $name "business-wallet" }}
+{{- $isFrontend := or $isAdminConsole $isBusinessWallet }}
 {{- $imageTag := $svc.imageTag | default $.Values.global.imageTag | default $.Chart.AppVersion }}
 {{- $secretAuthoritySecret := "" }}
-{{- if not $isAdminConsole }}
+{{- if not $isFrontend }}
 {{- $secretAuthoritySecret = index $.Values.secretAuthority.existingSecrets $name }}
 {{- end }}
 apiVersion: apps/v1
@@ -20,7 +22,7 @@ metadata:
     app.kubernetes.io/component: {{ $name }}
 spec:
   replicas: {{ $svc.replicas }}
-  {{- if not $isAdminConsole }}
+  {{- if not $isFrontend }}
   {{- /* Database schema migrations are fail-closed single-writer. RollingUpdate
          would run two schema generations against the same database at once and
          crash-loop the outgoing release, so the old pod must stop first. */}}
@@ -32,7 +34,7 @@ spec:
       {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
   template:
     metadata:
-      {{- if or (not $isAdminConsole) $.Values.podAnnotations }}
+      {{- if or (not $isFrontend) $.Values.podAnnotations }}
       annotations:
         {{- if eq $name "platform" }}
         checksum/platform-config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
@@ -69,7 +71,7 @@ spec:
       hostAliases:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- $waitForPlatformGrpc := and $.Values.grpc.enabled (not $isAdminConsole) (ne $name "platform") }}
+      {{- $waitForPlatformGrpc := and $.Values.grpc.enabled (not $isFrontend) (ne $name "platform") }}
       {{- if or (and (eq $name "platform") $.Values.license.trust.existingSecret) $waitForPlatformGrpc }}
       initContainers:
         {{- if and (eq $name "platform") $.Values.license.trust.existingSecret }}
@@ -140,7 +142,7 @@ spec:
               protocol: TCP
             {{- end }}
           env:
-            {{- if not $isAdminConsole }}
+            {{- if not $isFrontend }}
             # Secret-authority coordinate strings contain key identifiers,
             # validity windows, and in-container paths. They remain in the
             # workload-isolated Secret with the corresponding key material.
@@ -672,6 +674,16 @@ spec:
             - name: ADMIN_CONSOLE_TENANT_CONTEXT_URL
               value: {{ printf "http://%s:%v/api/platform/bootstrap/v1/admin-console-context" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             {{- end }}
+            {{- if $isBusinessWallet }}
+            - name: BUSINESS_WALLET_BOOTSTRAP_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            - name: BUSINESS_WALLET_TRUSTED_INGRESS_MODE
+              value: {{ $.Values.portalBff.trustedIngress.mode | quote }}
+            - name: BUSINESS_WALLET_TRUSTED_INGRESS_HOPS
+              value: {{ $.Values.portalBff.trustedIngress.hops | quote }}
+            - name: BUSINESS_WALLET_COOKIE_SECURE
+              value: "true"
+            {{- end }}
             {{- if eq $name "admin-console" }}
             - name: ADMIN_CONSOLE_PUBLIC_ORIGIN
               value: {{ $.Values.platform.externalBaseUrl | quote }}
@@ -771,7 +783,7 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            {{- if not $isAdminConsole }}
+            {{- if not $isFrontend }}
             - name: secret-authority
               mountPath: /app/secret-authority
               readOnly: true
@@ -865,7 +877,7 @@ spec:
             - name: license-state
               mountPath: {{ dir $.Values.license.trust.rootCaPath | quote }}
             {{- end }}
-            {{- if and (not $isAdminConsole) (ne $name "platform") $.Values.license.trust.existingSecret }}
+            {{- if and (not $isFrontend) (ne $name "platform") $.Values.license.trust.existingSecret }}
             {{- /* Satellites only READ the license root CA (their config points at this
                    path); the platform writes its own copy into the writable license-state
                    volume above. The installed license chains to this root. */}}
@@ -880,7 +892,7 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
-        {{- if not $isAdminConsole }}
+        {{- if not $isFrontend }}
         - name: secret-authority
           secret:
             secretName: {{ $secretAuthoritySecret | quote }}
@@ -918,7 +930,7 @@ spec:
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-{{ $name }}-config
         {{- end }}
-        {{- if and (not $isAdminConsole) $.Values.license.trust.existingSecret }}
+        {{- if and (not $isFrontend) $.Values.license.trust.existingSecret }}
         - name: license-root-ca
           secret:
             secretName: {{ $.Values.license.trust.existingSecret }}

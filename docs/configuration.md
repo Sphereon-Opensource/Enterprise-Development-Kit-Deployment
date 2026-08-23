@@ -381,7 +381,19 @@ audience. These values must move as one contract:
 In Helm the configurable credential bindings live under
 `serviceIdentity.clientIds` and `serviceIdentity.serviceIds`. Audience names are
 fixed protocol identifiers shared with source-level STS and tenant-registration
-contracts; the chart rejects `serviceIdentity.audiences`. The chart renders the
+contracts; the chart rejects a user-supplied `serviceIdentity.audiences` object.
+Documentation uses the following fully qualified names to identify the fixed
+entries in that governed matrix. These names describe chart-owned constants and
+are not additional customer values:
+
+| Fixed matrix entry | Protocol audience |
+| --- | --- |
+| `serviceIdentity.audiences.platform` | `enterprise-platform` |
+| `serviceIdentity.audiences.tenant-kms` | `enterprise-tenant-kms` |
+| `serviceIdentity.audiences.wallet-interaction` | `enterprise-wallet-interaction` |
+| `serviceIdentity.audiences.wallet-unit` | `enterprise-wallet-unit` |
+
+The chart renders the
 platform internal OAuth clients, validated-workload bindings, service token
 endpoints, fixed receiver audiences, and NetworkPolicy peer edges. Docker
 Compose uses the same fixed names in the mounted `compose/config/*.yml` files

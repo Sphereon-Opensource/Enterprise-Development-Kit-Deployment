@@ -7,7 +7,8 @@
 {{- $base := include "edk-enterprise.gateway.baseDomain" . }}
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
 {{- $wildcard := printf "*.%s" $base }}
-{{- $adminImage := printf "%s/%s:%s" .Values.global.imageRegistry (index .Values.services "admin-console").image (.Values.global.imageTag | default .Chart.AppVersion) }}
+{{- $adminImage := printf "%s/%s:%s" .Values.global.imageRegistry (index .Values.services "admin-console").image ((index .Values.services "admin-console").imageTag | default .Values.global.imageTag | default .Chart.AppVersion) }}
+{{- $walletImage := printf "%s/%s:%s" .Values.global.imageRegistry (index .Values.services "business-wallet").image ((index .Values.services "business-wallet").imageTag | default .Values.global.imageTag | default .Chart.AppVersion) }}
 {{- if and .Values.platformKeystore.enabled (not .Values.platformKeystore.existingClaim) }}
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -397,6 +398,77 @@ spec:
             {{- toYaml (index $.Values.services $console).resources | nindent 12 }}
 ---
 {{- end }}
+{{- $wallet := index .Values.services "business-wallet" }}
+{{- if $wallet.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "business-wallet") }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: business-wallet
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "business-wallet") | nindent 4 }}
+  ports:
+    - name: rest
+      port: {{ $wallet.restPort }}
+      targetPort: rest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "business-wallet") }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: business-wallet
+spec:
+  replicas: {{ $wallet.replicas }}
+  selector:
+    matchLabels:
+      {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "business-wallet") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "business-wallet") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "edk-enterprise.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: business-wallet
+          image: {{ $walletImage | quote }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: rest
+              containerPort: {{ $wallet.restPort }}
+          env:
+            - name: BUSINESS_WALLET_BOOTSTRAP_URL
+              value: {{ printf "http://%s:%v" $name .Values.monolith.restPort | quote }}
+            - name: BUSINESS_WALLET_TRUSTED_INGRESS_MODE
+              value: {{ .Values.portalBff.trustedIngress.mode | quote }}
+            - name: BUSINESS_WALLET_TRUSTED_INGRESS_HOPS
+              value: {{ .Values.portalBff.trustedIngress.hops | quote }}
+            - name: BUSINESS_WALLET_COOKIE_SECURE
+              value: "true"
+            {{- range $env := $wallet.env }}
+            {{- toYaml (list $env) | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /health, port: rest }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: rest }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml $wallet.resources | nindent 12 }}
+---
+{{- end }}
 {{- if .Values.gateway.enabled }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -451,6 +523,14 @@ spec:
   parentRefs: [{ name: {{ $gatewayName | quote }}, sectionName: https }]
   hostnames: [{{ $wildcard | quote }}]
   rules:
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: PathPrefix, value: /wallets }
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "business-wallet") }}
+          port: {{ (index .Values.services "business-wallet").restPort }}
     - timeouts:
         request: {{ .Values.gateway.requestTimeout | quote }}
         backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}

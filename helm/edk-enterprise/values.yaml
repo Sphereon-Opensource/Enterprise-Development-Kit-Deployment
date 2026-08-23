@@ -1048,3 +1048,30 @@ services:
         value: /admin-console
       - name: PORT
         value: "3000"
+
+  # One tenant-host runtime serves every configured business wallet. Tenant and
+  # wallet selection remain request-scoped through the platform bootstrap API.
+  business-wallet:
+    enabled: true
+    image: business-wallet
+    replicas: 1
+    restPort: 3006
+    publicIngress:
+      enabled: false
+      className: public
+      host: "*.example.com"
+      paths:
+        - /wallets
+      annotations: {}
+    internalIngress:
+      enabled: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    env:
+      - name: PORT
+        value: "3006"

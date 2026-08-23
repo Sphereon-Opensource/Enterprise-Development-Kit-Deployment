@@ -68,6 +68,9 @@ data:
     # LOCAL to avoid recursively invoking the remote KMS endpoint.
     transport:
       routing:
+        # Platform/license endpoints are deployment topology and must remain
+        # available before tenant/principal configuration has loaded.
+        configScope: APP
         modules:
           # Tenant registration migrations run while the ordinary platform
           # Service can still select the RC2 pod. Configuration refresh must

@@ -90,7 +90,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 113, 'shipped customer collection must contain 113 requests')
+assert.equal(requestCount(collection.item), 169, 'shipped customer collection must contain 169 requests')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 for (const name of [
@@ -301,7 +301,7 @@ assert.doesNotMatch(
 )
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
-  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp\n/u,
+  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email\n/u,
   'customer Compose must map authenticated service clients to their authorized secret workload identities',
 )
 assert.ok(
@@ -335,7 +335,7 @@ for (const sourceInvariant of [
   'verify-enterprise-image-set.mjs',
   'compose-postman-release-gate-support.mjs',
   "'--pull', 'never'",
-  "'E2E finished:\\s+113 requests captured,\\s+exit code 0\\.'",
+  "'E2E finished:\\s+169 requests captured,\\s+exit code 0\\.'",
   "'pg_dump --schema-only --no-owner --no-privileges",
   "'scan-producer'",
   'finalize-evidence',
@@ -517,7 +517,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     teardownStatus: 'failed',
     projectName: 'contract_project',
     tag: '0.25.0-RC3-contract',
-    requestCount: 113,
+    requestCount: 169,
     manifestPath: failedManifest,
     manifestHashPath: failedManifestHash,
   })
@@ -546,7 +546,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     teardownStatus: 'passed',
     projectName: 'contract_project',
     tag: '0.25.0-RC3-contract',
-    requestCount: 113,
+    requestCount: 169,
     manifestPath: sanitizedManifest,
     manifestHashPath: sanitizedHash,
   })
@@ -657,7 +657,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 113)
+  assert.equal(plan.requestCount, 169)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -696,7 +696,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 113)
+  assert.equal(monolithPlan.requestCount, 169)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Runs the customer Docker Compose topology and its 113-request Postman release gate.
+  Runs the customer Docker Compose topology and its 169-request Postman release gate.
 
 .DESCRIPTION
   This is a non-interactive, fail-closed release gate. Distributed topology
@@ -662,7 +662,7 @@ function Write-Plan {
     composeEnvFile = $resolvedComposeEnv
     collection = $collectionPath
     environment = $resolvedPostmanEnvironment
-    requestCount = 113
+    requestCount = 169
     immutableTag = $Tag
     sourceState = $resolvedSourceState
     expectedSource = $ExpectedSource
@@ -803,7 +803,7 @@ if ($Topology -eq 'Monolith') {
 $composeFiles += $selectedGatewayCompose
 $collection = Get-Content -LiteralPath $collectionPath -Raw | ConvertFrom-Json
 $requestCount = Count-Requests @($collection.item)
-if ($requestCount -ne 113) { Fail "Customer collection must contain exactly 113 requests; found $requestCount." }
+if ($requestCount -ne 169) { Fail "Customer collection must contain exactly 169 requests; found $requestCount." }
 if ($AccessMode -eq 'Localtest') {
   $gatewayRules = Get-Content -LiteralPath $gatewayDynamic -Raw
   if ($gatewayRules -notmatch [regex]::Escape("platform.$BaseDomain")) {
@@ -813,7 +813,7 @@ if ($AccessMode -eq 'Localtest') {
 Write-Plan
 
 if ($DryRun) {
-  Write-Host "Dry-run passed: customer $Topology/$AccessMode topology, immutable image plan, and 113-request collection validated."
+  Write-Host "Dry-run passed: customer $Topology/$AccessMode topology, immutable image plan, and 169-request collection validated."
   Write-Host "Plan: $(Join-Path $resolvedReportDir 'release-gate-plan.json')"
   exit 0
 }
@@ -1273,8 +1273,8 @@ try {
     '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
     '--base-domain', $BaseDomain
   ) (Join-Path $resolvedReportDir 'newman.log') $false
-  if ($runnerOutput -notmatch 'E2E finished:\s+113 requests captured,\s+exit code 0\.') {
-    Fail 'Newman did not execute and capture exactly all 113 request executions.'
+  if ($runnerOutput -notmatch 'E2E finished:\s+169 requests captured,\s+exit code 0\.') {
+    Fail 'Newman did not execute and capture exactly all 169 request executions.'
   }
   $junitPath = Join-Path $newmanStageDir 'junit.xml'
   Invoke-LoggedNative $nodeCommand @(
@@ -1435,7 +1435,7 @@ try {
       --teardown-status $teardownStatus `
       --project-name $ProjectName `
       --tag $Tag `
-      --request-count 113 `
+      --request-count 169 `
       --manifest (Join-Path $resolvedReportDir 'evidence-manifest.json') `
       --manifest-hash (Join-Path $resolvedReportDir 'evidence-manifest.sha256')
     $finalizationExit = $LASTEXITCODE

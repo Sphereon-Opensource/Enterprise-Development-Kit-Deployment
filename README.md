@@ -63,6 +63,17 @@ resources, such as an existing AWS KMS or Azure Key Vault key. Enable such a
 folder only after its provider, aliases, key identifiers, and public
 certificate material have been configured for the target tenant.
 
+The maintained collection contains 169 requests. Its authorization-server
+segment covers hosted and external UUID resources, discovery validation and
+refresh, lifecycle and tenant-isolation failures, public and confidential
+clients with secret redaction, identities, federation-binding validation and
+ordering, issuer default and override selection, protocol-profile dry-run and
+apply, and the distinct migration resume and audited source-change commands.
+Several negative and remediation scenarios require controlled preloaded
+database and discovery-source states. Prepare those states before running the
+collection. The public administration API deliberately cannot fabricate a
+stale discovery snapshot or a failed migration entry.
+
 ## Domain, DNS, and TLS model
 
 Every installation uses one customer-controlled base domain. The platform and

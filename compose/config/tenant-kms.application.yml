@@ -78,6 +78,9 @@ transport:
     enabled: true
     port: 9090
   routing:
+    # Platform/license endpoints are deployment topology and must remain
+    # available before tenant/principal configuration has loaded.
+    configScope: APP
     modules:
       platform:
         target: SERVER
