@@ -124,7 +124,7 @@
       "key": "externalKeyAlias",
       "value": "customer-external-key",
       "type": "string",
-      "description": "Customer-chosen alias for an existing external key. This is a logical tenant reference, not a private key or secret handle."
+      "description": "Exact provider-native alias of the existing external key. EDK stores it unchanged in this tenant's reference index; it is not a private key or secret handle. For a platform-shared AWS or Azure provider, the cloud object must have sphereon-tenant-id set to this collection's tenantId before registration."
     },
     {
       "key": "externalKeyKid",
@@ -148,7 +148,7 @@
       "key": "externalAzureCertificateAlias",
       "value": "customer-azure-leaf-certificate",
       "type": "string",
-      "description": "Customer-chosen alias for the Azure Key Vault provider-native leaf certificate."
+      "description": "Exact existing Azure Key Vault alias of the provider-native leaf certificate. EDK stores it unchanged in this tenant's certificate reference. For a platform-shared provider, the Azure certificate must have sphereon-tenant-id set to this collection's tenantId."
     },
     {
       "key": "externalAzureProviderCertificateId",
@@ -2702,7 +2702,7 @@
     },
     {
       "name": "06b External KMS Registration (optional)",
-      "description": "Optional customer templates for registering references to existing cloud-provider resources. Every request is disabled by default because it requires a provider that is already active and authorized for this tenant. Replace only the collection-local example values, enable the requests you need, and run them through the tenant gateway. Registration never creates or imports private key material. The DELETE examples remove only the EDK reference for externally managed resources and never delete the provider resource.",
+      "description": "Optional customer templates for registering references to existing cloud-provider resources. Every request is disabled by default because it requires a provider that is already active and authorized for this tenant. Replace only the collection-local example values, enable the requests you need, and run them through the tenant gateway. External key and provider-native certificate aliases are exact native provider identifiers and are stored unchanged in this tenant's reference index. For a platform-shared AWS or Azure provider, assign the native object with the cloud tag sphereon-tenant-id set to this collection's tenantId before registration. Tenant-owned providers do not require that shared-provider tag. Registration never creates or imports private key material. The DELETE examples remove only the EDK reference for externally managed resources and never delete the provider resource.",
       "item": [
         {
           "name": "01 Register existing external key with optional kid",
@@ -2710,7 +2710,7 @@
           "request": {
             "method": "POST",
             "url": "{{tenantKmsApiBaseUrl}}/keys/register",
-            "description": "Registers an existing customer-chosen key alias in an authorized provider. The kid is optional on this route; when supplied, EDK verifies that alias and kid identify the same provider key. This does not create, import, or export key material.",
+            "description": "Registers an existing key by its exact native alias in an authorized provider. EDK does not add the tenant prefix used for platform-managed generated keys. For a platform-shared AWS or Azure provider, set sphereon-tenant-id on the native key to this collection's tenantId before running the request. The kid is optional on this route; when supplied, EDK verifies that alias and kid identify the same provider key. This does not create, import, or export key material.",
             "header": [
               {
                 "key": "Authorization",
@@ -2751,6 +2751,7 @@
                   "const j = pm.response.json();",
                   "pm.expect(j.registered, 'registered').to.eql(true);",
                   "pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('externalAwsKmsProviderId'));",
+                  "pm.expect(j.alias, 'provider-native alias is preserved').to.eql(pm.collectionVariables.get('externalKeyAlias'));",
                   "pm.expect(j.origin, 'origin').to.eql('external');",
                   "pm.expect(j.controlMode, 'control mode').to.eql('externally_managed');"
                 ]
@@ -2764,7 +2765,7 @@
           "request": {
             "method": "POST",
             "url": "{{tenantKmsApiBaseUrl}}/keys/register",
-            "description": "Alias-only variant of external key registration. Omit kid when the provider does not expose a stable identifier to the customer. EDK resolves and persists the provider's canonical identity without importing key material.",
+            "description": "Alias-only variant of external key registration. The alias remains the exact native provider alias. For a platform-shared AWS or Azure provider, set sphereon-tenant-id on the native key to this collection's tenantId before running the request. Omit kid when the provider does not expose a stable identifier to the customer. EDK resolves and persists the provider's canonical identity without importing key material.",
             "header": [
               {
                 "key": "Authorization",
@@ -2805,6 +2806,7 @@
                   "const j = pm.response.json();",
                   "pm.expect(j.registered, 'registered').to.eql(true);",
                   "pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('externalAwsKmsProviderId'));",
+                  "pm.expect(j.alias, 'provider-native alias is preserved').to.eql(pm.collectionVariables.get('externalKeyAlias'));",
                   "pm.expect(j.origin, 'origin').to.eql('external');",
                   "pm.expect(j.controlMode, 'control mode').to.eql('externally_managed');"
                 ]
@@ -2923,7 +2925,7 @@
           "request": {
             "method": "POST",
             "url": "{{tenantKmsApiBaseUrl}}/certificates/register",
-            "description": "Registers an Azure Key Vault provider-native leaf certificate. The wire source value is provider_native, corresponding to PROVIDER_NATIVE. Azure leaf reads are delegated to the provider; this example does not submit a chain, follow AIA URLs, or export a PFX.",
+            "description": "Registers an Azure Key Vault provider-native leaf certificate by its exact existing Azure alias. EDK stores that alias unchanged. For a platform-shared provider, set sphereon-tenant-id on the Azure certificate to this collection's tenantId before running the request. The wire source value is provider_native, corresponding to PROVIDER_NATIVE. Azure leaf reads are delegated to the provider; this example does not submit a chain, follow AIA URLs, or export a PFX.",
             "header": [
               {
                 "key": "Authorization",
@@ -2963,6 +2965,7 @@
                   "pm.test('Azure provider-native leaf reference registered', () => pm.response.to.have.status(201));",
                   "const j = pm.response.json();",
                   "pm.expect(j.providerId, 'provider id').to.eql(pm.collectionVariables.get('externalAzureKmsProviderId'));",
+                  "pm.expect(j.alias, 'provider-native alias is preserved').to.eql(pm.collectionVariables.get('externalAzureCertificateAlias'));",
                   "pm.expect(j.kind, 'kind').to.eql('trusted_certificate');",
                   "pm.expect(j.source, 'source').to.eql('provider_native');",
                   "pm.expect(j.origin, 'origin').to.eql('external');",
