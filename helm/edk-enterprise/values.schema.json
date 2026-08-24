@@ -527,6 +527,11 @@
       "additionalProperties": true,
       "properties": {
         "externalBaseUrl": { "type": "string", "minLength": 1 },
+        "corsOrigins": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
         "setup": {
           "type": "object",
           "additionalProperties": false,

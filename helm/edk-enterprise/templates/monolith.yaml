@@ -5,6 +5,7 @@
 {{- $tenantDb := .Values.database.tenant }}
 {{- $gatewayName := printf "%s-gateway" (include "edk-enterprise.fullname" .) }}
 {{- $base := include "edk-enterprise.gateway.baseDomain" . }}
+{{- $bootstrap := .Values.platform.bootstrap }}
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
 {{- $wildcard := printf "*.%s" $base }}
 {{- $adminImage := printf "%s/%s:%s" .Values.global.imageRegistry (index .Values.services "admin-console").image ((index .Values.services "admin-console").imageTag | default .Values.global.imageTag | default .Chart.AppVersion) }}
@@ -36,10 +37,59 @@ metadata:
     app.kubernetes.io/component: monolith
 data:
   application-container.yml: |
+    # The platform operator client is intentionally application-agnostic. Keep
+    # this security boundary explicit in the mounted overlay because monolith
+    # deployments replace, rather than merge, the packaged container config.
+    auth:
+      login:
+        require-application: false
+    # Supply the same durable owner-bootstrap contract as the distributed
+    # platform process. The monolith overlay replaces the packaged container
+    # config, so omitting these fields silently deferred owner provisioning.
+    application:
+      tenant:
+        id: "platform"
+        hosted-as:
+          issuer: {{ $bootstrap.issuer | quote }}
+        owner:
+          {{- if $bootstrap.automatic }}
+          email: {{ required "platform.bootstrap.owner.email is required when platform.bootstrap.automatic=true" $bootstrap.owner.email | quote }}
+          display-name: {{ required "platform.bootstrap.owner.displayName is required when platform.bootstrap.automatic=true" $bootstrap.owner.displayName | quote }}
+          {{- end }}
+          {{- with $bootstrap.owner.roles }}
+          roles: {{ . | quote }}
+          {{- end }}
+    # The monolith is a non-production composition, but its issuer and holder journeys still
+    # use the same durable tenant database providers as the distributed production services.
+    # No OID4VCI protocol continuation state may fall back to an in-process memory store.
+    kv:
+      stores:
+        blob:
+          metadata: &oid4vciTenantDatabaseKv
+            type: KvStoreConfig
+            backendId: database
+            scopeBinding: TENANT
+        wallet-interaction-sessions: *oid4vciTenantDatabaseKv
+        wallet-interaction-blobs: *oid4vciTenantDatabaseKv
+        oid4vci:
+          offers: *oid4vciTenantDatabaseKv
+          sessions: *oid4vciTenantDatabaseKv
+          nonces: *oid4vciTenantDatabaseKv
+          deferred: *oid4vciTenantDatabaseKv
+          notifications: *oid4vciTenantDatabaseKv
+          credential-request-identities: *oid4vciTenantDatabaseKv
     oauth2:
       servers:
         default:
+          user-provider:
+            mode: {{ .Values.platform.bootstrap.userProviderMode | quote }}
 {{ include "edk-enterprise.platformWebAuthnConfig" . | indent 10 }}
+    {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
+    tenant:
+      platform:
+        owner:
+          initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+    {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -180,6 +230,16 @@ spec:
             # monolith image's local-config development account fallback.
             - name: OAUTH2_USER_PROVIDER_MODE
               value: {{ .Values.platform.bootstrap.userProviderMode | quote }}
+            # The packaged monolith configuration names its hosted AS instance
+            # `default`. Override that per-instance selector as well; otherwise it
+            # takes precedence over the global mode above and silently selects the
+            # development-only local-config credential provider.
+            - name: OAUTH2_SERVERS_DEFAULT_USER_PROVIDER_MODE
+              value: {{ .Values.platform.bootstrap.userProviderMode | quote }}
+            {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
+            - name: EDK_OWNER_INITIAL_CREDENTIAL
+              value: {{ $bootstrap.ownerInitialCredential | quote }}
+            {{- end }}
             - name: APPLICATION_TENANT_HOSTED_AS_ISSUER
               value: {{ .Values.platform.externalBaseUrl | quote }}
             - name: OID4VCI_ISSUER_IDENTIFIER
@@ -191,7 +251,7 @@ spec:
             - name: TENANT_RESOLUTION_PLATFORM_BASE_DOMAIN
               value: {{ $base | quote }}
             - name: CORS_ORIGINS
-              value: {{ .Values.platform.externalBaseUrl | quote }}
+              value: {{ include "edk-enterprise.browserCorsOrigins" . | quote }}
             # One in-process persisted software KMS serves platform and tenant
             # data through database routing. No remote module or self-gRPC route is rendered.
             - name: SPHEREON_SERVICE_ID
@@ -528,6 +588,9 @@ spec:
         backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
       matches:
         - path: { type: PathPrefix, value: /wallets }
+        # Business Wallet has a dynamic wallet slug and therefore cannot use a
+        # build-time Next basePath. Its browser assets remain rooted at /_next.
+        - path: { type: PathPrefix, value: /_next }
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "business-wallet") }}
           port: {{ (index .Values.services "business-wallet").restPort }}

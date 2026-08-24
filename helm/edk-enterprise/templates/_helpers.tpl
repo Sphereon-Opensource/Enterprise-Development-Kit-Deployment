@@ -10,6 +10,24 @@
 {{- end -}}
 {{- end -}}
 
+{{/*
+Exact browser origins accepted by the public REST CORS policy. The platform
+origin is always present; tenant wallet origins and optional docs origins are
+merged without weakening the policy to a wildcard.
+*/}}
+{{- define "edk-enterprise.browserCorsOrigins" -}}
+{{- $origins := list .Values.platform.externalBaseUrl -}}
+{{- range (.Values.platform.corsOrigins | default (list)) -}}
+{{- $origins = append $origins . -}}
+{{- end -}}
+{{- if .Values.docsPlayground.enabled -}}
+{{- range (.Values.docsPlayground.origins | default (list)) -}}
+{{- $origins = append $origins . -}}
+{{- end -}}
+{{- end -}}
+{{- join "," (uniq $origins) -}}
+{{- end -}}
+
 {{- define "edk-enterprise.serviceName" -}}
 {{- printf "%s-%s" (include "edk-enterprise.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
@@ -154,6 +172,7 @@ name, or an empty list for services that are not tenant-routed.
 - /admin-console/public/assets
 {{- else if eq $name "business-wallet" -}}
 - /wallets
+- /_next
 {{- end -}}
 {{- end -}}
 

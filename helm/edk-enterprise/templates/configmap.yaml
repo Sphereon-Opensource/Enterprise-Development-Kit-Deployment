@@ -93,11 +93,7 @@ data:
         allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
       {{- end }}
     cors:
-      {{- if and .Values.docsPlayground.enabled .Values.docsPlayground.origins }}
-      origins: ${env:ONBOARDING_UI_BASE_URL},{{ .Values.docsPlayground.origins | join "," }}
-      {{- else }}
-      origins: ${env:ONBOARDING_UI_BASE_URL}
-      {{- end }}
+      origins: {{ include "edk-enterprise.browserCorsOrigins" . | quote }}
     account-action:
       # Tokens are appended as a URL fragment and never reach ingress access logs.
       public-base-url: ${env:ONBOARDING_UI_BASE_URL}/admin-console

@@ -312,6 +312,11 @@ platform:
   # validating east-west platform bearers. It must equal the EXTERNAL_BASE_URL the
   # platform service stamps on the tokens it mints.
   externalBaseUrl: https://platform.example.com
+  # Additional browser origins that legitimately call the tenant-routed public
+  # APIs served by this installation. Tenant-scoped Business Wallet and account-
+  # action pages run on tenant subdomains, so list their exact HTTPS origins.
+  # An unrestricted wildcard origin is deliberately not implied.
+  corsOrigins: []
   setup:
     licenseRequest:
       # KMS material defaults used when creating the installation-bound license
@@ -1062,6 +1067,7 @@ services:
       host: "*.example.com"
       paths:
         - /wallets
+        - /_next
       annotations: {}
     internalIngress:
       enabled: false
