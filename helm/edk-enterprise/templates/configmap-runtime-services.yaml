@@ -613,6 +613,7 @@ data:
         scope-binding: TENANT
       wallet-interaction-blobs: *walletDatabaseKv
       wallet-interaction-sessions: *walletDatabaseKv
+      handoff-sessions: *walletDatabaseKv
     wallet:
       interaction:
         trust:

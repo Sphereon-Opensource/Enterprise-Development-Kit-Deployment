@@ -71,6 +71,7 @@ data:
             scopeBinding: TENANT
         wallet-interaction-sessions: *oid4vciTenantDatabaseKv
         wallet-interaction-blobs: *oid4vciTenantDatabaseKv
+        handoff-sessions: *oid4vciTenantDatabaseKv
         oid4vci:
           offers: *oid4vciTenantDatabaseKv
           sessions: *oid4vciTenantDatabaseKv
