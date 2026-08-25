@@ -682,6 +682,16 @@
         "blindIndexKey": { "type": "string", "minLength": 1 }
       }
     },
+    "federationSessionEncryption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["existingSecret", "key", "activeKeyId"],
+      "properties": {
+        "existingSecret": { "type": "string" },
+        "key": { "type": "string", "minLength": 1 },
+        "activeKeyId": { "type": "string", "minLength": 1 }
+      }
+    },
     "license": {
       "type": "object",
       "additionalProperties": true,

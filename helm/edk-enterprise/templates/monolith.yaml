@@ -43,6 +43,20 @@ data:
     auth:
       login:
         require-application: false
+    # Federation initiation happens before tenant context exists. Keep its
+    # pending state under a deployment-scoped key supplied through a Secret.
+    app:
+      security:
+        encryption:
+          activeKeyId: {{ .Values.federationSessionEncryption.activeKeyId | quote }}
+          keys:
+            {{ .Values.federationSessionEncryption.activeKeyId | quote }}: ${env:FEDERATION_SESSION_ENCRYPTION_KEY}
+    # Trust and identity services are co-located in the monolith. Read anchor
+    # identifiers from the durable tenant PostgreSQL repository so the stored
+    # protection envelope remains authoritative during matching.
+    trust-domain:
+      identifier-source:
+        mode: same-database
     # Supply the same durable owner-bootstrap contract as the distributed
     # platform process. The monolith overlay replaces the packaged container
     # config, so omitting these fields silently deferred owner provisioning.
@@ -207,6 +221,10 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ .Values.issuerPipeline.existingSecret | quote }}, key: {{ .Values.issuerPipeline.masterKekKey | quote }} } }
             - name: EDK_PIPELINE_BLIND_INDEX_KEY
               valueFrom: { secretKeyRef: { name: {{ .Values.issuerPipeline.existingSecret | quote }}, key: {{ .Values.issuerPipeline.blindIndexKey | quote }} } }
+            {{- end }}
+            {{- if .Values.federationSessionEncryption.existingSecret }}
+            - name: FEDERATION_SESSION_ENCRYPTION_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.federationSessionEncryption.existingSecret | quote }}, key: {{ .Values.federationSessionEncryption.key | quote }} } }
             {{- end }}
             - name: APP_PROFILE
               value: container

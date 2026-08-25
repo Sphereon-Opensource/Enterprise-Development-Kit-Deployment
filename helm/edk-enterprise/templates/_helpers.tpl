@@ -247,6 +247,8 @@ east-west Authorization headers or software-keystore access.
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
 {{- $issuerPipelineSecret := trim (default "" .Values.issuerPipeline.existingSecret) -}}
+{{- $federationSessionSecret := trim (default "" .Values.federationSessionEncryption.existingSecret) -}}
+{{- $tenantAsEnabled := index .Values.services "tenant-as" -}}
 {{- if and $satelliteEnabled (eq $identitySecret "") -}}
 {{- fail "serviceIdentity.internalClientExistingSecret is required when an EDK satellite service is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the key configured by serviceIdentity.internalClientSecretKey (default: internal-client-secret), then reference that Secret by name." -}}
 {{- end -}}
@@ -261,6 +263,9 @@ east-west Authorization headers or software-keystore access.
 {{- end -}}
 {{- if eq .Values.issuerPipeline.masterKekKey .Values.issuerPipeline.blindIndexKey -}}
 {{- fail "issuerPipeline.masterKekKey and issuerPipeline.blindIndexKey must be distinct Secret keys." -}}
+{{- end -}}
+{{- if and (or (eq $mode "monolith") (and $tenantAsEnabled $tenantAsEnabled.enabled)) (eq $federationSessionSecret "") -}}
+{{- fail "federationSessionEncryption.existingSecret is required when the monolith or tenant-as service is enabled. Create a Kubernetes Secret containing an independent 32-byte standard base64 value under federationSessionEncryption.key, then reference that Secret by name." -}}
 {{- end -}}
 {{- if eq .Values.portalBff.kms.encryptionKeyAlias .Values.portalBff.kms.handleHmacKeyAlias -}}
 {{- fail "portalBff.kms.encryptionKeyAlias and portalBff.kms.handleHmacKeyAlias must be distinct." -}}

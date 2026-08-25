@@ -26,6 +26,14 @@ data:
   application.yml: |
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "tenant-as")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
+    # Federation initiation happens before tenant context exists. Keep its
+    # pending state under a deployment-scoped key supplied through a Secret.
+    app:
+      security:
+        encryption:
+          activeKeyId: {{ .Values.federationSessionEncryption.activeKeyId | quote }}
+          keys:
+            {{ .Values.federationSessionEncryption.activeKeyId | quote }}: ${env:FEDERATION_SESSION_ENCRYPTION_KEY}
     config:
       providers:
         platform-config-remote:

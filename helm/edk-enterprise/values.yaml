@@ -494,6 +494,14 @@ issuerPipeline:
   masterKekKey: master-kek
   blindIndexKey: blind-index-key
 
+# Deployment-scoped encryption for pending federation/session records. The
+# chart references an existing Secret and never generates or stores key
+# material itself.
+federationSessionEncryption:
+  existingSecret: ""
+  key: federation-session-encryption-key
+  activeKeyId: federation-session-v1
+
 license:
   # Optional explicit installation pin for the license gate. Leave empty during
   # first-run setup; the protected license bundle supplies the installation id.

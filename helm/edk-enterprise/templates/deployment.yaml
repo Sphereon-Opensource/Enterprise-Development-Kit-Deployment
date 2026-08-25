@@ -292,6 +292,13 @@ spec:
                   name: {{ $.Values.issuerPipeline.existingSecret }}
                   key: {{ $.Values.issuerPipeline.blindIndexKey }}
             {{- end }}
+            {{- if and (eq $name "tenant-as") $.Values.federationSessionEncryption.existingSecret }}
+            - name: FEDERATION_SESSION_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.federationSessionEncryption.existingSecret }}
+                  key: {{ $.Values.federationSessionEncryption.key }}
+            {{- end }}
             {{- /* Public URLs the satellites self-fetch JWKS from and the platform/tenant
                    AS stamp as token issuers. The platform host and tenant-AS host derive
                    from the installation base domain. */}}
