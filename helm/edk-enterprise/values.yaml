@@ -63,7 +63,13 @@ database:
     # DNS/external managed Postgres; set podSelector or ipBlock in production values
     # to restrict egress to the platform database only.
     networkPolicy:
-      podSelector: {}
+      # Empty selectors must never fall back to a broad CIDR. The default
+      # assumes an in-cluster PostgreSQL workload with this reviewed label;
+      # external databases must provide an explicit private endpoint CIDR and
+      # enforce the same identity boundary at the database/firewall layer.
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: edk-platform-postgres
       namespaceSelector: {}
       ipBlock: {}
   # Secret management uses two fixed, separately credentialed PostgreSQL runtime roles
@@ -88,7 +94,9 @@ database:
     # DNS/external managed Postgres; set podSelector or ipBlock in production values
     # to restrict egress to the tenant database only.
     networkPolicy:
-      podSelector: {}
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: edk-tenant-postgres
       namespaceSelector: {}
       ipBlock: {}
 # Metadata for the explicit post-provision WeBuild TS 119 612 operator command.

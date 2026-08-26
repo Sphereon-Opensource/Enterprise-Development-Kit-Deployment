@@ -166,16 +166,6 @@ database:
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
     # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
-    secret-management-admin:
-      dialect: postgresql
-      isolation: shared
-      host: ${env:EDK_TENANT_DB_HOST}
-      port: 5432
-      database: ${env:EDK_TENANT_DB_NAME}
-      username: secret_management_admin
-      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      pool:
-        dedicated-pool: true
     secret-management-tenant:
       dialect: postgresql
       isolation: shared

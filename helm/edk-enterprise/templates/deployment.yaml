@@ -487,11 +487,6 @@ spec:
                 secretKeyRef:
                   name: {{ $tenantDb.existingSecret }}
                   key: {{ $tenantDb.passwordKey }}
-            - name: EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $.Values.database.secretManagement.existingSecret }}
-                  key: {{ $.Values.database.secretManagement.adminPasswordKey }}
             - name: EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD
               valueFrom:
                 secretKeyRef:

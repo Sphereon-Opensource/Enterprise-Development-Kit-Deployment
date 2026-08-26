@@ -384,17 +384,8 @@ secret:
 {{- $tenantDb := .Values.database.tenant -}}
 database:
   app:
-    # The platform barrier owns DDL; satellites receive runtime roles only.
-    secret-management-admin:
-      dialect: {{ .Values.database.dialect }}
-      isolation: shared
-      host: {{ $tenantDb.host }}
-      port: {{ $tenantDb.port }}
-      database: {{ $tenantDb.name }}
-      username: secret_management_admin
-      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      pool:
-        dedicated-pool: true
+    # The platform barrier owns DDL and authority persistence. Satellites receive
+    # only the tenant-serving runtime role for their local persistence.
     secret-management-tenant:
       dialect: {{ .Values.database.dialect }}
       isolation: shared

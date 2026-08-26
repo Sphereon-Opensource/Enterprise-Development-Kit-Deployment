@@ -52,9 +52,8 @@ x-edk-tenant-db-env: &edk-tenant-db-env
   EDK_TENANT_DB_NAME: ${EDK_TENANT_DB_NAME:-tenant}
   EDK_TENANT_DB_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
   EDK_TENANT_DB_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
-  # Every runtime hosts the secret-use broker and must connect through the two
-  # restricted secret-management roles, never through the general tenant role.
-  EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+  # Every runtime hosts the secret-use broker and uses only the tenant-serving
+  # role. Authority-admin persistence credentials are platform-only.
   EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
 
 x-edk-runtime-healthcheck-8080: &edk-runtime-healthcheck-8080
