@@ -399,6 +399,17 @@ endpoints, fixed receiver audiences, and NetworkPolicy peer edges. Docker
 Compose uses the same fixed names in the mounted `compose/config/*.yml` files
 and admin-console environment.
 
+Helm distinguishes **identity-ready** from **serving-ready**. `/health/identity`
+is 200 when gRPC is listening and the platform can serve `/token` and
+`/.well-known/jwks.json`; it does not wait for tenant ceremony. `/ready` stays
+the boot-ceremony gate. Distributed installs render `*-platform-identity` and
+`*-tenant-kms-identity` ClusterIP Services for that identity plane.
+Tenant-KMS is the only caller of `*-platform-identity` (token, JWKS, and gRPC).
+The platform boot ceremony is the only caller of `*-tenant-kms-identity`.
+Issuer, verifier, DID, tenant-AS, wallets, and the admin console keep using the
+serving `*-platform` Service, whose readiness is `/ready`. Compose shares
+`appnet` and keeps `enterprise-platform:9090`; it does not add identity aliases.
+
 Keep these four audience concepts distinct:
 
 - The **receiver expected audience** is the fixed protocol value a receiving

@@ -32,6 +32,11 @@ merged without weakening the policy to a wildcard.
 {{- printf "%s-%s" (include "edk-enterprise.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/* Identity-plane ClusterIP used before serving-ready. Tenant-KMS dials platform-identity; platform boot dials tenant-kms-identity. */}}
+{{- define "edk-enterprise.identityServiceName" -}}
+{{- printf "%s-%s-identity" (include "edk-enterprise.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{/*
 The chart has one deployment model. `topology.mode` changes only the process
 composition: distributed exposes the individual logical workloads; monolith

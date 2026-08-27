@@ -53,9 +53,9 @@ spec:
       labels:
         {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 8 }}
         {{- if eq $name "platform" }}
-        edk.sphereon.com/platform-authority-bootstrap: "true"
+        edk.sphereon.com/platform-identity: "true"
         {{- else if eq $name "tenant-kms" }}
-        edk.sphereon.com/tenant-kms-authority-bootstrap: "true"
+        edk.sphereon.com/tenant-kms-identity: "true"
         {{- end }}
     spec:
       serviceAccountName: {{ if eq $name "platform" }}{{ include "edk-enterprise.platformServiceAccountName" $ }}{{ else }}{{ include "edk-enterprise.serviceAccountName" $ }}{{ end }}
@@ -98,12 +98,10 @@ spec:
         {{- if $waitForPlatformGrpc }}
         {{- $platformGrpcService := include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
         {{- if eq $name "tenant-kms" }}
-        {{- $platformGrpcService = printf "%s-platform-authority-bootstrap" (include "edk-enterprise.fullname" $) }}
+        {{- $platformGrpcService = include "edk-enterprise.identityServiceName" (dict "root" $ "name" "platform") }}
         {{- end }}
-        # Do not construct a long-lived gRPC channel while the platform Service
-        # has no ready endpoint. Netty's reconnect backoff can otherwise outlive
-        # the first tenant-registration request even though the platform becomes
-        # ready moments later.
+        # Tenant-KMS waits on the platform identity Service (identity-ready,
+        # /health/identity). Other satellites wait on the serving Service (/ready).
         - name: wait-for-platform-grpc
           image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $imageTag }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
@@ -158,7 +156,7 @@ spec:
                   key: {{ $.Values.secretAuthority.keys.satellitePermitVerificationKeys | quote }}
             {{- if eq $name "platform" }}
             - name: TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST
-              value: {{ printf "%s-tenant-kms-authority-bootstrap" (include "edk-enterprise.fullname" $) | quote }}
+              value: {{ include "edk-enterprise.identityServiceName" (dict "root" $ "name" "tenant-kms") | quote }}
             - name: TENANT_KMS_AUTHORITY_BOOTSTRAP_PORT
               value: {{ $.Values.grpc.port | quote }}
             - name: SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY
@@ -619,12 +617,16 @@ spec:
                    calls to the platform (config reads + license-state projection) and to
                    its KMS hop. The platform AS issues the token; the satellite authenticates
                    as its per-service confidential client with that role's client secret.
-                   The token endpoint is the platform authority bootstrap Service: satellites must
-                   mint their identity while the platform is deliberately unready during its boot
-                   ceremony, and the regular Service excludes not-ready endpoints. */}}
+                   Tenant-KMS mints against platform-identity while the platform
+                   is identity-ready but not serving-ready. Other satellites wait
+                   for the serving Service. */}}
             {{- if and $.Values.serviceIdentity.internalClientExistingSecret (ne $name "platform") }}
+            {{- $identityTokenHost := include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
+            {{- if eq $name "tenant-kms" }}
+            {{- $identityTokenHost = include "edk-enterprise.identityServiceName" (dict "root" $ "name" "platform") }}
+            {{- end }}
             - name: SERVER_SERVICE_IDENTITY_TOKEN_ENDPOINT
-              value: {{ printf "http://%s-platform-authority-bootstrap:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s:%v/token" $identityTokenHost (index $.Values.services "platform").restPort | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_ID
               value: {{ index $.Values.serviceIdentity.clientIds $name | quote }}
             {{- /* Once tenant configuration is active, select the tenant-scoped
@@ -669,12 +671,16 @@ spec:
             {{- /* Trust anchor for the platform authorization server. Satellites validate
                    platform-issued bearers on east-west calls against this token issuer and
                    fetch its JWKS in-cluster. The issuer must equal the platform AS token `iss`
-                   (its external base URL); the JWKS URI is the in-cluster authority bootstrap
-                   Service, reachable across the platform boot ceremony like the token endpoint. */}}
+                   (its external base URL); tenant-KMS fetches JWKS from platform-identity
+                   during boot, other satellites from the serving platform Service. */}}
             - name: SERVER_REST_AUTH_PLATFORM_ISSUER
               value: {{ $.Values.platform.externalBaseUrl | quote }}
+            {{- $jwksHost := include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
+            {{- if eq $name "tenant-kms" }}
+            {{- $jwksHost = include "edk-enterprise.identityServiceName" (dict "root" $ "name" "platform") }}
+            {{- end }}
             - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
-              value: {{ printf "http://%s-platform-authority-bootstrap:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s:%v/.well-known/jwks.json" $jwksHost (index $.Values.services "platform").restPort | quote }}
             {{- $restAudience := include "edk-enterprise.serviceAudience" (dict "root" $ "name" $name) }}
             {{- if $restAudience }}
             - name: SERVER_REST_AUTH_EXPECTED_AUDIENCE
@@ -763,6 +769,10 @@ spec:
             {{- end }}
             {{- end }}
           {{- $probePath := $isAdminConsole | ternary "/admin-console/health" "/health" }}
+          {{- $readinessPath := $probePath }}
+          {{- if or (eq $name "platform") (eq $name "tenant-kms") }}
+          {{- $readinessPath = "/ready" }}
+          {{- end }}
           {{- if and $.Values.grpc.enabled $grpcReceiver }}
           # The REST listener becomes healthy before the native process starts its
           # gRPC command server. Keep the pod out of Service endpoints until the
@@ -792,14 +802,11 @@ spec:
               port: rest
             initialDelaySeconds: 20
             periodSeconds: 20
-          # Deliberately /health, not /ready: /ready is gated on the platform's boot ceremony,
-          # and that ceremony calls satellites whose init gate waits for the platform Service to
-          # have a ready endpoint. Pointing readiness at /ready deadlocks the two. Flipping it
-          # requires those init gates to dial the bootstrap authority Service first, which
-          # publishes not-ready addresses.
+          # Serving-ready for platform and tenant-KMS. Identity-plane callers use
+          # *-identity Services whose documented probe is /health/identity.
           readinessProbe:
             httpGet:
-              path: {{ $probePath }}
+              path: {{ $readinessPath }}
               port: rest
             initialDelaySeconds: 10
             periodSeconds: 10

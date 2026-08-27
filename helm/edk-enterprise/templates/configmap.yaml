@@ -448,19 +448,19 @@ data:
             services:
               key:
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
               # Typed key-resource operations are a separate service namespace.
               # Customer tenant sessions route them to tenant-KMS while the
               # application tenant continues to select LOCAL.
               leaf:
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
               mac:
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
               encryption:
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s-tenant-kms-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
           {{- end }}
           {{- if (index .Values.services "tenant-as").enabled }}
           # A tenant's authorization server owns its signing-key store. Registration provisions
@@ -606,12 +606,10 @@ data:
           enabled: true
         self:
           # Every in-cluster name the platform answers HTTP on, including the
-          # bootstrap authority Service satellites mint their workload tokens
-          # against. A name missing here reaches tenant resolution as an
-          # unknown host and fails closed, so east-west calls to /token and
-          # /.well-known/jwks.json are refused before the endpoint runs.
+          # identity Service tenant-KMS mints against while the serving Service
+          # is still unready. A name missing here fails tenant resolution closed.
           tenant-id: "platform"
-          hosts: {{ printf "%s,%s:%v,%s-platform-authority-bootstrap,%s-platform-authority-bootstrap:%v,localhost,platform.%s%s" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) (include "edk-enterprise.fullname" .) (include "edk-enterprise.fullname" .) (.Values.services.platform.restPort) .Values.global.platformBaseDomain (.Values.platform.bootstrap.selfHostsExtra | default "") | quote }}
+          hosts: {{ printf "%s,%s:%v,%s,%s:%v,localhost,platform.%s%s" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) (include "edk-enterprise.identityServiceName" (dict "root" . "name" "platform")) (include "edk-enterprise.identityServiceName" (dict "root" . "name" "platform")) (.Values.services.platform.restPort) .Values.global.platformBaseDomain (.Values.platform.bootstrap.selfHostsExtra | default "") | quote }}
       {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
       platform:
         owner:

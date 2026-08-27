@@ -9,6 +9,10 @@ metadata:
   labels:
     {{- include "edk-enterprise.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
+  {{- if or (eq $name "platform") (eq $name "tenant-kms") }}
+  annotations:
+    edk.sphereon.com/readiness-path: /ready
+  {{- end }}
 spec:
   type: ClusterIP
   selector:
