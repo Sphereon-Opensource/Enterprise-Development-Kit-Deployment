@@ -122,6 +122,51 @@ root so Helm can load files/service-identity-catalog.yaml.
 {{- join "," $audiences -}}
 {{- end -}}
 
+{{- define "edk-enterprise.serviceIdentity.clientSecretEnvName" -}}
+{{- printf "EDK_INTERNAL_CLIENT_SECRET_%s" (upper (replace "-" "_" .)) -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" -}}
+${env:{{ include "edk-enterprise.serviceIdentity.clientSecretEnvName" . }}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.clientSecretKey" -}}
+{{- $keys := .root.Values.serviceIdentity.clientSecretKeys | default dict -}}
+{{- $key := trim (toString (default "" (index $keys .role))) -}}
+{{- if eq $key "" -}}
+{{- fail (printf "serviceIdentity.clientSecretKeys.%s is required when the %s client is enabled. Set a distinct Kubernetes Secret key per satellite client; serviceIdentity.internalClientSecretKey is no longer supported." .role .role) -}}
+{{- end -}}
+{{- $key -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.roleNeedsClientSecret" -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles .role -}}
+{{- if and $row $row.clientId -}}
+{{- if eq $row.kind "satellite" -}}
+{{- $svc := index .root.Values.services .role -}}
+{{- if and $svc $svc.enabled }}true{{ else }}false{{ end -}}
+{{- else if eq $row.kind "auxiliary-client" -}}
+{{- if (index .root.Values.services "tenant-as").enabled }}true{{ else }}false{{ end -}}
+{{- else }}false{{ end -}}
+{{- else }}false{{ end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.platformClientSecretEnv" -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" . | fromYaml -}}
+{{- $envs := list -}}
+{{- $secret := .Values.serviceIdentity.internalClientExistingSecret -}}
+{{- range $role, $row := $catalog.roles -}}
+{{- if eq (include "edk-enterprise.serviceIdentity.roleNeedsClientSecret" (dict "root" $ "role" $role)) "true" -}}
+{{- $key := include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" $role) -}}
+{{- $envs = append $envs (dict "name" (include "edk-enterprise.serviceIdentity.clientSecretEnvName" $role) "valueFrom" (dict "secretKeyRef" (dict "name" $secret "key" $key))) -}}
+{{- end -}}
+{{- end -}}
+{{- if $envs -}}
+{{- toYaml $envs -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Thin wrapper over catalog receiverAudience. Requires dict root+name (or role).
 */}}
@@ -334,8 +379,22 @@ east-west Authorization headers or software-keystore access.
 {{- $issuerPipelineSecret := trim (default "" .Values.issuerPipeline.existingSecret) -}}
 {{- $federationSessionSecret := trim (default "" .Values.federationSessionEncryption.existingSecret) -}}
 {{- $tenantAsEnabled := index .Values.services "tenant-as" -}}
+{{- if hasKey .Values.serviceIdentity "internalClientSecretKey" -}}
+{{- fail "serviceIdentity.internalClientSecretKey is no longer supported. Set serviceIdentity.clientSecretKeys.<role> to a distinct Kubernetes Secret key for each satellite client." -}}
+{{- end -}}
 {{- if and $satelliteEnabled (eq $identitySecret "") -}}
-{{- fail "serviceIdentity.internalClientExistingSecret is required when an EDK satellite service is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the key configured by serviceIdentity.internalClientSecretKey (default: internal-client-secret), then reference that Secret by name." -}}
+{{- fail "serviceIdentity.internalClientExistingSecret is required when an EDK satellite service is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the distinct keys in serviceIdentity.clientSecretKeys, then reference that Secret by name." -}}
+{{- end -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" . | fromYaml -}}
+{{- $usedSecretKeys := dict -}}
+{{- range $role, $row := $catalog.roles -}}
+{{- if eq (include "edk-enterprise.serviceIdentity.roleNeedsClientSecret" (dict "root" $ "role" $role)) "true" -}}
+{{- $key := include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" $role) -}}
+{{- if hasKey $usedSecretKeys $key -}}
+{{- fail (printf "serviceIdentity.clientSecretKeys values must be distinct; %s and %s both use %s" (index $usedSecretKeys $key) $role $key) -}}
+{{- end -}}
+{{- $_ := set $usedSecretKeys $key $role -}}
+{{- end -}}
 {{- end -}}
 {{- if and (or .Values.services.platform.enabled (index .Values.services "tenant-kms").enabled) (eq $keystoreSecret "") -}}
 {{- fail "keystore.existingSecret is required when platform or tenant-kms is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the key configured by keystore.passwordKey (default: keystore-password), then reference that Secret by name." -}}

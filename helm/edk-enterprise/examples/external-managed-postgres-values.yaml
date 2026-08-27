@@ -34,8 +34,9 @@ networkPolicy:
   enabled: true
   allowDnsEgress: true
 
-# Pre-create this Secret in the release namespace. It must contain the keys
-# `internal-client-secret` and `keystore-password`; see the chart README.
+# Pre-create this Secret in the release namespace. It must contain the
+# per-client keys in `serviceIdentity.clientSecretKeys` and `keystore-password`;
+# see the chart README.
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
 

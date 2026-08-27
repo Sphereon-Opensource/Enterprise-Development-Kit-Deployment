@@ -34,9 +34,9 @@ The Helm chart requires two references before it renders a deployment:
 - `serviceIdentity.internalClientExistingSecret` when any satellite service is enabled;
 - `keystore.existingSecret` when platform or tenant-KMS is enabled.
 
-The referenced Secret normally contains `internal-client-secret` and
-`keystore-password`. `edk-runtime-secrets` is an example Secret name, not a
-prepackaged artifact. A missing Helm value fails `helm template` or
+The referenced Secret normally contains the per-client keys from
+`serviceIdentity.clientSecretKeys` and `keystore-password`. `edk-runtime-secrets`
+is an example Secret name, not a prepackaged artifact. A missing Helm value fails `helm template` or
 `helm install` before a release is created and tells you which value and key are
 required.
 
@@ -51,7 +51,7 @@ Error: secret "edk-runtime-secrets" not found
 If the Secret exists but is empty or has a wrong key name, events contain one of:
 
 ```text
-Error: couldn't find key internal-client-secret in Secret <namespace>/edk-runtime-secrets
+Error: couldn't find key issuer-service-client-secret in Secret <namespace>/edk-runtime-secrets
 Error: couldn't find key keystore-password in Secret <namespace>/edk-runtime-secrets
 ```
 
@@ -221,11 +221,11 @@ Check, in order:
 
 1. `serviceIdentity.internalClientExistingSecret` names the intended Secret in
    the Helm release namespace.
-2. The Secret contains the key configured by
-   `serviceIdentity.internalClientSecretKey` (default
-   `internal-client-secret`).
-3. Platform and tenant-AS were restarted after the Secret was created or
-   rotated, so both use the same confidential-client credential.
+2. The Secret contains the distinct keys in `serviceIdentity.clientSecretKeys`,
+   including `tenant-as-service-client-secret` for tenant-AS.
+3. Platform and the satellite whose key changed were restarted after the Secret
+   was created or rotated. Rotating one client no longer requires rolling every
+   satellite.
 4. The platform-issued tenant-AS provisioning token and the tenant-AS service
    client configuration use the chart-rendered client ids, service ids, and
    audiences as one contract.

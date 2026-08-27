@@ -403,16 +403,26 @@ tenantAs:
 
 # Service identity for the platform-issued east-west service tokens. The tenant
 # AS authenticates here as a client_credentials client to mint a platform service
-# token for its KMS hop during tenant registration. Provide the shared internal
-# client secret through a Secret referenced by `internalClientExistingSecret`.
+# token for its KMS hop during tenant registration. Provide distinct per-client
+# secrets through a Secret referenced by `internalClientExistingSecret`.
 serviceIdentity:
-  # Secret holding the internal client secret (key `internal-client-secret` by
-  # default). Required when any satellite is enabled. The platform AS registers
-  # the internal service clients and every satellite authenticates with the same
-  # value to obtain short-lived east-west service tokens. This is a Secret name,
-  # not the secret value; `edk-runtime-secrets` is the documented example name.
+  # Secret holding per-client confidential-client secrets. Required when any
+  # satellite is enabled. The platform AS registers each internal service client
+  # with its own key from `clientSecretKeys`; each satellite pod mounts only
+  # that role's key as `EDK_INTERNAL_CLIENT_SECRET`. This is a Secret name, not
+  # the secret value; `edk-runtime-secrets` is the documented example name.
+  # `internalClientSecretKey` is retired: Helm fails if that value is still set.
   internalClientExistingSecret: ""
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
   # Per-service client_credentials client id each satellite presents to the
   # platform AS to mint its east-west service token. These match the platform's
   # registered internal clients.

@@ -82,7 +82,7 @@ data:
           internal-clients:
             issuer:
               client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "issuer" }}
     {{- else }}
     oauth2:
     {{- end }}

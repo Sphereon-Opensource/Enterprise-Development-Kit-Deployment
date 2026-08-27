@@ -594,7 +594,22 @@
       "required": ["clientIds", "serviceIds"],
       "properties": {
         "internalClientExistingSecret": { "type": "string" },
-        "internalClientSecretKey": { "type": "string", "minLength": 1 },
+        "internalClientSecretKey": { "type": "string" },
+        "clientSecretKeys": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tenant-kms": { "type": "string", "minLength": 1 },
+            "tenant-as": { "type": "string", "minLength": 1 },
+            "did": { "type": "string", "minLength": 1 },
+            "blob": { "type": "string", "minLength": 1 },
+            "issuer": { "type": "string", "minLength": 1 },
+            "verifier": { "type": "string", "minLength": 1 },
+            "wallet-unit": { "type": "string", "minLength": 1 },
+            "wallet-interaction": { "type": "string", "minLength": 1 },
+            "trust-domain-identifier": { "type": "string", "minLength": 1 }
+          }
+        },
         "clientIds": {
           "type": "object",
           "additionalProperties": true,

@@ -85,7 +85,7 @@ data:
         token-endpoint-source: configured
         active-as-client-role: kms
         client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
-        client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+        client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "tenant-kms" }}
         tenant-bound-client-id: true
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
         # Routed KMS commands address the tenant-KMS service, so the minted access token may
@@ -279,53 +279,53 @@ data:
           internal-clients:
             issuer:
               client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "issuer" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "issuer") | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "issuer") | quote }}
             kms:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "tenant-kms" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "tenant-kms") | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "tenant-kms") | quote }}
             did:
               client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "did" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "did") | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "did") | quote }}
             {{- if (index .Values.services "blob").enabled }}
             blob:
               client-id: {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "blob" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "blob") | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "blob") | quote }}
             {{- end }}
             verifier:
               client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "verifier" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "verifier") | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "verifier") | quote }}
             tenantas:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "tenant-as" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "tenant-as") | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "tenant-as") | quote }}
             {{- if (index .Values.services "wallet-unit").enabled }}
             wallet-unit:
               client-id: {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "wallet-unit" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "wallet-unit") | quote }}
             {{- end }}
             {{- if (index .Values.services "wallet-interaction").enabled }}
             wallet-interaction:
               client-id: {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
-              client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "wallet-interaction" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "wallet-interaction") | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "wallet-interaction") | quote }}

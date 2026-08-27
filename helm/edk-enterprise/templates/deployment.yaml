@@ -269,16 +269,25 @@ spec:
             - name: THEME_CLIENT_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             {{- end }}
-            {{- /* East-west service identity + keystore secrets shared by the service containers.
-                   The platform AS mints the service tokens the satellites present; the
-                   satellites authenticate with the same internal client secret and read
-                   their software keystore with the keystore password. */}}
-            {{- if $.Values.serviceIdentity.internalClientExistingSecret }}
+            {{- /* East-west service identity + keystore secrets. Satellites keep
+                   the env name EDK_INTERNAL_CLIENT_SECRET so current images boot,
+                   but each pod mounts only that role's Secret key. Platform
+                   interpolates per-client env names for internal-clients. */}}
+            {{- if and $.Values.serviceIdentity.internalClientExistingSecret (ne $name "platform") }}
             - name: EDK_INTERNAL_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
-                  key: {{ $.Values.serviceIdentity.internalClientSecretKey }}
+                  key: {{ include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" $name) }}
+            {{- if and (eq $name "tenant-as") (index $.Values.services "issuer").enabled }}
+            - name: EDK_INTERNAL_CLIENT_SECRET_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
+                  key: {{ include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" "issuer") }}
+            {{- end }}
+            {{- else if and (eq $name "platform") $.Values.serviceIdentity.internalClientExistingSecret }}
+            {{- include "edk-enterprise.serviceIdentity.platformClientSecretEnv" $ | nindent 12 }}
             {{- end }}
             {{- if $.Values.keystore.existingSecret }}
             - name: EDK_KEYSTORE_PASSWORD
@@ -609,11 +618,11 @@ spec:
                    client_credentials service token and attaches it to its command-transport
                    calls to the platform (config reads + license-state projection) and to
                    its KMS hop. The platform AS issues the token; the satellite authenticates
-                   as its per-service confidential client with the shared internal secret.
+                   as its per-service confidential client with that role's client secret.
                    The token endpoint is the platform authority bootstrap Service: satellites must
                    mint their identity while the platform is deliberately unready during its boot
                    ceremony, and the regular Service excludes not-ready endpoints. */}}
-            {{- if $.Values.serviceIdentity.internalClientExistingSecret }}
+            {{- if and $.Values.serviceIdentity.internalClientExistingSecret (ne $name "platform") }}
             - name: SERVER_SERVICE_IDENTITY_TOKEN_ENDPOINT
               value: {{ printf "http://%s-platform-authority-bootstrap:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_ID
@@ -631,7 +640,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
-                  key: {{ $.Values.serviceIdentity.internalClientSecretKey }}
+                  key: {{ include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" $name) }}
             {{- /* Local workload label used to select the satellite credential. The platform
                    workload-trust-policy binds it to the client id in the validated JWT. */}}
             - name: SPHEREON_SERVICE_ID

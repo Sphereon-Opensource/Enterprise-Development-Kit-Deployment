@@ -433,14 +433,23 @@ values:
 | verifier | `serviceIdentity.clientIds.verifier` / `serviceIdentity.serviceIds.verifier` | `enterprise-platform` | `enterprise-tenant-kms` | tenant-KMS, platform trust-domain |
 | wallet-interaction | `serviceIdentity.clientIds.wallet-interaction` / `serviceIdentity.serviceIds.wallet-interaction` | `enterprise-platform` | `enterprise-wallet-unit` | wallet-unit |
 
-The service-identity credential, portal-BFF credential, and software-keystore password are
+The service-identity credentials, portal-BFF credential, and software-keystore password are
 deployment bootstrap Secrets. In Kubernetes, create a Secret in the Helm release
-namespace with three independently generated keys and reference it by name:
+namespace with independently generated per-client STS keys and reference it by name:
 
 ```yaml
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
   passwordKey: keystore-password
@@ -451,14 +460,15 @@ portalBff:
 
 | Kubernetes Secret key | Runtime input | Purpose |
 | --- | --- | --- |
-| `internal-client-secret` | `SERVER_SERVICE_IDENTITY_CLIENT_SECRET` | Shared secret used by registered satellite confidential clients to obtain short-lived platform-issued east-west tokens. |
+| `serviceIdentity.clientSecretKeys.<role>` | Satellite `EDK_INTERNAL_CLIENT_SECRET` / `SERVER_SERVICE_IDENTITY_CLIENT_SECRET`; platform `EDK_INTERNAL_CLIENT_SECRET_<ROLE>` | Distinct confidential-client secret for one registered satellite STS client. |
 | `admin-console-portal-bff-secret` | `ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Dedicated confidential client secret used only by the admin-console server and platform AS registration. |
 | `keystore-password` | `EDK_KEYSTORE_PASSWORD` | Password protecting the platform and tenant-KMS software PKCS#12 keystores. |
 
-`edk-runtime-secrets` is only an example Secret name. The chart requires all three
+`edk-runtime-secrets` is only an example Secret name. The chart requires the
 Secret references at render time but Kubernetes verifies the Secret object and
 keys when it creates containers. Secret data changes under the same name do not
-automatically restart pods; roll the platform and satellites after rotation.
+automatically restart pods; roll the platform and the satellite whose key
+changed after rotation. `serviceIdentity.internalClientSecretKey` is retired.
 
 The binary/gRPC path is security-sensitive. Tenant, principal, and workload
 identity come only from validated JWT claims. The following checks are required:
