@@ -216,6 +216,8 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ .Values.database.secretManagement.existingSecret | quote }}, key: {{ .Values.database.secretManagement.adminPasswordKey | quote }} } }
             - name: EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD
               valueFrom: { secretKeyRef: { name: {{ .Values.database.secretManagement.existingSecret | quote }}, key: {{ .Values.database.secretManagement.tenantPasswordKey | quote }} } }
+            - name: EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.database.secretManagement.existingSecret | quote }}, key: {{ .Values.database.secretManagement.runtimePasswordKey | quote }} } }
             {{- if .Values.issuerPipeline.existingSecret }}
             - name: EDK_PIPELINE_MASTER_KEK
               valueFrom: { secretKeyRef: { name: {{ .Values.issuerPipeline.existingSecret | quote }}, key: {{ .Values.issuerPipeline.masterKekKey | quote }} } }
