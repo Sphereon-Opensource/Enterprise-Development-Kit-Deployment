@@ -209,6 +209,20 @@ spec:
               value: {{ $.Values.grpc.port | quote }}
             - name: GRPC_AUTH_MODE
               value: {{ $.Values.grpc.authMode | quote }}
+            {{- with $.Values.grpc.tls }}
+            {{- if .cert }}
+            - name: GRPC_TLS_CERT
+              value: {{ .cert | quote }}
+            {{- end }}
+            {{- if .key }}
+            - name: GRPC_TLS_KEY
+              value: {{ .key | quote }}
+            {{- end }}
+            {{- if .clientCa }}
+            - name: GRPC_TLS_CLIENT_CA
+              value: {{ .clientCa | quote }}
+            {{- end }}
+            {{- end }}
             - name: TENANT_RESOLUTION_PLATFORM_BASE_DOMAIN
               value: {{ $.Values.global.platformBaseDomain | quote }}
             - name: TENANT_RESOLUTION_PLATFORM_SUBDOMAIN_ENABLED

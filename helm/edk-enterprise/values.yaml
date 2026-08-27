@@ -252,7 +252,13 @@ grpc:
   # server transport. The other services use routed command clients.
   enabled: true
   port: 9090
+  # service-jwt is application JWT on plaintext gRPC; it is not mTLS.
   authMode: service-jwt
+  allowInsecureNone: false
+  tls:
+    cert: ""
+    key: ""
+    clientCa: ""
 
 config:
   providers:

@@ -219,6 +219,28 @@ may use `latest`, but only with an Always pull policy.
 {{- end -}}
 {{- end -}}
 
+{{/* Fail closed on unknown gRPC auth aliases, insecure none, or mtls without certs. */}}
+{{- define "edk-enterprise.validateGrpcAuthMode" -}}
+{{- $mode := lower (trim (toString (default "" .Values.grpc.authMode))) -}}
+{{- $allowNone := .Values.grpc.allowInsecureNone | default false -}}
+{{- if eq $mode "none" -}}
+{{- if not $allowNone -}}
+{{- fail "grpc.authMode=none requires grpc.allowInsecureNone=true" -}}
+{{- end -}}
+{{- else if not (has $mode (list "service-jwt" "mtls" "mesh-mtls")) -}}
+{{- fail (printf "grpc.authMode must be one of service-jwt, mtls, mesh-mtls (or none with grpc.allowInsecureNone=true); got %q." .Values.grpc.authMode) -}}
+{{- end -}}
+{{- if eq $mode "mtls" -}}
+{{- $tls := default dict .Values.grpc.tls -}}
+{{- $cert := trim (toString (default "" $tls.cert)) -}}
+{{- $key := trim (toString (default "" $tls.key)) -}}
+{{- $ca := trim (toString (default "" $tls.clientCa)) -}}
+{{- if or (eq $cert "") (eq $key "") (eq $ca "") -}}
+{{- fail "grpc.authMode=mtls requires grpc.tls.cert, grpc.tls.key, and grpc.tls.clientCa" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Validate the selected Gateway API TLS termination mode and its required inputs. */}}
 {{- define "edk-enterprise.validateGatewayTls" -}}
 {{- if .Values.gateway.enabled -}}

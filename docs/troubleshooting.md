@@ -188,9 +188,10 @@ operations fail with a connection error:
   platform, tenant-KMS, wallet-unit, and wallet-interaction and switches the
   matching route endpoints to `grpc://`. A port or scheme mismatch between the
   caller's route and the peer service breaks the call.
-- Confirm `grpc.authMode` matches how peer traffic is secured. With
-  `service-jwt`, the caller presents a service token; with `mesh-mtls`, the mesh
-  provides mutual TLS and the sidecar must be injected on both peers.
+- Confirm `grpc.authMode` matches how peer traffic is secured. `service-jwt` is
+  application JWT on plaintext gRPC; it is not mTLS. With `mesh-mtls`, the mesh
+  provides mutual TLS and the sidecar must be injected on both peers; the app
+  still uses JWT on the plaintext socket the sidecar presents.
 - NetworkPolicy must allow the caller to reach platform, tenant-KMS,
   wallet-interaction, and wallet-unit as appropriate. If you enabled
   `networkPolicy`, confirm intra-release traffic to those peers is permitted.

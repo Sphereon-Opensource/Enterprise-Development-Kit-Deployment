@@ -510,7 +510,7 @@ Set the transport globally in Helm under `grpc`:
 | --- | --- |
 | `grpc.enabled` | Whether internal command routing uses gRPC. The shipped default is `true`: platform, tenant-KMS, wallet-unit, and wallet-interaction expose internal gRPC receivers and the chart renders `grpc://` peer endpoints for routes to those services. |
 | `grpc.port` | gRPC port (default `9090`). |
-| `grpc.authMode` | Auth mode for peer gRPC traffic. Use `service-jwt` for token-based service identity, or `mesh-mtls` when a service mesh provides mutual TLS. |
+| `grpc.authMode` | Auth mode for peer gRPC traffic. `service-jwt` is application JWT on plaintext gRPC; it is not mTLS. `mtls` is application-terminated mutual TLS and requires `grpc.tls` cert paths. `mesh-mtls` means a sidecar provides TLS while the app still uses JWT. `none` is rejected unless `grpc.allowInsecureNone` is true. |
 
 With `grpc.enabled=true` the chart renders platform, tenant-KMS, wallet-unit,
 and wallet-interaction gRPC receivers and points internal routes at those
@@ -564,9 +564,10 @@ The intended peer call graph:
 | wallet-unit | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
 | wallet-interaction | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
 
-For mTLS between peers, set `grpc.authMode=mesh-mtls` and inject your mesh
-sidecar through `podAnnotations`; `examples/mesh-mtls-values.yaml` shows the
-Istio form.
+For mesh-provided TLS between peers, set `grpc.authMode=mesh-mtls` and inject
+your mesh sidecar through `podAnnotations`; `examples/mesh-mtls-values.yaml`
+shows the Istio form. That combination is sidecar TLS plus application JWT, not
+application mTLS.
 
 ## Per-service overrides
 

@@ -489,7 +489,17 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "authMode": { "type": "string", "enum": ["service-jwt", "mesh-mtls", "none"] }
+        "authMode": { "type": "string", "enum": ["service-jwt", "mtls", "mesh-mtls", "none"] },
+        "allowInsecureNone": { "type": "boolean" },
+        "tls": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "cert": { "type": "string" },
+            "key": { "type": "string" },
+            "clientCa": { "type": "string" }
+          }
+        }
       }
     },
     "config": {
