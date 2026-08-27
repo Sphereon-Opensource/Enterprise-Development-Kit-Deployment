@@ -27,7 +27,7 @@
       "key": "kmsResourceHandle",
       "value": "",
       "type": "string",
-      "description": "Opaque tenant KMS resource handle (krh_...) discovered from the typed KMS resource list. It is the only KMS identifier a tenant caller ever sees."
+      "description": "Opaque tenant KMS resource handle (krh_...) discovered from the typed KMS resource list. This is a platform management/setup identifier only; tenant runtime KMS REST operations use providerId plus the provider-native key alias."
     },
     {
       "key": "statusListDidKmsResourceHandle",

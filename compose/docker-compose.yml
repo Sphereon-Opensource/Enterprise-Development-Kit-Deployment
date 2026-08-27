@@ -482,7 +482,6 @@ services:
     environment:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: TENANT
-      ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_TENANT_CONTEXT_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1/admin-console-context
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
