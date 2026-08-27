@@ -447,8 +447,9 @@ serviceIdentity:
     verifier: service-oid4vp
     wallet-unit: service-wallet-unit
     wallet-interaction: service-wallet-interaction
-  # East-west JWT audiences are fixed protocol identifiers in the chart and
-  # source contracts. They are not configurable deployment values.
+  # Receiver and STS audiences come from files/service-identity-catalog.yaml
+  # (vendored with VDX Helm and the frontend). They are not Helm values and
+  # there is no serviceIdentity.audiences override surface.
   # In-network surfaces each satellite admits without an operator bearer. The
   # tenant-AS signing-key provisioning endpoint is deliberately absent here:
   # it must validate the platform-issued bearer during tenant resolution so the
@@ -482,8 +483,10 @@ docsPlayground:
 
 # Dedicated confidential client and cryptographic state protection for the
 # public issuer/verifier testing-console BFF. The client secret is independent
-# from the east-west service-identity secret and is consumed only by the
-# platform authorization server and the admin-console server process.
+# from satellite serviceIdentity.clientSecretKeys and is consumed only by the
+# platform authorization server and the admin-console server process
+# (ADMIN_CONSOLE_WORKLOAD_CLIENT_*). Do not point the console at
+# EDK_INTERNAL_CLIENT_SECRET.
 portalBff:
   clientId: admin-console-portal-bff
   audience: application-bff-oauth-client

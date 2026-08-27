@@ -364,8 +364,17 @@ prerequisites, provider offerings, opaque handles, and migration behavior.
 Internal service-to-service calls use platform-issued JWTs, not public gateway
 routes and not trusted headers alone. The platform authorization server is the
 STS for these workload tokens. Each satellite has a confidential client id, a
-shared internal client secret, an asserted workload service id, and a receiver
-audience. These values must move as one contract:
+distinct per-client STS secret, an asserted workload service id, and a receiver
+audience. These values must move as one contract.
+
+The product-neutral **service-identity catalog**
+(`helm/edk-enterprise/files/service-identity-catalog.yaml`) is the source of
+truth for receiver audiences, default/extra STS audiences, and peer edges. The
+same catalog is vendored into VDX Helm and the frontend BFF; there is no
+`eastWest.*` audience helper family and no customer-editable
+`serviceIdentity.audiences` object. Helm credential bindings stay under
+`serviceIdentity.clientIds`, `serviceIdentity.serviceIds`, and
+`serviceIdentity.clientSecretKeys`.
 
 | Service | STS client id | Asserted service id | Receiver audience |
 | --- | --- | --- | --- |
@@ -378,26 +387,13 @@ audience. These values must move as one contract:
 | wallet-interaction | `wallet-interaction-service` | `service-wallet-interaction` | `enterprise-wallet-interaction` |
 | tenant-AS | `tenant-as-service` | `service-tenant-as` | `enterprise-tenant-as` |
 
-In Helm the configurable credential bindings live under
-`serviceIdentity.clientIds` and `serviceIdentity.serviceIds`. Audience names are
-fixed protocol identifiers shared with source-level STS and tenant-registration
-contracts; the chart rejects a user-supplied `serviceIdentity.audiences` object.
-Documentation uses the following fully qualified names to identify the fixed
-entries in that governed matrix. These names describe chart-owned constants and
-are not additional customer values:
-
-| Fixed matrix entry | Protocol audience |
-| --- | --- |
-| `serviceIdentity.audiences.platform` | `enterprise-platform` |
-| `serviceIdentity.audiences.tenant-kms` | `enterprise-tenant-kms` |
-| `serviceIdentity.audiences.wallet-interaction` | `enterprise-wallet-interaction` |
-| `serviceIdentity.audiences.wallet-unit` | `enterprise-wallet-unit` |
-
 The chart renders the
 platform internal OAuth clients, validated-workload bindings, service token
-endpoints, fixed receiver audiences, and NetworkPolicy peer edges. Docker
+endpoints, catalog receiver audiences, and NetworkPolicy peer edges. Docker
 Compose uses the same fixed names in the mounted `compose/config/*.yml` files
-and admin-console environment.
+and admin-console environment. Compose still shares one
+`EDK_INTERNAL_CLIENT_SECRET` across satellites today; Helm mounts a distinct
+`clientSecretKeys.<role>` value into that same env name per satellite pod.
 
 Helm distinguishes **identity-ready** from **serving-ready**. `/health/identity`
 is 200 when gRPC is listening and the platform can serve `/token` and
@@ -534,6 +530,12 @@ Set the transport globally in Helm under `grpc`:
 | `grpc.enabled` | Whether internal command routing uses gRPC. The shipped default is `true`: platform, tenant-KMS, wallet-unit, and wallet-interaction expose internal gRPC receivers and the chart renders `grpc://` peer endpoints for routes to those services. |
 | `grpc.port` | gRPC port (default `9090`). |
 | `grpc.authMode` | Auth mode for peer gRPC traffic. `service-jwt` is application JWT on plaintext gRPC; it is not mTLS. `mtls` is application-terminated mutual TLS and requires `grpc.tls` cert paths. `mesh-mtls` means a sidecar provides TLS while the app still uses JWT. `none` is rejected unless `grpc.allowInsecureNone` is true. |
+
+Internal gRPC is plaintext plus application JWT when `grpc.authMode=service-jwt`.
+Use `mtls` only with application-terminated cert paths, or `mesh-mtls` when a
+sidecar terminates TLS while the app still presents JWT on the local socket.
+SPIFFE is the planned later identity root for this transport and is not required
+for this release.
 
 With `grpc.enabled=true` the chart renders platform, tenant-KMS, wallet-unit,
 and wallet-interaction gRPC receivers and points internal routes at those

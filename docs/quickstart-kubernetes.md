@@ -220,10 +220,12 @@ replacement for the platform/tenant database split.
 
 ## 3. Create the runtime Secret
 
-The chart does not generate the confidential client secret used for east-west
+The chart does not generate the per-client STS secrets used for east-west
 service tokens or the password protecting the software PKCS#12 keystores. Create
-both values in the release namespace before installing. `edk-runtime-secrets`
-is an example Kubernetes Secret name, not an image or prepackaged file:
+those values in the release namespace before installing. `edk-runtime-secrets`
+is an example Kubernetes Secret name, not an image or prepackaged file. Each
+satellite still reads the env name `EDK_INTERNAL_CLIENT_SECRET`; Helm mounts
+only that role's `serviceIdentity.clientSecretKeys.<role>` entry into it:
 
 The corresponding Helm parameters are `serviceIdentity.internalClientExistingSecret`
 and `keystore.existingSecret`.

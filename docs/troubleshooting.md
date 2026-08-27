@@ -233,7 +233,7 @@ Check, in order:
    satellite.
 4. The platform-issued tenant-AS provisioning token and the tenant-AS service
    client configuration use the chart-rendered client ids, service ids, and
-   audiences as one contract.
+   service-identity catalog audiences as one contract.
 5. NetworkPolicy and service DNS allow tenant-AS to call the platform gRPC
    endpoint and tenant-KMS.
 

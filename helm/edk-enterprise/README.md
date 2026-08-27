@@ -289,29 +289,34 @@ publish those endpoints as customer routes.
 
 ## East-West Service Identity
 
-The chart renders internal service identity from one `serviceIdentity` contract:
+The chart renders internal service identity from one `serviceIdentity` contract
+plus the product-neutral service-identity catalog in
+`files/service-identity-catalog.yaml`. That catalog owns receiver audiences,
+default/extra STS audiences, and peer edges; the same file is vendored into VDX
+Helm and the frontend BFF. There is no `eastWest.*` audience helper family and
+no customer-editable `serviceIdentity.audiences` object.
 
 | Value | Purpose |
 | --- | --- |
 | `serviceIdentity.internalClientExistingSecret` | Secret containing the distinct confidential-client secrets used by internal service clients. |
-| `serviceIdentity.clientSecretKeys.<role>` | Key in that Secret for one satellite client. Defaults match `<client-id>-client-secret`. |
+| `serviceIdentity.clientSecretKeys.<role>` | Key in that Secret for one satellite client. Defaults match `<client-id>-client-secret`. Satellites still read the env name `EDK_INTERNAL_CLIENT_SECRET`. |
 | `serviceIdentity.clientIds.<service>` | OAuth client id each satellite presents to the platform AS for client-credentials service tokens. |
 | `serviceIdentity.serviceIds.<service>` | Local workload label used to select and configure the service credential. It is not transmitted as identity metadata. |
 
 These values drive platform internal OAuth clients, platform and receiver
-validated-workload bindings, and satellite service-token credentials. Receiver
-audiences are fixed protocol identifiers shared with source-level STS and
+validated-workload bindings, and satellite service-token credentials. Catalog
+audiences are protocol identifiers shared with source-level STS and
 tenant-registration contracts; the chart does not expose audience overrides.
 
-The following notation identifies the fixed, chart-owned receiver-audience
-matrix. It is documentation notation, not a `values.yaml` override surface:
+Distributed installs also split **identity-ready** from **serving-ready**.
+`*-platform-identity` / `*-tenant-kms-identity` publish not-ready addresses
+because Kubernetes has one Ready bit gated on `/ready`; serving Services do not.
+Tenant-KMS dials `*-platform-identity` for token, JWKS, and gRPC. Issuer,
+verifier, DID, tenant-AS, wallets, and the admin console keep the serving
+`*-platform` Service.
 
-| Fixed matrix entry | Protocol audience |
-| --- | --- |
-| `audiences.platform` | `enterprise-platform` |
-| `audiences.tenant-kms` | `enterprise-tenant-kms` |
-| `audiences.wallet-interaction` | `enterprise-wallet-interaction` |
-| `audiences.wallet-unit` | `enterprise-wallet-unit` |
+`grpc.authMode` defaults to `service-jwt`: application JWT on plaintext gRPC, not
+mTLS. SPIFFE is a later identity root and is not required for this chart.
 
 The receiver expected audience, route-requested audience, client default, and
 additional allowlist are different controls. The receiver validates its
