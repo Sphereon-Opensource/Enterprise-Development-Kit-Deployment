@@ -391,9 +391,11 @@ The chart renders the
 platform internal OAuth clients, validated-workload bindings, service token
 endpoints, catalog receiver audiences, and NetworkPolicy peer edges. Docker
 Compose uses the same fixed names in the mounted `compose/config/*.yml` files
-and admin-console environment. Compose still shares one
-`EDK_INTERNAL_CLIENT_SECRET` across satellites today; Helm mounts a distinct
-`clientSecretKeys.<role>` value into that same env name per satellite pod.
+and admin-console environment. Compose and Helm both give each satellite its
+own confidential-client secret. Satellites still read the env name
+`EDK_INTERNAL_CLIENT_SECRET`; Compose sources that value from
+`EDK_INTERNAL_CLIENT_SECRET_<ROLE>` and the platform interpolates every
+role-specific env into `internal-clients`.
 
 Helm distinguishes **identity-ready** from **serving-ready**. `/health/identity`
 is 200 when gRPC is listening and the platform can serve `/token` and

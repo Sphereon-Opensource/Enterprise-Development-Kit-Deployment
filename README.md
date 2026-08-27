@@ -157,7 +157,7 @@ Set every required value in `compose/.env` before rendering the stack.
 | `EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD` | Set a different password for the fixed `secret_management_tenant_serving` database role. |
 | `EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD` | Set a third password for the narrow `secret_management_runtime` replay-ledger role used by satellite services. |
 | `EDK_KEYSTORE_PASSWORD` | Set the password that protects the platform and tenant KMS keystores. |
-| `EDK_INTERNAL_CLIENT_SECRET` | Compose still shares one confidential-client secret across satellites. Helm uses distinct `serviceIdentity.clientSecretKeys` per client; splitting Compose is a follow-up. |
+| `EDK_INTERNAL_CLIENT_SECRET_<ROLE>` | Distinct confidential-client secret per STS registration (`TENANT_KMS`, `TENANT_AS`, `DID`, `BLOB`, `ISSUER`, `VERIFIER`, `EMAIL`). Satellites still read `EDK_INTERNAL_CLIENT_SECRET` (one value per container). Platform interpolates every role-specific env. |
 | `EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Set an independent secret for the admin-console portal BFF client. |
 | `EDK_PIPELINE_MASTER_KEK` | Replace the example value with a new 32-byte base64url value. |
 | `EDK_PIPELINE_BLIND_INDEX_KEY` | Replace the example value with a different 32-byte base64url value. |

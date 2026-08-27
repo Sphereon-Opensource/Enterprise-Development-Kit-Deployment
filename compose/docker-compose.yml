@@ -41,11 +41,22 @@ x-edk-common-env: &edk-common-env
   EDK_PLATFORM_PUBLIC_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
   EDK_TRUST_TENANT_REGISTRY_ISSUERS: ${EDK_TRUST_TENANT_REGISTRY_ISSUERS:-true}
   EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD}
-  EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET}
   EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
   EDK_OWNER_INITIAL_CREDENTIAL: ${EDK_OWNER_INITIAL_CREDENTIAL}
   SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY: ${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate the secret-authority key window before starting the stack}
   SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS: ${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate the secret-authority key window before starting the stack}
+
+# Distinct confidential-client passwords per STS registration. Satellites still
+# consume EDK_INTERNAL_CLIENT_SECRET (one value per container). Platform sees
+# every EDK_INTERNAL_CLIENT_SECRET_<ROLE> for internal-clients interpolation.
+x-edk-platform-sts-secrets: &edk-platform-sts-secrets
+  EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
+  EDK_INTERNAL_CLIENT_SECRET_TENANT_AS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
+  EDK_INTERNAL_CLIENT_SECRET_DID: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
+  EDK_INTERNAL_CLIENT_SECRET_BLOB: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
+  EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+  EDK_INTERNAL_CLIENT_SECRET_VERIFIER: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
+  EDK_INTERNAL_CLIENT_SECRET_EMAIL: ${EDK_INTERNAL_CLIENT_SECRET_EMAIL:?Set EDK_INTERNAL_CLIENT_SECRET_EMAIL}
 
 x-edk-tenant-db-env: &edk-tenant-db-env
   EDK_TENANT_DB_HOST: tenant-postgres
@@ -169,7 +180,7 @@ services:
       - platform-db-net
       - tenant-db-net
     environment:
-      <<: [*edk-common-env, *edk-tenant-db-env]
+      <<: [*edk-common-env, *edk-tenant-db-env, *edk-platform-sts-secrets]
       EDK_PLATFORM_DB_HOST: platform-postgres
       SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY: ${SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY:?Generate the secret-authority key window before starting the stack}
       SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS: ${SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS:?Generate the secret-authority key window before starting the stack}
@@ -245,6 +256,8 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
+      EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
       PORT: "18083"
       REST_PORT: "18083"
       # Authenticated issuer/verifier workloads call the Trust Domain API on
@@ -282,6 +295,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
       EXTERNAL_BASE_URL: ${EDK_KMS_INTERNAL_BASE_URL:-http://enterprise-tenant-kms:8080}
       REST_ENABLED: "false"
       GRPC_ENABLED: "true"
@@ -314,6 +328,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
       EXTERNAL_BASE_URL: ${EDK_DID_EXTERNAL_BASE_URL:-http://localhost:18082}
     volumes:
       - ./config/did.application.yml:/app/config/application.yml:ro
@@ -341,6 +356,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
       EXTERNAL_BASE_URL: ${EDK_BLOB_EXTERNAL_BASE_URL:-http://enterprise-blob:8080}
       REST_ENABLED: "true"
       GRPC_ENABLED: "false"
@@ -373,6 +389,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
       EXTERNAL_BASE_URL: ${EDK_ISSUER_EXTERNAL_BASE_URL:-http://localhost:18084}
       EDK_PIPELINE_MASTER_KEK: ${EDK_PIPELINE_MASTER_KEK}
       EDK_PIPELINE_BLIND_INDEX_KEY: ${EDK_PIPELINE_BLIND_INDEX_KEY}
@@ -406,6 +423,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
       EXTERNAL_BASE_URL: ${EDK_VERIFIER_EXTERNAL_BASE_URL:-http://localhost:18085}
     volumes:
       - ./config/verifier.application.yml:/app/config/application.yml:ro
