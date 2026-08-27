@@ -1,7 +1,7 @@
 {{- if eq (include "edk-enterprise.topologyMode" .) "distributed" }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
-{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+{{- $grpcReceiver := eq (include "edk-enterprise.serviceIdentity.grpcReceiver" (dict "root" $ "role" $name)) "true" }}
 {{- /* admin-console is a Next.js standalone web app, not an EDK Java service:
        it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
        /admin-console/health route rather than the EDK /health endpoint. */}}
@@ -243,7 +243,7 @@ spec:
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
             {{- $transportAudience := "" }}
-            {{- if $grpcReceiver }}{{- $transportAudience = include "edk-enterprise.serviceAudience" $name }}{{- end }}
+            {{- if $grpcReceiver }}{{- $transportAudience = include "edk-enterprise.serviceAudience" (dict "root" $ "name" $name) }}{{- end }}
             {{- if $transportAudience }}
             # TransportServerConfigProvider reads the canonical unprefixed
             # transport.auth.expected-audience property from AppConfigService.
@@ -510,7 +510,7 @@ spec:
             {{- end }}
             {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICE_TOKEN_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "tenant-kms") | quote }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
             {{- range $kmsService := list "key" "keys" "signature" "mac" "encryption" "ecdh" }}
@@ -524,7 +524,7 @@ spec:
             {{- end }}
             {{- if and (or (eq $name "issuer") (eq $name "verifier")) (index $.Values.services "wallet-interaction").enabled }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "wallet-interaction" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "wallet-interaction") | quote }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
             - name: WALLET_INTERACTION_GRPC_ENDPOINT
@@ -532,7 +532,7 @@ spec:
             {{- end }}
             {{- if eq $name "wallet-interaction" }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "wallet-unit" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "wallet-unit") | quote }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
             - name: WALLET_UNIT_GRPC_ENDPOINT
@@ -626,7 +626,7 @@ spec:
             - name: SERVER_SERVICE_IDENTITY_ACTIVE_AS_CLIENT_ROLE
               value: {{ index $activeAsClientRoles $name | quote }}
             - name: SERVER_SERVICE_IDENTITY_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -666,7 +666,7 @@ spec:
               value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
               value: {{ printf "http://%s-platform-authority-bootstrap:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
-            {{- $restAudience := include "edk-enterprise.serviceAudience" $name }}
+            {{- $restAudience := include "edk-enterprise.serviceAudience" (dict "root" $ "name" $name) }}
             {{- if $restAudience }}
             - name: SERVER_REST_AUTH_EXPECTED_AUDIENCE
               value: {{ $restAudience | quote }}
@@ -737,16 +737,16 @@ spec:
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "verifier")) (index $.Values.services "verifier").restPort | quote }}
             {{- if eq $name "admin-console" }}
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             {{- end }}
             - name: NEXT_PUBLIC_THEME_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "blob" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "did" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "did") | quote }}
             - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "issuer" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "issuer") | quote }}
             - name: NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "verifier" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             {{- end }}
             {{- range $env := $svc.env }}
             {{- if not (and (eq $name "platform") (has (get $env "name") (list "EXTERNAL_BASE_URL" "ONBOARDING_UI_BASE_URL"))) }}

@@ -52,8 +52,8 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
-        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
     {{- end }}
     security:
       workload-trust-policy:
@@ -136,7 +136,7 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             # RemoteOpaqueSecretResolver binds a dedicated tenant bootstrap workload
             # token; replacing it here would recurse through the credential being unlocked.
             preferServiceTokenOverSessionBearer: false
@@ -144,7 +144,7 @@ data:
             # Provisioning requests are addressed to tenant-AS, not tenant-KMS,
             # so this routed KMS hop uses the AS workload token for the KMS
             # receiver audience instead of forwarding the inbound bearer.
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               key: &tenantKmsGrpcRoute
@@ -167,7 +167,7 @@ data:
             # plane. Without this exact route the standalone tenant AS resolves
             # verify-remote to its local adapter, which calls the tenant-AS
             # facade again and recurses until the request times out.
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               credentials:

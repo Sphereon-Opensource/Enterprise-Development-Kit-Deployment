@@ -39,7 +39,7 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
     # Workload identities the tenant KMS trusts on east-west command-transport
     # calls, each bound to the client id of the service token the caller presents.
     # Tenant and principal claims are taken only from the validated workload JWT.
@@ -82,23 +82,23 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             services:
               config:
                 target: SERVER
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
-                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
           application:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
           secret:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             # Resolving the active KMS workload credential uses the dedicated
             # tenant bootstrap bearer supplied by RemoteOpaqueSecretResolver.
             preferServiceTokenOverSessionBearer: false

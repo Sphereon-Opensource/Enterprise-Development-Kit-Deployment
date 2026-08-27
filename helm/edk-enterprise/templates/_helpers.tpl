@@ -56,24 +56,87 @@ settings remain under their existing value names.
 {{- end -}}
 
 {{/*
-East-west JWT audiences are protocol identifiers shared with source-level STS
-and tenant-registration contracts. They are intentionally not chart values:
-changing one side would make otherwise valid tokens unusable at another
-receiver.
+Product-neutral service-identity catalog. Receiver audiences, gRPC receiver
+flags, and NetworkPolicy peers are catalog-owned. Callers must pass the chart
+root so Helm can load files/service-identity-catalog.yaml.
+*/}}
+{{- define "edk-enterprise.serviceIdentity.catalogYaml" -}}
+{{- $raw := .Files.Get "files/service-identity-catalog.yaml" -}}
+{{- if not $raw -}}
+{{- fail "files/service-identity-catalog.yaml is missing from the chart" -}}
+{{- end -}}
+{{- $raw -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.role" -}}
+{{- $role := .role | default .name -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles $role -}}
+{{- if not $row -}}
+{{- fail (printf "unknown service-identity role %q" $role) -}}
+{{- end -}}
+{{- toYaml $row -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.receiverAudience" -}}
+{{- $role := .role | default .name -}}
+{{- $row := include "edk-enterprise.serviceIdentity.role" . | fromYaml -}}
+{{- required (printf "service-identity role %q has no receiverAudience" $role) $row.receiverAudience -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.grpcReceiver" -}}
+{{- $row := include "edk-enterprise.serviceIdentity.role" . | fromYaml -}}
+{{- if $row.grpcReceiver }}true{{ else }}false{{ end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.defaultStsAudience" -}}
+{{- $role := .role | default .name -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles $role -}}
+{{- if not $row -}}
+{{- fail (printf "unknown service-identity role %q" $role) -}}
+{{- end -}}
+{{- if $row.defaultStsAudience -}}
+{{- $stsRow := index $catalog.roles $row.defaultStsAudience -}}
+{{- required (printf "service-identity role %q defaultStsAudience %q is unknown" $role $row.defaultStsAudience) $stsRow.receiverAudience -}}
+{{- else -}}
+{{- $row.receiverAudience -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" -}}
+{{- $role := .role | default .name -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles $role -}}
+{{- if not $row -}}
+{{- fail (printf "unknown service-identity role %q" $role) -}}
+{{- end -}}
+{{- $audiences := list -}}
+{{- range ($row.extraStsAudiences | default list) -}}
+{{- $extra := index $catalog.roles . -}}
+{{- if not $extra -}}
+{{- fail (printf "service-identity role %q extraStsAudiences entry %q is unknown" $role .) -}}
+{{- end -}}
+{{- $audiences = append $audiences (required (printf "service-identity extra STS role %q has no receiverAudience" .) $extra.receiverAudience) -}}
+{{- end -}}
+{{- join "," $audiences -}}
+{{- end -}}
+
+{{/*
+Thin wrapper over catalog receiverAudience. Requires dict root+name (or role).
 */}}
 {{- define "edk-enterprise.serviceAudience" -}}
-{{- $audiences := dict
-    "platform" "enterprise-platform"
-    "tenant-kms" "enterprise-tenant-kms"
-    "tenant-as" "enterprise-tenant-as"
-    "did" "enterprise-tenant-did"
-    "blob" "enterprise-blob"
-    "issuer" "enterprise-issuer"
-    "verifier" "enterprise-verifier"
-    "wallet-unit" "enterprise-wallet-unit"
-    "wallet-interaction" "enterprise-wallet-interaction"
--}}
-{{- required (printf "unsupported service audience role %q" .) (index $audiences .) -}}
+{{- if kindIs "string" . -}}
+{{- fail (printf "edk-enterprise.serviceAudience requires dict root+name; got string %q" .) -}}
+{{- end -}}
+{{- include "edk-enterprise.serviceIdentity.receiverAudience" (dict "root" .root "role" (.name | default .role)) -}}
+{{- end -}}
+
+{{- define "edk-enterprise.validateServiceIdentityCatalog" -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" . | fromYaml -}}
+{{- if not $catalog.roles -}}
+{{- fail "service-identity catalog has no roles" -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "edk-enterprise.labels" -}}
@@ -426,18 +489,18 @@ platform:
   target: SERVER
   transport: GRPC
   endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
   services:
     config:
       target: SERVER
       transport: GRPC
       endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-      serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+      serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
 application:
   target: SERVER
   transport: GRPC
   endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
 {{- end -}}
 
 {{/* The platform is both the central permit issuer and a satellite consumer. */}}

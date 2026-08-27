@@ -1,5 +1,6 @@
 {{- include "edk-enterprise.validateImageRegistry" . -}}
 {{- include "edk-enterprise.validateImageReference" . -}}
+{{- include "edk-enterprise.validateServiceIdentityCatalog" . -}}
 {{- include "edk-enterprise.validateTopology" . -}}
 {{- include "edk-enterprise.validateEmail" . -}}
 {{- include "edk-enterprise.validateGatewayTls" . -}}

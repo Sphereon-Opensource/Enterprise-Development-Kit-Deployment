@@ -443,13 +443,13 @@ spec:
             - name: ADMIN_CONSOLE_VERIFIER_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: NEXT_PUBLIC_THEME_AUDIENCE
-              value: enterprise-blob
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
-              value: enterprise-tenant-did
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "did") | quote }}
             - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
-              value: enterprise-issuer
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "issuer") | quote }}
             - name: NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE
-              value: enterprise-verifier
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             - name: PORT
               value: {{ (index $.Values.services $console).restPort | quote }}
             {{- if $isPlatform }}
@@ -460,7 +460,7 @@ spec:
             - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
               valueFrom: { secretKeyRef: { name: {{ $.Values.portalBff.existingSecret | quote }}, key: {{ $.Values.portalBff.clientSecretKey | quote }} } }
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
-              value: enterprise-platform
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             {{- else }}
             - name: ADMIN_CONSOLE_TENANT_CONTEXT_URL
               value: {{ printf "http://%s:%v/api/platform/bootstrap/v1/admin-console-context" $name $.Values.monolith.restPort | quote }}
