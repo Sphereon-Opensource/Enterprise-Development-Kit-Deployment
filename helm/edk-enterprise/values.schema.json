@@ -71,11 +71,12 @@
         "secretManagement": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["existingSecret", "adminPasswordKey", "tenantPasswordKey"],
+          "required": ["existingSecret", "adminPasswordKey", "tenantPasswordKey", "runtimePasswordKey"],
           "properties": {
             "existingSecret": { "type": "string", "minLength": 1 },
             "adminPasswordKey": { "type": "string", "minLength": 1 },
-            "tenantPasswordKey": { "type": "string", "minLength": 1 }
+            "tenantPasswordKey": { "type": "string", "minLength": 1 },
+            "runtimePasswordKey": { "type": "string", "minLength": 1 }
           }
         },
         "maintenance": {

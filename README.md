@@ -155,6 +155,7 @@ Set every required value in `compose/.env` before rendering the stack.
 | `EDK_TENANT_DB_PASSWORD` | Set a different tenant database owner password. |
 | `EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD` | Set the password for the fixed `secret_management_admin` database role. |
 | `EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD` | Set a different password for the fixed `secret_management_tenant_serving` database role. |
+| `EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD` | Set a third password for the narrow `secret_management_runtime` replay-ledger role used by satellite services. |
 | `EDK_KEYSTORE_PASSWORD` | Set the password that protects the platform and tenant KMS keystores. |
 | `EDK_INTERNAL_CLIENT_SECRET` | Compose still shares one confidential-client secret across satellites. Helm uses distinct `serviceIdentity.clientSecretKeys` per client; splitting Compose is a follow-up. |
 | `EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Set an independent secret for the admin-console portal BFF client. |
@@ -382,6 +383,7 @@ database:
     existingSecret: edk-secret-management-database
     adminPasswordKey: admin-password
     tenantPasswordKey: tenant-password
+    runtimePasswordKey: runtime-password
   tenant:
     host: tenant-postgres.example.net
     port: 5432
@@ -510,7 +512,8 @@ kubectl -n edk create secret generic edk-tenant-postgres \
 
 kubectl -n edk create secret generic edk-secret-management-database \
   --from-literal=admin-password='<secret-management-admin-password>' \
-  --from-literal=tenant-password='<secret-management-tenant-password>'
+  --from-literal=tenant-password='<secret-management-tenant-password>' \
+  --from-literal=runtime-password='<secret-management-runtime-password>'
 ```
 
 The two passwords in `edk-secret-management-database` must match the fixed role

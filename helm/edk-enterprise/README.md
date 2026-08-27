@@ -188,7 +188,7 @@ fails chart render.
 | `monolith.image` | `sphereon/vdx-svc-monolith` | Monolith application image. The tag defaults to `global.imageTag`; use only an immutable, release-approved image. |
 | `database.enabled` | `true` | Enables database environment wiring. |
 | `database.platform.existingSecret` | `edk-platform-postgres` | Secret with credentials for the control-plane (platform) database. |
-| `database.secretManagement.existingSecret` | `edk-secret-management-database` | Secret with distinct passwords for the fixed non-superuser secret-management admin and tenant-serving runtime roles. Schema migration uses the platform database owner from `database.platform.existingSecret` only during startup. |
+| `database.secretManagement.existingSecret` | `edk-secret-management-database` | Secret with distinct passwords for the fixed non-superuser secret-management admin, tenant-serving, and narrow replay-ledger runtime roles. Schema migration uses the platform database owner from `database.platform.existingSecret` only during startup. |
 | `database.tenant.existingSecret` | `edk-tenant-postgres` | Secret with credentials for the tenant workload database. |
 | `secretManagement.bootstrap.kek.mode` | `SOFTWARE_KMS` | Self-contained baseline backed by the persisted platform software KMS. External providers are configured explicitly and are not startup dependencies. |
 | `secretManagement.bootstrap.kek.identity` | `secret-management-bootstrap-kek` | Server-owned software-KMS binding name; it is not a physical path or public API field. |

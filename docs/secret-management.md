@@ -38,13 +38,14 @@ route.
 
 Docker Compose creates these roles on a fresh bundled platform database from
 `compose/postgres-init/10-secret-management-roles.sh`. Set
-`EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD` and
-`EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD` to distinct strong values.
+`EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD`,
+`EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD`, and
+`EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD` to distinct strong values.
 
 For Helm or an externally managed database, create the roles before starting
 the platform and store their passwords in the Kubernetes Secret selected by
 `database.secretManagement.existingSecret`. The default keys are
-`admin-password` and `tenant-password`. Grant both roles `USAGE` on the target
+`admin-password`, `tenant-password`, and `runtime-password`. Grant all three roles `USAGE` on the target
 schema; do not grant `CREATE`, ownership, role membership, superuser, or
 `BYPASSRLS`.
 

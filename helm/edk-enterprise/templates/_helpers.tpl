@@ -545,6 +545,16 @@ database:
       password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
       pool:
         dedicated-pool: true
+    secret-management-runtime:
+      dialect: {{ .Values.database.dialect }}
+      isolation: shared
+      host: {{ $tenantDb.host }}
+      port: {{ $tenantDb.port }}
+      database: {{ $tenantDb.name }}
+      username: secret_management_runtime
+      password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
 {{- end -}}
 
 {{/* Platform-owned command families every satellite resolves over gRPC. */}}

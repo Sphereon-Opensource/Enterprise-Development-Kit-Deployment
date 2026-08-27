@@ -452,6 +452,11 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.database.secretManagement.existingSecret }}
                   key: {{ $.Values.database.secretManagement.tenantPasswordKey }}
+            - name: EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.secretManagement.existingSecret }}
+                  key: {{ $.Values.database.secretManagement.runtimePasswordKey }}
             {{- else }}
             # Tenant workload datasource. Runtime services own tenant workload
             # persistence and never receive platform database credentials.
@@ -513,6 +518,11 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.database.secretManagement.existingSecret }}
                   key: {{ $.Values.database.secretManagement.tenantPasswordKey }}
+            - name: EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.database.secretManagement.existingSecret }}
+                  key: {{ $.Values.database.secretManagement.runtimePasswordKey }}
             {{- end }}
             {{- end }}
             {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") }}

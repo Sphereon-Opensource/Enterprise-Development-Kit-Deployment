@@ -72,13 +72,14 @@ database:
           app.kubernetes.io/name: edk-platform-postgres
       namespaceSelector: {}
       ipBlock: {}
-  # Secret management uses two fixed, separately credentialed PostgreSQL runtime roles
-  # in the platform database. Neither role owns or creates schema objects. The deployment-only
+  # Secret management uses three fixed, separately credentialed PostgreSQL runtime roles
+  # in the platform/tenant databases. None owns or creates schema objects. The deployment-only
   # migrator reuses the platform database owner during startup, then closes that connection.
   secretManagement:
     existingSecret: edk-secret-management-database
     adminPasswordKey: admin-password
     tenantPasswordKey: tenant-password
+    runtimePasswordKey: runtime-password
   tenant:
     host: edk-tenant-postgres
     port: 5432

@@ -196,7 +196,8 @@ kubectl -n edk create secret generic edk-tenant-postgres \
 
 kubectl -n edk create secret generic edk-secret-management-database \
   --from-literal=admin-password=<secret-management-admin-password> \
-  --from-literal=tenant-password=<secret-management-tenant-password>
+  --from-literal=tenant-password=<secret-management-tenant-password> \
+  --from-literal=runtime-password=<secret-management-runtime-password>
 ```
 
 Before installing, provision fixed PostgreSQL login roles

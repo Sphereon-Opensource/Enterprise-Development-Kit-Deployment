@@ -152,6 +152,16 @@ database:
       password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
       pool:
         dedicated-pool: true
+    secret-management-runtime:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_runtime
+      password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
   tenants:
     default:
       dialect: postgresql
