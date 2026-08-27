@@ -119,7 +119,9 @@ errors in its logs, points at one of these. Keep `/health`, `/health/identity`,
 and `/ready` private while investigating the workload. `/health` is process-up,
 `/health/identity` is gRPC plus token/JWKS, and `/ready` is serving-ready after
 the boot ceremony. Tenant-KMS must dial `*-platform-identity`, not the serving
-platform Service, or the pair deadlocks. The platform connects only to the
+platform Service, or the pair deadlocks. Identity Services publish not-ready
+addresses because kube Ready is `/ready`; serving Services do not. The platform
+connects only to the
 control-plane database. Satellite services connect only to the tenant workload
 database and fetch platform-owned configuration from the platform over the
 internal command route.

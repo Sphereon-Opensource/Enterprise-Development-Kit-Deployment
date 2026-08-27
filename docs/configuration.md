@@ -402,7 +402,9 @@ and admin-console environment.
 Helm distinguishes **identity-ready** from **serving-ready**. `/health/identity`
 is 200 when gRPC is listening and the platform can serve `/token` and
 `/.well-known/jwks.json`; it does not wait for tenant ceremony. `/ready` stays
-the boot-ceremony gate. Distributed installs render `*-platform-identity` and
+the boot-ceremony gate. Kubernetes has one pod Ready bit, so identity Services
+publish not-ready addresses while serving `*-platform` / `*-tenant-kms`
+Services do not. Distributed installs render `*-platform-identity` and
 `*-tenant-kms-identity` ClusterIP Services for that identity plane.
 Tenant-KMS is the only caller of `*-platform-identity` (token, JWKS, and gRPC).
 The platform boot ceremony is the only caller of `*-tenant-kms-identity`.

@@ -10,7 +10,10 @@ metadata:
     edk.sphereon.com/readiness-path: /health/identity
 spec:
   type: ClusterIP
-  publishNotReadyAddresses: false
+  # Identity plane publishes not-ready addresses because kube Ready is /ready
+  # on the serving Service. This is not the old catch-all bootstrap Service:
+  # only platform boot uses it, and the documented probe is /health/identity.
+  publishNotReadyAddresses: true
   selector:
     {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "tenant-kms") | nindent 4 }}
     edk.sphereon.com/tenant-kms-identity: "true"

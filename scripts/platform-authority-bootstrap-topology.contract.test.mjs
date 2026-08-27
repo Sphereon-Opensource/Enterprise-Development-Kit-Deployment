@@ -42,12 +42,13 @@ function namedDocument(rendered, kind, name) {
   return document
 }
 
-test('identity-plane Services replace authority-bootstrap without publishNotReadyAddresses', () => {
+test('identity-plane Services replace authority-bootstrap and publish not-ready addresses', () => {
   const rendered = renderChart()
   const prefix = 'topology-test-edk-enterprise'
   const identityName = `${prefix}-platform-identity`
   const identityService = namedDocument(rendered, 'Service', identityName)
   const platformService = namedDocument(rendered, 'Service', `${prefix}-platform`)
+  const tenantKmsService = namedDocument(rendered, 'Service', `${prefix}-tenant-kms`)
   const platformDeployment = namedDocument(rendered, 'Deployment', `${prefix}-platform`)
   const tenantKmsDeployment = namedDocument(rendered, 'Deployment', `${prefix}-tenant-kms`)
   const tenantKmsIdentityName = `${prefix}-tenant-kms-identity`
@@ -56,8 +57,8 @@ test('identity-plane Services replace authority-bootstrap without publishNotRead
   const tenantKmsConfig = namedDocument(rendered, 'ConfigMap', `${prefix}-tenant-kms-config`)
   const issuerConfig = namedDocument(rendered, 'ConfigMap', `${prefix}-issuer-config`)
 
-  assert.doesNotMatch(rendered, /publishNotReadyAddresses:\s*true/)
   assert.doesNotMatch(rendered, /authority-bootstrap/)
+  assert.match(identityService, /^  publishNotReadyAddresses: true$/m)
   assert.match(identityService, /^    edk\.sphereon\.com\/readiness-path: \/health\/identity$/m)
   assert.match(identityService, /^    edk\.sphereon\.com\/platform-identity: "true"$/m)
   assert.match(identityService, /^    - name: grpc$/m)
@@ -70,6 +71,7 @@ test('identity-plane Services replace authority-bootstrap without publishNotRead
   }
 
   assert.match(platformService, /^    edk\.sphereon\.com\/readiness-path: \/ready$/m)
+  assert.doesNotMatch(platformService, /publishNotReadyAddresses/)
   assert.doesNotMatch(platformService, /edk\.sphereon\.com\/platform-identity/)
   assert.match(platformService, /^    - name: rest$/m)
   assert.match(platformService, /^    - name: grpc$/m)
@@ -80,6 +82,8 @@ test('identity-plane Services replace authority-bootstrap without publishNotRead
   assert.match(tenantKmsDeployment, new RegExp(`/dev/tcp/${identityName}/`))
   assert.match(tenantKmsDeployment, /^        edk\.sphereon\.com\/tenant-kms-identity: "true"$/m)
   assert.match(tenantKmsDeployment, /readinessProbe:\s+httpGet:\s+path: \/ready/)
+  assert.doesNotMatch(tenantKmsService, /publishNotReadyAddresses/)
+  assert.match(tenantKmsIdentityService, /^  publishNotReadyAddresses: true$/m)
   assert.match(tenantKmsIdentityService, /^    edk\.sphereon\.com\/readiness-path: \/health\/identity$/m)
   assert.match(tenantKmsIdentityService, /^    edk\.sphereon\.com\/tenant-kms-identity: "true"$/m)
   assert.match(tenantKmsIdentityService, /^    - name: grpc$/m)
