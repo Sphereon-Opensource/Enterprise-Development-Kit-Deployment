@@ -36,6 +36,9 @@ x-edk-common-env: &edk-common-env
   APP_PROFILE: container
   PORT: "8080"
   REST_PORT: "8080"
+  # DualTransport parses GRPC_AUTH_MODE at boot even when gRPC is disabled.
+  # Canonical alias matches Helm grpc.authMode; unknown/blank fails closed.
+  GRPC_AUTH_MODE: service-jwt
   SPHEREON_CONFIG_LOCATION: /app/config
   EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
   EDK_PLATFORM_PUBLIC_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
