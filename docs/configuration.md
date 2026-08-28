@@ -536,6 +536,8 @@ Set the transport globally in Helm under `grpc`:
 Internal gRPC is plaintext plus application JWT when `grpc.authMode=service-jwt`.
 Use `mtls` only with application-terminated cert paths, or `mesh-mtls` when a
 sidecar terminates TLS while the app still presents JWT on the local socket.
+The platform issuer satellites use to mint those JWTs (`iss`) must be `https://`.
+Loopback HTTP is rejected at STS client start (`Deployment platform issuer is invalid`).
 SPIFFE is the planned later identity root for this transport and is not required
 for this release.
 
