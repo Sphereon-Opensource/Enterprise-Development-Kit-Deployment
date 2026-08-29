@@ -1537,7 +1537,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"slug\": \"{{authorizationServerSlug}}\",\n  \"displayName\": \"{{tenantName}} Hosted Authorization Server\",\n  \"issuer\": \"{{tenantGatewayUrl}}/oauth2/{{authorizationServerSlug}}\",\n  \"deployment\": \"HOSTED\",\n  \"authenticationMode\": \"HYBRID\",\n  \"purposes\": [\n    \"GENERAL\",\n    \"CREDENTIAL_ISSUANCE\",\n    \"WALLET_LOGIN\"\n  ],\n  \"usages\": [\n    \"OID4VCI_AUTHORIZATION_SERVER\"\n  ],\n  \"allowedGrantTypes\": [\n    \"authorization_code\",\n    \"refresh_token\"\n  ]\n}"
+              "raw": "{\n  \"slug\": \"{{authorizationServerSlug}}\",\n  \"displayName\": \"{{tenantName}} Hosted Authorization Server\",\n  \"issuer\": \"{{tenantGatewayUrl}}/oauth2/{{authorizationServerSlug}}\",\n  \"deployment\": \"HOSTED\",\n  \"authenticationMode\": \"HYBRID\",\n  \"purposes\": [\n    \"GENERAL\",\n    \"CREDENTIAL_ISSUANCE\",\n    \"WALLET_LOGIN\"\n  ],\n  \"allowedGrantTypes\": [\n    \"authorization_code\",\n    \"refresh_token\"\n  ]\n}"
             }
           },
           "event": [
@@ -1551,7 +1551,7 @@
                   "pm.expect(j.id, 'resource UUID').to.match(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i);",
                   "pm.collectionVariables.set('hostedAuthorizationServerId', j.id);",
                   "pm.collectionVariables.set('hostedAuthorizationServerRevision', String(j.revision));",
-                  "pm.expect(pm.response.json().lifecycle).to.eql('DRAFT');"
+                  "pm.expect(pm.response.json().lifecycle).to.eql('ACTIVE');"
                 ]
               }
             }
