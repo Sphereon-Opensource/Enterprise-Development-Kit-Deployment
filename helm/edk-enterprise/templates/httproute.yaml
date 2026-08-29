@@ -402,8 +402,8 @@ spec:
 {{- end }}
 {{- if .Values.services.platform.enabled }}
 # Tenant-host platform projections used by the theme, catalog, and tenant-scoped
-# platform-config APIs. Wallet entitlement is split onto the onboarding route
-# when that satellite is enabled.
+# platform-config APIs. Wallet entitlement moves to the external onboarding
+# integration route when integrations.walletOnboarding.enabled is true.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -430,7 +430,7 @@ spec:
         - path:
             type: PathPrefix
             value: /api/theme/v1
-        {{- if not (index .Values.services "wallet-onboarding").enabled }}
+        {{- if ne (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true" }}
         - path:
             type: PathPrefix
             value: /api/wallet-entitlement/v1
@@ -449,14 +449,14 @@ spec:
           port: {{ .Values.services.platform.restPort }}
 ---
 {{- end }}
-{{- if and (index .Values.services "wallet-onboarding").enabled }}
+{{- if eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true" }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ include "edk-enterprise.fullname" . }}-wallet-onboarding-tenant
   labels:
     {{- include "edk-enterprise.labels" . | nindent 4 }}
-    app.kubernetes.io/component: wallet-onboarding
+    app.kubernetes.io/component: wallet-onboarding-integration
 spec:
   parentRefs:
     - name: {{ $gatewayName }}
@@ -480,8 +480,8 @@ spec:
             type: PathPrefix
             value: /api/wallet-onboarding/v1
       backendRefs:
-        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-onboarding") }}
-          port: {{ (index .Values.services "wallet-onboarding").restPort }}
+        - name: {{ include "edk-enterprise.walletOnboardingServiceName" . }}
+          port: {{ include "edk-enterprise.walletOnboardingRestPort" . | int }}
 ---
 {{- end }}
 {{- range $name := list "did" }}

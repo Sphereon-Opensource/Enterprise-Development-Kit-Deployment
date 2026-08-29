@@ -36,7 +36,7 @@ Rendered only for the platform service.
 {{- if (index .Values.services "wallet-interaction").enabled }}
 {{- $secretBootstrapActors = append $secretBootstrapActors (index .Values.serviceIdentity.clientIds "wallet-interaction") }}
 {{- end }}
-{{- if (index .Values.services "wallet-onboarding").enabled }}
+{{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") }}
 {{- $secretBootstrapActors = append $secretBootstrapActors (index .Values.serviceIdentity.clientIds "wallet-onboarding") }}
 {{- end }}
 {{- $secretWorkloadActorIds := list }}
@@ -343,7 +343,7 @@ data:
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "wallet-interaction") | quote }}
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "wallet-interaction") | quote }}
             {{- end }}
-            {{- if (index .Values.services "wallet-onboarding").enabled }}
+            {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") }}
             wallet-onboarding:
               client-id: {{ index .Values.serviceIdentity.clientIds "wallet-onboarding" | quote }}
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "wallet-onboarding" }}
@@ -439,7 +439,7 @@ data:
           {{- if (index .Values.services "wallet-interaction").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
           {{- end }}
-          {{- if (index .Values.services "wallet-onboarding").enabled }}
+          {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-onboarding" | quote }}
           {{- end }}
         service_client_bindings:
@@ -457,7 +457,7 @@ data:
           {{- if (index .Values.services "wallet-interaction").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
           {{- end }}
-          {{- if (index .Values.services "wallet-onboarding").enabled }}
+          {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-onboarding" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-onboarding" | quote }}
           {{- end }}
     {{- if and .Values.serviceIdentity.internalClientExistingSecret (or (index .Values.services "tenant-kms").enabled (index .Values.services "tenant-as").enabled) }}
@@ -534,7 +534,7 @@ data:
         {{- if (index .Values.services "blob").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob")) -}}{{- end }}
         {{- if (index .Values.services "wallet-unit").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "wallet-unit")) -}}{{- end }}
         {{- if (index .Values.services "wallet-interaction").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "wallet-interaction")) -}}{{- end }}
-        {{- if (index .Values.services "wallet-onboarding").enabled }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "wallet-onboarding")) -}}{{- end }}
+        {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") }}{{- $stsAudiences = append $stsAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "wallet-onboarding")) -}}{{- end }}
         allowed-audiences: {{ join "," $stsAudiences | quote }}
         {{- $platformSts := (.Values.platform).sts | default dict }}
         {{- if and (hasKey $platformSts "provisioningRoleClientIds") (not (kindIs "invalid" $platformSts.provisioningRoleClientIds)) }}

@@ -48,6 +48,22 @@
         "mode": { "type": "string", "enum": ["distributed", "monolith"] }
       }
     },
+    "integrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "walletOnboarding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "serviceName", "restPort"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "serviceName": { "type": "string" },
+            "restPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        }
+      }
+    },
     "monolith": {
       "type": "object",
       "additionalProperties": false,
@@ -364,7 +380,7 @@
         "existingSecrets": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction", "wallet-onboarding"],
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
           "properties": {
             "platform": { "type": "string" },
             "tenant-kms": { "type": "string" },
@@ -374,8 +390,7 @@
             "issuer": { "type": "string" },
             "verifier": { "type": "string" },
             "wallet-unit": { "type": "string" },
-            "wallet-interaction": { "type": "string" },
-            "wallet-onboarding": { "type": "string" }
+            "wallet-interaction": { "type": "string" }
           }
         },
         "keys": {
@@ -942,9 +957,9 @@
     "services": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "wallet-onboarding", "issuer", "verifier"],
+      "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
       "patternProperties": {
-        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|wallet-onboarding|issuer|verifier|admin-console|admin-console-tenant|business-wallet)$": {
+        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console|admin-console-tenant|business-wallet)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {

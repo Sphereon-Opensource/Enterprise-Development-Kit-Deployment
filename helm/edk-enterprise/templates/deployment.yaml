@@ -43,7 +43,7 @@ spec:
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-tenant-as.yaml") $ | sha256sum }}
         {{- else if eq $name "tenant-kms" }}
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-tenant-kms.yaml") $ | sha256sum }}
-        {{- else if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") (eq $name "wallet-onboarding") }}
+        {{- else if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
         checksum/runtime-config: {{ include (print $.Template.BasePath "/configmap-runtime-services.yaml") $ | sha256sum }}
         {{- end }}
         {{- with $.Values.podAnnotations }}
@@ -525,7 +525,7 @@ spec:
                   key: {{ $.Values.database.secretManagement.runtimePasswordKey }}
             {{- end }}
             {{- end }}
-            {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") (ne $name "wallet-onboarding") }}
+            {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICE_TOKEN_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "tenant-kms") | quote }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
@@ -643,7 +643,7 @@ spec:
                    confidential client registered for this workload. Without this
                    role the bootstrap client remains in use and its token carries
                    tenant_id=platform, so tenant KMS routing fails closed. */}}
-            {{- $activeAsClientRoles := dict "tenant-kms" "kms" "tenant-as" "authorization-server" "did" "did" "blob" "blob" "issuer" "issuer" "verifier" "verifier" "wallet-unit" "wallet-unit" "wallet-interaction" "wallet-interaction" "wallet-onboarding" "wallet-onboarding" }}
+            {{- $activeAsClientRoles := dict "tenant-kms" "kms" "tenant-as" "authorization-server" "did" "did" "blob" "blob" "issuer" "issuer" "verifier" "verifier" "wallet-unit" "wallet-unit" "wallet-interaction" "wallet-interaction" }}
             - name: SERVER_SERVICE_IDENTITY_ACTIVE_AS_CLIENT_ROLE
               value: {{ index $activeAsClientRoles $name | quote }}
             - name: SERVER_SERVICE_IDENTITY_AUDIENCE
@@ -750,8 +750,8 @@ spec:
             # header keeps tenant-routing context. The BFF takes the in-cluster onboarding hop
             # when that satellite is enabled; otherwise it falls back to platform.
             - name: ADMIN_CONSOLE_WALLET_ENTITLEMENT_BASE_URL
-              {{- if (index $.Values.services "wallet-onboarding").enabled }}
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "wallet-onboarding")) (index $.Values.services "wallet-onboarding").restPort | quote }}
+              {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" $) "true") }}
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.walletOnboardingServiceName" $) (include "edk-enterprise.walletOnboardingRestPort" $) | quote }}
               {{- else }}
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
               {{- end }}
@@ -784,13 +784,13 @@ spec:
             - name: NEXT_PUBLIC_AUDIT_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             - name: ADMIN_CONSOLE_WALLET_ENTITLEMENT_AUDIENCE
-              {{- if (index $.Values.services "wallet-onboarding").enabled }}
+              {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" $) "true") }}
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "wallet-onboarding") | quote }}
               {{- else }}
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
               {{- end }}
             - name: NEXT_PUBLIC_WALLET_ENTITLEMENT_AUDIENCE
-              {{- if (index $.Values.services "wallet-onboarding").enabled }}
+              {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" $) "true") }}
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "wallet-onboarding") | quote }}
               {{- else }}
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
@@ -916,7 +916,7 @@ spec:
               subPath: application.yml
               readOnly: true
             {{- end }}
-            {{- if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") (eq $name "wallet-onboarding") }}
+            {{- if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
             # Service-specific routing, persistence and trust policy. This is a
             # subPath mount, so it REPLACES the image's baked
             # /app/config/application.yml rather than merging with it. Every key
@@ -1006,7 +1006,7 @@ spec:
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-tenant-kms-config
         {{- end }}
-        {{- if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") (eq $name "wallet-onboarding") }}
+        {{- if or (eq $name "did") (eq $name "blob") (eq $name "issuer") (eq $name "verifier") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
         - name: runtime-service-config
           configMap:
             name: {{ include "edk-enterprise.fullname" $ }}-{{ $name }}-config

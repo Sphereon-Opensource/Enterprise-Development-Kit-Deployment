@@ -166,13 +166,39 @@ ${env:{{ include "edk-enterprise.serviceIdentity.clientSecretEnvName" . }}}
 {{- $key -}}
 {{- end -}}
 
+{{- define "edk-enterprise.walletOnboardingIntegrationEnabled" -}}
+{{- $integrations := default dict .Values.integrations -}}
+{{- $wo := default dict (index $integrations "walletOnboarding") -}}
+{{- if default false $wo.enabled }}true{{ else }}false{{ end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.walletOnboardingServiceName" -}}
+{{- $integrations := default dict .Values.integrations -}}
+{{- $wo := default dict (index $integrations "walletOnboarding") -}}
+{{- $name := trim (default "" $wo.serviceName) -}}
+{{- if and (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") (eq $name "") -}}
+{{- fail "integrations.walletOnboarding.serviceName is required when integrations.walletOnboarding.enabled=true; point it at the external wallet-onboarding Service in this namespace." -}}
+{{- end -}}
+{{- $name -}}
+{{- end -}}
+
+{{- define "edk-enterprise.walletOnboardingRestPort" -}}
+{{- $integrations := default dict .Values.integrations -}}
+{{- $wo := default dict (index $integrations "walletOnboarding") -}}
+{{- default 8080 $wo.restPort -}}
+{{- end -}}
+
 {{- define "edk-enterprise.serviceIdentity.roleNeedsClientSecret" -}}
 {{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
 {{- $row := index $catalog.roles .role -}}
 {{- if and $row $row.clientId -}}
 {{- if eq $row.kind "satellite" -}}
+{{- if eq .role "wallet-onboarding" -}}
+{{- if eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .root) "true" }}true{{ else }}false{{ end -}}
+{{- else -}}
 {{- $svc := index .root.Values.services .role -}}
 {{- if and $svc $svc.enabled }}true{{ else }}false{{ end -}}
+{{- end -}}
 {{- else if eq $row.kind "auxiliary-client" -}}
 {{- if (index .root.Values.services "tenant-as").enabled }}true{{ else }}false{{ end -}}
 {{- else }}false{{ end -}}
@@ -402,7 +428,7 @@ east-west Authorization headers or software-keystore access.
 */}}
 {{- define "edk-enterprise.validateRuntimeSecrets" -}}
 {{- $mode := include "edk-enterprise.topologyMode" . -}}
-{{- $satelliteEnabled := and (eq $mode "distributed") (or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled (index .Values.services "wallet-onboarding").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled) -}}
+{{- $satelliteEnabled := and (eq $mode "distributed") (or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") .Values.services.issuer.enabled .Values.services.verifier.enabled) -}}
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
@@ -446,7 +472,7 @@ east-west Authorization headers or software-keystore access.
 {{- end -}}
 {{- $secretWorkloads := list "platform" -}}
 {{- if eq $mode "distributed" -}}
-{{- $secretWorkloads = list "platform" "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" "wallet-onboarding" -}}
+{{- $secretWorkloads = list "platform" "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" -}}
 {{- end -}}
 {{- range $name := $secretWorkloads -}}
 {{- $service := index $.Values.services $name -}}
@@ -659,8 +685,11 @@ would create endpoints that can never provision or use tenant keys.
 {{- if and (index .Values.services "wallet-interaction").enabled (not (index .Values.services "wallet-unit").enabled) -}}
 {{- fail "services.wallet-unit.enabled must be true while wallet-interaction is enabled: wallet interaction routes HSM policy authorization to wallet-unit." -}}
 {{- end -}}
-{{- if and (index .Values.services "wallet-onboarding").enabled (not (index .Values.services "tenant-kms").enabled) -}}
-{{- fail "services.tenant-kms.enabled must be true while wallet-onboarding is enabled: wallet onboarding routes entitlement signing and key lifecycle to tenant-kms." -}}
+{{- if and (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") (not (index .Values.services "tenant-kms").enabled) -}}
+{{- fail "services.tenant-kms.enabled must be true while integrations.walletOnboarding.enabled=true: wallet onboarding routes entitlement signing and key lifecycle to tenant-kms." -}}
+{{- end -}}
+{{- if eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true" -}}
+{{- $_ := include "edk-enterprise.walletOnboardingServiceName" . -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

@@ -23,6 +23,15 @@ global:
 topology:
   mode: distributed
 
+# External product integrations the chart wires (HttpRoute / STS / console BASE_URL)
+# but does not deploy. Wallet images stay outside edk-enterprise.
+integrations:
+  walletOnboarding:
+    enabled: false
+    # Existing Service (same namespace) that fronts enterprise-wallet-onboarding.
+    serviceName: ""
+    restPort: 8080
+
 # Settings that exist only because the monolith is one Kubernetes workload.
 # Database, license, origin, email, tenant, and secret values remain in their
 # normal shared sections above and below.
@@ -221,7 +230,6 @@ secretAuthority:
     verifier: ""
     wallet-unit: ""
     wallet-interaction: ""
-    wallet-onboarding: ""
   keys:
     centralPermitSigningKey: central-permit-signing-key
     centralAssertionVerificationKeys: central-assertion-verification-keys
@@ -251,8 +259,10 @@ auth:
     audience: edk-enterprise
 
 grpc:
-  # Platform, tenant KMS, wallet-unit, wallet-interaction, and wallet-onboarding
-  # carry the gRPC server transport. The other services use routed command clients.
+  # Platform, tenant KMS, wallet-unit, and wallet-interaction carry the gRPC
+  # server transport. External wallet-onboarding (integrations.walletOnboarding)
+  # also receives gRPC when deployed outside this chart. Other services use
+  # routed command clients.
   enabled: true
   port: 9090
   # service-jwt is application JWT on plaintext gRPC; it is not mTLS.
@@ -955,40 +965,6 @@ services:
     env:
       - name: WALLET_INTERACTION_KEYSTORE_ROOT
         value: /keystore
-
-  wallet-onboarding:
-    enabled: false
-    image: enterprise-wallet-onboarding
-    replicas: 1
-    restPort: 8080
-    publicIngress:
-      enabled: false
-      className: ""
-      host: ""
-      paths: []
-      annotations: {}
-    internalIngress:
-      enabled: false
-      className: internal
-      host: ""
-      paths: []
-      annotations: {}
-    resources:
-      requests:
-        cpu: 250m
-        memory: 768Mi
-      limits:
-        cpu: "1"
-        memory: 1536Mi
-    env:
-      - name: WALLET_ACTIVATION_PROFILE
-        value: development-email-software-wscd
-      - name: WALLET_MANAGED_READINESS_DEPENDENCY_RECORDS
-        value: "[]"
-      - name: WALLET_MANAGED_READINESS_RELEASE_EVIDENCE_RECORDS
-        value: "[]"
-      - name: WALLET_MANAGED_READINESS_RELEASE_SIGNING_KEYS
-        value: "[]"
 
   issuer:
     enabled: true
