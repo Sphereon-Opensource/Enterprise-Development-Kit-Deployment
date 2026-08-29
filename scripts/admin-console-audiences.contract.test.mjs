@@ -65,3 +65,23 @@ test('operator token exchange allowlist follows admin-console peer audiences', (
   }
   assert.ok(!audiences.includes('enterprise-platform'), 'operator default audience must not be duplicated')
 })
+
+test('admin-console receives server-only runtime audience variables', () => {
+  const rendered = renderChart()
+  for (const [name, audience] of [
+    ['ADMIN_CONSOLE_PLATFORM_AUDIENCE', 'enterprise-platform'],
+    ['ADMIN_CONSOLE_TENANT_KMS_AUDIENCE', 'enterprise-tenant-kms'],
+    ['ADMIN_CONSOLE_AUDIT_AUDIENCE', 'enterprise-platform'],
+    ['ADMIN_CONSOLE_WALLET_ENTITLEMENT_AUDIENCE', 'enterprise-platform'],
+    ['ADMIN_CONSOLE_THEME_AUDIENCE', 'enterprise-blob'],
+    ['ADMIN_CONSOLE_TENANT_DID_AUDIENCE', 'enterprise-tenant-did'],
+    ['ADMIN_CONSOLE_ISSUER_AUDIENCE', 'enterprise-issuer'],
+    ['ADMIN_CONSOLE_VERIFIER_AUDIENCE', 'enterprise-verifier'],
+  ]) {
+    assert.match(
+      rendered,
+      new RegExp(`name: ${name}\\s+value: "${audience}"`),
+      `${name} is missing its runtime audience`,
+    )
+  }
+})

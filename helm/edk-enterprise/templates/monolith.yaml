@@ -444,12 +444,20 @@ spec:
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_VERIFIER_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_THEME_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
             - name: NEXT_PUBLIC_THEME_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
+            - name: ADMIN_CONSOLE_TENANT_DID_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "did") | quote }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "did") | quote }}
+            - name: ADMIN_CONSOLE_ISSUER_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "issuer") | quote }}
             - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "issuer") | quote }}
+            - name: ADMIN_CONSOLE_VERIFIER_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             - name: NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             - name: PORT
@@ -461,6 +469,8 @@ spec:
               value: {{ $.Values.portalBff.clientId | quote }}
             - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
               valueFrom: { secretKeyRef: { name: {{ $.Values.portalBff.existingSecret | quote }}, key: {{ $.Values.portalBff.clientSecretKey | quote }} } }
+            - name: ADMIN_CONSOLE_PLATFORM_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             {{- else }}
