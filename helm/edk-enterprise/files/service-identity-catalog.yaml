@@ -19,6 +19,7 @@ roles:
       - verifier
       - wallet-unit
       - wallet-interaction
+      - wallet-onboarding
       - admin-console
       - admin-console-tenant
     peersOut:
@@ -28,6 +29,7 @@ roles:
       - blob
       - issuer
       - verifier
+      - wallet-onboarding
   tenant-kms:
     kind: satellite
     clientId: kms-service
@@ -45,6 +47,7 @@ roles:
       - issuer
       - verifier
       - wallet-interaction
+      - wallet-onboarding
       - admin-console
       - admin-console-tenant
     peersOut:
@@ -155,6 +158,7 @@ roles:
     grpcReceiver: true
     peersIn:
       - wallet-interaction
+      - wallet-onboarding
     peersOut:
       - platform
   wallet-interaction:
@@ -174,6 +178,25 @@ roles:
       - wallet-unit
       - tenant-kms
       - platform
+  wallet-onboarding:
+    kind: satellite
+    clientId: wallet-onboarding-service
+    serviceId: service-wallet-onboarding
+    receiverAudience: enterprise-wallet-onboarding
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+      - wallet-unit
+    grpcReceiver: true
+    peersIn:
+      - platform
+      - admin-console
+      - admin-console-tenant
+      - wallet-interaction
+    peersOut:
+      - platform
+      - tenant-kms
+      - wallet-unit
   admin-console:
     kind: bff
     clientId: admin-console-portal-bff
@@ -190,6 +213,7 @@ roles:
       - blob
       - issuer
       - verifier
+      - wallet-onboarding
   admin-console-tenant:
     kind: bff
     clientId: admin-console-portal-bff
@@ -207,6 +231,7 @@ roles:
       - blob
       - issuer
       - verifier
+      - wallet-onboarding
   business-wallet:
     kind: frontend
     clientId: null
@@ -225,6 +250,7 @@ roles:
       - verifier
       - wallet-unit
       - wallet-interaction
+      - wallet-onboarding
   trust-domain-identifier:
     kind: auxiliary-client
     clientId: trust-domain-service

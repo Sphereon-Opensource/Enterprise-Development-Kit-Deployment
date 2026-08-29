@@ -364,7 +364,7 @@
         "existingSecrets": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction", "wallet-onboarding"],
           "properties": {
             "platform": { "type": "string" },
             "tenant-kms": { "type": "string" },
@@ -374,7 +374,8 @@
             "issuer": { "type": "string" },
             "verifier": { "type": "string" },
             "wallet-unit": { "type": "string" },
-            "wallet-interaction": { "type": "string" }
+            "wallet-interaction": { "type": "string" },
+            "wallet-onboarding": { "type": "string" }
           }
         },
         "keys": {
@@ -401,7 +402,7 @@
             "assertionPublicKeys": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["service-platform", "service-crypto", "service-data", "service-blob", "service-tenant-as", "service-oid4vci", "service-oid4vp", "service-wallet-unit", "service-wallet-interaction"],
+              "required": ["service-platform", "service-crypto", "service-data", "service-blob", "service-tenant-as", "service-oid4vci", "service-oid4vp", "service-wallet-unit", "service-wallet-interaction", "service-wallet-onboarding"],
               "properties": {
                 "service-platform": { "type": "string", "minLength": 1 },
                 "service-crypto": { "type": "string", "minLength": 1 },
@@ -411,7 +412,8 @@
                 "service-oid4vci": { "type": "string", "minLength": 1 },
                 "service-oid4vp": { "type": "string", "minLength": 1 },
                 "service-wallet-unit": { "type": "string", "minLength": 1 },
-                "service-wallet-interaction": { "type": "string", "minLength": 1 }
+                "service-wallet-interaction": { "type": "string", "minLength": 1 },
+                "service-wallet-onboarding": { "type": "string", "minLength": 1 }
               }
             }
           }
@@ -608,13 +610,14 @@
             "verifier": { "type": "string", "minLength": 1 },
             "wallet-unit": { "type": "string", "minLength": 1 },
             "wallet-interaction": { "type": "string", "minLength": 1 },
+            "wallet-onboarding": { "type": "string", "minLength": 1 },
             "trust-domain-identifier": { "type": "string", "minLength": 1 }
           }
         },
         "clientIds": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction", "wallet-onboarding"],
           "properties": {
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
@@ -623,13 +626,14 @@
             "issuer": { "type": "string", "minLength": 1 },
             "verifier": { "type": "string", "minLength": 1 },
             "wallet-unit": { "type": "string", "minLength": 1 },
-            "wallet-interaction": { "type": "string", "minLength": 1 }
+            "wallet-interaction": { "type": "string", "minLength": 1 },
+            "wallet-onboarding": { "type": "string", "minLength": 1 }
           }
         },
         "serviceIds": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction", "wallet-onboarding"],
           "properties": {
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
@@ -638,13 +642,14 @@
             "issuer": { "type": "string", "minLength": 1 },
             "verifier": { "type": "string", "minLength": 1 },
             "wallet-unit": { "type": "string", "minLength": 1 },
-            "wallet-interaction": { "type": "string", "minLength": 1 }
+            "wallet-interaction": { "type": "string", "minLength": 1 },
+            "wallet-onboarding": { "type": "string", "minLength": 1 }
           }
         },
         "anonymousPathPrefixes": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction"],
+          "required": ["platform", "tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction", "wallet-onboarding"],
           "properties": {
             "platform": { "type": "string" },
             "tenant-kms": { "type": "string" },
@@ -654,7 +659,8 @@
             "issuer": { "type": "string" },
             "verifier": { "type": "string" },
             "wallet-unit": { "type": "string" },
-            "wallet-interaction": { "type": "string" }
+            "wallet-interaction": { "type": "string" },
+            "wallet-onboarding": { "type": "string" }
           }
         }
       }
@@ -936,9 +942,9 @@
     "services": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
+      "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "wallet-onboarding", "issuer", "verifier"],
       "patternProperties": {
-        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console|admin-console-tenant|business-wallet)$": {
+        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|wallet-onboarding|issuer|verifier|admin-console|admin-console-tenant|business-wallet)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {

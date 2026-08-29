@@ -401,10 +401,9 @@ spec:
 ---
 {{- end }}
 {{- if .Values.services.platform.enabled }}
-# Tenant-host platform projections used by the theme, wallet-entitlement and
-# tenant-scoped platform-config APIs (which include typed KMS resource
-# management). These are intentionally narrow; the platform's operator-host
-# catch-all must not become a wildcard tenant-host catch-all.
+# Tenant-host platform projections used by the theme, catalog, and tenant-scoped
+# platform-config APIs. Wallet entitlement is split onto the onboarding route
+# when that satellite is enabled.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -431,9 +430,11 @@ spec:
         - path:
             type: PathPrefix
             value: /api/theme/v1
+        {{- if not (index .Values.services "wallet-onboarding").enabled }}
         - path:
             type: PathPrefix
             value: /api/wallet-entitlement/v1
+        {{- end }}
         - path:
             type: PathPrefix
             value: /api/platform/config/v1/tenants
@@ -446,6 +447,41 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
           port: {{ .Values.services.platform.restPort }}
+---
+{{- end }}
+{{- if and (index .Values.services "wallet-onboarding").enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-wallet-onboarding-tenant
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wallet-onboarding
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /api/wallet-entitlement/v1
+        - path:
+            type: PathPrefix
+            value: /api/wallet-onboarding/v1
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-onboarding") }}
+          port: {{ (index .Values.services "wallet-onboarding").restPort }}
 ---
 {{- end }}
 {{- range $name := list "did" }}

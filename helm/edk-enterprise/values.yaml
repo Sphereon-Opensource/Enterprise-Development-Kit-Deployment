@@ -221,6 +221,7 @@ secretAuthority:
     verifier: ""
     wallet-unit: ""
     wallet-interaction: ""
+    wallet-onboarding: ""
   keys:
     centralPermitSigningKey: central-permit-signing-key
     centralAssertionVerificationKeys: central-assertion-verification-keys
@@ -239,6 +240,7 @@ secretAuthority:
       service-oid4vp: service-oid4vp-assertion.pub.pem
       service-wallet-unit: service-wallet-unit-assertion.pub.pem
       service-wallet-interaction: service-wallet-interaction-assertion.pub.pem
+      service-wallet-onboarding: service-wallet-onboarding-assertion.pub.pem
 
 auth:
   enabled: true
@@ -249,8 +251,8 @@ auth:
     audience: edk-enterprise
 
 grpc:
-  # Platform, tenant KMS, wallet-unit, and wallet-interaction carry the gRPC
-  # server transport. The other services use routed command clients.
+  # Platform, tenant KMS, wallet-unit, wallet-interaction, and wallet-onboarding
+  # carry the gRPC server transport. The other services use routed command clients.
   enabled: true
   port: 9090
   # service-jwt is application JWT on plaintext gRPC; it is not mTLS.
@@ -423,6 +425,7 @@ serviceIdentity:
     verifier: verifier-service-client-secret
     wallet-unit: wallet-unit-service-client-secret
     wallet-interaction: wallet-interaction-service-client-secret
+    wallet-onboarding: wallet-onboarding-service-client-secret
     trust-domain-identifier: trust-domain-service-client-secret
   # Per-service client_credentials client id each satellite presents to the
   # platform AS to mint its east-west service token. These match the platform's
@@ -437,6 +440,7 @@ serviceIdentity:
     trust-domain-identifier: trust-domain-service
     wallet-unit: wallet-unit-service
     wallet-interaction: wallet-interaction-service
+    wallet-onboarding: wallet-onboarding-service
   # Local workload labels used to select credentials and configure the binding
   # to each platform-issued JWT client id. They are never sent as identity headers.
   serviceIds:
@@ -448,6 +452,7 @@ serviceIdentity:
     verifier: service-oid4vp
     wallet-unit: service-wallet-unit
     wallet-interaction: service-wallet-interaction
+    wallet-onboarding: service-wallet-onboarding
   # Receiver and STS audiences come from files/service-identity-catalog.yaml
   # (vendored with VDX Helm and the frontend). They are not Helm values and
   # there is no serviceIdentity.audiences override surface.
@@ -468,6 +473,7 @@ serviceIdentity:
     verifier: "/oid4vp/request-uri,/oid4vp/auth/response,/.well-known"
     wallet-unit: ""
     wallet-interaction: ""
+    wallet-onboarding: "/api/wallet-onboarding/v1/idv/email/callback,/wallet/verify"
 
 # Interactive documentation site (docs playground). When enabled, registers a
 # public OAuth client on the platform AS (authorization code + required PKCE +
@@ -553,6 +559,7 @@ license:
     verifier: enterprise-verifier
     wallet-unit: enterprise-wallet-unit
     wallet-interaction: enterprise-wallet-interaction
+    wallet-onboarding: enterprise-wallet-onboarding
   # License trust anchor and bundle delivery. The platform is the local
   # licensing authority; it trusts the installed license bundle's root CA. The
   # bundle itself is imported through the setup API after the platform boots.
@@ -948,6 +955,40 @@ services:
     env:
       - name: WALLET_INTERACTION_KEYSTORE_ROOT
         value: /keystore
+
+  wallet-onboarding:
+    enabled: false
+    image: enterprise-wallet-onboarding
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: false
+      className: ""
+      host: ""
+      paths: []
+      annotations: {}
+    internalIngress:
+      enabled: false
+      className: internal
+      host: ""
+      paths: []
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 768Mi
+      limits:
+        cpu: "1"
+        memory: 1536Mi
+    env:
+      - name: WALLET_ACTIVATION_PROFILE
+        value: development-email-software-wscd
+      - name: WALLET_MANAGED_READINESS_DEPENDENCY_RECORDS
+        value: "[]"
+      - name: WALLET_MANAGED_READINESS_RELEASE_EVIDENCE_RECORDS
+        value: "[]"
+      - name: WALLET_MANAGED_READINESS_RELEASE_SIGNING_KEYS
+        value: "[]"
 
   issuer:
     enabled: true

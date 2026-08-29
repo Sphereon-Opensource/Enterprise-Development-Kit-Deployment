@@ -54,6 +54,9 @@ data:
           {{- if (index .Values.services "wallet-interaction").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
           {{- end }}
+          {{- if (index .Values.services "wallet-onboarding").enabled }}
+          - {{ index .Values.serviceIdentity.serviceIds "wallet-onboarding" | quote }}
+          {{- end }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
@@ -62,6 +65,9 @@ data:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
           {{- if (index .Values.services "wallet-interaction").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "wallet-onboarding").enabled }}
+          "[{{ index .Values.serviceIdentity.serviceIds "wallet-onboarding" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-onboarding" | quote }}
           {{- end }}
     # Tenant configuration routes platform-side KMS commands to SERVER. This
     # workload is that receiver, so its deployment-local routing must remain

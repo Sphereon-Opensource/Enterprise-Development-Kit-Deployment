@@ -402,7 +402,7 @@ east-west Authorization headers or software-keystore access.
 */}}
 {{- define "edk-enterprise.validateRuntimeSecrets" -}}
 {{- $mode := include "edk-enterprise.topologyMode" . -}}
-{{- $satelliteEnabled := and (eq $mode "distributed") (or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled) -}}
+{{- $satelliteEnabled := and (eq $mode "distributed") (or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled (index .Values.services "wallet-onboarding").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled) -}}
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
@@ -446,7 +446,7 @@ east-west Authorization headers or software-keystore access.
 {{- end -}}
 {{- $secretWorkloads := list "platform" -}}
 {{- if eq $mode "distributed" -}}
-{{- $secretWorkloads = list "platform" "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" -}}
+{{- $secretWorkloads = list "platform" "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" "wallet-onboarding" -}}
 {{- end -}}
 {{- range $name := $secretWorkloads -}}
 {{- $service := index $.Values.services $name -}}
@@ -658,6 +658,9 @@ would create endpoints that can never provision or use tenant keys.
 {{- end -}}
 {{- if and (index .Values.services "wallet-interaction").enabled (not (index .Values.services "wallet-unit").enabled) -}}
 {{- fail "services.wallet-unit.enabled must be true while wallet-interaction is enabled: wallet interaction routes HSM policy authorization to wallet-unit." -}}
+{{- end -}}
+{{- if and (index .Values.services "wallet-onboarding").enabled (not (index .Values.services "tenant-kms").enabled) -}}
+{{- fail "services.tenant-kms.enabled must be true while wallet-onboarding is enabled: wallet onboarding routes entitlement signing and key lifecycle to tenant-kms." -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
