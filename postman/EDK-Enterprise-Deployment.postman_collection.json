@@ -615,10 +615,16 @@
                   "      const serviceUrls = j.serviceUrls || {};",
                   "      const expectedTenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/$/, '');",
                   "      const exactTenantOrigin = (label, value) => pm.expect(String(value || '').replace(/\\/$/, ''), label).to.eql(expectedTenantOrigin);",
+                  "      const protocolUrl = (label, value, segment) => {",
+                  "        const actual = String(value || '').replace(/\\/$/, '');",
+                  "        const slug = pm.variables.replaceIn('{{tenantSlug}}');",
+                  "        const allowed = [expectedTenantOrigin, expectedTenantOrigin + '/' + segment + '/' + slug];",
+                  "        pm.expect(allowed, label).to.include(actual);",
+                  "      };",
                   "      exactTenantOrigin('tenant URL', j.tenantUrl || j.primaryDomainUrl);",
-                  "      exactTenantOrigin('AS issuer URL', serviceUrls.authorizationServerUrl || j.issuerUrl || j.tenant?.issuerUrl);",
-                  "      exactTenantOrigin('OID4VCI issuer URL', serviceUrls.oid4vciIssuerUrl || j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl);",
-                  "      exactTenantOrigin('OID4VP verifier URL', serviceUrls.oid4vpVerifierUrl || j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl);",
+                  "      protocolUrl('AS issuer URL', serviceUrls.authorizationServerUrl || j.issuerUrl || j.tenant?.issuerUrl, 'as');",
+                  "      protocolUrl('OID4VCI issuer URL', serviceUrls.oid4vciIssuerUrl || j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl, 'oid4vci');",
+                  "      protocolUrl('OID4VP verifier URL', serviceUrls.oid4vpVerifierUrl || j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl, 'oid4vp');",
                   "    });",
                   "  } catch (registrationPostConditionError) {",
                   "    console.error('Registration post-condition failed; aborting this tenant run: ' + registrationPostConditionError.message);",
@@ -1258,7 +1264,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "['tenantOwnerLoginUrl', 'tenantOwnerAuthSessionId', 'tenantOwnerReturnUrl', 'tenantOwnerTabId', 'tenantOwnerSessionCode', 'tenantOwnerAuthCode', 'tenantOwnerCodeChallenge', 'tenantOwnerToken'].forEach((key) => pm.collectionVariables.unset(key));",
+                  "['tenantOwnerLoginUrl', 'tenantOwnerLoginActionUrl', 'tenantOwnerProtocolBase', 'tenantOwnerAuthSessionId', 'tenantOwnerReturnUrl', 'tenantOwnerTabId', 'tenantOwnerSessionCode', 'tenantOwnerAuthCode', 'tenantOwnerCodeChallenge', 'tenantOwnerToken'].forEach((key) => pm.collectionVariables.unset(key));",
                   "const verifier = pm.variables.replaceIn('{{tenantOwnerCodeVerifier}}');",
                   "const challenge = CryptoJS.SHA256(verifier).toString(CryptoJS.enc.Base64)",
                   "  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
@@ -1276,8 +1282,10 @@
                   "pm.expect(location, 'Location header').to.be.a('string').and.to.include('/login?');",
                   "const tenantBase = pm.variables.replaceIn('{{tenantGatewayUrl}}').replace(/\\/$/, '');",
                   "const loginUrl = /^https?:\\/\\//.test(location) ? location : tenantBase + location;",
-                  "pm.expect(loginUrl, 'tenant-scoped login URL').to.match(new RegExp('^' + tenantBase.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '/login\\\\?'));",
+                  "pm.expect(loginUrl, 'tenant-scoped login URL').to.match(new RegExp('^' + tenantBase.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '(/as/[^/]+)?/login\\\\?'));",
                   "pm.collectionVariables.set('tenantOwnerLoginUrl', loginUrl);",
+                  "pm.collectionVariables.set('tenantOwnerLoginActionUrl', loginUrl.split('?')[0]);",
+                  "pm.collectionVariables.set('tenantOwnerProtocolBase', loginUrl.replace(/\\/login\\?.*/, ''));",
                   "const sessionId = /[?&]session_id=([^&]+)/.exec(location);",
                   "pm.expect(sessionId, 'session_id in login URL').to.not.eql(null);",
                   "pm.collectionVariables.set('tenantOwnerAuthSessionId', decodeURIComponent(sessionId[1]));",
@@ -1322,7 +1330,7 @@
           },
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/login",
+            "url": "{{tenantOwnerLoginActionUrl}}",
             "description": "Authenticates the activated owner at the tenant gateway with the CSRF tuple from the rendered form.",
             "header": [
               {
@@ -1370,8 +1378,7 @@
                   "const location = pm.response.headers.get('Location');",
                   "pm.expect(location, 'Location header').to.be.a('string').and.to.include('/authorize/callback');",
                   "pm.expect(location).to.not.include('error=invalid_credentials');",
-                  "const expectedPath = '/authorize/callback?session_id=' + encodeURIComponent(pm.collectionVariables.get('tenantOwnerAuthSessionId'));",
-                  "const expectedUrl = pm.variables.replaceIn('{{tenantGatewayUrl}}').replace(/\\/$/, '') + expectedPath;",
+                  "const expectedUrl = pm.collectionVariables.get('tenantOwnerReturnUrl');",
                   "const normalizedLocation = /^https?:\\/\\//.test(location) ? location : pm.variables.replaceIn('{{tenantGatewayUrl}}').replace(/\\/$/, '') + location;",
                   "pm.expect(normalizedLocation, 'tenant authorization callback URL').to.eql(expectedUrl);"
                 ]
@@ -1386,7 +1393,7 @@
           },
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/authorize/callback?session_id={{tenantOwnerAuthSessionId}}",
+            "url": "{{tenantOwnerReturnUrl}}",
             "description": "Resumes the pending tenant authorization with the authenticated owner session."
           },
           "event": [
@@ -1411,7 +1418,7 @@
           "name": "07 Exchange tenant owner authorization code",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/token",
+            "url": "{{tenantOwnerProtocolBase}}/token",
             "description": "Exchanges the tenant authorization code with the matching PKCE verifier. Only this tenant-bound owner token is used on tenant secret routes.",
             "header": [
               {

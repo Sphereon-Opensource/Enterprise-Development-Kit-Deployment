@@ -266,6 +266,7 @@ name, or an empty list for services that are not tenant-routed.
 - /api/theme/v1
 - /api/assets/v1
 {{- else if eq $name "tenant-as" -}}
+- /as
 - /authorize
 - /par
 - /token
@@ -273,6 +274,8 @@ name, or an empty list for services that are not tenant-routed.
 - /oauth2
 - /login
 - /logout
+- /account-action
+- /api/account-actions
 - /api/trust-domain/v1
 - /.well-known/oauth-authorization-server
 - /.well-known/openid-configuration
