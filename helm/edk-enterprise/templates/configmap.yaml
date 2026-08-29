@@ -369,6 +369,7 @@ data:
           post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/admin-console"
           allowed-scopes: openid
           default-access-token-audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+          allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.peersOutAudiencesCsv" (dict "root" . "role" "admin-console") | quote }}
           token-endpoint-auth-method: none
         {{- if .Values.docsPlayground.enabled }}
         # Public docs playground client: authorization code + required PKCE + required PAR.

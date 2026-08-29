@@ -127,6 +127,28 @@ root so Helm can load files/service-identity-catalog.yaml.
 {{- join "," $audiences -}}
 {{- end -}}
 
+{{- define "edk-enterprise.serviceIdentity.peersOutAudiencesCsv" -}}
+{{- $role := .role | default .name -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles $role -}}
+{{- if not $row -}}
+{{- fail (printf "unknown service-identity role %q" $role) -}}
+{{- end -}}
+{{- $defaultAudience := include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" .root "role" $role) -}}
+{{- $audiences := list -}}
+{{- range ($row.peersOut | default list) -}}
+{{- $peer := index $catalog.roles . -}}
+{{- if not $peer -}}
+{{- fail (printf "service-identity role %q peersOut entry %q is unknown" $role .) -}}
+{{- end -}}
+{{- $audience := trim (toString (default "" $peer.receiverAudience)) -}}
+{{- if and $audience (ne $audience $defaultAudience) (not (has $audience $audiences)) -}}
+{{- $audiences = append $audiences $audience -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $audiences -}}
+{{- end -}}
+
 {{- define "edk-enterprise.serviceIdentity.clientSecretEnvName" -}}
 {{- printf "EDK_INTERNAL_CLIENT_SECRET_%s" (upper (replace "-" "_" .)) -}}
 {{- end -}}

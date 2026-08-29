@@ -45,6 +45,8 @@ roles:
       - issuer
       - verifier
       - wallet-interaction
+      - admin-console
+      - admin-console-tenant
     peersOut:
       - tenant-as
       - platform
@@ -183,6 +185,7 @@ roles:
     peersIn: []
     peersOut:
       - platform
+      - tenant-kms
       - did
       - blob
       - issuer
@@ -198,6 +201,7 @@ roles:
     peersIn: []
     peersOut:
       - platform
+      - tenant-kms
       - tenant-as
       - did
       - blob

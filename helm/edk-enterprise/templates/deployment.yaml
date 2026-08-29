@@ -764,6 +764,12 @@ spec:
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             {{- end }}
+            - name: NEXT_PUBLIC_TENANT_KMS_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "tenant-kms") | quote }}
+            - name: NEXT_PUBLIC_AUDIT_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
+            - name: NEXT_PUBLIC_WALLET_ENTITLEMENT_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             - name: NEXT_PUBLIC_THEME_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
