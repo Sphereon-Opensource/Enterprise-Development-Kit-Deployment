@@ -623,6 +623,46 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
+    # Preserve the same finite public Developer Console projection in monolith mode.
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: Exact, value: /developer-console }
+        - path: { type: Exact, value: /developer-console/oauth/callback }
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: { type: ReplacePrefixMatch, replacePrefixMatch: /admin-console/developer-console }
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
+          port: {{ (index .Values.services "admin-console-tenant").restPort }}
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: PathPrefix, value: /developer-console/api/developer-console/v1 }
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: { type: ReplacePrefixMatch, replacePrefixMatch: /admin-console/api/developer-console/v1 }
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
+          port: {{ (index .Values.services "admin-console-tenant").restPort }}
+    {{- range $authEndpoint := list "session" "login" "callback" }}
+    - timeouts:
+        request: {{ $.Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: Exact, value: {{ printf "/developer-console/api/auth/%s" $authEndpoint | quote }} }
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: { type: ReplacePrefixMatch, replacePrefixMatch: {{ printf "/admin-console/api/developer-console-auth/%s" $authEndpoint | quote }} }
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "admin-console-tenant") }}
+          port: {{ (index $.Values.services "admin-console-tenant").restPort }}
+    {{- end }}
     # Keep the neutral testing-console public contract on tenant origins.  The
     # browser runtime remains the existing tenant console; only the public
     # prefix is projected differently, exactly as it is in distributed mode.
