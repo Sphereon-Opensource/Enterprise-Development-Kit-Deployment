@@ -746,6 +746,11 @@ spec:
             - name: ADMIN_CONSOLE_AUDIT_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             {{- end }}
+            # Runtime discovery projects the platform-hosted wallet entitlement API to the
+            # tenant origin so the Host header keeps tenant-routing context. The BFF still
+            # takes the in-cluster platform hop; the discovered origin only sets the Host.
+            - name: ADMIN_CONSOLE_WALLET_ENTITLEMENT_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL

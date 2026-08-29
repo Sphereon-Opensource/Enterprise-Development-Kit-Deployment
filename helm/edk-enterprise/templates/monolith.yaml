@@ -428,6 +428,10 @@ spec:
             - name: ADMIN_CONSOLE_AUDIT_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             {{- end }}
+            # Same in-cluster rule as Audit: discovery projects the platform-hosted wallet
+            # entitlement API to the tenant origin, but the authenticated hop stays internal.
+            - name: ADMIN_CONSOLE_WALLET_ENTITLEMENT_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
