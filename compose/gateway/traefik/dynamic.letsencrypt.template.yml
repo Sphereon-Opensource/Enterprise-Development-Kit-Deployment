@@ -175,6 +175,40 @@ __LE_TLS_DOMAINS__
       tls:
         certResolver: le
 
+    # Public Developer Console projection with finite page, API, and auth routes.
+    developer-console-page:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (Path(`/developer-console`) || Path(`/developer-console/oauth/callback`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-page-rewrite"]
+      priority: 280
+      tls:
+        certResolver: le
+    developer-console-api:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/developer-console/api/developer-console/v1`)
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-api-rewrite"]
+      priority: 285
+      tls:
+        certResolver: le
+    developer-console-auth:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (Path(`/developer-console/api/auth/session`) ||
+         Path(`/developer-console/api/auth/login`) ||
+         Path(`/developer-console/api/auth/callback`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-auth-rewrite"]
+      priority: 290
+      tls:
+        certResolver: le
+
     tenant-issuer:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
@@ -267,6 +301,18 @@ __LE_TLS_DOMAINS__
       replacePathRegex:
         regex: "^/testing-console/(.*)"
         replacement: "/admin-console/$1"
+    developer-console-page-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console(?:/(.*))?$"
+        replacement: "/admin-console/developer-console/$1"
+    developer-console-api-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console/(.*)"
+        replacement: "/admin-console/$1"
+    developer-console-auth-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console/api/auth/(session|login|callback)$"
+        replacement: "/admin-console/api/developer-console-auth/$1"
 
   services:
     svc-platform:

@@ -152,6 +152,79 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
+    # Public Developer Console page and its dedicated OAuth callback. The
+    # neutral public prefix is rewritten into the app's private Next mount;
+    # this route does not expose the generic admin-console surface.
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console
+        - path:
+            type: Exact
+            value: /developer-console/oauth/callback
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/developer-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    # Public Developer Console API and only the three auth session endpoints
+    # needed by the browser projection. Keep every other admin API out.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /developer-console/api/developer-console/v1
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/api/developer-console/v1
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console/api/auth/session
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/api/developer-console-auth/session
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console/api/auth/login
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/api/developer-console-auth/login
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console/api/auth/callback
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/api/developer-console-auth/callback
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
     # Only the browser-safe admin-console runtime projection is exposed from
     # the platform service on tenant hosts.
     - matches:
