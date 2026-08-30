@@ -152,13 +152,24 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
-    # Public Developer Console page and its dedicated OAuth callback. The
-    # neutral public prefix is rewritten into the app's private Next mount;
-    # this route does not expose the generic admin-console surface.
+    # Public Developer Console page and OAuth callback. ReplacePrefixMatch
+    # requires exactly one PathPrefix match, so Exact page mounts use
+    # ReplaceFullPath instead of a broad /developer-console PathPrefix that
+    # would also swallow the auth API Exact rules below.
     - matches:
         - path:
             type: Exact
             value: /developer-console
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/developer-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    - matches:
         - path:
             type: Exact
             value: /developer-console/oauth/callback
@@ -166,13 +177,13 @@ spec:
         - type: URLRewrite
           urlRewrite:
             path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /admin-console/developer-console
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/developer-console/oauth/callback
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
-    # Public Developer Console API and only the three auth session endpoints
-    # needed by the browser projection. Keep every other admin API out.
+    # Public Developer Console API under the same public prefix. Longer PathPrefix
+    # matches win over the page rule above.
     - matches:
         - path:
             type: PathPrefix
@@ -186,6 +197,8 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
+    # Exact auth endpoints rewrite path mid-segment, so use ReplaceFullPath
+    # (ReplacePrefixMatch forbids Exact matches).
     - matches:
         - path:
             type: Exact
@@ -194,8 +207,8 @@ spec:
         - type: URLRewrite
           urlRewrite:
             path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /admin-console/api/developer-console-auth/session
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/api/developer-console-auth/session
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
@@ -207,8 +220,8 @@ spec:
         - type: URLRewrite
           urlRewrite:
             path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /admin-console/api/developer-console-auth/login
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/api/developer-console-auth/login
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
@@ -220,8 +233,8 @@ spec:
         - type: URLRewrite
           urlRewrite:
             path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /admin-console/api/developer-console-auth/callback
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/api/developer-console-auth/callback
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}

@@ -638,16 +638,28 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
     # Preserve the same finite public Developer Console projection in monolith mode.
+    # Exact page mounts use ReplaceFullPath; ReplacePrefixMatch forbids Exact matches.
     - timeouts:
         request: {{ .Values.gateway.requestTimeout | quote }}
         backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
       matches:
         - path: { type: Exact, value: /developer-console }
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: { type: ReplaceFullPath, replaceFullPath: /admin-console/developer-console }
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
+          port: {{ (index .Values.services "admin-console-tenant").restPort }}
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
         - path: { type: Exact, value: /developer-console/oauth/callback }
       filters:
         - type: URLRewrite
           urlRewrite:
-            path: { type: ReplacePrefixMatch, replacePrefixMatch: /admin-console/developer-console }
+            path: { type: ReplaceFullPath, replaceFullPath: /admin-console/developer-console/oauth/callback }
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
@@ -672,7 +684,7 @@ spec:
       filters:
         - type: URLRewrite
           urlRewrite:
-            path: { type: ReplacePrefixMatch, replacePrefixMatch: {{ printf "/admin-console/api/developer-console-auth/%s" $authEndpoint | quote }} }
+            path: { type: ReplaceFullPath, replaceFullPath: {{ printf "/admin-console/api/developer-console-auth/%s" $authEndpoint | quote }} }
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "admin-console-tenant") }}
           port: {{ (index $.Values.services "admin-console-tenant").restPort }}
