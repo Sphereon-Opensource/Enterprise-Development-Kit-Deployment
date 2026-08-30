@@ -1,0 +1,263 @@
+# Product-neutral service-identity catalog.
+# Owner: EDK. Helm charts and VDX-frontend vendor a byte-identical copy.
+schemaVersion: 1
+roles:
+  platform:
+    kind: workload
+    clientId: null
+    serviceId: service-platform
+    receiverAudience: enterprise-platform
+    defaultStsAudience: null
+    extraStsAudiences: []
+    grpcReceiver: true
+    peersIn:
+      - tenant-kms
+      - tenant-as
+      - did
+      - blob
+      - issuer
+      - verifier
+      - wallet-unit
+      - wallet-interaction
+      - wallet-onboarding
+      - admin-console
+      - admin-console-tenant
+    peersOut:
+      - tenant-as
+      - tenant-kms
+      - did
+      - blob
+      - issuer
+      - verifier
+      - wallet-onboarding
+  tenant-kms:
+    kind: satellite
+    clientId: kms-service
+    serviceId: service-crypto
+    receiverAudience: enterprise-tenant-kms
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+    grpcReceiver: true
+    peersIn:
+      - platform
+      - tenant-as
+      - did
+      - blob
+      - issuer
+      - verifier
+      - wallet-interaction
+      - wallet-onboarding
+      - admin-console
+      - admin-console-tenant
+    peersOut:
+      - tenant-as
+      - platform
+  tenant-as:
+    kind: satellite
+    clientId: tenant-as-service
+    serviceId: service-tenant-as
+    receiverAudience: enterprise-tenant-as
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+    grpcReceiver: false
+    peersIn:
+      - platform
+      - tenant-kms
+      - did
+      - blob
+      - issuer
+      - verifier
+      - admin-console-tenant
+    peersOut:
+      - platform
+      - tenant-kms
+      - blob
+  did:
+    kind: satellite
+    clientId: did-service
+    serviceId: service-data
+    receiverAudience: enterprise-tenant-did
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+    grpcReceiver: false
+    peersIn:
+      - platform
+      - verifier
+      - admin-console
+      - admin-console-tenant
+    peersOut:
+      - tenant-kms
+      - tenant-as
+      - platform
+  issuer:
+    kind: satellite
+    clientId: issuer-service
+    serviceId: service-oid4vci
+    receiverAudience: enterprise-issuer
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+      - did
+      - tenant-as
+    grpcReceiver: false
+    peersIn:
+      - platform
+      - admin-console
+      - admin-console-tenant
+    peersOut:
+      - tenant-kms
+      - tenant-as
+      - platform
+      - wallet-interaction
+  verifier:
+    kind: satellite
+    clientId: verifier-service
+    serviceId: service-oid4vp
+    receiverAudience: enterprise-verifier
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+    grpcReceiver: false
+    peersIn:
+      - platform
+      - admin-console
+      - admin-console-tenant
+    peersOut:
+      - tenant-kms
+      - tenant-as
+      - did
+      - platform
+      - wallet-interaction
+  blob:
+    kind: satellite
+    clientId: blob-service
+    serviceId: service-blob
+    receiverAudience: enterprise-blob
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - blob
+    grpcReceiver: false
+    peersIn:
+      - tenant-as
+      - admin-console
+      - admin-console-tenant
+    peersOut:
+      - tenant-kms
+      - tenant-as
+      - platform
+  wallet-unit:
+    kind: satellite
+    clientId: wallet-unit-service
+    serviceId: service-wallet-unit
+    receiverAudience: enterprise-wallet-unit
+    defaultStsAudience: platform
+    extraStsAudiences: []
+    grpcReceiver: true
+    peersIn:
+      - wallet-interaction
+      - wallet-onboarding
+    peersOut:
+      - platform
+  wallet-interaction:
+    kind: satellite
+    clientId: wallet-interaction-service
+    serviceId: service-wallet-interaction
+    receiverAudience: enterprise-wallet-interaction
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+      - wallet-unit
+    grpcReceiver: true
+    peersIn:
+      - issuer
+      - verifier
+    peersOut:
+      - wallet-unit
+      - tenant-kms
+      - platform
+  wallet-onboarding:
+    kind: satellite
+    clientId: wallet-onboarding-service
+    serviceId: service-wallet-onboarding
+    receiverAudience: enterprise-wallet-onboarding
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+      - wallet-unit
+    grpcReceiver: true
+    peersIn:
+      - platform
+      - admin-console
+      - admin-console-tenant
+      - wallet-interaction
+    peersOut:
+      - platform
+      - tenant-kms
+      - wallet-unit
+  admin-console:
+    kind: bff
+    clientId: admin-console-portal-bff
+    serviceId: null
+    receiverAudience: application-bff-oauth-client
+    defaultStsAudience: platform
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn: []
+    peersOut:
+      - platform
+      - tenant-kms
+      - did
+      - blob
+      - issuer
+      - verifier
+      - wallet-onboarding
+  admin-console-tenant:
+    kind: bff
+    clientId: admin-console-portal-bff
+    serviceId: null
+    receiverAudience: null
+    defaultStsAudience: platform
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn: []
+    peersOut:
+      - platform
+      - tenant-kms
+      - tenant-as
+      - did
+      - blob
+      - issuer
+      - verifier
+      - wallet-onboarding
+  business-wallet:
+    kind: frontend
+    clientId: null
+    serviceId: null
+    receiverAudience: null
+    defaultStsAudience: null
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn: []
+    peersOut:
+      - platform
+      - tenant-as
+      - did
+      - blob
+      - issuer
+      - verifier
+      - wallet-unit
+      - wallet-interaction
+      - wallet-onboarding
+  trust-domain-identifier:
+    kind: auxiliary-client
+    clientId: trust-domain-service
+    serviceId: null
+    receiverAudience: null
+    defaultStsAudience: tenant-as
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn: []
+    peersOut: []

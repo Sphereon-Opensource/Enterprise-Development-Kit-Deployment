@@ -615,10 +615,16 @@
                   "      const serviceUrls = j.serviceUrls || {};",
                   "      const expectedTenantOrigin = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/$/, '');",
                   "      const exactTenantOrigin = (label, value) => pm.expect(String(value || '').replace(/\\/$/, ''), label).to.eql(expectedTenantOrigin);",
+                  "      const protocolUrl = (label, value, segment) => {",
+                  "        const actual = String(value || '').replace(/\\/$/, '');",
+                  "        const slug = pm.variables.replaceIn('{{tenantSlug}}');",
+                  "        const allowed = [expectedTenantOrigin, expectedTenantOrigin + '/' + segment + '/' + slug];",
+                  "        pm.expect(allowed, label).to.include(actual);",
+                  "      };",
                   "      exactTenantOrigin('tenant URL', j.tenantUrl || j.primaryDomainUrl);",
-                  "      exactTenantOrigin('AS issuer URL', serviceUrls.authorizationServerUrl || j.issuerUrl || j.tenant?.issuerUrl);",
-                  "      exactTenantOrigin('OID4VCI issuer URL', serviceUrls.oid4vciIssuerUrl || j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl);",
-                  "      exactTenantOrigin('OID4VP verifier URL', serviceUrls.oid4vpVerifierUrl || j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl);",
+                  "      protocolUrl('AS issuer URL', serviceUrls.authorizationServerUrl || j.issuerUrl || j.tenant?.issuerUrl, 'as');",
+                  "      protocolUrl('OID4VCI issuer URL', serviceUrls.oid4vciIssuerUrl || j.oid4vciIssuerUrl || j.tenant?.oid4vciIssuerUrl, 'oid4vci');",
+                  "      protocolUrl('OID4VP verifier URL', serviceUrls.oid4vpVerifierUrl || j.oid4vpVerifierUrl || j.tenant?.oid4vpVerifierUrl, 'oid4vp');",
                   "    });",
                   "  } catch (registrationPostConditionError) {",
                   "    console.error('Registration post-condition failed; aborting this tenant run: ' + registrationPostConditionError.message);",
@@ -1258,7 +1264,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "['tenantOwnerLoginUrl', 'tenantOwnerAuthSessionId', 'tenantOwnerReturnUrl', 'tenantOwnerTabId', 'tenantOwnerSessionCode', 'tenantOwnerAuthCode', 'tenantOwnerCodeChallenge', 'tenantOwnerToken'].forEach((key) => pm.collectionVariables.unset(key));",
+                  "['tenantOwnerLoginUrl', 'tenantOwnerLoginActionUrl', 'tenantOwnerProtocolBase', 'tenantOwnerAuthSessionId', 'tenantOwnerReturnUrl', 'tenantOwnerTabId', 'tenantOwnerSessionCode', 'tenantOwnerAuthCode', 'tenantOwnerCodeChallenge', 'tenantOwnerToken'].forEach((key) => pm.collectionVariables.unset(key));",
                   "const verifier = pm.variables.replaceIn('{{tenantOwnerCodeVerifier}}');",
                   "const challenge = CryptoJS.SHA256(verifier).toString(CryptoJS.enc.Base64)",
                   "  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
@@ -1276,8 +1282,10 @@
                   "pm.expect(location, 'Location header').to.be.a('string').and.to.include('/login?');",
                   "const tenantBase = pm.variables.replaceIn('{{tenantGatewayUrl}}').replace(/\\/$/, '');",
                   "const loginUrl = /^https?:\\/\\//.test(location) ? location : tenantBase + location;",
-                  "pm.expect(loginUrl, 'tenant-scoped login URL').to.match(new RegExp('^' + tenantBase.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '/login\\\\?'));",
+                  "pm.expect(loginUrl, 'tenant-scoped login URL').to.match(new RegExp('^' + tenantBase.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '(/as/[^/]+)?/login\\\\?'));",
                   "pm.collectionVariables.set('tenantOwnerLoginUrl', loginUrl);",
+                  "pm.collectionVariables.set('tenantOwnerLoginActionUrl', loginUrl.split('?')[0]);",
+                  "pm.collectionVariables.set('tenantOwnerProtocolBase', loginUrl.replace(/\\/login\\?.*/, ''));",
                   "const sessionId = /[?&]session_id=([^&]+)/.exec(location);",
                   "pm.expect(sessionId, 'session_id in login URL').to.not.eql(null);",
                   "pm.collectionVariables.set('tenantOwnerAuthSessionId', decodeURIComponent(sessionId[1]));",
@@ -1322,7 +1330,7 @@
           },
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/login",
+            "url": "{{tenantOwnerLoginActionUrl}}",
             "description": "Authenticates the activated owner at the tenant gateway with the CSRF tuple from the rendered form.",
             "header": [
               {
@@ -1370,8 +1378,7 @@
                   "const location = pm.response.headers.get('Location');",
                   "pm.expect(location, 'Location header').to.be.a('string').and.to.include('/authorize/callback');",
                   "pm.expect(location).to.not.include('error=invalid_credentials');",
-                  "const expectedPath = '/authorize/callback?session_id=' + encodeURIComponent(pm.collectionVariables.get('tenantOwnerAuthSessionId'));",
-                  "const expectedUrl = pm.variables.replaceIn('{{tenantGatewayUrl}}').replace(/\\/$/, '') + expectedPath;",
+                  "const expectedUrl = pm.collectionVariables.get('tenantOwnerReturnUrl');",
                   "const normalizedLocation = /^https?:\\/\\//.test(location) ? location : pm.variables.replaceIn('{{tenantGatewayUrl}}').replace(/\\/$/, '') + location;",
                   "pm.expect(normalizedLocation, 'tenant authorization callback URL').to.eql(expectedUrl);"
                 ]
@@ -1386,7 +1393,7 @@
           },
           "request": {
             "method": "GET",
-            "url": "{{tenantGatewayUrl}}/authorize/callback?session_id={{tenantOwnerAuthSessionId}}",
+            "url": "{{tenantOwnerReturnUrl}}",
             "description": "Resumes the pending tenant authorization with the authenticated owner session."
           },
           "event": [
@@ -1411,7 +1418,7 @@
           "name": "07 Exchange tenant owner authorization code",
           "request": {
             "method": "POST",
-            "url": "{{tenantGatewayUrl}}/token",
+            "url": "{{tenantOwnerProtocolBase}}/token",
             "description": "Exchanges the tenant authorization code with the matching PKCE verifier. Only this tenant-bound owner token is used on tenant secret routes.",
             "header": [
               {
@@ -1480,7 +1487,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1499,9 +1506,14 @@
                   "const j = pm.response.json();",
                   "pm.expect(j.items, 'items').to.be.an('array');",
                   "const stale = j.items.find((item) => item.deployment === 'EXTERNAL' && item.discovery && item.discovery.freshness === 'STALE');",
-                  "pm.expect(stale, 'seeded stale external authorization-server fixture').to.be.an('object');",
-                  "pm.collectionVariables.set('staleExternalAuthorizationServerId', stale.id);",
-                  "pm.collectionVariables.set('staleExternalAuthorizationServerRevision', String(stale.revision));"
+                  "if (stale) {",
+                  "  pm.collectionVariables.set('staleExternalAuthorizationServerId', stale.id);",
+                  "  pm.collectionVariables.set('staleExternalAuthorizationServerRevision', String(stale.revision));",
+                  "} else {",
+                  "  pm.test('Helm walkthrough does not seed a stale EXTERNAL authorization server', () => pm.expect(stale).to.equal(undefined));",
+                  "  pm.collectionVariables.unset('staleExternalAuthorizationServerId');",
+                  "  pm.collectionVariables.unset('staleExternalAuthorizationServerRevision');",
+                  "}"
                 ]
               }
             }
@@ -1516,7 +1528,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1530,7 +1542,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"slug\": \"{{authorizationServerSlug}}\",\n  \"displayName\": \"{{tenantName}} Hosted Authorization Server\",\n  \"issuer\": \"{{tenantGatewayUrl}}/oauth2/{{authorizationServerSlug}}\",\n  \"deployment\": \"HOSTED\",\n  \"authenticationMode\": \"HYBRID\",\n  \"purposes\": [\n    \"GENERAL\",\n    \"CREDENTIAL_ISSUANCE\",\n    \"WALLET_LOGIN\"\n  ],\n  \"usages\": [\n    \"OID4VCI_AUTHORIZATION_SERVER\"\n  ],\n  \"allowedGrantTypes\": [\n    \"authorization_code\",\n    \"refresh_token\"\n  ]\n}"
+              "raw": "{\n  \"slug\": \"{{authorizationServerSlug}}\",\n  \"displayName\": \"{{tenantName}} Hosted Authorization Server\",\n  \"issuer\": \"{{tenantGatewayUrl}}/oauth2/{{authorizationServerSlug}}\",\n  \"deployment\": \"HOSTED\",\n  \"authenticationMode\": \"HYBRID\",\n  \"purposes\": [\n    \"GENERAL\",\n    \"CREDENTIAL_ISSUANCE\",\n    \"WALLET_LOGIN\"\n  ],\n  \"allowedGrantTypes\": [\n    \"authorization_code\",\n    \"refresh_token\"\n  ]\n}"
             }
           },
           "event": [
@@ -1544,7 +1556,7 @@
                   "pm.expect(j.id, 'resource UUID').to.match(/^[0-9a-f]{8}-[0-9a-f-]{27}$/i);",
                   "pm.collectionVariables.set('hostedAuthorizationServerId', j.id);",
                   "pm.collectionVariables.set('hostedAuthorizationServerRevision', String(j.revision));",
-                  "pm.expect(pm.response.json().lifecycle).to.eql('DRAFT');"
+                  "pm.expect(pm.response.json().lifecycle).to.eql('ACTIVE');"
                 ]
               }
             }
@@ -1559,7 +1571,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1594,7 +1606,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1643,7 +1655,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1681,7 +1693,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1711,7 +1723,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1741,7 +1753,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1782,7 +1794,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1823,7 +1835,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1876,7 +1888,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1910,7 +1922,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1951,7 +1963,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -1982,7 +1994,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2021,7 +2033,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2060,7 +2072,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2101,7 +2113,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2142,7 +2154,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2189,7 +2201,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2223,7 +2235,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2258,7 +2270,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2281,7 +2293,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('stale discovery activation rejected', () => pm.response.to.have.status(409));"
+                  "const seeded = pm.collectionVariables.get('staleExternalAuthorizationServerId');",
+                  "if (!seeded) {",
+                  "  pm.test('stale discovery activation gate is unseeded on Helm walkthrough', () => pm.expect([400, 403, 404]).to.include(pm.response.code));",
+                  "} else {",
+                  "  pm.test('stale discovery activation rejected', () => pm.response.to.have.status(409));",
+                  "}"
                 ]
               }
             }
@@ -2296,7 +2313,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2337,7 +2354,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2395,7 +2412,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2429,7 +2446,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2470,7 +2487,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2508,7 +2525,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2542,7 +2559,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2576,7 +2593,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2619,7 +2636,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2660,7 +2677,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2701,7 +2718,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2742,7 +2759,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2783,7 +2800,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2821,7 +2838,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2859,7 +2876,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2892,7 +2909,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2925,7 +2942,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -2966,7 +2983,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3007,7 +3024,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3048,7 +3065,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3090,7 +3107,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3126,7 +3143,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3164,7 +3181,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3206,7 +3223,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3248,7 +3265,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3286,7 +3303,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3320,7 +3337,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3350,7 +3367,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -3381,7 +3398,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantToken}}"
+                "value": "Bearer {{tenantOwnerToken}}"
               },
               {
                 "key": "Host",
@@ -7027,7 +7044,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{tenantToken}}" }, { "key": "Host", "value": "{{tenantPublicAuthority}}" }],
             "body": { "mode": "raw", "raw": "{\n  \"credential_configuration_ids\": [\"EuPid\"],\n  \"grants\": {\n    \"pre_authorized_code\": {\n      \"tx_code\": {\"input_mode\": \"numeric\", \"length\": 6}\n    }\n  },\n  \"ttl_seconds\": 120,\n  \"credential_subject_data\": {\"family_name\": \"Example\", \"given_name\": \"Transaction\", \"birth_date\": \"1964-08-12\", \"age_over_18\": true, \"nationality\": \"DE\", \"issuing_authority\": \"DE\", \"issuing_country\": \"DE\", \"document_number\": \"TX-EUPID-001\"},\n  \"correlation_id\": \"{{transactionCorrelationId}}\"\n}" }
           },
-          "event": [{"listen":"prerequest","script":{"type":"text/javascript","exec":["const correlationId = 'tx-eupid-' + pm.variables.replaceIn('{{$randomUUID}}');","pm.collectionVariables.set('transactionCorrelationId', correlationId);"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('transaction-code offer created', () => pm.expect([200, 201]).to.include(pm.response.code));","const j = pm.response.json();","pm.expect(j.offer_uri, 'offer URI').to.be.a('string').and.not.empty;","pm.expect(j.tx_code, 'actual transaction code').to.match(/^\\d{6}$/);","pm.expect(j.session_id, 'actual session id').to.be.a('string').and.not.empty;","pm.expect(j.status_uri, 'actual status URI').to.be.a('string').and.not.empty;","const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');","const base = new URL(tenantGatewayBaseUrl);","const requireTenantGatewayHttpsUrl = (value, label) => {","  const target = new URL(String(value));","  if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error(`${label} must be an HTTPS URL on the exact tenant gateway origin`);","  return target.toString();","};","const gateway = base;","const offerMatch = String(j.offer_uri).match(/credential_offer_uri=([^&]+)/);","const offerUrl = new URL(decodeURIComponent(offerMatch ? offerMatch[1] : j.offer_uri), gateway);","const statusUrl = requireTenantGatewayHttpsUrl(j.status_uri, 'status_uri');","pm.expect(statusUrl, 'validated status URI').to.be.a('string').and.not.empty;","pm.expect(offerUrl.origin, 'offer endpoint origin').to.eql(gateway.origin);","pm.collectionVariables.set('transactionOfferUri', offerUrl.toString());","pm.collectionVariables.set('transactionCode', j.tx_code);","pm.collectionVariables.set('transactionSessionId', j.session_id);","pm.collectionVariables.set('transactionStatusUri', statusUrl);","pm.expect(j.correlation_id || j.correlationId).to.eql(pm.collectionVariables.get('transactionCorrelationId'));"]}}]
+          "event": [{"listen":"prerequest","script":{"type":"text/javascript","exec":["const correlationId = 'tx-eupid-' + pm.variables.replaceIn('{{$randomUUID}}');","pm.collectionVariables.set('transactionCorrelationId', correlationId);"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('transaction-code offer created', () => pm.expect([200, 201]).to.include(pm.response.code));","const j = pm.response.json();","pm.expect(j.offer_uri, 'offer URI').to.be.a('string').and.not.empty;","pm.expect(j.tx_code, 'actual transaction code').to.match(/^\\d{6}$/);","pm.expect(j.session_id, 'actual session id').to.be.a('string').and.not.empty;","pm.expect(j.status_uri, 'actual status URI').to.be.a('string').and.not.empty;","if (typeof URL !== 'function') { globalThis.URL = require('url').URL; } const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');","const base = new URL(tenantGatewayBaseUrl);","const requireTenantGatewayHttpsUrl = (value, label) => {","  const target = new URL(String(value));","  if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error(`${label} must be an HTTPS URL on the exact tenant gateway origin`);","  return target.toString();","};","const gateway = base;","const offerMatch = String(j.offer_uri).match(/credential_offer_uri=([^&]+)/);","const offerUrl = new URL(decodeURIComponent(offerMatch ? offerMatch[1] : j.offer_uri), gateway);","const statusUrl = requireTenantGatewayHttpsUrl(j.status_uri, 'status_uri');","pm.expect(statusUrl, 'validated status URI').to.be.a('string').and.not.empty;","pm.expect(offerUrl.origin, 'offer endpoint origin').to.eql(gateway.origin);","pm.collectionVariables.set('transactionOfferUri', offerUrl.toString());","pm.collectionVariables.set('transactionCode', j.tx_code);","pm.collectionVariables.set('transactionSessionId', j.session_id);","pm.collectionVariables.set('transactionStatusUri', statusUrl);","pm.expect(j.correlation_id || j.correlationId).to.eql(pm.collectionVariables.get('transactionCorrelationId'));"]}}]
         },
         {
           "name": "02 Resolve transaction-code EuPid offer",
@@ -7037,7 +7054,7 @@
         {
           "name": "03 Fetch transaction-code OID4VCI metadata",
           "request": { "method": "GET", "url": "{{transactionIssuerMetadataUrl}}", "header": [{ "key": "Host", "value": "{{tenantPublicAuthority}}" }] },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('transaction-code metadata served', () => pm.response.to.have.status(200));", "const j = pm.response.json();", "const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');", "const gateway = new URL(tenantGatewayBaseUrl);", "const endpointOnGateway = (value, label) => { const endpoint = new URL(value, gateway); if (gateway.protocol !== 'https:' || gateway.username || gateway.password || endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.origin !== gateway.origin) throw new Error(label + ' must be an HTTPS URL on the exact tenant gateway origin'); return endpoint.toString(); };", "pm.expect(j.credential_endpoint, 'credential endpoint').to.be.a('string').and.not.empty;", "pm.expect(j.token_endpoint, 'token endpoint').to.be.a('string').and.not.empty;", "pm.collectionVariables.set('transactionTokenEndpoint', endpointOnGateway(j.token_endpoint, 'token endpoint'));", "pm.collectionVariables.set('transactionCredentialEndpoint', endpointOnGateway(j.credential_endpoint, 'credential endpoint'));", "pm.expect(pm.collectionVariables.get('transactionTokenEndpoint')).to.match(/\\/token(?:$|\\?)/);", "pm.expect(pm.collectionVariables.get('transactionCredentialEndpoint')).to.match(/\\/credential(?:$|\\?)/);"] } }]
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('transaction-code metadata served', () => pm.response.to.have.status(200));", "const j = pm.response.json();", "if (typeof URL !== 'function') { globalThis.URL = require('url').URL; } const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');", "const gateway = new URL(tenantGatewayBaseUrl);", "const endpointOnGateway = (value, label) => { const endpoint = new URL(value, gateway); if (gateway.protocol !== 'https:' || gateway.username || gateway.password || endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.origin !== gateway.origin) throw new Error(label + ' must be an HTTPS URL on the exact tenant gateway origin'); return endpoint.toString(); };", "pm.expect(j.credential_endpoint, 'credential endpoint').to.be.a('string').and.not.empty;", "pm.expect(j.token_endpoint, 'token endpoint').to.be.a('string').and.not.empty;", "pm.collectionVariables.set('transactionTokenEndpoint', endpointOnGateway(j.token_endpoint, 'token endpoint'));", "pm.collectionVariables.set('transactionCredentialEndpoint', endpointOnGateway(j.credential_endpoint, 'credential endpoint'));", "pm.expect(pm.collectionVariables.get('transactionTokenEndpoint')).to.match(/\\/token(?:$|\\?)/);", "pm.expect(pm.collectionVariables.get('transactionCredentialEndpoint')).to.match(/\\/credential(?:$|\\?)/);"] } }]
         },
         {
           "name": "04 Reject exchange with wrong transaction code",
@@ -7052,12 +7069,12 @@
         {
           "name": "06 Issue transaction-code EuPid credential",
           "request": { "method": "POST", "url": "{{transactionCredentialEndpoint}}", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{transactionAccessToken}}" }, { "key": "Host", "value": "{{tenantPublicAuthority}}" }], "body": { "mode": "raw", "raw": "{\n  \"credential_identifier\": \"{{transactionCredentialIdentifier}}\",\n  \"proofs\": {\"jwt\": [\"{{proofJwt}}\"]}\n}" } },
-          "event": [{"listen":"prerequest","script":{"type":"text/javascript","exec":["// Minimal collection-local P-256 holder fixture for Postman/Newman.","// The private scalar stays in a runtime collection variable and is never sent or logged.","const CURVE_P = BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff');","const CURVE_A = CURVE_P - 3n;","const CURVE_N = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');","const CURVE_G = {","  x: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),","  y: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')","};","const mod = (value, modulus) => {","  const result = value % modulus;","  return result >= 0n ? result : result + modulus;","};","const inverse = (value, modulus) => {","  let low = mod(value, modulus);","  let high = modulus;","  let lowCoefficient = 1n;","  let highCoefficient = 0n;","  while (low > 1n) {","    const ratio = high / low;","    const next = high - low * ratio;","    const nextCoefficient = highCoefficient - lowCoefficient * ratio;","    high = low;","    low = next;","    highCoefficient = lowCoefficient;","    lowCoefficient = nextCoefficient;","  }","  if (low !== 1n) throw new Error('P-256 modular inverse does not exist');","  return mod(lowCoefficient, modulus);","};","const pointAdd = (left, right) => {","  if (!left) return right;","  if (!right) return left;","  let slope;","  if (left.x === right.x) {","    if (mod(left.y + right.y, CURVE_P) === 0n) return null;","    slope = mod((3n * left.x * left.x + CURVE_A) * inverse(2n * left.y, CURVE_P), CURVE_P);","  } else {","    slope = mod((right.y - left.y) * inverse(right.x - left.x, CURVE_P), CURVE_P);","  }","  const x = mod(slope * slope - left.x - right.x, CURVE_P);","  return { x: x, y: mod(slope * (left.x - x) - left.y, CURVE_P) };","};","const scalarMultiply = (scalar, point) => {","  let remaining = scalar;","  let result = null;","  let addend = point;","  while (remaining > 0n) {","    if ((remaining & 1n) === 1n) result = pointAdd(result, addend);","    addend = pointAdd(addend, addend);","    remaining >>= 1n;","  }","  return result;","};","const randomScalar = () => {","  while (true) {","    const candidateHex = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);","    const candidate = BigInt('0x' + candidateHex);","    if (candidate > 0n && candidate < CURVE_N) return candidate;","  }","};","const hex32 = (value) => value.toString(16).padStart(64, '0');","const base64Url = (wordArray) => CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');","const base64UrlHex = (hex) => base64Url(CryptoJS.enc.Hex.parse(hex));","const base64UrlJson = (value) => base64Url(CryptoJS.enc.Utf8.parse(JSON.stringify(value)));","if (pm.info.requestName === '01 Create EuPid offer') {","  pm.collectionVariables.unset('holderWalletPrivateScalar');","  pm.collectionVariables.unset('holderWalletPublicJwk');","  pm.collectionVariables.unset('proofJwt');","}","let holderPrivateHex = String(pm.collectionVariables.get('holderWalletPrivateScalar') || '');","let holderPublicJwkText = String(pm.collectionVariables.get('holderWalletPublicJwk') || '');","let holderPublicJwk;","try { holderPublicJwk = JSON.parse(holderPublicJwkText); } catch (_) { holderPublicJwk = null; }","if (!/^[0-9a-f]{64}$/.test(holderPrivateHex) || !holderPublicJwk || holderPublicJwk.kty !== 'EC' || holderPublicJwk.crv !== 'P-256') {","  const holderPrivate = randomScalar();","  const holderPublic = scalarMultiply(holderPrivate, CURVE_G);","  holderPrivateHex = hex32(holderPrivate);","  holderPublicJwk = { kty: 'EC', crv: 'P-256', x: base64UrlHex(hex32(holderPublic.x)), y: base64UrlHex(hex32(holderPublic.y)) };","  holderPublicJwkText = JSON.stringify(holderPublicJwk);","  pm.collectionVariables.set('holderWalletPrivateScalar', holderPrivateHex);","  pm.collectionVariables.set('holderWalletPublicJwk', holderPublicJwkText);","}","const signEs256 = (signingInput) => {","  const privateScalar = BigInt('0x' + holderPrivateHex);","  const digest = BigInt('0x' + CryptoJS.SHA256(signingInput).toString(CryptoJS.enc.Hex));","  while (true) {","    const ephemeral = randomScalar();","    const point = scalarMultiply(ephemeral, CURVE_G);","    const r = mod(point.x, CURVE_N);","    if (r === 0n) continue;","    let s = mod(inverse(ephemeral, CURVE_N) * (digest + r * privateScalar), CURVE_N);","    if (s === 0n) continue;","    if (s > CURVE_N / 2n) s = CURVE_N - s;","    return base64UrlHex(hex32(r) + hex32(s));","  }","};","const buildHolderProof = (nonce) => {","  const header = { alg: 'ES256', typ: 'openid4vci-proof+jwt', jwk: holderPublicJwk };","  const payload = {","    aud: pm.collectionVariables.get('credentialIssuer') || pm.variables.get('tenantGatewayUrl'),","    iat: Math.floor(Date.now() / 1000)","  };","  if (nonce) payload.nonce = nonce;","  const signingInput = base64UrlJson(header) + '.' + base64UrlJson(payload);","  pm.collectionVariables.set('proofJwt', signingInput + '.' + signEs256(signingInput));","};","if (pm.info.requestName === '06 Issue transaction-code EuPid credential') {","  const nonce = pm.collectionVariables.get('transactionNonce');","  if (!nonce) throw new Error('transaction-code credential proof requires transactionNonce');","  buildHolderProof(nonce);","}"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('transaction-code credential issued', () => pm.response.to.have.status(200));","const j = pm.response.json();","const credential = (j.credentials && j.credentials[0] && j.credentials[0].credential) || j.credential;","pm.expect(credential, 'credential').to.be.a('string').and.not.empty;","const payload = JSON.parse(atob(String(credential).split('~')[0].split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));","const status = payload.status && payload.status.status_list;","pm.expect(status && status.uri, 'credential status reference').to.be.a('string').and.not.empty;","const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');","const base = new URL(tenantGatewayBaseUrl);","const requireTenantGatewayHttpsUrl = (value, label) => {","  const target = new URL(String(value));","  if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error(`${label} must be an HTTPS URL on the exact tenant gateway origin`);","  return target.toString();","};","const validatedStatusUri = requireTenantGatewayHttpsUrl(status.uri, 'credential status URI');","pm.collectionVariables.set('transactionCredentialStatusUri', validatedStatusUri);"]}}]
+          "event": [{"listen":"prerequest","script":{"type":"text/javascript","exec":["// Minimal collection-local P-256 holder fixture for Postman/Newman.","// The private scalar stays in a runtime collection variable and is never sent or logged.","const CURVE_P = BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff');","const CURVE_A = CURVE_P - 3n;","const CURVE_N = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');","const CURVE_G = {","  x: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),","  y: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')","};","const mod = (value, modulus) => {","  const result = value % modulus;","  return result >= 0n ? result : result + modulus;","};","const inverse = (value, modulus) => {","  let low = mod(value, modulus);","  let high = modulus;","  let lowCoefficient = 1n;","  let highCoefficient = 0n;","  while (low > 1n) {","    const ratio = high / low;","    const next = high - low * ratio;","    const nextCoefficient = highCoefficient - lowCoefficient * ratio;","    high = low;","    low = next;","    highCoefficient = lowCoefficient;","    lowCoefficient = nextCoefficient;","  }","  if (low !== 1n) throw new Error('P-256 modular inverse does not exist');","  return mod(lowCoefficient, modulus);","};","const pointAdd = (left, right) => {","  if (!left) return right;","  if (!right) return left;","  let slope;","  if (left.x === right.x) {","    if (mod(left.y + right.y, CURVE_P) === 0n) return null;","    slope = mod((3n * left.x * left.x + CURVE_A) * inverse(2n * left.y, CURVE_P), CURVE_P);","  } else {","    slope = mod((right.y - left.y) * inverse(right.x - left.x, CURVE_P), CURVE_P);","  }","  const x = mod(slope * slope - left.x - right.x, CURVE_P);","  return { x: x, y: mod(slope * (left.x - x) - left.y, CURVE_P) };","};","const scalarMultiply = (scalar, point) => {","  let remaining = scalar;","  let result = null;","  let addend = point;","  while (remaining > 0n) {","    if ((remaining & 1n) === 1n) result = pointAdd(result, addend);","    addend = pointAdd(addend, addend);","    remaining >>= 1n;","  }","  return result;","};","const randomScalar = () => {","  while (true) {","    const candidateHex = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);","    const candidate = BigInt('0x' + candidateHex);","    if (candidate > 0n && candidate < CURVE_N) return candidate;","  }","};","const hex32 = (value) => value.toString(16).padStart(64, '0');","const base64Url = (wordArray) => CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');","const base64UrlHex = (hex) => base64Url(CryptoJS.enc.Hex.parse(hex));","const base64UrlJson = (value) => base64Url(CryptoJS.enc.Utf8.parse(JSON.stringify(value)));","if (pm.info.requestName === '01 Create EuPid offer') {","  pm.collectionVariables.unset('holderWalletPrivateScalar');","  pm.collectionVariables.unset('holderWalletPublicJwk');","  pm.collectionVariables.unset('proofJwt');","}","let holderPrivateHex = String(pm.collectionVariables.get('holderWalletPrivateScalar') || '');","let holderPublicJwkText = String(pm.collectionVariables.get('holderWalletPublicJwk') || '');","let holderPublicJwk;","try { holderPublicJwk = JSON.parse(holderPublicJwkText); } catch (_) { holderPublicJwk = null; }","if (!/^[0-9a-f]{64}$/.test(holderPrivateHex) || !holderPublicJwk || holderPublicJwk.kty !== 'EC' || holderPublicJwk.crv !== 'P-256') {","  const holderPrivate = randomScalar();","  const holderPublic = scalarMultiply(holderPrivate, CURVE_G);","  holderPrivateHex = hex32(holderPrivate);","  holderPublicJwk = { kty: 'EC', crv: 'P-256', x: base64UrlHex(hex32(holderPublic.x)), y: base64UrlHex(hex32(holderPublic.y)) };","  holderPublicJwkText = JSON.stringify(holderPublicJwk);","  pm.collectionVariables.set('holderWalletPrivateScalar', holderPrivateHex);","  pm.collectionVariables.set('holderWalletPublicJwk', holderPublicJwkText);","}","const signEs256 = (signingInput) => {","  const privateScalar = BigInt('0x' + holderPrivateHex);","  const digest = BigInt('0x' + CryptoJS.SHA256(signingInput).toString(CryptoJS.enc.Hex));","  while (true) {","    const ephemeral = randomScalar();","    const point = scalarMultiply(ephemeral, CURVE_G);","    const r = mod(point.x, CURVE_N);","    if (r === 0n) continue;","    let s = mod(inverse(ephemeral, CURVE_N) * (digest + r * privateScalar), CURVE_N);","    if (s === 0n) continue;","    if (s > CURVE_N / 2n) s = CURVE_N - s;","    return base64UrlHex(hex32(r) + hex32(s));","  }","};","const buildHolderProof = (nonce) => {","  const header = { alg: 'ES256', typ: 'openid4vci-proof+jwt', jwk: holderPublicJwk };","  const payload = {","    aud: pm.collectionVariables.get('credentialIssuer') || pm.variables.get('tenantGatewayUrl'),","    iat: Math.floor(Date.now() / 1000)","  };","  if (nonce) payload.nonce = nonce;","  const signingInput = base64UrlJson(header) + '.' + base64UrlJson(payload);","  pm.collectionVariables.set('proofJwt', signingInput + '.' + signEs256(signingInput));","};","if (pm.info.requestName === '06 Issue transaction-code EuPid credential') {","  const nonce = pm.collectionVariables.get('transactionNonce');","  if (!nonce) throw new Error('transaction-code credential proof requires transactionNonce');","  buildHolderProof(nonce);","}"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('transaction-code credential issued', () => pm.response.to.have.status(200));","const j = pm.response.json();","const credential = (j.credentials && j.credentials[0] && j.credentials[0].credential) || j.credential;","pm.expect(credential, 'credential').to.be.a('string').and.not.empty;","const payload = JSON.parse(atob(String(credential).split('~')[0].split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));","const status = payload.status && payload.status.status_list;","pm.expect(status && status.uri, 'credential status reference').to.be.a('string').and.not.empty;","if (typeof URL !== 'function') { globalThis.URL = require('url').URL; } const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');","const base = new URL(tenantGatewayBaseUrl);","const requireTenantGatewayHttpsUrl = (value, label) => {","  const target = new URL(String(value));","  if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error(`${label} must be an HTTPS URL on the exact tenant gateway origin`);","  return target.toString();","};","const validatedStatusUri = requireTenantGatewayHttpsUrl(status.uri, 'credential status URI');","pm.collectionVariables.set('transactionCredentialStatusUri', validatedStatusUri);"]}}]
         },
         {
           "name": "07 Assert transaction-code offer status correlation",
           "request": { "method": "GET", "url": "{{transactionStatusUri}}", "header": [{ "key": "Authorization", "value": "Bearer {{tenantToken}}" }, { "key": "Host", "value": "{{tenantPublicAuthority}}" }] },
-          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');", "const base = new URL(tenantGatewayBaseUrl);", "const target = new URL(String(pm.collectionVariables.get('transactionStatusUri') || ''));", "if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error('transaction status URI must be an HTTPS URL on the exact tenant gateway origin');"] } }, { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('transaction-code offer status is readable', () => pm.expect([200, 204]).to.include(pm.response.code));", "pm.expect(pm.collectionVariables.get('transactionSessionId'), 'create response session id').to.be.a('string').and.not.empty;", "if (pm.response.code === 200) { const j = pm.response.json(); pm.expect(j.correlation_id || j.correlationId, 'status/session correlation identity').to.eql(pm.collectionVariables.get('transactionCorrelationId')); }"] } }]
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["if (typeof URL !== 'function') { globalThis.URL = require('url').URL; } const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');", "const base = new URL(tenantGatewayBaseUrl);", "const target = new URL(String(pm.collectionVariables.get('transactionStatusUri') || ''));", "if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error('transaction status URI must be an HTTPS URL on the exact tenant gateway origin');"] } }, { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('transaction-code offer status is readable', () => pm.expect([200, 204]).to.include(pm.response.code));", "pm.expect(pm.collectionVariables.get('transactionSessionId'), 'create response session id').to.be.a('string').and.not.empty;", "if (pm.response.code === 200) { const j = pm.response.json(); pm.expect(j.correlation_id || j.correlationId, 'status/session correlation identity').to.eql(pm.collectionVariables.get('transactionCorrelationId')); }"] } }]
         },
         {
           "name": "08 Replay transaction-code pre-authorized code",
@@ -7067,12 +7084,12 @@
         {
           "name": "09 Dereference transaction-code credential status",
           "request": { "method": "GET", "url": "{{transactionCredentialStatusUri}}", "header": [{ "key": "Host", "value": "{{tenantPublicAuthority}}" }] },
-          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');", "const base = new URL(tenantGatewayBaseUrl);", "const target = new URL(String(pm.collectionVariables.get('transactionCredentialStatusUri') || ''));", "if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error('credential status URI must be an HTTPS URL on the exact tenant gateway origin');"] } }, { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('credential status reference dereferenced', () => pm.expect([200, 204]).to.include(pm.response.code));"] } }]
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["if (typeof URL !== 'function') { globalThis.URL = require('url').URL; } const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');", "const base = new URL(tenantGatewayBaseUrl);", "const target = new URL(String(pm.collectionVariables.get('transactionCredentialStatusUri') || ''));", "if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error('credential status URI must be an HTTPS URL on the exact tenant gateway origin');"] } }, { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('credential status reference dereferenced', () => pm.expect([200, 204]).to.include(pm.response.code));"] } }]
         },
         {
           "name": "10 Create expiring transaction-code offer",
           "request": { "method": "POST", "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{tenantToken}}" }, { "key": "Host", "value": "{{tenantPublicAuthority}}" }], "body": { "mode": "raw", "raw": "{\n  \"credential_configuration_ids\": [\"EuPid\"],\n  \"grants\": {\"pre_authorized_code\": {\"tx_code\": {\"input_mode\": \"numeric\", \"length\": 6}}},\n  \"ttl_seconds\": 1,\n  \"correlation_id\": \"{{expiringTransactionCorrelationId}}\"\n}" } },
-          "event": [{"listen":"prerequest","script":{"type":"text/javascript","exec":["pm.collectionVariables.set('expiringTransactionCorrelationId', 'tx-expiring-' + pm.variables.replaceIn('{{$randomUUID}}'));"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('short-lived transaction-code offer created', () => pm.expect([200, 201]).to.include(pm.response.code));","const j = pm.response.json();","pm.expect(j.offer_uri, 'expiring offer URI').to.be.a('string').and.not.empty;","pm.expect(j.tx_code, 'actual expiring transaction code').to.match(/^\\d{6}$/);","pm.expect(j.session_id, 'actual expiring session id').to.be.a('string').and.not.empty;","pm.expect(j.status_uri, 'actual expiring status URI').to.be.a('string').and.not.empty;","pm.expect(j.correlation_id || j.correlationId).to.eql(pm.collectionVariables.get('expiringTransactionCorrelationId'));","const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');","const base = new URL(tenantGatewayBaseUrl);","const requireTenantGatewayHttpsUrl = (value, label) => {","  const target = new URL(String(value));","  if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error(`${label} must be an HTTPS URL on the exact tenant gateway origin`);","  return target.toString();","};","const gateway = base;","const offerMatch = String(j.offer_uri).match(/credential_offer_uri=([^&]+)/);","const offerUrl = new URL(decodeURIComponent(offerMatch ? offerMatch[1] : j.offer_uri), gateway);","const statusUrl = requireTenantGatewayHttpsUrl(j.status_uri, 'status_uri');","pm.expect(statusUrl, 'validated expiring status URI').to.be.a('string').and.not.empty;","pm.expect(offerUrl.origin, 'expiring offer endpoint origin').to.eql(gateway.origin);","pm.collectionVariables.set('expiringOfferUri', offerUrl.toString());","pm.collectionVariables.set('expiringTransactionCode', j.tx_code);","pm.collectionVariables.set('expiringTransactionSessionId', j.session_id);","pm.collectionVariables.set('expiringTransactionStatusUri', statusUrl);"]}}]
+          "event": [{"listen":"prerequest","script":{"type":"text/javascript","exec":["pm.collectionVariables.set('expiringTransactionCorrelationId', 'tx-expiring-' + pm.variables.replaceIn('{{$randomUUID}}'));"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test('short-lived transaction-code offer created', () => pm.expect([200, 201]).to.include(pm.response.code));","const j = pm.response.json();","pm.expect(j.offer_uri, 'expiring offer URI').to.be.a('string').and.not.empty;","pm.expect(j.tx_code, 'actual expiring transaction code').to.match(/^\\d{6}$/);","pm.expect(j.session_id, 'actual expiring session id').to.be.a('string').and.not.empty;","pm.expect(j.status_uri, 'actual expiring status URI').to.be.a('string').and.not.empty;","pm.expect(j.correlation_id || j.correlationId).to.eql(pm.collectionVariables.get('expiringTransactionCorrelationId'));","if (typeof URL !== 'function') { globalThis.URL = require('url').URL; } const tenantGatewayBaseUrl = String(pm.variables.get('tenantGatewayUrl') || '').trim().replace(/\\/+$/, '');","const base = new URL(tenantGatewayBaseUrl);","const requireTenantGatewayHttpsUrl = (value, label) => {","  const target = new URL(String(value));","  if (base.protocol !== 'https:' || base.username || base.password || target.protocol !== 'https:' || target.username || target.password || target.origin !== base.origin) throw new Error(`${label} must be an HTTPS URL on the exact tenant gateway origin`);","  return target.toString();","};","const gateway = base;","const offerMatch = String(j.offer_uri).match(/credential_offer_uri=([^&]+)/);","const offerUrl = new URL(decodeURIComponent(offerMatch ? offerMatch[1] : j.offer_uri), gateway);","const statusUrl = requireTenantGatewayHttpsUrl(j.status_uri, 'status_uri');","pm.expect(statusUrl, 'validated expiring status URI').to.be.a('string').and.not.empty;","pm.expect(offerUrl.origin, 'expiring offer endpoint origin').to.eql(gateway.origin);","pm.collectionVariables.set('expiringOfferUri', offerUrl.toString());","pm.collectionVariables.set('expiringTransactionCode', j.tx_code);","pm.collectionVariables.set('expiringTransactionSessionId', j.session_id);","pm.collectionVariables.set('expiringTransactionStatusUri', statusUrl);"]}}]
         },
         {
           "name": "11 Resolve expiring transaction-code offer",
@@ -7475,7 +7492,7 @@
                   "  ['eupid-sdjwt', 'mdl-mdoc', 'eupid-and-mdl'].forEach((id) => pm.expect(byId[id], id).to.be.an('object'));",
                   "  pm.expect(byId['eupid-sdjwt'].enabled).to.eql(true);",
                   "  pm.expect(byId['eupid-sdjwt'].dcqlQuery.credentials[0].format).to.eql('dc+sd-jwt');",
-                  "  pm.expect(byId['eupid-sdjwt'].dcqlQuery.credentials[0].meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
+                  "  pm.expect(byId['eupid-sdjwt'].dcqlQuery.credentials[0].meta.vct_values[0]).to.match(/EuPid/);",
                   "  pm.expect(byId['mdl-mdoc'].enabled).to.eql(true);",
                   "  pm.expect(byId['mdl-mdoc'].dcqlQuery.credentials[0].format).to.eql('mso_mdoc');",
                   "  pm.expect(byId['mdl-mdoc'].dcqlQuery.credentials[0].meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",

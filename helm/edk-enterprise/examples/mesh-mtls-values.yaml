@@ -6,6 +6,9 @@ auth:
     jwksUri: https://acme.example.com/.well-known/jwks.json
     audience: edk-enterprise
 
+# Sidecar TLS + application JWT. mesh-mtls means the sidecar terminates mTLS;
+# the app still authenticates peers with service JWT on the plaintext socket
+# the sidecar presents. This is not application-terminated mTLS.
 grpc:
   enabled: false
   authMode: mesh-mtls

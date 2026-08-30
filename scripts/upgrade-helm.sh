@@ -335,19 +335,34 @@ if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
   kubectl create namespace "$NAMESPACE"
 fi
 
-# Never rotate an existing internal-client or keystore credential implicitly.
+# Never rotate an existing per-client STS or keystore credential implicitly.
+CLIENT_SECRET_KEYS=(
+  kms-service-client-secret
+  tenant-as-service-client-secret
+  did-service-client-secret
+  blob-service-client-secret
+  issuer-service-client-secret
+  verifier-service-client-secret
+  wallet-unit-service-client-secret
+  wallet-interaction-service-client-secret
+  trust-domain-service-client-secret
+)
 if ! secret_exists "$RUNTIME_SECRET_NAME"; then
   printf 'Creating new runtime Secret/%s.\n' "$RUNTIME_SECRET_NAME"
-  INTERNAL_CLIENT_SECRET="$(base64url_secret 48)"
   KEYSTORE_PASSWORD="$(base64url_secret 48)"
   PORTAL_BFF_SECRET="$(base64url_secret 48)"
-  apply_secret_fields "$RUNTIME_SECRET_NAME" \
-    "\"internal-client-secret\":\"$INTERNAL_CLIENT_SECRET\",\"keystore-password\":\"$KEYSTORE_PASSWORD\",\"admin-console-portal-bff-secret\":\"$PORTAL_BFF_SECRET\""
-  unset INTERNAL_CLIENT_SECRET KEYSTORE_PASSWORD PORTAL_BFF_SECRET
+  json_fields="\"keystore-password\":\"$KEYSTORE_PASSWORD\",\"admin-console-portal-bff-secret\":\"$PORTAL_BFF_SECRET\""
+  for client_secret_key in "${CLIENT_SECRET_KEYS[@]}"; do
+    client_secret_value="$(base64url_secret 48)"
+    json_fields+=",\"${client_secret_key}\":\"${client_secret_value}\""
+    unset client_secret_value
+  done
+  apply_secret_fields "$RUNTIME_SECRET_NAME" "$json_fields"
+  unset KEYSTORE_PASSWORD PORTAL_BFF_SECRET json_fields
 else
-  for required_key in internal-client-secret keystore-password; do
+  for required_key in keystore-password "${CLIENT_SECRET_KEYS[@]}"; do
     secret_has_key "$RUNTIME_SECRET_NAME" "$required_key" ||
-      die "Existing Secret/$RUNTIME_SECRET_NAME is missing '$required_key'. Restore the original value; it is unsafe to generate a replacement during an upgrade."
+      die "Existing Secret/$RUNTIME_SECRET_NAME is missing '$required_key'. Restore or add a distinct per-client STS key; it is unsafe to generate a replacement during an upgrade. serviceIdentity.internalClientSecretKey / internal-client-secret is no longer used."
   done
   if ! secret_has_key "$RUNTIME_SECRET_NAME" admin-console-portal-bff-secret; then
     printf 'Adding the missing portal BFF key without changing existing runtime credentials.\n'
@@ -358,7 +373,7 @@ else
   fi
 fi
 
-for required_key in internal-client-secret keystore-password admin-console-portal-bff-secret; do
+for required_key in keystore-password admin-console-portal-bff-secret "${CLIENT_SECRET_KEYS[@]}"; do
   secret_has_key "$RUNTIME_SECRET_NAME" "$required_key" ||
     die "Secret/$RUNTIME_SECRET_NAME is missing '$required_key' after runtime-secret reconciliation."
 done

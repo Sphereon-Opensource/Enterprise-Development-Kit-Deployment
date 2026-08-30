@@ -221,22 +221,32 @@ replacement for the platform/tenant database split.
 
 ## 3. Create the runtime Secret
 
-The chart does not generate the confidential client secret used for east-west
+The chart does not generate the per-client STS secrets used for east-west
 service tokens or the password protecting the software PKCS#12 keystores. Create
-both values in the release namespace before installing. `edk-runtime-secrets`
-is an example Kubernetes Secret name, not an image or prepackaged file:
+those values in the release namespace before installing. `edk-runtime-secrets`
+is an example Kubernetes Secret name, not an image or prepackaged file. Each
+satellite still reads the env name `EDK_INTERNAL_CLIENT_SECRET`; Helm mounts
+only that role's `serviceIdentity.clientSecretKeys.<role>` entry into it:
 
 The corresponding Helm parameters are `serviceIdentity.internalClientExistingSecret`
 and `keystore.existingSecret`.
 
 ```bash
 kubectl -n edk create secret generic edk-runtime-secrets \
-  --from-literal=internal-client-secret='<long-random-confidential-client-secret>' \
+  --from-literal=kms-service-client-secret='<independent-secret>' \
+  --from-literal=tenant-as-service-client-secret='<independent-secret>' \
+  --from-literal=did-service-client-secret='<independent-secret>' \
+  --from-literal=blob-service-client-secret='<independent-secret>' \
+  --from-literal=issuer-service-client-secret='<independent-secret>' \
+  --from-literal=verifier-service-client-secret='<independent-secret>' \
+  --from-literal=wallet-unit-service-client-secret='<independent-secret>' \
+  --from-literal=wallet-interaction-service-client-secret='<independent-secret>' \
+  --from-literal=trust-domain-service-client-secret='<independent-secret>' \
   --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' \
   --from-literal=keystore-password='<long-random-pkcs12-password>'
 ```
 
-Generate the two values independently with at least 32 random bytes each. For
+Generate each value independently with at least 32 random bytes. For
 production, have the cluster's secret-management mechanism create this Secret;
 do not commit Secret manifests containing plaintext values.
 
@@ -245,7 +255,16 @@ Reference the Secret name and keys from the values overlay:
 ```yaml
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
   passwordKey: keystore-password
@@ -254,12 +273,12 @@ portalBff:
   clientSecretKey: admin-console-portal-bff-secret
 ```
 
-`internal-client-secret` is shared by the platform authorization server and the
-registered satellite confidential clients so they can obtain short-lived
-east-west tokens. `admin-console-portal-bff-secret` belongs only to the dedicated
+Each `clientSecretKeys.<role>` value is a distinct key used by that satellite
+confidential client. `admin-console-portal-bff-secret` belongs only to the dedicated
 portal BFF confidential client. `keystore-password` protects the platform and tenant-KMS
 software keystores. Changing Secret data under the same name requires restarting
-the affected Deployments because these values are read when containers start.
+the platform and the satellite whose key changed because these values are read
+when containers start.
 
 ## 4. Pick a values overlay
 

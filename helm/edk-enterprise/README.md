@@ -71,7 +71,7 @@ The wrapper leaves the release stopped and never rolls application pods back
 automatically. Restore the pre-upgrade database snapshots before an explicit
 binary rollback.
 
-Existing `internal-client-secret`, `keystore-password`, BFF credentials, and
+Existing per-client STS keys, `keystore-password`, BFF credentials, and
 issuer-pipeline keys are preserved. If an existing Secret is missing a key that
 cannot be regenerated safely, the wrapper stops instead of rotating it.
 
@@ -98,11 +98,20 @@ Kubernetes at public Docker Hub, not the EDK enterprise registry.
 
 Before installing, create the runtime Secret in the same namespace as the Helm
 release. `edk-runtime-secrets` is an example Secret **name**, not an image or a
-prepackaged file. It holds three independently generated values:
+prepackaged file. It holds independently generated per-client STS keys, the
+portal-BFF secret, and the keystore password:
 
 ```powershell
 kubectl --namespace edk create secret generic edk-runtime-secrets `
-  --from-literal=internal-client-secret='<long-random-confidential-client-secret>' `
+  --from-literal=kms-service-client-secret='<independent-secret>' `
+  --from-literal=tenant-as-service-client-secret='<independent-secret>' `
+  --from-literal=did-service-client-secret='<independent-secret>' `
+  --from-literal=blob-service-client-secret='<independent-secret>' `
+  --from-literal=issuer-service-client-secret='<independent-secret>' `
+  --from-literal=verifier-service-client-secret='<independent-secret>' `
+  --from-literal=wallet-unit-service-client-secret='<independent-secret>' `
+  --from-literal=wallet-interaction-service-client-secret='<independent-secret>' `
+  --from-literal=trust-domain-service-client-secret='<independent-secret>' `
   --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' `
   --from-literal=keystore-password='<long-random-pkcs12-password>'
 ```
@@ -126,7 +135,16 @@ Then configure all Secret references:
 ```yaml
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
   passwordKey: keystore-password
@@ -140,19 +158,22 @@ portalBff:
   clientSecretKey: admin-console-portal-bff-secret
 ```
 
-`internal-client-secret` is shared by the platform authorization server and its
-registered internal confidential clients. Satellites use it at the platform
-token endpoint to obtain short-lived east-west bearer tokens; it is what causes
-`SERVER_SERVICE_IDENTITY_CLIENT_SECRET` to be rendered. `keystore-password`
-protects the platform and tenant-KMS software PKCS#12 stores and is rendered as
-`EDK_KEYSTORE_PASSWORD`. `admin-console-portal-bff-secret` is a separate
-credential used only by the dedicated `admin-console-portal-bff` client and the
-admin-console server. Generate all three independently, keep them out of values
-files and Git, and rotate them as credentials. The Secret name and key names may
-be changed, but the referenced Secret and keys must already exist in the release
+Each `clientSecretKeys.<role>` entry is a distinct key in that Secret. The
+platform authorization server registers every enabled satellite client with its
+own value. Satellites still read `EDK_INTERNAL_CLIENT_SECRET` /
+`SERVER_SERVICE_IDENTITY_CLIENT_SECRET`, but each pod mounts only that role's
+key. `keystore-password` protects the platform and tenant-KMS software PKCS#12
+stores and is rendered as `EDK_KEYSTORE_PASSWORD`. `admin-console-portal-bff-secret`
+is a separate credential used only by the dedicated `admin-console-portal-bff`
+client and the admin-console server; do not point the console at a satellite
+STS key. Generate every value independently, keep them out of values files and
+Git, and rotate them as credentials. The Secret name and key names may be
+changed, but the referenced Secret and keys must already exist in the release
 namespace. A Helm value change rolls the affected Deployments; when only Secret
-data changes under the same name, restart the platform and satellite pods because
-environment-variable Secret values are read only when a container starts.
+data changes under the same name, restart the platform and the satellite whose
+key changed because environment-variable Secret values are read only when a
+container starts. `serviceIdentity.internalClientSecretKey` is retired and
+fails chart render.
 
 ## Main Values
 
@@ -268,29 +289,34 @@ publish those endpoints as customer routes.
 
 ## East-West Service Identity
 
-The chart renders internal service identity from one `serviceIdentity` contract:
+The chart renders internal service identity from one `serviceIdentity` contract
+plus the product-neutral service-identity catalog in
+`files/service-identity-catalog.yaml`. That catalog owns receiver audiences,
+default/extra STS audiences, and peer edges; the same file is vendored into VDX
+Helm and the frontend BFF. There is no `eastWest.*` audience helper family and
+no customer-editable `serviceIdentity.audiences` object.
 
 | Value | Purpose |
 | --- | --- |
-| `serviceIdentity.internalClientExistingSecret` | Secret containing the shared confidential-client secret used by internal service clients. |
-| `serviceIdentity.internalClientSecretKey` | Key in that Secret; defaults to `internal-client-secret`. |
+| `serviceIdentity.internalClientExistingSecret` | Secret containing the distinct confidential-client secrets used by internal service clients. |
+| `serviceIdentity.clientSecretKeys.<role>` | Key in that Secret for one satellite client. Defaults match `<client-id>-client-secret`. Satellites still read the env name `EDK_INTERNAL_CLIENT_SECRET`. |
 | `serviceIdentity.clientIds.<service>` | OAuth client id each satellite presents to the platform AS for client-credentials service tokens. |
 | `serviceIdentity.serviceIds.<service>` | Local workload label used to select and configure the service credential. It is not transmitted as identity metadata. |
 
 These values drive platform internal OAuth clients, platform and receiver
-validated-workload bindings, and satellite service-token credentials. Receiver
-audiences are fixed protocol identifiers shared with source-level STS and
+validated-workload bindings, and satellite service-token credentials. Catalog
+audiences are protocol identifiers shared with source-level STS and
 tenant-registration contracts; the chart does not expose audience overrides.
 
-The following notation identifies the fixed, chart-owned receiver-audience
-matrix. It is documentation notation, not a `values.yaml` override surface:
+Distributed installs also split **identity-ready** from **serving-ready**.
+`*-platform-identity` / `*-tenant-kms-identity` publish not-ready addresses
+because Kubernetes has one Ready bit gated on `/ready`; serving Services do not.
+Tenant-KMS dials `*-platform-identity` for token, JWKS, and gRPC. Issuer,
+verifier, DID, tenant-AS, wallets, and the admin console keep the serving
+`*-platform` Service.
 
-| Fixed matrix entry | Protocol audience |
-| --- | --- |
-| `audiences.platform` | `enterprise-platform` |
-| `audiences.tenant-kms` | `enterprise-tenant-kms` |
-| `audiences.wallet-interaction` | `enterprise-wallet-interaction` |
-| `audiences.wallet-unit` | `enterprise-wallet-unit` |
+`grpc.authMode` defaults to `service-jwt`: application JWT on plaintext gRPC, not
+mTLS. SPIFFE is a later identity root and is not required for this chart.
 
 The receiver expected audience, route-requested audience, client default, and
 additional allowlist are different controls. The receiver validates its
@@ -330,7 +356,7 @@ Render-time validation cannot query the target namespace. When a configured
 Secret name does not exist, Kubernetes leaves affected pods in
 `CreateContainerConfigError` with `secret "<name>" not found`. When the Secret
 exists without the configured key, events report `couldn't find key
-internal-client-secret` or `couldn't find key keystore-password`. Inspect events
+<client-secret-key>` or `couldn't find key keystore-password`. Inspect events
 with `kubectl get events --namespace <namespace>
 --sort-by=.metadata.creationTimestamp`; do not print Secret values into
 diagnostic logs. Correct the Secret through the cluster's secret-management

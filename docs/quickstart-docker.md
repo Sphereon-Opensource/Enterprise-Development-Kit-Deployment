@@ -59,7 +59,7 @@ Set, at minimum:
 
 - The image tag for the enterprise images. The image repository is pinned to `nexus.sphereon.com/edk-docker` in the Compose file.
 - The platform and tenant database passwords. The default Compose file starts `platform-postgres` and `tenant-postgres`; use external databases only when you intentionally replace those evaluation services. Keep the two databases separate. They may share a PostgreSQL server, but not a database name, credential, or authorization boundary.
-- The required secrets: keystore password, internal client secret, and the issuer pipeline keys.
+- The required secrets: keystore password, distinct per-satellite internal client secrets, and the issuer pipeline keys.
 - A fresh secret-authority key window. Generate it before the first start and
   after intentionally rotating the authority keys:
 

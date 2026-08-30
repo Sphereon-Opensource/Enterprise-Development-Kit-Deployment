@@ -2,16 +2,21 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "edk-enterprise.fullname" . }}-tenant-kms-authority-bootstrap
+  name: {{ include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms") }}
   labels:
     {{- include "edk-enterprise.labels" . | nindent 4 }}
-    app.kubernetes.io/component: tenant-kms-authority-bootstrap
+    app.kubernetes.io/component: tenant-kms-identity
+  annotations:
+    edk.sphereon.com/readiness-path: /health/identity
 spec:
   type: ClusterIP
+  # Identity plane publishes not-ready addresses because kube Ready is /ready
+  # on the serving Service. This is not the old catch-all bootstrap Service:
+  # only platform boot uses it, and the documented probe is /health/identity.
   publishNotReadyAddresses: true
   selector:
     {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "tenant-kms") | nindent 4 }}
-    edk.sphereon.com/tenant-kms-authority-bootstrap: "true"
+    edk.sphereon.com/tenant-kms-identity: "true"
   ports:
     - name: grpc
       port: {{ .Values.grpc.port }}

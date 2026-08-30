@@ -23,6 +23,15 @@ global:
 topology:
   mode: distributed
 
+# External product integrations the chart wires (HttpRoute / STS / console BASE_URL)
+# but does not deploy. Wallet images stay outside edk-enterprise.
+integrations:
+  walletOnboarding:
+    enabled: false
+    # Existing Service (same namespace) that fronts enterprise-wallet-onboarding.
+    serviceName: ""
+    restPort: 8080
+
 # Settings that exist only because the monolith is one Kubernetes workload.
 # Database, license, origin, email, tenant, and secret values remain in their
 # normal shared sections above and below.
@@ -239,6 +248,7 @@ secretAuthority:
       service-oid4vp: service-oid4vp-assertion.pub.pem
       service-wallet-unit: service-wallet-unit-assertion.pub.pem
       service-wallet-interaction: service-wallet-interaction-assertion.pub.pem
+      service-wallet-onboarding: service-wallet-onboarding-assertion.pub.pem
 
 auth:
   enabled: true
@@ -250,10 +260,18 @@ auth:
 
 grpc:
   # Platform, tenant KMS, wallet-unit, and wallet-interaction carry the gRPC
-  # server transport. The other services use routed command clients.
+  # server transport. External wallet-onboarding (integrations.walletOnboarding)
+  # also receives gRPC when deployed outside this chart. Other services use
+  # routed command clients.
   enabled: true
   port: 9090
+  # service-jwt is application JWT on plaintext gRPC; it is not mTLS.
   authMode: service-jwt
+  allowInsecureNone: false
+  tls:
+    cert: ""
+    key: ""
+    clientCa: ""
 
 config:
   providers:
@@ -398,16 +416,27 @@ tenantAs:
 
 # Service identity for the platform-issued east-west service tokens. The tenant
 # AS authenticates here as a client_credentials client to mint a platform service
-# token for its KMS hop during tenant registration. Provide the shared internal
-# client secret through a Secret referenced by `internalClientExistingSecret`.
+# token for its KMS hop during tenant registration. Provide distinct per-client
+# secrets through a Secret referenced by `internalClientExistingSecret`.
 serviceIdentity:
-  # Secret holding the internal client secret (key `internal-client-secret` by
-  # default). Required when any satellite is enabled. The platform AS registers
-  # the internal service clients and every satellite authenticates with the same
-  # value to obtain short-lived east-west service tokens. This is a Secret name,
-  # not the secret value; `edk-runtime-secrets` is the documented example name.
+  # Secret holding per-client confidential-client secrets. Required when any
+  # satellite is enabled. The platform AS registers each internal service client
+  # with its own key from `clientSecretKeys`; each satellite pod mounts only
+  # that role's key as `EDK_INTERNAL_CLIENT_SECRET`. This is a Secret name, not
+  # the secret value; `edk-runtime-secrets` is the documented example name.
+  # `internalClientSecretKey` is retired: Helm fails if that value is still set.
   internalClientExistingSecret: ""
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    wallet-onboarding: wallet-onboarding-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
   # Per-service client_credentials client id each satellite presents to the
   # platform AS to mint its east-west service token. These match the platform's
   # registered internal clients.
@@ -421,6 +450,7 @@ serviceIdentity:
     trust-domain-identifier: trust-domain-service
     wallet-unit: wallet-unit-service
     wallet-interaction: wallet-interaction-service
+    wallet-onboarding: wallet-onboarding-service
   # Local workload labels used to select credentials and configure the binding
   # to each platform-issued JWT client id. They are never sent as identity headers.
   serviceIds:
@@ -432,8 +462,10 @@ serviceIdentity:
     verifier: service-oid4vp
     wallet-unit: service-wallet-unit
     wallet-interaction: service-wallet-interaction
-  # East-west JWT audiences are fixed protocol identifiers in the chart and
-  # source contracts. They are not configurable deployment values.
+    wallet-onboarding: service-wallet-onboarding
+  # Receiver and STS audiences come from files/service-identity-catalog.yaml
+  # (vendored with VDX Helm and the frontend). They are not Helm values and
+  # there is no serviceIdentity.audiences override surface.
   # In-network surfaces each satellite admits without an operator bearer. The
   # tenant-AS signing-key provisioning endpoint is deliberately absent here:
   # it must validate the platform-issued bearer during tenant resolution so the
@@ -443,7 +475,7 @@ serviceIdentity:
   # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
     platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**,/public/catalogs"
-    tenant-as: "/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect,/account-action,/api/account-actions"
+    tenant-as: "/as,/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect,/account-action,/api/account-actions"
     tenant-kms: ""
     did: "/.well-known"
     blob: "/public/assets"
@@ -451,6 +483,7 @@ serviceIdentity:
     verifier: "/oid4vp/request-uri,/oid4vp/auth/response,/.well-known"
     wallet-unit: ""
     wallet-interaction: ""
+    wallet-onboarding: "/api/wallet-onboarding/v1/idv/email/callback,/wallet/verify"
 
 # Interactive documentation site (docs playground). When enabled, registers a
 # public OAuth client on the platform AS (authorization code + required PKCE +
@@ -467,8 +500,10 @@ docsPlayground:
 
 # Dedicated confidential client and cryptographic state protection for the
 # public issuer/verifier testing-console BFF. The client secret is independent
-# from the east-west service-identity secret and is consumed only by the
-# platform authorization server and the admin-console server process.
+# from satellite serviceIdentity.clientSecretKeys and is consumed only by the
+# platform authorization server and the admin-console server process
+# (ADMIN_CONSOLE_WORKLOAD_CLIENT_*). Do not point the console at
+# EDK_INTERNAL_CLIENT_SECRET.
 portalBff:
   clientId: admin-console-portal-bff
   audience: application-bff-oauth-client
@@ -534,6 +569,7 @@ license:
     verifier: enterprise-verifier
     wallet-unit: enterprise-wallet-unit
     wallet-interaction: enterprise-wallet-interaction
+    wallet-onboarding: enterprise-wallet-onboarding
   # License trust anchor and bundle delivery. The platform is the local
   # licensing authority; it trusts the installed license bundle's root CA. The
   # bundle itself is imported through the setup API after the platform boots.

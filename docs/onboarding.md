@@ -158,9 +158,10 @@ If registration returns `503 SERVICE_UNAVAILABLE` and mentions remote platform
 configuration, `platform.config.get`, or a missing Authorization header, inspect
 the tenant-AS and platform logs together. For Helm deployments, verify that
 `serviceIdentity.internalClientExistingSecret` references a Secret in the release
-namespace and that it contains `internal-client-secret`. Also verify
-`keystore.existingSecret` and `keystore-password`, then restart the affected
-Deployments after correcting or rotating Secret data. This is an east-west
+namespace and that it contains the distinct `serviceIdentity.clientSecretKeys`
+entries (tenant-AS uses `tenant-as-service-client-secret`). Also verify
+`keystore.existingSecret` and `keystore-password`, then restart the platform and
+the satellite whose key changed after correcting or rotating Secret data. This is an east-west
 service-identity failure, not an operator bearer-token failure or a reason to
 recreate the tenant database.
 

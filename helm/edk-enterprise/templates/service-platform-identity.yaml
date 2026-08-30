@@ -2,20 +2,21 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "edk-enterprise.fullname" . }}-platform-authority-bootstrap
+  name: {{ include "edk-enterprise.identityServiceName" (dict "root" . "name" "platform") }}
   labels:
     {{- include "edk-enterprise.labels" . | nindent 4 }}
-    app.kubernetes.io/component: platform-authority-bootstrap
+    app.kubernetes.io/component: platform-identity
+  annotations:
+    edk.sphereon.com/readiness-path: /health/identity
 spec:
   type: ClusterIP
-  # This narrowly selected authority endpoint must exist while the platform performs mandatory
-  # reconciliation and is intentionally still unready for normal REST and gRPC traffic. It carries
-  # the command transport plus the REST surfaces satellites need to obtain and validate their
-  # workload identity (`/token`, `/.well-known/jwks.json`) before the platform reports ready.
+  # Identity plane publishes not-ready addresses because kube Ready is /ready
+  # on the serving Service. This is not the old catch-all bootstrap Service:
+  # only tenant-KMS uses it, and the documented probe is /health/identity.
   publishNotReadyAddresses: true
   selector:
     {{- include "edk-enterprise.selectorLabels" (dict "root" . "name" "platform") | nindent 4 }}
-    edk.sphereon.com/platform-authority-bootstrap: "true"
+    edk.sphereon.com/platform-identity: "true"
   ports:
     - name: rest
       port: {{ (index .Values.services "platform").restPort }}

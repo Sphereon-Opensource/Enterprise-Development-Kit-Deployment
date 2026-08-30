@@ -428,6 +428,10 @@ spec:
             - name: ADMIN_CONSOLE_AUDIT_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             {{- end }}
+            # Same in-cluster rule as Audit: discovery projects the platform-hosted wallet
+            # entitlement API to the tenant origin, but the authenticated hop stays internal.
+            - name: ADMIN_CONSOLE_WALLET_ENTITLEMENT_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
@@ -444,14 +448,22 @@ spec:
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_VERIFIER_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_THEME_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
             - name: NEXT_PUBLIC_THEME_AUDIENCE
-              value: enterprise-blob
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
+            - name: ADMIN_CONSOLE_TENANT_DID_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "did") | quote }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
-              value: enterprise-tenant-did
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "did") | quote }}
+            - name: ADMIN_CONSOLE_ISSUER_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "issuer") | quote }}
             - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
-              value: enterprise-issuer
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "issuer") | quote }}
+            - name: ADMIN_CONSOLE_VERIFIER_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             - name: NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE
-              value: enterprise-verifier
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             - name: PORT
               value: {{ (index $.Values.services $console).restPort | quote }}
             {{- if $isPlatform }}
@@ -461,8 +473,10 @@ spec:
               value: {{ $.Values.portalBff.clientId | quote }}
             - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
               valueFrom: { secretKeyRef: { name: {{ $.Values.portalBff.existingSecret | quote }}, key: {{ $.Values.portalBff.clientSecretKey | quote }} } }
+            - name: ADMIN_CONSOLE_PLATFORM_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
-              value: enterprise-platform
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             {{- else }}
             - name: ADMIN_CONSOLE_TENANT_CONTEXT_URL
               value: {{ printf "http://%s:%v/api/platform/bootstrap/v1/admin-console-context" $name $.Values.monolith.restPort | quote }}
@@ -624,16 +638,28 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
     # Preserve the same finite public Developer Console projection in monolith mode.
+    # Exact page mounts use ReplaceFullPath; ReplacePrefixMatch forbids Exact matches.
     - timeouts:
         request: {{ .Values.gateway.requestTimeout | quote }}
         backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
       matches:
         - path: { type: Exact, value: /developer-console }
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: { type: ReplaceFullPath, replaceFullPath: /admin-console/developer-console }
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
+          port: {{ (index .Values.services "admin-console-tenant").restPort }}
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
         - path: { type: Exact, value: /developer-console/oauth/callback }
       filters:
         - type: URLRewrite
           urlRewrite:
-            path: { type: ReplacePrefixMatch, replacePrefixMatch: /admin-console/developer-console }
+            path: { type: ReplaceFullPath, replaceFullPath: /admin-console/developer-console/oauth/callback }
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
@@ -658,7 +684,7 @@ spec:
       filters:
         - type: URLRewrite
           urlRewrite:
-            path: { type: ReplacePrefixMatch, replacePrefixMatch: {{ printf "/admin-console/api/developer-console-auth/%s" $authEndpoint | quote }} }
+            path: { type: ReplaceFullPath, replaceFullPath: {{ printf "/admin-console/api/developer-console-auth/%s" $authEndpoint | quote }} }
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "admin-console-tenant") }}
           port: {{ (index $.Values.services "admin-console-tenant").restPort }}

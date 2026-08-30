@@ -34,9 +34,9 @@ The Helm chart requires two references before it renders a deployment:
 - `serviceIdentity.internalClientExistingSecret` when any satellite service is enabled;
 - `keystore.existingSecret` when platform or tenant-KMS is enabled.
 
-The referenced Secret normally contains `internal-client-secret` and
-`keystore-password`. `edk-runtime-secrets` is an example Secret name, not a
-prepackaged artifact. A missing Helm value fails `helm template` or
+The referenced Secret normally contains the per-client keys from
+`serviceIdentity.clientSecretKeys` and `keystore-password`. `edk-runtime-secrets`
+is an example Secret name, not a prepackaged artifact. A missing Helm value fails `helm template` or
 `helm install` before a release is created and tells you which value and key are
 required.
 
@@ -51,7 +51,7 @@ Error: secret "edk-runtime-secrets" not found
 If the Secret exists but is empty or has a wrong key name, events contain one of:
 
 ```text
-Error: couldn't find key internal-client-secret in Secret <namespace>/edk-runtime-secrets
+Error: couldn't find key issuer-service-client-secret in Secret <namespace>/edk-runtime-secrets
 Error: couldn't find key keystore-password in Secret <namespace>/edk-runtime-secrets
 ```
 
@@ -115,11 +115,16 @@ deployment:
   selector that matches its pods.
 
 A pod that is `Running` but never becomes `Ready`, with database connection
-errors in its logs, points at one of these. Keep `/health` and `/ready` private
-while investigating the workload. The platform connects only to the control-plane
-database. Satellite services connect only to the tenant workload database and
-fetch platform-owned configuration from the platform over the internal command
-route.
+errors in its logs, points at one of these. Keep `/health`, `/health/identity`,
+and `/ready` private while investigating the workload. `/health` is process-up,
+`/health/identity` is gRPC plus token/JWKS, and `/ready` is serving-ready after
+the boot ceremony. Tenant-KMS must dial `*-platform-identity`, not the serving
+platform Service, or the pair deadlocks. Identity Services publish not-ready
+addresses because kube Ready is `/ready`; serving Services do not. The platform
+connects only to the
+control-plane database. Satellite services connect only to the tenant workload
+database and fetch platform-owned configuration from the platform over the
+internal command route.
 
 ## Issuer-trust and admin REST 401s
 
@@ -188,9 +193,10 @@ operations fail with a connection error:
   platform, tenant-KMS, wallet-unit, and wallet-interaction and switches the
   matching route endpoints to `grpc://`. A port or scheme mismatch between the
   caller's route and the peer service breaks the call.
-- Confirm `grpc.authMode` matches how peer traffic is secured. With
-  `service-jwt`, the caller presents a service token; with `mesh-mtls`, the mesh
-  provides mutual TLS and the sidecar must be injected on both peers.
+- Confirm `grpc.authMode` matches how peer traffic is secured. `service-jwt` is
+  application JWT on plaintext gRPC; it is not mTLS. With `mesh-mtls`, the mesh
+  provides mutual TLS and the sidecar must be injected on both peers; the app
+  still uses JWT on the plaintext socket the sidecar presents.
 - NetworkPolicy must allow the caller to reach platform, tenant-KMS,
   wallet-interaction, and wallet-unit as appropriate. If you enabled
   `networkPolicy`, confirm intra-release traffic to those peers is permitted.
@@ -220,14 +226,14 @@ Check, in order:
 
 1. `serviceIdentity.internalClientExistingSecret` names the intended Secret in
    the Helm release namespace.
-2. The Secret contains the key configured by
-   `serviceIdentity.internalClientSecretKey` (default
-   `internal-client-secret`).
-3. Platform and tenant-AS were restarted after the Secret was created or
-   rotated, so both use the same confidential-client credential.
+2. The Secret contains the distinct keys in `serviceIdentity.clientSecretKeys`,
+   including `tenant-as-service-client-secret` for tenant-AS.
+3. Platform and the satellite whose key changed were restarted after the Secret
+   was created or rotated. Rotating one client no longer requires rolling every
+   satellite.
 4. The platform-issued tenant-AS provisioning token and the tenant-AS service
    client configuration use the chart-rendered client ids, service ids, and
-   audiences as one contract.
+   service-identity catalog audiences as one contract.
 5. NetworkPolicy and service DNS allow tenant-AS to call the platform gRPC
    endpoint and tenant-KMS.
 

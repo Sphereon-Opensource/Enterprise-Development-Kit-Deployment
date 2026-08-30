@@ -32,6 +32,11 @@ merged without weakening the policy to a wildcard.
 {{- printf "%s-%s" (include "edk-enterprise.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/* Identity-plane ClusterIP used before serving-ready. Tenant-KMS dials platform-identity; platform boot dials tenant-kms-identity. These Services publish not-ready addresses because kube Ready is /ready. */}}
+{{- define "edk-enterprise.identityServiceName" -}}
+{{- printf "%s-%s-identity" (include "edk-enterprise.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{/*
 The chart has one deployment model. `topology.mode` changes only the process
 composition: distributed exposes the individual logical workloads; monolith
@@ -56,24 +61,180 @@ settings remain under their existing value names.
 {{- end -}}
 
 {{/*
-East-west JWT audiences are protocol identifiers shared with source-level STS
-and tenant-registration contracts. They are intentionally not chart values:
-changing one side would make otherwise valid tokens unusable at another
-receiver.
+Product-neutral service-identity catalog. Receiver audiences, gRPC receiver
+flags, and NetworkPolicy peers are catalog-owned. Callers must pass the chart
+root so Helm can load files/service-identity-catalog.yaml.
+*/}}
+{{- define "edk-enterprise.serviceIdentity.catalogYaml" -}}
+{{- $raw := .Files.Get "files/service-identity-catalog.yaml" -}}
+{{- if not $raw -}}
+{{- fail "files/service-identity-catalog.yaml is missing from the chart" -}}
+{{- end -}}
+{{- $raw -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.role" -}}
+{{- $role := .role | default .name -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles $role -}}
+{{- if not $row -}}
+{{- fail (printf "unknown service-identity role %q" $role) -}}
+{{- end -}}
+{{- toYaml $row -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.receiverAudience" -}}
+{{- $role := .role | default .name -}}
+{{- $row := include "edk-enterprise.serviceIdentity.role" . | fromYaml -}}
+{{- required (printf "service-identity role %q has no receiverAudience" $role) $row.receiverAudience -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.grpcReceiver" -}}
+{{- $row := include "edk-enterprise.serviceIdentity.role" . | fromYaml -}}
+{{- if $row.grpcReceiver }}true{{ else }}false{{ end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.defaultStsAudience" -}}
+{{- $role := .role | default .name -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles $role -}}
+{{- if not $row -}}
+{{- fail (printf "unknown service-identity role %q" $role) -}}
+{{- end -}}
+{{- if $row.defaultStsAudience -}}
+{{- $stsRow := index $catalog.roles $row.defaultStsAudience -}}
+{{- required (printf "service-identity role %q defaultStsAudience %q is unknown" $role $row.defaultStsAudience) $stsRow.receiverAudience -}}
+{{- else -}}
+{{- $row.receiverAudience -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" -}}
+{{- $role := .role | default .name -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles $role -}}
+{{- if not $row -}}
+{{- fail (printf "unknown service-identity role %q" $role) -}}
+{{- end -}}
+{{- $audiences := list -}}
+{{- range ($row.extraStsAudiences | default list) -}}
+{{- $extra := index $catalog.roles . -}}
+{{- if not $extra -}}
+{{- fail (printf "service-identity role %q extraStsAudiences entry %q is unknown" $role .) -}}
+{{- end -}}
+{{- $audiences = append $audiences (required (printf "service-identity extra STS role %q has no receiverAudience" .) $extra.receiverAudience) -}}
+{{- end -}}
+{{- join "," $audiences -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.peersOutAudiencesCsv" -}}
+{{- $role := .role | default .name -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles $role -}}
+{{- if not $row -}}
+{{- fail (printf "unknown service-identity role %q" $role) -}}
+{{- end -}}
+{{- $defaultAudience := include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" .root "role" $role) -}}
+{{- $audiences := list -}}
+{{- range ($row.peersOut | default list) -}}
+{{- $peer := index $catalog.roles . -}}
+{{- if not $peer -}}
+{{- fail (printf "service-identity role %q peersOut entry %q is unknown" $role .) -}}
+{{- end -}}
+{{- $audience := trim (toString (default "" $peer.receiverAudience)) -}}
+{{- if and $audience (ne $audience $defaultAudience) (not (has $audience $audiences)) -}}
+{{- $audiences = append $audiences $audience -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $audiences -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.clientSecretEnvName" -}}
+{{- printf "EDK_INTERNAL_CLIENT_SECRET_%s" (upper (replace "-" "_" .)) -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" -}}
+${env:{{ include "edk-enterprise.serviceIdentity.clientSecretEnvName" . }}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.clientSecretKey" -}}
+{{- $keys := .root.Values.serviceIdentity.clientSecretKeys | default dict -}}
+{{- $key := trim (toString (default "" (index $keys .role))) -}}
+{{- if eq $key "" -}}
+{{- fail (printf "serviceIdentity.clientSecretKeys.%s is required when the %s client is enabled. Set a distinct Kubernetes Secret key per satellite client; serviceIdentity.internalClientSecretKey is no longer supported." .role .role) -}}
+{{- end -}}
+{{- $key -}}
+{{- end -}}
+
+{{- define "edk-enterprise.walletOnboardingIntegrationEnabled" -}}
+{{- $integrations := default dict .Values.integrations -}}
+{{- $wo := default dict (index $integrations "walletOnboarding") -}}
+{{- if default false $wo.enabled }}true{{ else }}false{{ end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.walletOnboardingServiceName" -}}
+{{- $integrations := default dict .Values.integrations -}}
+{{- $wo := default dict (index $integrations "walletOnboarding") -}}
+{{- $name := trim (default "" $wo.serviceName) -}}
+{{- if and (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") (eq $name "") -}}
+{{- fail "integrations.walletOnboarding.serviceName is required when integrations.walletOnboarding.enabled=true; point it at the external wallet-onboarding Service in this namespace." -}}
+{{- end -}}
+{{- $name -}}
+{{- end -}}
+
+{{- define "edk-enterprise.walletOnboardingRestPort" -}}
+{{- $integrations := default dict .Values.integrations -}}
+{{- $wo := default dict (index $integrations "walletOnboarding") -}}
+{{- default 8080 $wo.restPort -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.roleNeedsClientSecret" -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" .root | fromYaml -}}
+{{- $row := index $catalog.roles .role -}}
+{{- if and $row $row.clientId -}}
+{{- if eq $row.kind "satellite" -}}
+{{- if eq .role "wallet-onboarding" -}}
+{{- if eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .root) "true" }}true{{ else }}false{{ end -}}
+{{- else -}}
+{{- $svc := index .root.Values.services .role -}}
+{{- if and $svc $svc.enabled }}true{{ else }}false{{ end -}}
+{{- end -}}
+{{- else if eq $row.kind "auxiliary-client" -}}
+{{- if (index .root.Values.services "tenant-as").enabled }}true{{ else }}false{{ end -}}
+{{- else }}false{{ end -}}
+{{- else }}false{{ end -}}
+{{- end -}}
+
+{{- define "edk-enterprise.serviceIdentity.platformClientSecretEnv" -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" . | fromYaml -}}
+{{- $envs := list -}}
+{{- $secret := .Values.serviceIdentity.internalClientExistingSecret -}}
+{{- range $role, $row := $catalog.roles -}}
+{{- if eq (include "edk-enterprise.serviceIdentity.roleNeedsClientSecret" (dict "root" $ "role" $role)) "true" -}}
+{{- $key := include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" $role) -}}
+{{- $envs = append $envs (dict "name" (include "edk-enterprise.serviceIdentity.clientSecretEnvName" $role) "valueFrom" (dict "secretKeyRef" (dict "name" $secret "key" $key))) -}}
+{{- end -}}
+{{- end -}}
+{{- if $envs -}}
+{{- toYaml $envs -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Thin wrapper over catalog receiverAudience. Requires dict root+name (or role).
 */}}
 {{- define "edk-enterprise.serviceAudience" -}}
-{{- $audiences := dict
-    "platform" "enterprise-platform"
-    "tenant-kms" "enterprise-tenant-kms"
-    "tenant-as" "enterprise-tenant-as"
-    "did" "enterprise-tenant-did"
-    "blob" "enterprise-blob"
-    "issuer" "enterprise-issuer"
-    "verifier" "enterprise-verifier"
-    "wallet-unit" "enterprise-wallet-unit"
-    "wallet-interaction" "enterprise-wallet-interaction"
--}}
-{{- required (printf "unsupported service audience role %q" .) (index $audiences .) -}}
+{{- if kindIs "string" . -}}
+{{- fail (printf "edk-enterprise.serviceAudience requires dict root+name; got string %q" .) -}}
+{{- end -}}
+{{- include "edk-enterprise.serviceIdentity.receiverAudience" (dict "root" .root "role" (.name | default .role)) -}}
+{{- end -}}
+
+{{- define "edk-enterprise.validateServiceIdentityCatalog" -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" . | fromYaml -}}
+{{- if not $catalog.roles -}}
+{{- fail "service-identity catalog has no roles" -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "edk-enterprise.labels" -}}
@@ -153,6 +314,7 @@ name, or an empty list for services that are not tenant-routed.
 - /api/theme/v1
 - /api/assets/v1
 {{- else if eq $name "tenant-as" -}}
+- /as
 - /authorize
 - /par
 - /token
@@ -160,6 +322,8 @@ name, or an empty list for services that are not tenant-routed.
 - /oauth2
 - /login
 - /logout
+- /account-action
+- /api/account-actions
 - /api/trust-domain/v1
 - /.well-known/oauth-authorization-server
 - /.well-known/openid-configuration
@@ -219,6 +383,28 @@ may use `latest`, but only with an Always pull policy.
 {{- end -}}
 {{- end -}}
 
+{{/* Fail closed on unknown gRPC auth aliases, insecure none, or mtls without certs. */}}
+{{- define "edk-enterprise.validateGrpcAuthMode" -}}
+{{- $mode := lower (trim (toString (default "" .Values.grpc.authMode))) -}}
+{{- $allowNone := .Values.grpc.allowInsecureNone | default false -}}
+{{- if eq $mode "none" -}}
+{{- if not $allowNone -}}
+{{- fail "grpc.authMode=none requires grpc.allowInsecureNone=true" -}}
+{{- end -}}
+{{- else if not (has $mode (list "service-jwt" "mtls" "mesh-mtls")) -}}
+{{- fail (printf "grpc.authMode must be one of service-jwt, mtls, mesh-mtls (or none with grpc.allowInsecureNone=true); got %q." .Values.grpc.authMode) -}}
+{{- end -}}
+{{- if eq $mode "mtls" -}}
+{{- $tls := default dict .Values.grpc.tls -}}
+{{- $cert := trim (toString (default "" $tls.cert)) -}}
+{{- $key := trim (toString (default "" $tls.key)) -}}
+{{- $ca := trim (toString (default "" $tls.clientCa)) -}}
+{{- if or (eq $cert "") (eq $key "") (eq $ca "") -}}
+{{- fail "grpc.authMode=mtls requires grpc.tls.cert, grpc.tls.key, and grpc.tls.clientCa" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Validate the selected Gateway API TLS termination mode and its required inputs. */}}
 {{- define "edk-enterprise.validateGatewayTls" -}}
 {{- if .Values.gateway.enabled -}}
@@ -242,15 +428,29 @@ east-west Authorization headers or software-keystore access.
 */}}
 {{- define "edk-enterprise.validateRuntimeSecrets" -}}
 {{- $mode := include "edk-enterprise.topologyMode" . -}}
-{{- $satelliteEnabled := and (eq $mode "distributed") (or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled .Values.services.issuer.enabled .Values.services.verifier.enabled) -}}
+{{- $satelliteEnabled := and (eq $mode "distributed") (or (index .Values.services "tenant-kms").enabled .Values.services.did.enabled .Values.services.blob.enabled (index .Values.services "tenant-as").enabled (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") .Values.services.issuer.enabled .Values.services.verifier.enabled) -}}
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
 {{- $issuerPipelineSecret := trim (default "" .Values.issuerPipeline.existingSecret) -}}
 {{- $federationSessionSecret := trim (default "" .Values.federationSessionEncryption.existingSecret) -}}
 {{- $tenantAsEnabled := index .Values.services "tenant-as" -}}
+{{- if hasKey .Values.serviceIdentity "internalClientSecretKey" -}}
+{{- fail "serviceIdentity.internalClientSecretKey is no longer supported. Set serviceIdentity.clientSecretKeys.<role> to a distinct Kubernetes Secret key for each satellite client." -}}
+{{- end -}}
 {{- if and $satelliteEnabled (eq $identitySecret "") -}}
-{{- fail "serviceIdentity.internalClientExistingSecret is required when an EDK satellite service is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the key configured by serviceIdentity.internalClientSecretKey (default: internal-client-secret), then reference that Secret by name." -}}
+{{- fail "serviceIdentity.internalClientExistingSecret is required when an EDK satellite service is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the distinct keys in serviceIdentity.clientSecretKeys, then reference that Secret by name." -}}
+{{- end -}}
+{{- $catalog := include "edk-enterprise.serviceIdentity.catalogYaml" . | fromYaml -}}
+{{- $usedSecretKeys := dict -}}
+{{- range $role, $row := $catalog.roles -}}
+{{- if eq (include "edk-enterprise.serviceIdentity.roleNeedsClientSecret" (dict "root" $ "role" $role)) "true" -}}
+{{- $key := include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" $role) -}}
+{{- if hasKey $usedSecretKeys $key -}}
+{{- fail (printf "serviceIdentity.clientSecretKeys values must be distinct; %s and %s both use %s" (index $usedSecretKeys $key) $role $key) -}}
+{{- end -}}
+{{- $_ := set $usedSecretKeys $key $role -}}
+{{- end -}}
 {{- end -}}
 {{- if and (or .Values.services.platform.enabled (index .Values.services "tenant-kms").enabled) (eq $keystoreSecret "") -}}
 {{- fail "keystore.existingSecret is required when platform or tenant-kms is enabled. Create a Kubernetes Secret (for example edk-runtime-secrets) containing the key configured by keystore.passwordKey (default: keystore-password), then reference that Secret by name." -}}
@@ -414,18 +614,18 @@ platform:
   target: SERVER
   transport: GRPC
   endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
   services:
     config:
       target: SERVER
       transport: GRPC
       endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-      serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+      serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
 application:
   target: SERVER
   transport: GRPC
   endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+  serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
 {{- end -}}
 
 {{/* The platform is both the central permit issuer and a satellite consumer. */}}
@@ -484,6 +684,12 @@ would create endpoints that can never provision or use tenant keys.
 {{- end -}}
 {{- if and (index .Values.services "wallet-interaction").enabled (not (index .Values.services "wallet-unit").enabled) -}}
 {{- fail "services.wallet-unit.enabled must be true while wallet-interaction is enabled: wallet interaction routes HSM policy authorization to wallet-unit." -}}
+{{- end -}}
+{{- if and (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") (not (index .Values.services "tenant-kms").enabled) -}}
+{{- fail "services.tenant-kms.enabled must be true while integrations.walletOnboarding.enabled=true: wallet onboarding routes entitlement signing and key lifecycle to tenant-kms." -}}
+{{- end -}}
+{{- if eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true" -}}
+{{- $_ := include "edk-enterprise.walletOnboardingServiceName" . -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

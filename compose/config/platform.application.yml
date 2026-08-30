@@ -32,7 +32,7 @@ server:
     token-endpoint-source: configured
     active-as-client-role: kms
     client-id: kms-service
-    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
     tenant-bound-client-id: true
     audience: enterprise-platform
     allowed-audiences: enterprise-tenant-kms
@@ -478,43 +478,43 @@ oauth2:
       internal-clients:
         issuer:
           client-id: issuer-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_ISSUER}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as
         kms:
           client-id: kms-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
         did:
           client-id: did-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_DID}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
         blob:
           client-id: blob-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_BLOB}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-blob
         verifier:
           client-id: verifier-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
         tenantas:
           client-id: tenant-as-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
         email:
           client-id: email-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_EMAIL}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
     platform:

@@ -1,7 +1,7 @@
 {{- if eq (include "edk-enterprise.topologyMode" .) "distributed" }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
-{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+{{- $grpcReceiver := eq (include "edk-enterprise.serviceIdentity.grpcReceiver" (dict "root" $ "role" $name)) "true" }}
 {{- /* admin-console is a Next.js standalone web app, not an EDK Java service:
        it carries no DB/JWT/gRPC/license-gate wiring and is probed on its own
        /admin-console/health route rather than the EDK /health endpoint. */}}
@@ -53,9 +53,9 @@ spec:
       labels:
         {{- include "edk-enterprise.selectorLabels" (dict "root" $ "name" $name) | nindent 8 }}
         {{- if eq $name "platform" }}
-        edk.sphereon.com/platform-authority-bootstrap: "true"
+        edk.sphereon.com/platform-identity: "true"
         {{- else if eq $name "tenant-kms" }}
-        edk.sphereon.com/tenant-kms-authority-bootstrap: "true"
+        edk.sphereon.com/tenant-kms-identity: "true"
         {{- end }}
     spec:
       serviceAccountName: {{ if eq $name "platform" }}{{ include "edk-enterprise.platformServiceAccountName" $ }}{{ else }}{{ include "edk-enterprise.serviceAccountName" $ }}{{ end }}
@@ -98,12 +98,10 @@ spec:
         {{- if $waitForPlatformGrpc }}
         {{- $platformGrpcService := include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
         {{- if eq $name "tenant-kms" }}
-        {{- $platformGrpcService = printf "%s-platform-authority-bootstrap" (include "edk-enterprise.fullname" $) }}
+        {{- $platformGrpcService = include "edk-enterprise.identityServiceName" (dict "root" $ "name" "platform") }}
         {{- end }}
-        # Do not construct a long-lived gRPC channel while the platform Service
-        # has no ready endpoint. Netty's reconnect backoff can otherwise outlive
-        # the first tenant-registration request even though the platform becomes
-        # ready moments later.
+        # Tenant-KMS waits on the platform identity Service (identity-ready,
+        # /health/identity). Other satellites wait on the serving Service (/ready).
         - name: wait-for-platform-grpc
           image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $imageTag }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
@@ -158,7 +156,7 @@ spec:
                   key: {{ $.Values.secretAuthority.keys.satellitePermitVerificationKeys | quote }}
             {{- if eq $name "platform" }}
             - name: TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST
-              value: {{ printf "%s-tenant-kms-authority-bootstrap" (include "edk-enterprise.fullname" $) | quote }}
+              value: {{ include "edk-enterprise.identityServiceName" (dict "root" $ "name" "tenant-kms") | quote }}
             - name: TENANT_KMS_AUTHORITY_BOOTSTRAP_PORT
               value: {{ $.Values.grpc.port | quote }}
             - name: SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY
@@ -209,6 +207,20 @@ spec:
               value: {{ $.Values.grpc.port | quote }}
             - name: GRPC_AUTH_MODE
               value: {{ $.Values.grpc.authMode | quote }}
+            {{- with $.Values.grpc.tls }}
+            {{- if .cert }}
+            - name: GRPC_TLS_CERT
+              value: {{ .cert | quote }}
+            {{- end }}
+            {{- if .key }}
+            - name: GRPC_TLS_KEY
+              value: {{ .key | quote }}
+            {{- end }}
+            {{- if .clientCa }}
+            - name: GRPC_TLS_CLIENT_CA
+              value: {{ .clientCa | quote }}
+            {{- end }}
+            {{- end }}
             - name: TENANT_RESOLUTION_PLATFORM_BASE_DOMAIN
               value: {{ $.Values.global.platformBaseDomain | quote }}
             - name: TENANT_RESOLUTION_PLATFORM_SUBDOMAIN_ENABLED
@@ -229,7 +241,7 @@ spec:
             - name: SPHEREON_APP_SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
             {{- $transportAudience := "" }}
-            {{- if $grpcReceiver }}{{- $transportAudience = include "edk-enterprise.serviceAudience" $name }}{{- end }}
+            {{- if $grpcReceiver }}{{- $transportAudience = include "edk-enterprise.serviceAudience" (dict "root" $ "name" $name) }}{{- end }}
             {{- if $transportAudience }}
             # TransportServerConfigProvider reads the canonical unprefixed
             # transport.auth.expected-audience property from AppConfigService.
@@ -255,16 +267,25 @@ spec:
             - name: THEME_CLIENT_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             {{- end }}
-            {{- /* East-west service identity + keystore secrets shared by the service containers.
-                   The platform AS mints the service tokens the satellites present; the
-                   satellites authenticate with the same internal client secret and read
-                   their software keystore with the keystore password. */}}
-            {{- if $.Values.serviceIdentity.internalClientExistingSecret }}
+            {{- /* East-west service identity + keystore secrets. Satellites keep
+                   the env name EDK_INTERNAL_CLIENT_SECRET so current images boot,
+                   but each pod mounts only that role's Secret key. Platform
+                   interpolates per-client env names for internal-clients. */}}
+            {{- if and $.Values.serviceIdentity.internalClientExistingSecret (ne $name "platform") }}
             - name: EDK_INTERNAL_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
-                  key: {{ $.Values.serviceIdentity.internalClientSecretKey }}
+                  key: {{ include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" $name) }}
+            {{- if and (eq $name "tenant-as") (index $.Values.services "issuer").enabled }}
+            - name: EDK_INTERNAL_CLIENT_SECRET_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
+                  key: {{ include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" "issuer") }}
+            {{- end }}
+            {{- else if and (eq $name "platform") $.Values.serviceIdentity.internalClientExistingSecret }}
+            {{- include "edk-enterprise.serviceIdentity.platformClientSecretEnv" $ | nindent 12 }}
             {{- end }}
             {{- if $.Values.keystore.existingSecret }}
             - name: EDK_KEYSTORE_PASSWORD
@@ -506,7 +527,7 @@ spec:
             {{- end }}
             {{- if and (ne $name "platform") (ne $name "tenant-kms") (ne $name "tenant-as") (ne $name "wallet-unit") (ne $name "wallet-interaction") }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_SERVICE_TOKEN_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "tenant-kms") | quote }}
             - name: TRANSPORT_ROUTING_MODULES_KMS_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
             {{- range $kmsService := list "key" "keys" "signature" "mac" "encryption" "ecdh" }}
@@ -520,7 +541,7 @@ spec:
             {{- end }}
             {{- if and (or (eq $name "issuer") (eq $name "verifier")) (index $.Values.services "wallet-interaction").enabled }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "wallet-interaction" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "wallet-interaction") | quote }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
             - name: WALLET_INTERACTION_GRPC_ENDPOINT
@@ -528,7 +549,7 @@ spec:
             {{- end }}
             {{- if eq $name "wallet-interaction" }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_SERVICE_TOKEN_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "wallet-unit" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "wallet-unit") | quote }}
             - name: TRANSPORT_ROUTING_MODULES_WALLET_PREFER_SERVICE_TOKEN_OVER_SESSION_BEARER
               value: "true"
             - name: WALLET_UNIT_GRPC_ENDPOINT
@@ -605,13 +626,17 @@ spec:
                    client_credentials service token and attaches it to its command-transport
                    calls to the platform (config reads + license-state projection) and to
                    its KMS hop. The platform AS issues the token; the satellite authenticates
-                   as its per-service confidential client with the shared internal secret.
-                   The token endpoint is the platform authority bootstrap Service: satellites must
-                   mint their identity while the platform is deliberately unready during its boot
-                   ceremony, and the regular Service excludes not-ready endpoints. */}}
-            {{- if $.Values.serviceIdentity.internalClientExistingSecret }}
+                   as its per-service confidential client with that role's client secret.
+                   Tenant-KMS mints against platform-identity while the platform
+                   is identity-ready but not serving-ready. Other satellites wait
+                   for the serving Service. */}}
+            {{- if and $.Values.serviceIdentity.internalClientExistingSecret (ne $name "platform") }}
+            {{- $identityTokenHost := include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
+            {{- if eq $name "tenant-kms" }}
+            {{- $identityTokenHost = include "edk-enterprise.identityServiceName" (dict "root" $ "name" "platform") }}
+            {{- end }}
             - name: SERVER_SERVICE_IDENTITY_TOKEN_ENDPOINT
-              value: {{ printf "http://%s-platform-authority-bootstrap:%v/token" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
+              value: {{ printf "http://%s:%v/token" $identityTokenHost (index $.Values.services "platform").restPort | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_ID
               value: {{ index $.Values.serviceIdentity.clientIds $name | quote }}
             {{- /* Once tenant configuration is active, select the tenant-scoped
@@ -622,12 +647,12 @@ spec:
             - name: SERVER_SERVICE_IDENTITY_ACTIVE_AS_CLIENT_ROLE
               value: {{ index $activeAsClientRoles $name | quote }}
             - name: SERVER_SERVICE_IDENTITY_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             - name: SERVER_SERVICE_IDENTITY_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.serviceIdentity.internalClientExistingSecret }}
-                  key: {{ $.Values.serviceIdentity.internalClientSecretKey }}
+                  key: {{ include "edk-enterprise.serviceIdentity.clientSecretKey" (dict "root" $ "role" $name) }}
             {{- /* Local workload label used to select the satellite credential. The platform
                    workload-trust-policy binds it to the client id in the validated JWT. */}}
             - name: SPHEREON_SERVICE_ID
@@ -656,13 +681,17 @@ spec:
             {{- /* Trust anchor for the platform authorization server. Satellites validate
                    platform-issued bearers on east-west calls against this token issuer and
                    fetch its JWKS in-cluster. The issuer must equal the platform AS token `iss`
-                   (its external base URL); the JWKS URI is the in-cluster authority bootstrap
-                   Service, reachable across the platform boot ceremony like the token endpoint. */}}
+                   (its external base URL); tenant-KMS fetches JWKS from platform-identity
+                   during boot, other satellites from the serving platform Service. */}}
             - name: SERVER_REST_AUTH_PLATFORM_ISSUER
               value: {{ $.Values.platform.externalBaseUrl | quote }}
+            {{- $jwksHost := include "edk-enterprise.serviceName" (dict "root" $ "name" "platform") }}
+            {{- if eq $name "tenant-kms" }}
+            {{- $jwksHost = include "edk-enterprise.identityServiceName" (dict "root" $ "name" "platform") }}
+            {{- end }}
             - name: SERVER_REST_AUTH_PLATFORM_JWKS_URI
-              value: {{ printf "http://%s-platform-authority-bootstrap:%v/.well-known/jwks.json" (include "edk-enterprise.fullname" $) (index $.Values.services "platform").restPort | quote }}
-            {{- $restAudience := include "edk-enterprise.serviceAudience" $name }}
+              value: {{ printf "http://%s:%v/.well-known/jwks.json" $jwksHost (index $.Values.services "platform").restPort | quote }}
+            {{- $restAudience := include "edk-enterprise.serviceAudience" (dict "root" $ "name" $name) }}
             {{- if $restAudience }}
             - name: SERVER_REST_AUTH_EXPECTED_AUDIENCE
               value: {{ $restAudience | quote }}
@@ -717,6 +746,15 @@ spec:
             - name: ADMIN_CONSOLE_AUDIT_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             {{- end }}
+            # Runtime discovery projects wallet entitlement to the tenant origin so the Host
+            # header keeps tenant-routing context. The BFF takes the in-cluster onboarding hop
+            # when that satellite is enabled; otherwise it falls back to platform.
+            - name: ADMIN_CONSOLE_WALLET_ENTITLEMENT_BASE_URL
+              {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" $) "true") }}
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.walletOnboardingServiceName" $) (include "edk-enterprise.walletOnboardingRestPort" $) | quote }}
+              {{- else }}
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+              {{- end }}
             - name: ADMIN_CONSOLE_THEME_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             - name: ADMIN_CONSOLE_TENANT_KMS_BASE_URL
@@ -732,17 +770,47 @@ spec:
             - name: ADMIN_CONSOLE_VERIFIER_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "verifier")) (index $.Values.services "verifier").restPort | quote }}
             {{- if eq $name "admin-console" }}
+            - name: ADMIN_CONSOLE_PLATFORM_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             {{- end }}
+            - name: ADMIN_CONSOLE_TENANT_KMS_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "tenant-kms") | quote }}
+            - name: NEXT_PUBLIC_TENANT_KMS_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "tenant-kms") | quote }}
+            - name: ADMIN_CONSOLE_AUDIT_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
+            - name: NEXT_PUBLIC_AUDIT_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
+            - name: ADMIN_CONSOLE_WALLET_ENTITLEMENT_AUDIENCE
+              {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" $) "true") }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "wallet-onboarding") | quote }}
+              {{- else }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
+              {{- end }}
+            - name: NEXT_PUBLIC_WALLET_ENTITLEMENT_AUDIENCE
+              {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" $) "true") }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "wallet-onboarding") | quote }}
+              {{- else }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
+              {{- end }}
+            - name: ADMIN_CONSOLE_THEME_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
             - name: NEXT_PUBLIC_THEME_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "blob" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "blob") | quote }}
+            - name: ADMIN_CONSOLE_TENANT_DID_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "did") | quote }}
             - name: NEXT_PUBLIC_TENANT_DID_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "did" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "did") | quote }}
+            - name: ADMIN_CONSOLE_ISSUER_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "issuer") | quote }}
             - name: NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "issuer" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "issuer") | quote }}
+            - name: ADMIN_CONSOLE_VERIFIER_AUDIENCE
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             - name: NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE
-              value: {{ include "edk-enterprise.serviceAudience" "verifier" | quote }}
+              value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             {{- end }}
             {{- range $env := $svc.env }}
             {{- if not (and (eq $name "platform") (has (get $env "name") (list "EXTERNAL_BASE_URL" "ONBOARDING_UI_BASE_URL"))) }}
@@ -750,6 +818,10 @@ spec:
             {{- end }}
             {{- end }}
           {{- $probePath := $isAdminConsole | ternary "/admin-console/health" "/health" }}
+          {{- $readinessPath := $probePath }}
+          {{- if or (eq $name "platform") (eq $name "tenant-kms") }}
+          {{- $readinessPath = "/ready" }}
+          {{- end }}
           {{- if and $.Values.grpc.enabled $grpcReceiver }}
           # The REST listener becomes healthy before the native process starts its
           # gRPC command server. Keep the pod out of Service endpoints until the
@@ -779,14 +851,11 @@ spec:
               port: rest
             initialDelaySeconds: 20
             periodSeconds: 20
-          # Deliberately /health, not /ready: /ready is gated on the platform's boot ceremony,
-          # and that ceremony calls satellites whose init gate waits for the platform Service to
-          # have a ready endpoint. Pointing readiness at /ready deadlocks the two. Flipping it
-          # requires those init gates to dial the bootstrap authority Service first, which
-          # publishes not-ready addresses.
+          # Serving-ready for platform and tenant-KMS. Identity-plane callers use
+          # *-identity Services whose documented probe is /health/identity.
           readinessProbe:
             httpGet:
-              path: {{ $probePath }}
+              path: {{ $readinessPath }}
               port: rest
             initialDelaySeconds: 10
             periodSeconds: 10

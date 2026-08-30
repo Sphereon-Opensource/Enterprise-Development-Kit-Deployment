@@ -157,7 +157,7 @@ Set every required value in `compose/.env` before rendering the stack.
 | `EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD` | Set a different password for the fixed `secret_management_tenant_serving` database role. |
 | `EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD` | Set a third password for the narrow `secret_management_runtime` replay-ledger role used by satellite services. |
 | `EDK_KEYSTORE_PASSWORD` | Set the password that protects the platform and tenant KMS keystores. |
-| `EDK_INTERNAL_CLIENT_SECRET` | Set the shared confidential-client secret used for authenticated east-west service tokens. |
+| `EDK_INTERNAL_CLIENT_SECRET_<ROLE>` | Distinct confidential-client secret per STS registration (`TENANT_KMS`, `TENANT_AS`, `DID`, `BLOB`, `ISSUER`, `VERIFIER`, `EMAIL`). Satellites still read `EDK_INTERNAL_CLIENT_SECRET` (one value per container). Platform interpolates every role-specific env. |
 | `EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Set an independent secret for the admin-console portal BFF client. |
 | `EDK_PIPELINE_MASTER_KEK` | Replace the example value with a new 32-byte base64url value. |
 | `EDK_PIPELINE_BLIND_INDEX_KEY` | Replace the example value with a different 32-byte base64url value. |
@@ -405,7 +405,16 @@ platform:
 
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
 
 keystore:
   existingSecret: edk-runtime-secrets
@@ -521,7 +530,15 @@ When installing directly with Helm, create these objects before rendering:
 
 ```bash
 kubectl -n edk create secret generic edk-runtime-secrets \
-  --from-literal=internal-client-secret='<independent-random-secret>' \
+  --from-literal=kms-service-client-secret='<independent-random-secret>' \
+  --from-literal=tenant-as-service-client-secret='<independent-random-secret>' \
+  --from-literal=did-service-client-secret='<independent-random-secret>' \
+  --from-literal=blob-service-client-secret='<independent-random-secret>' \
+  --from-literal=issuer-service-client-secret='<independent-random-secret>' \
+  --from-literal=verifier-service-client-secret='<independent-random-secret>' \
+  --from-literal=wallet-unit-service-client-secret='<independent-random-secret>' \
+  --from-literal=wallet-interaction-service-client-secret='<independent-random-secret>' \
+  --from-literal=trust-domain-service-client-secret='<independent-random-secret>' \
   --from-literal=admin-console-portal-bff-secret='<independent-random-secret>' \
   --from-literal=keystore-password='<independent-random-password>'
 

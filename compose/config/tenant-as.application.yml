@@ -139,16 +139,18 @@ transport:
         serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: false
 # The issuer is a resource server of every tenant AS and obtains a tenant-scoped
-# token through this confidential client. Helm renders the same registration when
-# the shared internal-client secret is configured; Compose supplies that secret
-# for the enterprise topology as well.
+# token through this confidential client. Helm registers each satellite with a
+# distinct clientSecretKeys entry (still exposed to the pod as
+# EDK_INTERNAL_CLIENT_SECRET). Compose mounts that same issuer secret on this
+# container as EDK_INTERNAL_CLIENT_SECRET_ISSUER so the AS registration matches
+# the issuer satellite.
 oauth2:
   servers:
     default:
       internal-clients:
         issuer:
           client-id: issuer-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_ISSUER}
 config:
   providers:
     platform-config-remote:
