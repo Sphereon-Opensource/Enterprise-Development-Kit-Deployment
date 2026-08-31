@@ -141,7 +141,7 @@ database:
     default:
       dialect: postgresql
       host: ${env:EDK_PLATFORM_DB_HOST}
-      port: 5432
+      port: ${env:EDK_PLATFORM_DB_PORT:5432}
       database: ${env:EDK_PLATFORM_DB_NAME}
       username: ${env:EDK_PLATFORM_DB_USERNAME}
       password: ${env:EDK_PLATFORM_DB_PASSWORD}
@@ -181,9 +181,9 @@ database:
       dialect: postgresql
       isolation: shared
       host: ${env:EDK_PLATFORM_DB_HOST}
-      port: 5432
+      port: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PORT:5432}
       database: ${env:EDK_PLATFORM_DB_NAME}
-      username: secret_management_runtime
+      username: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_USERNAME:secret_management_runtime}
       password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
       pool:
         dedicated-pool: true
@@ -202,7 +202,7 @@ database:
       isolation: schema
       schema-pattern: tenant_{id}
       host: ${env:EDK_TENANT_DB_HOST}
-      port: 5432
+      port: ${env:EDK_TENANT_DB_PORT:5432}
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
@@ -635,7 +635,7 @@ secret:
         audience: enterprise-platform
         verification-keys: ${env:SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS}
     satellite:
-      workload-id: service-platform
+      workload-id: ${env:SECRET_AUTHORITY_SATELLITE_WORKLOAD_ID:service-platform}
       workload-hosting-revision: 1
       assertion:
         issuer: sphereon-secret-workload

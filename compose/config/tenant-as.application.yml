@@ -245,6 +245,13 @@ application:
   bootstrap:
     on-startup: false
 app:
+  security:
+    encryption:
+      activeKeyId: ${env:FEDERATION_SESSION_ENCRYPTION_ACTIVE_KEY_ID:federation-session-v1}
+      keys:
+        federation:
+          session:
+            v1: ${env:FEDERATION_SESSION_ENCRYPTION_KEY}
   # TODO: set to prod for a production deployment.
   deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
 auth:

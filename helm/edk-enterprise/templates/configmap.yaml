@@ -374,6 +374,7 @@ data:
           client-name: Platform Operator CLI
           client-type: public
           grant-types: "authorization_code,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
           redirect-uris:
             - ${env:ONBOARDING_UI_BASE_URL}/admin-console/callback
             - ${env:ONBOARDING_UI_BASE_URL}/onboarding/callback
