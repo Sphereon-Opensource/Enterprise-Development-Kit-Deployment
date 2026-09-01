@@ -17,7 +17,8 @@ assert_plan() {
   local expected_auto="$4"
   local expected_intermediate_files="$5"
 
-  edk_plan_known_upgrade_path "$installed" "$target" "0.25.0-rc1-to-0.25.0-rc2.yaml" "0.25.0-rc2-to-0.25.0-rc3.yaml"
+  edk_plan_known_upgrade_path "$installed" "$target" "0.25.0-rc1-to-0.25.0-rc2.yaml" \
+    "0.25.0-rc2-to-0.25.0-rc3.yaml" "0.25.0-rc3-to-0.25.0-rc4.yaml"
 
   [[ "$EDK_INTERMEDIATE_IMAGE_TAG" == "$expected_intermediate" ]] ||
     fail "$installed -> $target intermediate: expected '$expected_intermediate', got '$EDK_INTERMEDIATE_IMAGE_TAG'"
@@ -50,6 +51,18 @@ if edk_plan_known_upgrade_path "0.25.0-RC3" "0.25.0-RC2" "one" "two"; then
 fi
 if edk_plan_known_upgrade_path "0.25.0-RC3-build-7" "0.25.0-RC2" "one" "two"; then
   fail "RC3 suffix release downgrade must be rejected"
+fi
+
+assert_plan "0.25.0-RC3" "0.25.0-RC4" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml" ""
+assert_plan "0.25.0-RC3" "0.25.0-RC4-20260831-4" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml" ""
+assert_plan "0.25.0-rc4" "0.25.0-rc4" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml" ""
+assert_plan "0.25.0-RC2" "0.25.0-RC40" "" "" ""
+
+if edk_plan_known_upgrade_path "0.25.0-RC4" "0.25.0-RC3" "one" "two" "three"; then
+  fail "RC4 -> RC3 downgrade must be rejected"
+fi
+if edk_plan_known_upgrade_path "0.25.0-RC4-20260831-4" "0.25.0-RC3" "one" "two" "three"; then
+  fail "RC4 suffix release downgrade must be rejected"
 fi
 
 extracted="$(printf '%s\n' '{"global": {"imageTag": "0.25.0-RC1"}, "services": {"platform": {"imageTag": "wrong"}}}' | edk_extract_global_image_tag)"

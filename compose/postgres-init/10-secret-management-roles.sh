@@ -72,4 +72,15 @@ GRANT USAGE ON SCHEMA public
 COMMIT;
 SQL
 
-: > "$marker"
+# This script is both the initdb.d provisioner and the healthcheck, and Docker runs those as
+# different users: initdb.d as postgres, the healthcheck as root. With no start_period the
+# healthcheck fires while initdb is still running, so root can create the marker in the window
+# between this script's own `[ -f "$marker" ]` check and this line. Truncating a root-owned marker
+# then fails as postgres and, under `set -e`, aborts initdb and the container.
+#
+# Creating it only when absent is safe because the work above is idempotent: the roles are altered
+# inside a transaction guarded by an advisory lock, so whichever user got there first has already
+# completed the same provisioning.
+if [ ! -f "$marker" ]; then
+  : > "$marker" 2>/dev/null || true
+fi

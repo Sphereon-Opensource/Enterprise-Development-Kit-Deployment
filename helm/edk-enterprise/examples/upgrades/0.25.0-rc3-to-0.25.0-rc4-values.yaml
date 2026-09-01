@@ -1,0 +1,67 @@
+# Compatibility overlay for upgrades from 0.25.0-RC3 to 0.25.0-RC4.
+#
+# Pass this after the customer's maintained values file. An RC3 values export pins the ingress path
+# lists below, which would otherwise override RC4 chart defaults.
+#
+#   platform: /api/catalog/v1 and /public/catalogs are new tenant-host projections.
+#   did:      the universal registrar moved off the bare /1.0/* prefix, which collided with the
+#             resolver's /1.0/identifiers.
+#   issuer:   /public/schema and /public/catalogs are new public read surfaces.
+#   tenant-as: /api/trust-domain/v1 is removed. The RC2 -> RC3 overlay added it here, but
+#             enterprise-tenant-as carries no lib-trust-domain module and never has, so the path was
+#             advertised and not served. Trust-domain administration is platform-owned.
+#
+# Do not carry this file into unrelated future upgrades; use only migration files named by that
+# target release's notes.
+services:
+  platform:
+    publicIngress:
+      paths:
+        - /.well-known/oauth-authorization-server
+        - /.well-known/openid-configuration
+        - /authorize
+        - /login
+        - /token
+        - /userinfo
+        - /oauth2
+        - /api/platform/setup/v1
+        - /api/platform/bootstrap/v1
+        - /api/platform/admin/v1
+        - /api/catalog/v1
+        - /public/catalogs
+  did:
+    publicIngress:
+      paths:
+        - /1.0/identifiers
+        - /.well-known/did.json
+        - /api/did/v1
+        - /universal-registrar/1.0/create
+        - /universal-registrar/1.0/update
+        - /universal-registrar/1.0/deactivate
+  issuer:
+    publicIngress:
+      paths:
+        - /.well-known/openid-credential-issuer
+        - /oid4vci
+        - /credential
+        - /credential_deferred
+        - /nonce
+        - /notification
+        - /public/statuslists
+        - /public/schema
+        - /public/catalogs
+        - /api/oid4vci/v1
+        - /api/credential-design/v1
+        - /api/statuslist/v1
+  tenant-as:
+    publicIngress:
+      paths:
+        - /.well-known/oauth-authorization-server
+        - /.well-known/openid-configuration
+        - /.well-known/jwks.json
+        - /authorize
+        - /token
+        - /userinfo
+        - /oauth2
+        - /login
+        - /logout

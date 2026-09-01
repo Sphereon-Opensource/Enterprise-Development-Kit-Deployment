@@ -125,13 +125,16 @@ http:
       service: svc-platform
       priority: 300
       tls: {}
-    # Typed KMS resource management is part of the platform configuration API and
-    # is served by the platform, which owns the secret authority state; the tenant
-    # host supplies the tenant-routing context.
-    tenant-platform-config-kms:
+    # The platform configuration API is served by the platform, which owns the
+    # configuration and secret-authority state; the tenant host supplies the
+    # tenant-routing context. This mirrors the Helm HTTPRoute, which routes the whole
+    # /api/platform/config/v1/tenants prefix. A narrower rule leaves the
+    # authorization-server, issuer-instance and verifier-instance slices unrouted on the
+    # tenant host, where the admin console and the release gate address them.
+    tenant-platform-config:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        PathRegexp(`^/api/platform/config/v1/tenants/[^/]+/kms(/.*)?$`)
+        PathPrefix(`/api/platform/config/v1/tenants`)
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 300

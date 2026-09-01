@@ -480,7 +480,7 @@ spec:
       matches:
         - path:
             type: RegularExpression
-            value: "^/api/(identity/v1|identity-auth/v1/admin|party/v1|trust-domain/v1)(/.*)?$"
+            value: "^/api/(identity/v1|identity-auth/v1/admin|party/v1)(/.*)?$"
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as") }}
           port: {{ (index .Values.services "tenant-as").restPort }}
@@ -527,6 +527,12 @@ spec:
         - path:
             type: PathPrefix
             value: /api/catalog/v1
+        # Trust-domain administration is platform-owned: enterprise-tenant-as carries no
+        # lib-trust-domain module, so routing it there returns 404. Compose has always
+        # pointed this at the platform service.
+        - path:
+            type: PathPrefix
+            value: /api/trust-domain/v1
         - path:
             type: PathPrefix
             value: /public/catalogs

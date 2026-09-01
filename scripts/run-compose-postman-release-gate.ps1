@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Runs the customer Docker Compose topology and its 169-request Postman release gate.
+  Runs the customer Docker Compose topology and its 215-request Postman release gate.
 
 .DESCRIPTION
   This is a non-interactive, fail-closed release gate. Distributed topology
@@ -28,6 +28,10 @@ param(
   [string]$ComposeEnvFile = (Join-Path $PSScriptRoot '..\compose\.env'),
   [string]$PostmanEnvironmentFile = (Join-Path $PSScriptRoot '..\postman\EDK-Enterprise-Deployment.customer.postman_environment.json'),
   [string]$MailpitUrl = '',
+  # The collection that ships with the release under test. Defaults to the maintained one. An
+  # upgrade rehearsal gates the older baseline with the collection that release actually shipped,
+  # because a newer collection exercises routes the older images do not serve.
+  [string]$CollectionPath = '',
   [Parameter(Mandatory = $true, ParameterSetName = 'LicenseSetup')][string]$LicenseBundleZipPath,
   [Parameter(Mandatory = $true, ParameterSetName = 'PreProvisioned')][switch]$PreProvisionedSetup,
   [switch]$AllowMixedSourceFingerprints,
@@ -63,7 +67,11 @@ $behindEdgeComposeTemplate = Join-Path $composeDir 'docker-compose.behind-edge.t
 $behindEdgeStaticTemplate = Join-Path $composeDir 'gateway\traefik\traefik.behind-edge.template.yml'
 $behindEdgeDynamicTemplate = Join-Path $composeDir 'gateway\traefik\dynamic.public-cert.template.yml'
 $edgeRouterTemplate = Join-Path $composeDir 'gateway\traefik\edge-router.template.yml'
-$collectionPath = Join-Path $customerRoot 'postman\EDK-Enterprise-Deployment.postman_collection.json'
+$collectionPath = if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
+    Join-Path $customerRoot 'postman\EDK-Enterprise-Deployment.postman_collection.json'
+} else {
+    [System.IO.Path]::GetFullPath($CollectionPath)
+}
 $snapshotDir = Join-Path $repoRoot 'deploy\edk\e2e\snapshots'
 $runnerPath = Join-Path $repoRoot 'deploy\edk\e2e\runner\run-e2e.js'
 $imageVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-enterprise-image-set.mjs'
@@ -662,7 +670,7 @@ function Write-Plan {
     composeEnvFile = $resolvedComposeEnv
     collection = $collectionPath
     environment = $resolvedPostmanEnvironment
-    requestCount = 169
+    requestCount = 215
     immutableTag = $Tag
     sourceState = $resolvedSourceState
     expectedSource = $ExpectedSource
@@ -803,7 +811,7 @@ if ($Topology -eq 'Monolith') {
 $composeFiles += $selectedGatewayCompose
 $collection = Get-Content -LiteralPath $collectionPath -Raw | ConvertFrom-Json
 $requestCount = Count-Requests @($collection.item)
-if ($requestCount -ne 169) { Fail "Customer collection must contain exactly 169 requests; found $requestCount." }
+if ($requestCount -ne 215) { Fail "Customer collection must contain exactly 215 requests; found $requestCount." }
 if ($AccessMode -eq 'Localtest') {
   $gatewayRules = Get-Content -LiteralPath $gatewayDynamic -Raw
   if ($gatewayRules -notmatch [regex]::Escape("platform.$BaseDomain")) {
@@ -813,7 +821,7 @@ if ($AccessMode -eq 'Localtest') {
 Write-Plan
 
 if ($DryRun) {
-  Write-Host "Dry-run passed: customer $Topology/$AccessMode topology, immutable image plan, and 169-request collection validated."
+  Write-Host "Dry-run passed: customer $Topology/$AccessMode topology, immutable image plan, and 215-request collection validated."
   Write-Host "Plan: $(Join-Path $resolvedReportDir 'release-gate-plan.json')"
   exit 0
 }
@@ -1273,8 +1281,8 @@ try {
     '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
     '--base-domain', $BaseDomain
   ) (Join-Path $resolvedReportDir 'newman.log') $false
-  if ($runnerOutput -notmatch 'E2E finished:\s+169 requests captured,\s+exit code 0\.') {
-    Fail 'Newman did not execute and capture exactly all 169 request executions.'
+  if ($runnerOutput -notmatch 'E2E finished:\s+215 requests captured,\s+exit code 0\.') {
+    Fail 'Newman did not execute and capture exactly all 201 request executions.'
   }
   $junitPath = Join-Path $newmanStageDir 'junit.xml'
   Invoke-LoggedNative $nodeCommand @(
@@ -1435,7 +1443,7 @@ try {
       --teardown-status $teardownStatus `
       --project-name $ProjectName `
       --tag $Tag `
-      --request-count 169 `
+      --request-count 201 `
       --manifest (Join-Path $resolvedReportDir 'evidence-manifest.json') `
       --manifest-hash (Join-Path $resolvedReportDir 'evidence-manifest.sha256')
     $finalizationExit = $LASTEXITCODE

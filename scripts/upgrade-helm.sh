@@ -154,9 +154,9 @@ done
 [[ "$NAMESPACE" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid Kubernetes namespace: $NAMESPACE"
 [[ "$RUNTIME_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid runtime Secret name."
 [[ "$PIPELINE_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid pipeline Secret name."
-if [[ "$IMAGE_TAG" =~ ^0\.25\.0-RC3([._-][A-Za-z0-9][A-Za-z0-9._-]*)?$ ]]; then
+if [[ "$IMAGE_TAG" =~ ^0\.25\.0-RC[34]([._-][A-Za-z0-9][A-Za-z0-9._-]*)?$ ]]; then
   [[ -n "$RELEASE_SET_EVIDENCE" ]] ||
-    die "--release-set-evidence is required for immutable RC3 upgrades."
+    die "--release-set-evidence is required for immutable RC3 and RC4 upgrades."
 fi
 
 require_command helm
@@ -245,6 +245,7 @@ append_unique_file() {
 
 RC1_TO_RC2_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml"
 V0_25_0_RC2_TO_V0_25_0_RC3_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc2-to-0.25.0-rc3-values.yaml"
+V0_25_0_RC3_TO_V0_25_0_RC4_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc3-to-0.25.0-rc4-values.yaml"
 
 # Resolve the currently installed immutable image tag before rendering. Known
 # release transitions are selected automatically. Compatibility overlays are
@@ -263,7 +264,8 @@ if [[ -n "$INSTALLED_IMAGE_TAG" && -n "$IMAGE_TAG" ]]; then
     "$INSTALLED_IMAGE_TAG" \
     "$IMAGE_TAG" \
     "$(absolute_file "$RC1_TO_RC2_VALUES")" \
-    "$(absolute_file "$V0_25_0_RC2_TO_V0_25_0_RC3_VALUES")"; then
+    "$(absolute_file "$V0_25_0_RC2_TO_V0_25_0_RC3_VALUES")" \
+    "$(absolute_file "$V0_25_0_RC3_TO_V0_25_0_RC4_VALUES")"; then
     die "Refusing unsupported release downgrade: $INSTALLED_IMAGE_TAG -> $IMAGE_TAG"
   fi
   AUTO_MIGRATION_VALUE_FILES=("${EDK_AUTO_MIGRATION_VALUE_FILES[@]}")

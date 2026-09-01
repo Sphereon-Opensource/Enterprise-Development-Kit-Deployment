@@ -121,6 +121,9 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+      # initdb runs the same script as postgres while the healthcheck runs it as root. Holding
+      # the first probe back until initdb has finished keeps the two out of each other's way.
+      start_period: 20s
 
   tenant-postgres:
     image: postgres:16-alpine
@@ -143,6 +146,9 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+      # Same reason as platform-postgres: the healthcheck and initdb run this script as
+      # different users, so let initdb settle before the first probe.
+      start_period: 20s
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.96.0

@@ -63,7 +63,7 @@ resources, such as an existing AWS KMS or Azure Key Vault key. Enable such a
 folder only after its provider, aliases, key identifiers, and public
 certificate material have been configured for the target tenant.
 
-The maintained collection contains 169 requests. Its authorization-server
+The maintained collection contains 215 requests. Its authorization-server
 segment covers hosted and external UUID resources, discovery validation and
 refresh, lifecycle and tenant-isolation failures, public and confidential
 clients with secret redaction, identities, federation-binding validation and

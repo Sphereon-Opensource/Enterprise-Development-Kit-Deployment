@@ -14,6 +14,7 @@ edk_release_number() {
     # while the final canonical tag is still reserved. Treat only delimited RC3
     # suffixes as RC3; RC1/RC2 retain their exact-match behavior.
     0.25.0-RC3|0.25.0-RC3[-._]*) printf '3\n' ;;
+    0.25.0-RC4|0.25.0-RC4[-._]*) printf '4\n' ;;
     *) printf '0\n' ;;
   esac
 }
@@ -31,6 +32,7 @@ edk_plan_known_upgrade_path() {
   local target_tag="$2"
   local rc1_to_rc2_values="$3"
   local v0_25_0_rc2_to_v0_25_0_rc3_values="$4"
+  local v0_25_0_rc3_to_v0_25_0_rc4_values="${5:-}"
   local installed_release_number target_release_number
 
   EDK_AUTO_MIGRATION_VALUE_FILES=()
@@ -55,6 +57,10 @@ edk_plan_known_upgrade_path() {
   fi
   if [[ "$installed_release_number" -gt 0 && "$target_release_number" -ge 3 ]]; then
     EDK_AUTO_MIGRATION_VALUE_FILES+=("$v0_25_0_rc2_to_v0_25_0_rc3_values")
+  fi
+  if [[ -n "$v0_25_0_rc3_to_v0_25_0_rc4_values" &&
+        "$installed_release_number" -gt 0 && "$target_release_number" -ge 4 ]]; then
+    EDK_AUTO_MIGRATION_VALUE_FILES+=("$v0_25_0_rc3_to_v0_25_0_rc4_values")
   fi
   if [[ "$installed_release_number" == "1" && "$target_release_number" -ge 3 ]]; then
     EDK_INTERMEDIATE_IMAGE_TAG="0.25.0-RC2"
