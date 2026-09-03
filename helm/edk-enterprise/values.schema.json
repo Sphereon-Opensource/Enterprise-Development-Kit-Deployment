@@ -390,7 +390,8 @@
             "issuer": { "type": "string" },
             "verifier": { "type": "string" },
             "wallet-unit": { "type": "string" },
-            "wallet-interaction": { "type": "string" }
+            "wallet-interaction": { "type": "string" },
+            "wallet-onboarding": { "type": "string" }
           }
         },
         "keys": {
@@ -957,9 +958,9 @@
     "services": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "issuer", "verifier"],
-      "patternProperties": {
-        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|issuer|verifier|admin-console|admin-console-tenant|business-wallet)$": {
+          "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "wallet-onboarding", "issuer", "verifier"],
+          "patternProperties": {
+        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|wallet-onboarding|issuer|verifier|admin-console|admin-console-tenant|business-wallet)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {

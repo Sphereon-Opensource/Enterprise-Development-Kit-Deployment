@@ -1,0 +1,109 @@
+{
+  "realm": "edk",
+  "displayName": "EDK external identity provider (e2e)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "wallet-user",
+        "description": "Federated wallet user admitted to the tenant authorization server"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "edk-tenant-as",
+      "name": "EDK tenant authorization server",
+      "description": "Confidential client the tenant AS uses when it federates login to this realm.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "edk-tenant-as-local-only-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": true,
+      "rootUrl": "http://enterprise-tenant-as:18083",
+      "redirectUris": [
+        "http://enterprise-tenant-as:18083/federation/callback",
+        "http://enterprise-tenant-as:18083/*",
+        "http://localhost:18083/federation/callback",
+        "http://localhost:18083/*",
+        "https://platform.saas.localtest.me/federation/callback",
+        "https://platform.saas.localtest.me/*",
+        "https://acme.saas.localtest.me/federation/callback",
+        "https://acme.saas.localtest.me/*",
+        "https://globex.saas.localtest.me/federation/callback",
+        "https://globex.saas.localtest.me/*",
+        "https://initech.saas.localtest.me/federation/callback",
+        "https://initech.saas.localtest.me/*",
+        "https://contoso.saas.localtest.me/federation/callback",
+        "https://contoso.saas.localtest.me/*"
+      ],
+      "webOrigins": [
+        "http://enterprise-tenant-as:18083",
+        "http://localhost:18083",
+        "https://platform.saas.localtest.me",
+        "https://acme.saas.localtest.me",
+        "https://globex.saas.localtest.me",
+        "https://initech.saas.localtest.me",
+        "https://contoso.saas.localtest.me"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "",
+        "post.logout.redirect.uris": "+",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["offline_access"],
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "wallet-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "wallet-user@edk.localtest.me",
+      "firstName": "Wallet",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "wallet-user-password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["wallet-user"],
+      "requiredActions": []
+    }
+  ]
+}

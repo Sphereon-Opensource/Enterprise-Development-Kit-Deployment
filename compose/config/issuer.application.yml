@@ -14,6 +14,9 @@ server:
       # during tenant onboarding, not deployment-time URLs.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      # Internal JWKS fetch base for dynamic tenant AS issuers; persisted tenant
+      # and AS identities plus the public issuer path are appended during validation.
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       expected-audience: enterprise-issuer
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
       anonymous-path-prefixes: /oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers

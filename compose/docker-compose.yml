@@ -231,6 +231,9 @@ services:
       GRPC_PORT: "9090"
       TRANSPORT_AUTH_EXPECTED_AUDIENCE: enterprise-platform
       SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE: enterprise-platform
+      AUTHORIZATION_SERVER_MIGRATION_RESUME_FAILED: ${AUTHORIZATION_SERVER_MIGRATION_RESUME_FAILED:-false}
+      TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST: enterprise-tenant-kms
+      TENANT_KMS_AUTHORITY_BOOTSTRAP_PORT: "9090"
     volumes:
       - ./config/platform.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
@@ -514,6 +517,8 @@ services:
     environment:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: TENANT
+      ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1
       ADMIN_CONSOLE_TENANT_CONTEXT_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1/admin-console-context
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED

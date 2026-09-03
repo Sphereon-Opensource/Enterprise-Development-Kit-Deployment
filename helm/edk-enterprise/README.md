@@ -111,6 +111,7 @@ kubectl --namespace edk create secret generic edk-runtime-secrets `
   --from-literal=verifier-service-client-secret='<independent-secret>' `
   --from-literal=wallet-unit-service-client-secret='<independent-secret>' `
   --from-literal=wallet-interaction-service-client-secret='<independent-secret>' `
+  --from-literal=wallet-onboarding-service-client-secret='<independent-secret>' `
   --from-literal=trust-domain-service-client-secret='<independent-secret>' `
   --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' `
   --from-literal=keystore-password='<long-random-pkcs12-password>'
@@ -144,6 +145,7 @@ serviceIdentity:
     verifier: verifier-service-client-secret
     wallet-unit: wallet-unit-service-client-secret
     wallet-interaction: wallet-interaction-service-client-secret
+    wallet-onboarding: wallet-onboarding-service-client-secret
     trust-domain-identifier: trust-domain-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
@@ -206,7 +208,7 @@ fails chart render.
 | `email.allowedPrivateDestinations` | `""` | Comma-separated reviewed private SMTP relay `host:port` pairs. Empty retains the public-unicast-only runtime default; loopback is always rejected. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
-| `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, and renders gRPC peer endpoints for routed calls to those receivers. |
+| `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, plus the optional in-chart wallet-onboarding service, and renders gRPC peer endpoints for routed calls to those receivers. |
 | `config.providers.platformConfigRemote.enabled` | `true` | Enables platform-owned remote config reads for every satellite/workload service. |
 | `config.providers.tenantConfigDb.enabled` | `false` | Disables direct tenant-config DB reads on satellites so platform remains the config authority. |
 | `issuerPipeline.existingSecret` | `""` | Required Secret name for issuer pipeline encryption and blind-index keys. |
@@ -253,7 +255,7 @@ either topology.
 
 ## Service Values
 
-Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `wallet-unit`, `wallet-interaction`, `issuer`, `verifier`, or `admin-console`.
+Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `wallet-unit`, `wallet-interaction`, `wallet-onboarding`, `issuer`, `verifier`, or `admin-console`.
 
 | Value | Purpose |
 | --- | --- |
@@ -276,14 +278,19 @@ Default backing components:
 | `tenant-as` | `true` | `enterprise-tenant-as` | Tenant OAuth2 authorization server behind the tenant gateway |
 | `wallet-unit` | `true` | `enterprise-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
 | `wallet-interaction` | `true` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
+| `wallet-onboarding` | `false` | `enterprise-wallet-onboarding` | Managed wallet IDV, profile activation, readiness, and wallet-unit provisioning |
 | `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
 | `admin-console` | `true` | `admin-console` | Platform operator UI on the platform host |
 | `admin-console-tenant` | `true` | `admin-console` | Tenant-only UI and testing console on registered tenant hosts |
 
 Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
-wallet-unit, wallet-interaction, issuer, and verifier remain backing workloads
-behind `platform.<baseDomain>` and `<tenant>.<baseDomain>` host/path routes.
+wallet-unit, wallet-interaction, wallet-onboarding, issuer, and verifier remain
+backing workloads behind `platform.<baseDomain>` and `<tenant>.<baseDomain>`
+host/path routes. Enable `wallet-onboarding` together with wallet-unit and
+wallet-interaction when the managed-wallet profile is hosted in this release;
+the default keeps it disabled for installations that use an external onboarding
+provider. The edge browser frontend remains a separately deployed client.
 Kubernetes uses the workload health endpoints inside the cluster. Do not
 publish those endpoints as customer routes.
 
@@ -338,6 +345,7 @@ The chart renders this fixed registration matrix:
 | issuer | `clientIds.issuer` / `serviceIds.issuer` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-tenant-as` |
 | verifier | `clientIds.verifier` / `serviceIds.verifier` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-wallet-interaction` |
 | wallet-interaction | `clientIds.wallet-interaction` / `serviceIds.wallet-interaction` | `enterprise-platform` | `enterprise-wallet-unit` |
+| wallet-onboarding | `clientIds.wallet-onboarding` / `serviceIds.wallet-onboarding` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-wallet-unit`, `service-email` |
 
 An audience-free client-credentials request is valid only when its default is
 nonblank. Exactly one requested audience is valid only when it equals the

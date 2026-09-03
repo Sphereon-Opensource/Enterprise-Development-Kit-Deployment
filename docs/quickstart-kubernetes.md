@@ -166,6 +166,132 @@ directory. If either stage fails, the script scales the release to zero and
 stops without rolling application pods back. Restore both database snapshots
 before running an explicit Helm rollback or retry.
 
+## Upgrading from 0.25.0-RC3 to 0.25.0-RC4
+
+RC4 replaces the single `serviceIdentity.internalClientExistingSecret` key with
+one client-secret key per satellite role, adds a dedicated
+`federationSessionEncryption` key, and adds a third secret-management database
+role. It also corrects the public ingress path lists for `platform`, `did`,
+`issuer`, and `tenant-as`, and removes the `/api/trust-domain/v1` path that the
+RC2-to-RC3 overlay advertised on `tenant-as` without a serving module behind
+it. Provision the two manual prerequisites below before running the wrapper.
+
+```bash
+bash ./scripts/upgrade-helm.sh \
+  --release <your-release> \
+  --namespace <your-namespace> \
+  --values ./customer-values.yaml \
+  --image-tag 0.25.0-RC4 \
+  --release-set-evidence ./enterprise-image-set.json \
+  --tenant-host <existing-rc3-tenant-host>
+```
+
+`--release-set-evidence` is required: the wrapper refuses immutable RC3 and
+RC4 tags without it (`--release-set-evidence is required for immutable RC3 and
+RC4 upgrades.`). Obtain `enterprise-image-set.json` with the RC4 release and
+pass the file as delivered; it must bind the requested tag to all seven
+default images with immutable content and provenance.
+
+The wrapper detects the installed RC3 tag and applies the bundled
+`0.25.0-rc3-to-0.25.0-rc4-values.yaml` overlay after your maintained values, on
+top of the earlier RC1-to-RC2 and RC2-to-RC3 overlays applied cumulatively.
+Keeping the earlier overlays is intentional, for the same reason as the RC3
+upgrade above. Do not copy the transition values into the maintained site
+values file.
+
+### Runtime Secret keys
+
+Recreate or update the runtime Secret with one key per satellite role instead
+of the single `internal-client-secret` key. The chart no longer reads
+`internal-client-secret`; Helm fails if `internalClientSecretKey` is still
+set. The default `serviceIdentity.clientSecretKeys` values are:
+
+- `kms-service-client-secret`
+- `tenant-as-service-client-secret`
+- `did-service-client-secret`
+- `blob-service-client-secret`
+- `issuer-service-client-secret`
+- `verifier-service-client-secret`
+- `wallet-unit-service-client-secret`
+- `wallet-interaction-service-client-secret`
+- `trust-domain-service-client-secret`
+
+Add a `federation-session-encryption-key` entry for
+`federationSessionEncryption.key`. Nothing creates these keys on an upgrade:
+add them to the existing Secret yourself. Generate every value independently;
+none of them may reuse the retired `internal-client-secret` value, and the key
+names above may all be renamed in your values overlay as long as
+`serviceIdentity.clientSecretKeys` and `federationSessionEncryption.key` point
+at the keys you chose.
+
+### Secret-management database role
+
+RC4 adds a `runtime-password` key to the secret-management database Secret and
+requires the `secret_management_runtime` PostgreSQL role in both the platform
+database and the tenant database. The database init script that creates this
+role only runs against an empty data directory, so an existing installation
+must create the role by hand before upgrading, in both databases, as the
+bootstrap superuser:
+
+```sql
+CREATE ROLE secret_management_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD '<runtime-password>';
+GRANT CONNECT ON DATABASE <db> TO secret_management_runtime;
+GRANT USAGE ON SCHEMA public TO secret_management_runtime;
+```
+
+Use the same generated password on both databases and store it under the
+`runtime-password` key of the Secret referenced by
+`database.secretManagement.existingSecret`, alongside the existing
+`admin-password` and `tenant-password` keys. Grant all three roles `USAGE` on
+the target schema only; do not grant `CREATE`, ownership, role membership,
+superuser, or `BYPASSRLS`.
+
+### Secret-authority public keys
+
+The platform mounts one assertion public key per workload listed under
+`secretAuthority.keys.assertionPublicKeys`, whether or not that workload is
+deployed. RC4 lists `service-blob` and `service-wallet-onboarding`, which an RC3
+platform Secret does not carry, so the platform pod fails to mount its
+secret-authority volume with `references non-existent secret key` until they
+exist. Generate a key pair for each missing workload with
+`scripts/generate-secret-authority-keys.sh` and add the public key to the
+Secret named by `secretAuthority.existingSecrets.platform` under the key the
+chart lists (for example `service-wallet-onboarding-assertion.pub.pem`). Keep
+the private half only if you deploy that workload.
+
+### Business wallet
+
+RC4 enables `services.business-wallet` by default, and the upgrade overlay
+does not change that, so the upgrade adds a business-wallet Deployment pulling
+the `business-wallet` image at your release tag. Set
+`services.business-wallet.enabled: false` in your values if you do not deploy
+the business wallet.
+
+### OID4VCI issuer identifier
+
+Each tenant's OID4VCI credential issuer identifier becomes
+`https://<tenant-host>/oid4vci/<tenant>`, not the bare tenant origin. Existing
+credential configuration carries over automatically at the first platform
+start after the upgrade. Wallets and relying parties that hold the old
+identifier must be onboarded again with a new credential offer.
+
+### Authorization-server migration resume
+
+If the platform refuses to start with a message beginning
+`Authorization-server migration source previously failed`, set
+`platform.authorizationServerMigrationResumeFailed: true` in your values for
+one upgrade, then set it back to `false`. Do not change `oauth2.servers.*`
+configuration between the failed start and the retry. A migration that fails
+only during planning retries on its own and does not need the flag.
+
+After the rollout, verify both an existing RC3 tenant and a newly created
+tenant:
+
+- `https://<existing-rc3-tenant-host>/.well-known/openid-credential-issuer`
+  returns 200 with `credential_issuer` ending in `/oid4vci/<tenant>`
+- `https://<existing-rc3-tenant-host>/.well-known/did.json`
+- create a new tenant and verify the same two endpoints for its host
+
 ## 1. Create the namespace and pull secret
 
 ```bash

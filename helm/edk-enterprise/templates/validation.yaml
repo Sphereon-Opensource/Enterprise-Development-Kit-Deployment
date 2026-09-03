@@ -10,6 +10,10 @@
 {{- include "edk-enterprise.validateRuntimeDependencies" . -}}
 {{- if eq (include "edk-enterprise.topologyMode" .) "distributed" -}}
 {{- $expectedSecretActors := list (index .Values.serviceIdentity.clientIds "tenant-as") (index .Values.serviceIdentity.clientIds "issuer") (index .Values.serviceIdentity.clientIds "tenant-kms") (index .Values.serviceIdentity.clientIds "did") (index .Values.serviceIdentity.clientIds "blob") (index .Values.serviceIdentity.clientIds "verifier") | sortAlpha -}}
+{{- if (index .Values.services "wallet-unit").enabled }}{{- $expectedSecretActors = append $expectedSecretActors (index .Values.serviceIdentity.clientIds "wallet-unit") -}}{{- end -}}
+{{- if (index .Values.services "wallet-interaction").enabled }}{{- $expectedSecretActors = append $expectedSecretActors (index .Values.serviceIdentity.clientIds "wallet-interaction") -}}{{- end -}}
+{{- if eq (include "edk-enterprise.walletOnboardingServiceEnabled" .) "true" }}{{- $expectedSecretActors = append $expectedSecretActors (index .Values.serviceIdentity.clientIds "wallet-onboarding") -}}{{- end -}}
+{{- $expectedSecretActors = $expectedSecretActors | sortAlpha -}}
 {{- $configuredSecretActors := .Values.secretManagement.internalResolution.allowedServiceActors | sortAlpha -}}
 {{- if ne (join "," $configuredSecretActors) (join "," $expectedSecretActors) -}}
 {{- fail "secretManagement.internalResolution.allowedServiceActors must exactly match the standard signed opaque-secret workload clients" -}}

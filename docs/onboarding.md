@@ -254,15 +254,20 @@ issuance and verification examples. Import these files into Postman:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-The supplied collection starts after platform setup. Run its 110 requests in
+The supplied collection starts after platform setup. Run its 284 requests in
 folder order:
 
 | Folder | What it does |
 | --- | --- |
 | `00 Before You Start` | Checks the imported environment and gateway contract before authenticated requests |
-| `02 Operator Sign-in` | Signs in as the operator and exchanges the authorization code for an operator token |
-| `03 Tenant Onboarding` | Registers the tenant, waits for onboarding completion, and verifies tenant public endpoint bindings |
-| `04 Tenant Federation` through `15 Authorization Code Offer` | Configure and exercise tenant federation, the disposable SOFTWARE KMS create/write/validate/rotate/detach/retire lifecycle, DID, issuance, status-list, DCQL, and verification examples |
+| `02 Operator Token` | Obtains the operator token with the client_credentials grant of the confidential operator client that the setup script registered |
+| `03 Tenant Onboarding` | Registers the tenant, waits for onboarding completion, verifies tenant public endpoint bindings, and registers the tenant service client on the tenant authorization server |
+| `03b Subtenants` | Registers a two-level tenant hierarchy, lists the children at both levels, reconciles registration rows, and gives the deepest subtenant its own service client, issuer and issued credential |
+| `04 Tenant Federation` through `08 Credential Designs` | Configure tenant federation, the disposable SOFTWARE KMS create/write/validate/rotate/detach/retire lifecycle, DID, issuer settings and credential designs |
+| `09 Status Lists` | The JWT list, then `09b CWT mdoc` for the CWT-signed mdoc list, `09c Bitstring VCDM` for the two-bit bitstring list with revocation and suspension, and `09d Shared list` for one list shared by two credential configurations and two issuer instances |
+| `10 Hosted Branding Verification` through `11a OID4VCI Pre-authorized Transaction Code` | Hosted branding, SD-JWT and mdoc issuance, and the pre-authorized transaction-code flow |
+| `11b VCDM 1.1` and `11c VCDM 2.0` | Issue W3C VC-JWT credentials in both VCDM versions and check the `BitstringStatusListEntry` status entry each one carries |
+| `12 Issue Credentials Pipeline` through `15 Authorization Code Offer` | Pipeline issuance, DCQL, verification and the authorization-code offer examples |
 
 ## After onboarding
 

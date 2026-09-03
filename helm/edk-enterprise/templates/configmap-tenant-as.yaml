@@ -38,12 +38,22 @@ data:
       providers:
         platform-config-remote:
           bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles
+    server:
+      rest:
+        auth:
+          # Keep the public platform issuer in token `iss`, but fetch its
+          # signing keys over release-local service DNS.
+          platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
+          platform-jwks-uri: {{ printf "http://%s:%v/.well-known/jwks.json" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          # Hosted-AS issuers include a tenant path. The validator preserves
+          # it after prefixing persisted tenant/AS identities on the internal
+          # JWKS bridge; the public issuer remains the JWT `iss` value.
+          self-jwks-base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
     {{- if .Values.serviceIdentity.internalClientExistingSecret }}
     # The tenant AS reaches tenant-kms with a tenant-bound workload client.
     # Tokens are still minted at the platform AS to avoid the signing -> KMS ->
     # token-mint recursion, but the active customer AS selects the matching
     # authorization-server client that platform onboarding registered.
-    server:
       service-identity:
         token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
         token-endpoint-allow-http: true

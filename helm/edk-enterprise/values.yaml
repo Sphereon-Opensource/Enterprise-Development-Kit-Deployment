@@ -24,7 +24,8 @@ topology:
   mode: distributed
 
 # External product integrations the chart wires (HttpRoute / STS / console BASE_URL)
-# but does not deploy. Wallet images stay outside edk-enterprise.
+# but does not deploy. The managed-wallet onboarding service defaults to this
+# external mode; set services.wallet-onboarding.enabled=true to host it in-chart.
 integrations:
   walletOnboarding:
     enabled: false
@@ -230,6 +231,7 @@ secretAuthority:
     verifier: ""
     wallet-unit: ""
     wallet-interaction: ""
+    wallet-onboarding: ""
   keys:
     centralPermitSigningKey: central-permit-signing-key
     centralAssertionVerificationKeys: central-assertion-verification-keys
@@ -260,9 +262,9 @@ auth:
 
 grpc:
   # Platform, tenant KMS, wallet-unit, and wallet-interaction carry the gRPC
-  # server transport. External wallet-onboarding (integrations.walletOnboarding)
-  # also receives gRPC when deployed outside this chart. Other services use
-  # routed command clients.
+  # server transport. The optional in-chart wallet-onboarding service and an
+  # external wallet-onboarding integration also receive gRPC when enabled.
+  # Other services use routed command clients.
   enabled: true
   port: 9090
   # service-jwt is application JWT on plaintext gRPC; it is not mTLS.
@@ -344,6 +346,8 @@ platform:
   # action pages run on tenant subdomains, so list their exact HTTPS origins.
   # An unrestricted wildcard origin is deliberately not implied.
   corsOrigins: []
+  # true lets the platform resume authorization-server migration sources that failed on an earlier start.
+  authorizationServerMigrationResumeFailed: false
   setup:
     licenseRequest:
       # KMS material defaults used when creating the installation-bound license
@@ -475,7 +479,7 @@ serviceIdentity:
   # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
     platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**,/public/catalogs"
-    tenant-as: "/as,/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect,/account-action,/api/account-actions"
+    tenant-as: "/as,/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/internal/jwks,/introspect,/account-action,/api/account-actions"
     tenant-kms: ""
     did: "/.well-known"
     blob: "/public/assets"
@@ -965,6 +969,47 @@ services:
     env:
       - name: WALLET_INTERACTION_KEYSTORE_ROOT
         value: /keystore
+
+  # Optional managed-wallet onboarding satellite. Enable this together with
+  # wallet-unit and wallet-interaction for a self-contained edge-wallet backend.
+  # The activation and readiness values are deliberately supplied by the
+  # deployment profile/operator through env; the chart never invents production
+  # attestation evidence or release readiness.
+  wallet-onboarding:
+    enabled: false
+    image: enterprise-wallet-onboarding
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: false
+      className: ""
+      host: ""
+      paths: []
+      annotations: {}
+    internalIngress:
+      enabled: false
+      className: internal
+      host: ""
+      paths: []
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 768Mi
+      limits:
+        cpu: "1"
+        memory: 1536Mi
+    env:
+      - name: WALLET_ACTIVATION_PROFILE
+        # The chart's explicit local profile is suitable for development only.
+        # Production must replace it and supply the corresponding evidence.
+        value: development-email-software-wscd
+      - name: WALLET_MANAGED_READINESS_DEPENDENCY_RECORDS
+        value: "[]"
+      - name: WALLET_MANAGED_READINESS_RELEASE_EVIDENCE_RECORDS
+        value: "[]"
+      - name: WALLET_MANAGED_READINESS_RELEASE_SIGNING_KEYS
+        value: "[]"
 
   issuer:
     enabled: true

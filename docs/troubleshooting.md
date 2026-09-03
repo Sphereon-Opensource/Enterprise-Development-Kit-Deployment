@@ -327,6 +327,7 @@ tenant runtime instances. If it does not load or you cannot sign in:
 - Browser tenant resource requests fail under `/admin-console/api/*`. The
   admin-console BFF cannot resolve runtime-config services or exchange a tenant
   service token. Confirm the container has `ADMIN_CONSOLE_PLATFORM_BASE_URL`
+  (platform console) or `ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL` (tenant console)
   pointing at the internal platform service, and has the server-side tenant
   upstreams (`ADMIN_CONSOLE_TENANT_DID_BASE_URL`, `ADMIN_CONSOLE_ISSUER_BASE_URL`,
   `ADMIN_CONSOLE_VERIFIER_BASE_URL`) pointing at the internal REST services.

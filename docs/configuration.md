@@ -683,7 +683,7 @@ server public origins. Browser resource API calls stay same-origin through
 | Variable | Value | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_BASE_PATH` | `/admin-console` | The path prefix the app is served under. The app owns the prefix and emits assets at `/admin-console/_next/...`. |
-| `ADMIN_CONSOLE_PLATFORM_BASE_URL` | Internal platform upstream URL | Server-side platform base used by the BFF for setup-status, runtime-config bootstrap lookups, platform-admin, platform-config, and token exchange. |
+| `ADMIN_CONSOLE_PLATFORM_BASE_URL` | Internal platform upstream URL | Server-side platform base used by the BFF for setup-status, runtime-config bootstrap lookups, platform-admin, platform-config, and token exchange. Platform console only; the tenant console receives the narrow `ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL` instead and resolves the rest from runtime bootstrap. |
 | `ADMIN_CONSOLE_PUBLIC_ORIGIN` | `https://platform.<base-domain>` | Canonical operator host; the complete console is served only for this origin. |
 | `ADMIN_CONSOLE_TRUSTED_INGRESS_MODE` / `ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS` | `X_FORWARDED` / `1` | Select exactly one trusted gateway hop for the untrusted instance-origin candidate. |
 | `ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS` | Exact internal platform origin | Server-only exception for the configured in-cluster HTTP platform service; wildcards, paths, credentials, and arbitrary HTTP origins are rejected. |

@@ -54,7 +54,7 @@ data:
           {{- if (index .Values.services "wallet-interaction").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
           {{- end }}
-          {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") }}
+          {{- if (eq (include "edk-enterprise.walletOnboardingEnabled" .) "true") }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-onboarding" | quote }}
           {{- end }}
         service_client_bindings:
@@ -66,7 +66,7 @@ data:
           {{- if (index .Values.services "wallet-interaction").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
           {{- end }}
-          {{- if (eq (include "edk-enterprise.walletOnboardingIntegrationEnabled" .) "true") }}
+          {{- if (eq (include "edk-enterprise.walletOnboardingEnabled" .) "true") }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-onboarding" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-onboarding" | quote }}
           {{- end }}
     # Tenant configuration routes platform-side KMS commands to SERVER. This

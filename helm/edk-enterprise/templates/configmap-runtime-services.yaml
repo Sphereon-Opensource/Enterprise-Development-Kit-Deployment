@@ -625,3 +625,25 @@ data:
             signing-key-id: wallet-interaction-holder-signing
             signing-algorithm: ES256
 {{- end }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "wallet-onboarding").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-wallet-onboarding-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wallet-onboarding
+data:
+  application.yml: |
+    # This source file is the same reviewed runtime contract shipped in the
+    # native wallet-onboarding image. Endpoint substitutions bind it to the
+    # release-local Services while keeping tenant and activation policy keys
+    # explicit and auditable.
+{{ $walletOnboardingConfig := .Files.Get "files/wallet-onboarding.application.yml" -}}
+{{- $walletOnboardingConfig = replace "grpc://enterprise-platform:9090" (printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port) $walletOnboardingConfig -}}
+{{- $walletOnboardingConfig = replace "grpc://enterprise-tenant-kms:9090" (printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port) $walletOnboardingConfig -}}
+{{- $walletOnboardingConfig = replace "grpc://enterprise-wallet-unit:9090" (printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-unit")) .Values.grpc.port) $walletOnboardingConfig -}}
+{{- $walletOnboardingConfig = replace "http://enterprise-platform:18080" (printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (index .Values.services "platform").restPort) $walletOnboardingConfig -}}
+{{ $walletOnboardingConfig | indent 4 }}
+---
+{{- end }}

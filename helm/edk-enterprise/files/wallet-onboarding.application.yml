@@ -1,0 +1,508 @@
+"server.rest.auth.enabled": true
+"server.rest.anonymous.allowed": false
+"server.rest.anonymous.allowed.paths": "/health,/health/**,/ready,/api/wallet-onboarding/v1/idv/email/callback,/wallet/verify"
+"server.rest.tenant.default.id": "default"
+"server.rest.auth.platform-issuer": "${env:EDK_PLATFORM_ISSUER}"
+"server.rest.auth.platform-jwks-uri": "${env:EDK_PLATFORM_JWKS_URI:http://enterprise-platform:18080/.well-known/jwks.json}"
+"server.rest.auth.expected-audience": "enterprise-wallet-onboarding"
+"wallet.browser.session.issuer": "${env:WALLET_BROWSER_SESSION_ISSUER:https://wallet.example.invalid/wallet}"
+"wallet.browser.session.jwks-uri": "${env:WALLET_BROWSER_SESSION_JWKS_URI:http://enterprise-wallet-browser:8080/wallet/.well-known/session-jwks.json}"
+"tenant.resolution.fallback.tenant-id": "${env:TENANT_ID:default}"
+
+server:
+  service-identity:
+    token-endpoint: "${env:PLATFORM_TOKEN_ENDPOINT:http://enterprise-platform:18080/token}"
+    token-endpoint-allow-http: true
+    client-id: "${env:WALLET_ONBOARDING_SERVICE_CLIENT_ID:wallet-onboarding-service}"
+    client-secret: "${env:WALLET_ONBOARDING_SERVICE_CLIENT_SECRET}"
+    # The platform provisions one independent onboarding credential per tenant. Append the
+    # resolved tenant id before selecting its typed credential and requesting service tokens.
+    tenant-bound-client-id: true
+    audience: enterprise-platform
+    # The workload has one deployment-owned client identity. Permit that identity to request
+    # tokens only for the three remote services declared by this application below.
+    allowed-audiences: enterprise-tenant-kms,enterprise-wallet-unit,service-email
+
+rest:
+  enabled: true
+  port: "${env:REST_PORT:8080}"
+  bind: "${env:REST_BIND:0.0.0.0}"
+
+grpc:
+  enabled: true
+  port: "${env:GRPC_PORT:9090}"
+  auth:
+    mode: "${env:GRPC_AUTH_MODE:JWT}"
+  health:
+    check: true
+
+security:
+  workload-trust-policy:
+    service_client_bindings:
+      "[service-wallet-interaction]": wallet-interaction-service
+
+database:
+  app:
+    default:
+      dialect: "postgresql"
+      host: "${env:DATABASE_APP_DEFAULT_HOST:postgres}"
+      port: "${env:DATABASE_APP_DEFAULT_PORT:5432}"
+      database: "${env:DATABASE_APP_DEFAULT_DATABASE:vdx}"
+      username: "${env:DATABASE_APP_DEFAULT_USERNAME:vdx}"
+      password: "${env:DATABASE_APP_DEFAULT_PASSWORD:vdx}"
+    secret-management-admin:
+      dialect: "postgresql"
+      isolation: "shared"
+      host: "${env:DATABASE_APP_DEFAULT_HOST:postgres}"
+      port: 5432
+      database: "${env:DATABASE_APP_DEFAULT_DATABASE:vdx}"
+      username: "secret_management_admin"
+      password: "${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}"
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: "postgresql"
+      isolation: "shared"
+      host: "${env:DATABASE_APP_DEFAULT_HOST:postgres}"
+      port: 5432
+      database: "${env:DATABASE_APP_DEFAULT_DATABASE:vdx}"
+      username: "secret_management_tenant_serving"
+      password: "${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}"
+      pool:
+        dedicated-pool: true
+  tenants:
+    default:
+      dialect: "postgresql"
+      host: "${env:DATABASE_TENANTS_DEFAULT_HOST:postgres}"
+      port: "${env:DATABASE_TENANTS_DEFAULT_PORT:5432}"
+      database: "${env:DATABASE_TENANTS_DEFAULT_DATABASE:vdx}"
+      username: "${env:DATABASE_TENANTS_DEFAULT_USERNAME:vdx}"
+      password: "${env:DATABASE_TENANTS_DEFAULT_PASSWORD:vdx}"
+      isolation: "${env:DATABASE_TENANTS_DEFAULT_ISOLATION:shared}"
+
+# This deployable is a satellite. Tenant routing and tenant-owned runtime configuration are
+# authoritative on enterprise-platform; its local tenant database stores wallet process data only.
+tenant:
+  resolution:
+    remote: true
+    platform:
+      base-domain: "${env:EDK_PLATFORM_BASE_DOMAIN}"
+      subdomain:
+        enabled: true
+    custom-domain:
+      enabled: false
+
+# did:web resolution remains public-first. If public DNS is not reachable from the workload,
+# retry the same document path through the deployment-owned DID service while preserving Host.
+east-west:
+  tenant-did:
+    base-url: "${env:EDK_TENANT_DID_INTERNAL_BASE_URL:http://enterprise-did:8080}"
+
+wallet:
+  entitlement:
+    manifest:
+      signing-key-ref: "${env:WALLET_ENTITLEMENT_MANIFEST_SIGNING_KEY_REF:wallet-entitlement-manifest-signing}"
+      signing-key-provider-id: "${env:WALLET_ENTITLEMENT_MANIFEST_SIGNING_KEY_PROVIDER_ID:}"
+  managed:
+    readiness:
+      dependency-records: '${env:WALLET_MANAGED_READINESS_DEPENDENCY_RECORDS:[]}'
+      release-evidence-records: '${env:WALLET_MANAGED_READINESS_RELEASE_EVIDENCE_RECORDS:[]}'
+      release-signing-keys: '${env:WALLET_MANAGED_READINESS_RELEASE_SIGNING_KEYS:[]}'
+      wallet-unit-health-url: '${env:WALLET_MANAGED_READINESS_WALLET_UNIT_HEALTH_URL:http://enterprise-wallet-unit:8080/health}'
+    onboarding:
+      public-base-url: "${env:WALLET_ONBOARDING_PUBLIC_BASE_URL:https://wallet.example.invalid}"
+      worker:
+        enabled: "${env:WALLET_ONBOARDING_WORKER_ENABLED:true}"
+        poll-interval-millis: "${env:WALLET_ONBOARDING_WORKER_POLL_INTERVAL_MILLIS:1000}"
+        batch-limit: "${env:WALLET_ONBOARDING_WORKER_BATCH_LIMIT:25}"
+        owner: "${env:WALLET_ONBOARDING_WORKER_OWNER:}"
+        tenant-ids: "${env:WALLET_ONBOARDING_WORKER_TENANT_IDS:}"
+    recovery:
+      portable:
+        manifest:
+          signing-key-ref: "${env:WALLET_RECOVERY_MANIFEST_SIGNING_KEY_REF}"
+          signing-key-provider-id: "${env:WALLET_RECOVERY_MANIFEST_SIGNING_KEY_PROVIDER_ID}"
+        tdf-provider-id: "${env:WALLET_RECOVERY_TDF_PROVIDER_ID}"
+        maximum-envelope-bytes: "${env:WALLET_RECOVERY_MAXIMUM_ENVELOPE_BYTES}"
+        maximum-archive-bytes: "${env:WALLET_RECOVERY_MAXIMUM_ARCHIVE_BYTES}"
+        maximum-payload-bytes: "${env:WALLET_RECOVERY_MAXIMUM_PAYLOAD_BYTES}"
+        maximum-object-count: "${env:WALLET_RECOVERY_MAXIMUM_OBJECT_COUNT}"
+
+# Passkey relying-party policy is deployment-owned. VDX-edge terminates public TLS, while this
+# service receives private HTTP; WebAuthn must therefore validate the configured public tenant
+# origin and RP ID rather than its internal container authority.
+enterprise-wallet:
+  activation:
+    # A deployment must opt into either the development browser profile or the production release
+    # profile. Missing/unknown values fail activation; production evidence is never inferred.
+    profile: "${env:WALLET_ACTIVATION_PROFILE}"
+    production:
+      signer:
+        id: "${env:WALLET_ACTIVATION_SIGNER_ID}"
+        issuer: "${env:WALLET_ACTIVATION_SIGNER_ISSUER}"
+        provider-id: "${env:WALLET_ACTIVATION_SIGNER_PROVIDER_ID}"
+        key-id: "${env:WALLET_ACTIVATION_SIGNER_KEY_ID}"
+        algorithm: "${env:WALLET_ACTIVATION_SIGNER_ALGORITHM}"
+        profile: "${env:WALLET_ACTIVATION_SIGNER_PROFILE}"
+        certificate-chain: "${env:WALLET_ACTIVATION_SIGNER_CERTIFICATE_CHAIN}"
+        trust-evidence-ref: "${env:WALLET_ACTIVATION_SIGNER_TRUST_EVIDENCE_REF}"
+      wallet-solution:
+        name: "${env:WALLET_ACTIVATION_SOLUTION_NAME}"
+        version: "${env:WALLET_ACTIVATION_SOLUTION_VERSION}"
+        information-link: "${env:WALLET_ACTIVATION_SOLUTION_INFORMATION_LINK:}"
+        vendor: "${env:WALLET_ACTIVATION_SOLUTION_VENDOR:}"
+        certification-id: "${env:WALLET_ACTIVATION_SOLUTION_CERTIFICATION_ID}"
+        certification-scheme: "${env:WALLET_ACTIVATION_SOLUTION_CERTIFICATION_SCHEME}"
+        assurance-level: "${env:WALLET_ACTIVATION_SOLUTION_ASSURANCE_LEVEL}"
+        certification-issuer: "${env:WALLET_ACTIVATION_SOLUTION_CERTIFICATION_ISSUER}"
+        certification-evidence-ref: "${env:WALLET_ACTIVATION_SOLUTION_CERTIFICATION_EVIDENCE_REF}"
+        valid-from: "${env:WALLET_ACTIVATION_SOLUTION_VALID_FROM:}"
+        valid-until: "${env:WALLET_ACTIVATION_SOLUTION_VALID_UNTIL:}"
+      secure-application:
+        id: "${env:WALLET_ACTIVATION_SECURE_APPLICATION_ID}"
+        version: "${env:WALLET_ACTIVATION_SECURE_APPLICATION_VERSION:}"
+        component-type: "${env:WALLET_ACTIVATION_SECURE_APPLICATION_COMPONENT_TYPE}"
+      secure-device:
+        id: "${env:WALLET_ACTIVATION_SECURE_DEVICE_ID}"
+        provider-id: "${env:WALLET_ACTIVATION_SECURE_DEVICE_PROVIDER_ID}"
+        component-type: "${env:WALLET_ACTIVATION_SECURE_DEVICE_COMPONENT_TYPE}"
+        security-level: "${env:WALLET_ACTIVATION_SECURE_DEVICE_SECURITY_LEVEL}"
+        certification-id: "${env:WALLET_ACTIVATION_SECURE_DEVICE_CERTIFICATION_ID}"
+        certification-scheme: "${env:WALLET_ACTIVATION_SECURE_DEVICE_CERTIFICATION_SCHEME}"
+        assurance-level: "${env:WALLET_ACTIVATION_SECURE_DEVICE_ASSURANCE_LEVEL}"
+        certification-issuer: "${env:WALLET_ACTIVATION_SECURE_DEVICE_CERTIFICATION_ISSUER}"
+        certification-evidence-ref: "${env:WALLET_ACTIVATION_SECURE_DEVICE_CERTIFICATION_EVIDENCE_REF}"
+      keystore:
+        id: "${env:WALLET_ACTIVATION_KEYSTORE_ID}"
+        namespace: "${env:WALLET_ACTIVATION_KEYSTORE_NAMESPACE}"
+        provider-id: "${env:WALLET_ACTIVATION_KEYSTORE_PROVIDER_ID}"
+        security-level: "${env:WALLET_ACTIVATION_KEYSTORE_SECURITY_LEVEL}"
+        component-type: "${env:WALLET_ACTIVATION_KEYSTORE_COMPONENT_TYPE}"
+        private-key-protection-evidence-ref: "${env:WALLET_ACTIVATION_KEYSTORE_PRIVATE_KEY_PROTECTION_EVIDENCE_REF}"
+      private-key:
+        non-exportable: "${env:WALLET_ACTIVATION_PRIVATE_KEY_NON_EXPORTABLE}"
+        user-authentication-protected: "${env:WALLET_ACTIVATION_PRIVATE_KEY_USER_AUTHENTICATION_PROTECTED}"
+        isolation-boundary: "${env:WALLET_ACTIVATION_PRIVATE_KEY_ISOLATION_BOUNDARY}"
+        evidence-ref: "${env:WALLET_ACTIVATION_PRIVATE_KEY_EVIDENCE_REF}"
+      user-authentication:
+        assurance-level: "${env:WALLET_ACTIVATION_USER_AUTHENTICATION_ASSURANCE_LEVEL}"
+        methods: "${env:WALLET_ACTIVATION_USER_AUTHENTICATION_METHODS}"
+        policy-ref: "${env:WALLET_ACTIVATION_USER_AUTHENTICATION_POLICY_REF}"
+        evidence-ref: "${env:WALLET_ACTIVATION_USER_AUTHENTICATION_EVIDENCE_REF}"
+      attested-key:
+        id: "${env:WALLET_ACTIVATION_ATTESTED_KEY_ID}"
+        algorithm: "${env:WALLET_ACTIVATION_ATTESTED_KEY_ALGORITHM}"
+        ref: "${env:WALLET_ACTIVATION_ATTESTED_KEY_REF}"
+        proof-of-possession-ref: "${env:WALLET_ACTIVATION_ATTESTED_KEY_PROOF_OF_POSSESSION_REF}"
+      status:
+        wia-list-ref: "${env:WALLET_ACTIVATION_STATUS_WIA_LIST_REF}"
+        ka-list-ref: "${env:WALLET_ACTIVATION_STATUS_KA_LIST_REF}"
+        issuer: "${env:WALLET_ACTIVATION_STATUS_ISSUER}"
+      wia:
+        audience: "${env:WALLET_ACTIVATION_WIA_AUDIENCE}"
+        ttl-seconds: "${env:WALLET_ACTIVATION_WIA_TTL_SECONDS}"
+      ka:
+        audience: "${env:WALLET_ACTIVATION_KA_AUDIENCE}"
+        ttl-seconds: "${env:WALLET_ACTIVATION_KA_TTL_SECONDS}"
+      consent:
+        processing-purpose: "${env:WALLET_ACTIVATION_CONSENT_PROCESSING_PURPOSE}"
+        data-categories: "${env:WALLET_ACTIVATION_CONSENT_DATA_CATEGORIES}"
+        minimization-policy-ref: "${env:WALLET_ACTIVATION_CONSENT_MINIMIZATION_POLICY_REF}"
+        retention-policy-ref: "${env:WALLET_ACTIVATION_CONSENT_RETENTION_POLICY_REF}"
+  authenticator:
+    web:
+      rp-id: "${env:WALLET_AUTHENTICATOR_WEB_RP_ID}"
+      allowed-origins: "${env:WALLET_AUTHENTICATOR_WEB_ALLOWED_ORIGINS}"
+      expected-origin: "${env:WALLET_AUTHENTICATOR_WEB_EXPECTED_ORIGIN}"
+      attestation-policy: "${env:WALLET_AUTHENTICATOR_WEB_ATTESTATION_POLICY:none}"
+    mobile:
+      rp-id: "${env:WALLET_AUTHENTICATOR_MOBILE_RP_ID}"
+      allowed-origins: "${env:WALLET_AUTHENTICATOR_MOBILE_ALLOWED_ORIGINS}"
+      expected-origin: "${env:WALLET_AUTHENTICATOR_MOBILE_EXPECTED_ORIGIN}"
+      attestation-policy: "${env:WALLET_AUTHENTICATOR_MOBILE_ATTESTATION_POLICY:direct}"
+
+sphereon:
+  service:
+    id: "${env:WALLET_ONBOARDING_SERVICE_ID:service-wallet-onboarding}"
+
+transport:
+  routing:
+    # Deployment topology is owned by this service. Tenant configuration must not
+    # redirect email, wallet-unit, or platform commands into another trust boundary.
+    configScope: APP
+    modules:
+      # Secret-bound outbound authentication must obtain its permit from the central authority.
+      # Reuse the authenticated bootstrap session here so permit issuance cannot recursively
+      # depend on minting the service token whose credential is being authorized.
+      secret:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: false
+      # Tenant routing and authored tenant configuration remain platform-authoritative. Fix this
+      # route at APP scope so tenant-authored configuration cannot redirect the authority call.
+      platform:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
+        services:
+          config:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
+      application:
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
+        services:
+          license:
+            commands:
+              "[application.license.get-effective]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-platform:9090
+                timeoutMs: 5000
+      email:
+        serviceTokenAudience: service-email
+        preferServiceTokenOverSessionBearer: true
+        services:
+          service:
+            commands:
+              "[email.service.send]":
+                target: "SERVER"
+                transport: "HTTP"
+                endpoint: http://service-email:8080
+                timeoutMs: 15000
+              "[email.service.send-templated]":
+                target: "SERVER"
+                transport: "HTTP"
+                endpoint: http://service-email:8080
+                timeoutMs: 15000
+              "[email.service.is-available]":
+                target: "SERVER"
+                transport: "HTTP"
+                endpoint: http://service-email:8080
+                timeoutMs: 5000
+      # Identifier protection and entitlement signing are server-side, but this satellite owns no
+      # tenant key material. Route the key lifecycle, typed leaf wrap/unwrap, MAC, encryption, and
+      # only the exact raw-signature command used by the internally constructed entitlement JWS to
+      # tenant-KMS. APP scope prevents tenant configuration from redirecting them.
+      kms:
+        serviceTokenAudience: enterprise-tenant-kms
+        preferServiceTokenOverSessionBearer: true
+        services:
+          key: &tenantKmsGrpcRoute
+            target: "SERVER"
+            transport: "GRPC"
+            endpoint: grpc://enterprise-tenant-kms:9090
+          leaf: *tenantKmsGrpcRoute
+          signature:
+            commands:
+              "[kms.signature.create]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: "grpc://enterprise-tenant-kms:9090"
+          mac: *tenantKmsGrpcRoute
+          encryption: *tenantKmsGrpcRoute
+      # The tenant-facing Unit workload owns managed-wallet lifecycle changes. Normal
+      # wallet lifecycle commands remain local by default; these explicit workload-only
+      # boundaries are the only lifecycle mutations deployed remotely here.
+      wallet:
+        services:
+          unit:
+            commands:
+              "[wallet.unit.get]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.unit.list]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.party-binding.bind]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.identity-party-binding.bind]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.party-binding.get]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.party-binding.list]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+          # Passkey registration is owned by the Unit workload as well.  The
+          # onboarding worker creates the ceremony and verifies its result,
+          # but it must never resolve these commands against its excluded
+          # local command graph.
+          "[passkey]":
+            commands:
+              "[wallet.passkey.begin-registration]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: "grpc://enterprise-wallet-unit:9090"
+                timeoutMs: 30000
+                serviceTokenAudience: "enterprise-wallet-unit"
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.passkey.finish-registration]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: "grpc://enterprise-wallet-unit:9090"
+                timeoutMs: 30000
+                serviceTokenAudience: "enterprise-wallet-unit"
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.passkey.get-credential]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: "grpc://enterprise-wallet-unit:9090"
+                timeoutMs: 30000
+                serviceTokenAudience: "enterprise-wallet-unit"
+                preferServiceTokenOverSessionBearer: true
+          # The routing resolver derives the service key from the second command-id segment.
+          # Keep party-binding commands in their own service maps so they cannot fall back to a
+          # local implementation when the onboarding graph deliberately excludes wallet storage.
+          "[party-binding]":
+            commands:
+              "[wallet.party-binding.bind]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.party-binding.get]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[wallet.party-binding.list]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+          "[identity-party-binding]":
+            commands:
+              "[wallet.identity-party-binding.bind]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+      "[managed-wallet]":
+        services:
+          "[activation-assurance]":
+            commands:
+              "[managed-wallet.activation-assurance.record]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+          unit:
+            commands:
+              "[managed-wallet.unit.ensure-operational]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[managed-wallet.unit.validate]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+              "[managed-wallet.unit.compensate]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+                serviceTokenAudience: enterprise-wallet-unit
+                preferServiceTokenOverSessionBearer: true
+      "[enterprise-wallet]":
+        serviceTokenAudience: enterprise-wallet-unit
+        preferServiceTokenOverSessionBearer: true
+        services:
+          "[wscd-content]":
+            commands:
+              "[enterprise-wallet.wscd-content.ensure-key]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+              "[enterprise-wallet.wscd-content.protect]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+              "[enterprise-wallet.wscd-content.open]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+              "[enterprise-wallet.wscd-content.rewrap]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+              "[enterprise-wallet.backup.health]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+              "[wallet.backup.record-credential-deletion]":
+                target: "SERVER"
+                transport: "GRPC"
+                endpoint: grpc://enterprise-wallet-unit:9090
+                timeoutMs: 30000
+
+# Secret-use permit authority, satellite role. Onboarding can request platform-authorized secret
+# use without holding the central permit-signing key.
+secret:
+  authority:
+    allowed-clock-skew-millis: 5000
+    satellite:
+      workload-id: service-wallet-onboarding
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}

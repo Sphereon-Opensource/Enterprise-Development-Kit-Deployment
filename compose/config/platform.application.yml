@@ -445,6 +445,10 @@ oauth2:
   servers:
     default:
       mode: HOSTED
+      # The platform AS is provisioned entirely from this shipped configuration, so
+      # configuration is authoritative for its client registry and persisted
+      # registrations are secondary. Set statically so it holds from the first request.
+      client-registry-source-precedence: configuration-primary
       signing-key:
         auto-generate: true
       issuer: ${env:EXTERNAL_BASE_URL}

@@ -1,0 +1,53 @@
+# Optional Keycloak lane: an external OIDC identity provider the tenant AS
+# federates login to. Layer it over the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.keycloak.yml ...
+# or pass -Keycloak to run-compose-postman-release-gate.ps1.
+#
+# Keycloak keeps its own database on platform-postgres. The role and database are
+# created by the initdb script mounted below, which only runs when the data
+# volume is initialised; add the overlay to a fresh project or reset volumes.
+#
+# The realm import pins the issuer to http://keycloak:8080/realms/edk. Tokens are
+# validated inside the Compose network by that issuer, so the hostname is fixed
+# to the in-network origin rather than derived from the requesting host; the
+# host-side port (18090) only reaches the same realm for smoke tests.
+services:
+  platform-postgres:
+    environment:
+      KEYCLOAK_DB_PASSWORD: ${EDK_KEYCLOAK_DB_PASSWORD:?Set EDK_KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - ./keycloak/postgres-init/20-keycloak-database.sh:/docker-entrypoint-initdb.d/20-keycloak-database.sh:ro
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:${EDK_KEYCLOAK_IMAGE_TAG:-26.2}
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://platform-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${EDK_KEYCLOAK_DB_PASSWORD:?Set EDK_KEYCLOAK_DB_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: "8080"
+      KC_HOSTNAME: http://keycloak:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${EDK_KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${EDK_KEYCLOAK_ADMIN_PASSWORD:?Set EDK_KEYCLOAK_ADMIN_PASSWORD}
+    ports:
+      - "${EDK_KEYCLOAK_HOST_PORT:-18090}:8080"
+    volumes:
+      - ./keycloak/edk-realm.json:/opt/keycloak/data/import/edk-realm.json:ro
+    networks:
+      - appnet
+      - platform-db-net
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    healthcheck:
+      # Management interface (port 9000) serves /health/ready when KC_HEALTH_ENABLED is set.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 2 cat <&3 | grep -q 'UP'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 45s

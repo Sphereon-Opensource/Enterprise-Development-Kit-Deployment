@@ -272,6 +272,51 @@ function manifestEvidence(root, excluded) {
     .sort((left, right) => left.path.localeCompare(right.path))
 }
 
+/**
+ * Evidence kinds. `release` is the gate verdict for the release under test. `baseline` is the
+ * prior-release install an upgrade rehearsal starts from: it is not release-verified, so it gets
+ * its own label and can never be read as a gate pass.
+ */
+export const EVIDENCE_LABELS = Object.freeze({
+  release: 'customer-compose-evidence',
+  baseline: 'customer-compose-baseline',
+})
+
+/**
+ * Optional lanes the gate can run. Every lane is always recorded so a reader can tell a lane
+ * that was not exercised from one that does not exist. keycloak and webhookSink follow their
+ * switches; azureKms is ran only when -AzureKms is given and every AZURE_* value is present;
+ * eudi has no switch yet and is recorded as skipped until it does.
+ */
+export const OPTIONAL_LANES = Object.freeze(['keycloak', 'webhookSink', 'azureKms', 'eudi'])
+export const OPTIONAL_LANE_STATES = Object.freeze(['ran', 'skipped'])
+
+export function normalizeOptionalLanes(input = {}) {
+  for (const [name, state] of Object.entries(input)) {
+    if (!OPTIONAL_LANES.includes(name)) throw new Error(`Unknown optional lane '${name}'.`)
+    if (!OPTIONAL_LANE_STATES.includes(state)) {
+      throw new Error(`Optional lane '${name}' must be ran or skipped; got '${state}'.`)
+    }
+  }
+  const lanes = {}
+  for (const name of OPTIONAL_LANES) lanes[name] = input[name] ?? 'skipped'
+  return lanes
+}
+
+/** Parses the CLI form `keycloak=ran,webhookSink=skipped`. Unlisted lanes are skipped. */
+export function parseOptionalLanes(text) {
+  const lanes = {}
+  const entries = String(text ?? '').split(',').map((entry) => entry.trim()).filter(Boolean)
+  for (const entry of entries) {
+    const parts = entry.split('=')
+    if (parts.length !== 2 || !parts[0]) {
+      throw new Error(`Invalid optional lane entry '${entry}'; expected name=ran|skipped.`)
+    }
+    lanes[parts[0]] = parts[1]
+  }
+  return normalizeOptionalLanes(lanes)
+}
+
 export function finalizeEvidence({
   root,
   environmentPath,
@@ -283,7 +328,13 @@ export function finalizeEvidence({
   requestCount,
   manifestPath,
   manifestHashPath,
+  evidenceKind = 'release',
+  optionalLanes = {},
 }) {
+  if (!Object.hasOwn(EVIDENCE_LABELS, evidenceKind)) {
+    throw new Error(`Unknown evidence kind '${evidenceKind}'.`)
+  }
+  const lanes = normalizeOptionalLanes(optionalLanes)
   const entries = sensitiveEntries(environmentPath)
   const canary = postmanValues(environmentPath).get(canaryKey) ?? ''
   const manifest = resolve(manifestPath)
@@ -314,12 +365,14 @@ export function finalizeEvidence({
   const evidence = manifestEvidence(root, excluded)
   writeJson(manifest, {
     status,
+    kind: evidenceKind,
     completedAt: new Date().toISOString(),
     projectName,
     tag,
     requestCount,
     teardownStatus,
     canaryStatus: canaryExposures.length === 0 ? 'absent' : 'exposed-and-redacted',
+    optionalLanes: lanes,
     evidence,
     detachedManifestHash: {
       algorithm: 'sha256',
@@ -333,7 +386,7 @@ export function finalizeEvidence({
     `${sha256File(manifest)}  ${relative(root, manifest).replaceAll('\\', '/')}\n`,
     'utf8',
   )
-  return {status, canaryExposures, sanitation}
+  return {status, canaryExposures, sanitation, evidenceKind, optionalLanes: lanes}
 }
 
 async function main(argv) {
@@ -412,8 +465,13 @@ async function main(argv) {
       requestCount: Number(required(options, '--request-count')),
       manifestPath: required(options, '--manifest'),
       manifestHashPath: required(options, '--manifest-hash'),
+      evidenceKind: options.get('--evidence-kind') ?? 'release',
+      optionalLanes: parseOptionalLanes(options.get('--optional-lanes') ?? ''),
     })
-    console.log(`customer-compose-evidence:${result.status}`)
+    console.log(`${EVIDENCE_LABELS[result.evidenceKind]}:${result.status}`)
+    console.log(
+      `customer-compose-optional-lanes:${OPTIONAL_LANES.map((name) => `${name}=${result.optionalLanes[name]}`).join(',')}`,
+    )
     if (result.status !== 'passed') process.exitCode = 1
     return
   }

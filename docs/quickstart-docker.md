@@ -91,6 +91,34 @@ keys `EDK_DB_NAME`, `EDK_DB_USERNAME`, `EDK_DB_PASSWORD`, and
 `EDK_POSTGRES_HOST_PORT` from `.env`. Replace them with `EDK_PLATFORM_DB_*` and
 `EDK_TENANT_DB_*`.
 
+RC4 requires eight `.env` variables that RC3 did not. `docker compose config`
+fails with "required variable ... is missing a value" until all eight are set:
+
+| Variable | Read by |
+| --- | --- |
+| `EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS` | platform, and the tenant KMS satellite through `EDK_INTERNAL_CLIENT_SECRET` |
+| `EDK_INTERNAL_CLIENT_SECRET_TENANT_AS` | platform, and the tenant AS satellite through `EDK_INTERNAL_CLIENT_SECRET` |
+| `EDK_INTERNAL_CLIENT_SECRET_DID` | platform, and the DID satellite through `EDK_INTERNAL_CLIENT_SECRET` |
+| `EDK_INTERNAL_CLIENT_SECRET_BLOB` | platform, and the blob satellite through `EDK_INTERNAL_CLIENT_SECRET` |
+| `EDK_INTERNAL_CLIENT_SECRET_ISSUER` | platform, and the issuer satellite through `EDK_INTERNAL_CLIENT_SECRET` |
+| `EDK_INTERNAL_CLIENT_SECRET_VERIFIER` | platform, and the verifier satellite through `EDK_INTERNAL_CLIENT_SECRET` |
+| `EDK_INTERNAL_CLIENT_SECRET_EMAIL` | platform, and the email satellite through `EDK_INTERNAL_CLIENT_SECRET` |
+| `EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD` | platform and every satellite, as the password of the `secret_management_runtime` database role |
+
+The platform reads all seven `EDK_INTERNAL_CLIENT_SECRET_*` values directly;
+each satellite container still reads only its own secret through the single
+`EDK_INTERNAL_CLIENT_SECRET` name, and the seven values may differ. The
+platform no longer reads a single `EDK_INTERNAL_CLIENT_SECRET` value. See the
+required-values table in the repository README and the East-west service
+identity and STS section of [configuration.md](configuration.md) for what
+each value protects.
+
+Each tenant's OID4VCI credential issuer identifier is
+`https://<tenant>.<base-domain>/oid4vci/<tenant>`, not the bare tenant origin.
+Existing credential configuration carries over automatically at the first
+start after the upgrade. Wallets and relying parties that hold the old
+identifier must be onboarded again with a new credential offer.
+
 There is no default base domain: Compose fails before startup when
 `EDK_PLATFORM_BASE_DOMAIN` is empty. For an explicitly selected localtest run,
 set it to `saas.localtest.me`; that domain resolves every subdomain to
@@ -129,6 +157,14 @@ detects the running container first, then its recorded release state, then an
 unchanged `.env`. Use the explicit installed-tag option only when an older stack
 was removed and its `.env` was already changed. After success, keep the target
 `EDK_TAG` in `.env` for later direct Compose commands.
+
+If the platform refuses to start with a startup failure whose message begins
+`Authorization-server migration source previously failed`, set
+`AUTHORIZATION_SERVER_MIGRATION_RESUME_FAILED=true` in `.env` so the platform
+service receives it on the next start, then remove it again. Do not change
+`oauth2.servers.*` configuration between a failed start and the retry; a changed
+source is refused until it is accepted through the migration API. A migration
+that fails only during planning retries on its own and does not need the flag.
 
 ## 3a. Run the base stack (developer diagnostic only)
 

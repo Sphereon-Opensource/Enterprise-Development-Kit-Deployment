@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Runs the customer Docker Compose topology and its 215-request Postman release gate.
+  Runs the customer Docker Compose topology and its Postman release gate.
 
 .DESCRIPTION
   This is a non-interactive, fail-closed release gate. Distributed topology
@@ -35,6 +35,11 @@ param(
   [Parameter(Mandatory = $true, ParameterSetName = 'LicenseSetup')][string]$LicenseBundleZipPath,
   [Parameter(Mandatory = $true, ParameterSetName = 'PreProvisioned')][switch]$PreProvisionedSetup,
   [switch]$AllowMixedSourceFingerprints,
+  # Installs a prior release as the starting point of an upgrade rehearsal. The published
+  # 0.25.0-RC3 image set cannot satisfy the release image preflight -- three of its eight images
+  # carry an empty source-fingerprint label and version 0.25.0-SNAPSHOT -- so a baseline install
+  # skips that preflight. It is not a release verdict: the run stamps customer-compose-baseline.
+  [switch]$BaselineInstall,
   [ValidatePattern('^[a-z0-9][a-z0-9-]{1,30}$')][string]$EdgeEnvironment = '',
   [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$')][string]$EdgeNetworkName = 'edge',
   [ValidatePattern('^\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}$')][string]$EdgeTrustedSubnet = '172.16.100.0/24',
@@ -44,6 +49,18 @@ param(
   [switch]$UseExistingProject,
   [switch]$KeepUp,
   [switch]$RemoveVolumesOnTeardown,
+  # Optional lanes. Each appends a customer Compose overlay and injects its Postman
+  # environment values through the runner's EDK_E2E_ENV_ channel, never the collection.
+  # The evidence manifest records every lane as ran or skipped.
+  [switch]$Keycloak,
+  [switch]$WebhookSink,
+  # Azure Key Vault lane: no overlay, a real vault. Needs AZURE_KEY_VAULT_URI, AZURE_TENANT_ID,
+  # AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_HSM_KEY_NAME and AZURE_CERT_NAME in the process
+  # environment; when any is missing the lane is recorded as skipped, not failed.
+  [switch]$AzureKms,
+  # Re-mints the committed response snapshots from this run. The runner refuses to write them
+  # when any assertion failed, so a mint always reflects a fully passing gate.
+  [switch]$UpdateSnapshots,
   [switch]$DryRun
 )
 
@@ -62,6 +79,9 @@ $baseCompose = if ($Topology -eq 'Monolith') {
 }
 $monolithServiceCompose = Join-Path $repoRoot 'deploy\docker\docker-compose.monolith.local.yml'
 $gatewayCompose = Join-Path $composeDir 'docker-compose.gateway.yml'
+$keycloakCompose = Join-Path $composeDir 'docker-compose.keycloak.yml'
+$keycloakRealm = Join-Path $composeDir 'keycloak\edk-realm.json'
+$webhookSinkCompose = Join-Path $composeDir 'docker-compose.webhook-sink.yml'
 $gatewayDynamic = Join-Path $composeDir 'gateway\traefik\dynamic.yml'
 $behindEdgeComposeTemplate = Join-Path $composeDir 'docker-compose.behind-edge.template.yml'
 $behindEdgeStaticTemplate = Join-Path $composeDir 'gateway\traefik\traefik.behind-edge.template.yml'
@@ -72,9 +92,12 @@ $collectionPath = if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
 } else {
     [System.IO.Path]::GetFullPath($CollectionPath)
 }
+# Pinned size of the shipped collection. Bump this in the same commit that adds or removes a request.
+$DefaultCollectionRequestCount = 284
 $snapshotDir = Join-Path $repoRoot 'deploy\edk\e2e\snapshots'
 $runnerPath = Join-Path $repoRoot 'deploy\edk\e2e\runner\run-e2e.js'
 $imageVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-enterprise-image-set.mjs'
+$openapiCheckoutVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-openapi-checkouts.mjs'
 $setupHelper = Join-Path $scriptDir 'prepare-compose-postman-setup.mjs'
 $canaryScanner = Join-Path $scriptDir 'assert-plaintext-canary-absent.mjs'
 $supportHelper = Join-Path $scriptDir 'compose-postman-release-gate-support.mjs'
@@ -335,7 +358,8 @@ __MONOLITH_PORTS__
     environment:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: TENANT
-      ADMIN_CONSOLE_PLATFORM_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL: http://svc-monolith:8080
+      ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://svc-monolith:8080/api/platform/bootstrap/v1
       ADMIN_CONSOLE_TENANT_CONTEXT_URL: http://svc-monolith:8080/api/platform/bootstrap/v1/admin-console-context
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
@@ -645,6 +669,42 @@ function Wait-BehindEdgePublicOrigin {
   Write-Utf8NoBom (Join-Path $resolvedReportDir 'edge-public-readiness.log') "$(($attempts -join "`n"))`n"
   Fail "Shared-edge public origin did not become trusted and reachable: $url"
 }
+# Optional lane values reach newman through the runner's EDK_E2E_ENV_<key> override channel,
+# never through the collection. Secrets come from the process environment; the realm file's
+# secret is only the local fallback.
+function Set-OptionalLaneEnvironment {
+  if ($Keycloak) {
+    $keycloakHostPort = if ([string]::IsNullOrWhiteSpace($env:EDK_KEYCLOAK_HOST_PORT)) { '18090' } else { $env:EDK_KEYCLOAK_HOST_PORT.Trim() }
+    $keycloakClientSecret = $env:KEYCLOAK_CLIENT_SECRET
+    if ([string]::IsNullOrWhiteSpace($keycloakClientSecret)) {
+      $realm = Get-Content -LiteralPath $keycloakRealm -Raw | ConvertFrom-Json
+      $client = @($realm.clients | Where-Object { $_.clientId -eq 'edk-tenant-as' }) | Select-Object -First 1
+      if ($null -eq $client -or [string]::IsNullOrWhiteSpace($client.secret)) {
+        Fail "Keycloak realm import has no edk-tenant-as client secret: $keycloakRealm"
+      }
+      $keycloakClientSecret = [string]$client.secret
+    }
+    $env:EDK_E2E_ENV_keycloakIssuerUrl = 'http://keycloak:8080/realms/edk'
+    $env:EDK_E2E_ENV_keycloakPublicUrl = "http://localhost:$keycloakHostPort/realms/edk"
+    $env:EDK_E2E_ENV_keycloakClientId = 'edk-tenant-as'
+    $env:EDK_E2E_ENV_keycloakClientSecret = $keycloakClientSecret
+    $env:EDK_E2E_ENV_keycloakUsername = if ([string]::IsNullOrWhiteSpace($env:KEYCLOAK_USERNAME)) { 'wallet-user' } else { $env:KEYCLOAK_USERNAME }
+    $env:EDK_E2E_ENV_keycloakPassword = if ([string]::IsNullOrWhiteSpace($env:KEYCLOAK_PASSWORD)) { 'wallet-user-password' } else { $env:KEYCLOAK_PASSWORD }
+  }
+  if ($WebhookSink) {
+    $webhookSinkHostPort = if ([string]::IsNullOrWhiteSpace($env:EDK_WEBHOOK_SINK_HOST_PORT)) { '18095' } else { $env:EDK_WEBHOOK_SINK_HOST_PORT.Trim() }
+    $env:EDK_E2E_ENV_webhookSinkInternalUrl = 'http://webhook-sink:8080'
+    $env:EDK_E2E_ENV_webhookSinkAdminUrl = "http://localhost:$webhookSinkHostPort"
+  }
+  if ($azureKmsLaneReady) {
+    $env:EDK_E2E_ENV_azureKeyVaultUri = $env:AZURE_KEY_VAULT_URI.Trim().TrimEnd('/')
+    $env:EDK_E2E_ENV_azureTenantId = $env:AZURE_TENANT_ID
+    $env:EDK_E2E_ENV_azureClientId = $env:AZURE_CLIENT_ID
+    $env:EDK_E2E_ENV_azureClientSecret = $env:AZURE_CLIENT_SECRET
+    $env:EDK_E2E_ENV_azureHsmKeyName = $env:AZURE_HSM_KEY_NAME
+    $env:EDK_E2E_ENV_azureCertName = $env:AZURE_CERT_NAME
+  }
+}
 function Write-Plan {
   $references = if ($Topology -eq 'Monolith') {
     @($MonolithImage, "nexus.sphereon.com/edk-docker/admin-console:$Tag")
@@ -660,6 +720,7 @@ function Write-Plan {
     baseDomain = $BaseDomain
     publicOrigin = "https://platform.$BaseDomain"
     composeFiles = @($composeFiles)
+    optionalLanes = $optionalLanes
     gatewayDynamic = $selectedGatewayDynamic
     requiresLocalCa = $requiresLocalCa
     edgeEnvironment = if ($AccessMode -eq 'BehindEdge') { $EdgeEnvironment } else { $null }
@@ -670,12 +731,13 @@ function Write-Plan {
     composeEnvFile = $resolvedComposeEnv
     collection = $collectionPath
     environment = $resolvedPostmanEnvironment
-    requestCount = 215
+    requestCount = $requestCount
     immutableTag = $Tag
     sourceState = $resolvedSourceState
     expectedSource = $ExpectedSource
     releaseImages = $references
     monolithImage = if ($Topology -eq 'Monolith') { $MonolithImage } else { $null }
+    baselineInstall = [bool]$BaselineInstall
     resetVolumes = [bool]$ResetVolumes
     useExistingProject = [bool]$UseExistingProject
     setupMode = if ($PreProvisionedSetup) { 'pre-provisioned' } else { 'protected-license-bundle' }
@@ -743,6 +805,12 @@ if ($ResetVolumes -and $PreProvisionedSetup) {
   Fail '-ResetVolumes cannot be combined with -PreProvisionedSetup because the reset removes the pre-provisioned installation.'
 }
 if ($UseExistingProject -and $ResetVolumes) { Fail '-UseExistingProject and -ResetVolumes are mutually exclusive.' }
+if ($BaselineInstall) {
+  # A baseline exists to be upgraded, so it must survive the run.
+  if (-not $KeepUp) { Fail '-BaselineInstall requires -KeepUp; a torn-down baseline cannot be upgraded.' }
+  # Snapshots are the release contract. A run that skipped the image preflight must never rewrite them.
+  if ($UpdateSnapshots) { Fail '-BaselineInstall cannot be combined with -UpdateSnapshots.' }
+}
 if ($UseExistingProject -and $RemoveVolumesOnTeardown) { Fail 'Cannot remove volumes from an adopted existing project.' }
 if (-not [string]::IsNullOrWhiteSpace($MailpitUrl)) {
   $mailpitUri = $null
@@ -809,9 +877,45 @@ if ($Topology -eq 'Monolith') {
   $composeFiles += $monolithServiceCompose
 }
 $composeFiles += $selectedGatewayCompose
+if ($Keycloak) {
+  Require-File $keycloakCompose 'Keycloak overlay'
+  Require-File $keycloakRealm 'Keycloak realm import'
+  $composeFiles += $keycloakCompose
+}
+if ($WebhookSink) {
+  Require-File $webhookSinkCompose 'Webhook sink overlay'
+  $composeFiles += $webhookSinkCompose
+}
+# The Azure Key Vault lane has no overlay: it runs against a real vault and needs every value
+# below. A missing value skips the lane (the collection folder self-skips on an empty
+# azureKeyVaultUri) and the manifest records it as skipped rather than failing the gate.
+$azureKmsEnvNames = @('AZURE_KEY_VAULT_URI', 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_HSM_KEY_NAME', 'AZURE_CERT_NAME')
+$azureKmsMissing = @($azureKmsEnvNames | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
+$azureKmsLaneReady = [bool]($AzureKms -and $azureKmsMissing.Count -eq 0)
+if ($AzureKms -and -not $azureKmsLaneReady) {
+  Write-Host "Azure lane skipped (missing: $($azureKmsMissing -join ', '))"
+}
+# Every optional lane is recorded so the manifest distinguishes a lane that was not exercised
+# from one that does not exist. eudi has no switch yet and stays skipped.
+$optionalLanes = [ordered]@{
+  keycloak = if ($Keycloak) { 'ran' } else { 'skipped' }
+  webhookSink = if ($WebhookSink) { 'ran' } else { 'skipped' }
+  azureKms = if ($azureKmsLaneReady) { 'ran' } else { 'skipped' }
+  eudi = 'skipped'
+}
+$optionalLanesArgument = (@($optionalLanes.Keys | ForEach-Object { "$($_)=$($optionalLanes[$_])" }) -join ',')
 $collection = Get-Content -LiteralPath $collectionPath -Raw | ConvertFrom-Json
 $requestCount = Count-Requests @($collection.item)
-if ($requestCount -ne 215) { Fail "Customer collection must contain exactly 215 requests; found $requestCount." }
+# The shipped collection is pinned so it cannot silently shrink. An explicitly supplied collection
+# is a deliberate choice -- gating an older release against the collection it shipped with -- so its
+# own size becomes the contract, and the runner must still execute every request in it.
+if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
+  if ($requestCount -ne $DefaultCollectionRequestCount) {
+    Fail "Customer collection must contain exactly $DefaultCollectionRequestCount requests; found $requestCount."
+  }
+} elseif ($requestCount -lt 1) {
+  Fail "Supplied collection $collectionPath contains no requests."
+}
 if ($AccessMode -eq 'Localtest') {
   $gatewayRules = Get-Content -LiteralPath $gatewayDynamic -Raw
   if ($gatewayRules -notmatch [regex]::Escape("platform.$BaseDomain")) {
@@ -821,7 +925,7 @@ if ($AccessMode -eq 'Localtest') {
 Write-Plan
 
 if ($DryRun) {
-  Write-Host "Dry-run passed: customer $Topology/$AccessMode topology, immutable image plan, and 215-request collection validated."
+  Write-Host "Dry-run passed: customer $Topology/$AccessMode topology, immutable image plan, and $requestCount-request collection validated."
   Write-Host "Plan: $(Join-Path $resolvedReportDir 'release-gate-plan.json')"
   exit 0
 }
@@ -829,6 +933,12 @@ if ($DryRun) {
 foreach ($tool in @($dockerCommand, $nodeCommand) + $(if ($AccessMode -eq 'BehindEdge') { @($curlCommand) } else { @() })) {
   if ($null -eq (Get-Command $tool -ErrorAction SilentlyContinue)) { Fail "$tool is required on PATH." }
 }
+# OpenAPI checkout alignment preflight. The collection and the route inventory are read against
+# the vendored spec, so the five openapi checkouts must sit on one commit before the stack comes
+# up. A checkout missing from this host (docs site, frontend workspace) is tolerated.
+Require-File $openapiCheckoutVerifier 'OpenAPI checkout verifier'
+& $nodeCommand $openapiCheckoutVerifier --allow-missing
+if ($LASTEXITCODE -ne 0) { Fail "OpenAPI checkout verification failed with exit code $LASTEXITCODE." }
 if ($requiresLocalCa) { Require-File $localCa 'Customer gateway local CA' }
 if ($PSCmdlet.ParameterSetName -eq 'LicenseSetup') {
   $LicenseBundleZipPath = [System.IO.Path]::GetFullPath($LicenseBundleZipPath)
@@ -970,7 +1080,15 @@ try {
   }
   $renderedImages = Join-Path $resolvedReportDir 'compose-images.txt'
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('config', '--images')) $renderedImages | Out-Null
-  if ($Topology -eq 'Distributed') {
+  if ($Topology -eq 'Distributed' -and $BaselineInstall) {
+    Write-Utf8NoBom `
+      (Join-Path $resolvedReportDir 'enterprise-image-preflight-skipped.json') `
+      "$(([ordered]@{
+        reason = 'baseline-install'
+        tag = $Tag
+        note = 'A baseline install starts an upgrade rehearsal. Release image provenance is verified for the release under test, not for the release being upgraded from.'
+      } | ConvertTo-Json -Depth 4))`n"
+  } elseif ($Topology -eq 'Distributed') {
     $imageVerifierArgs = @(
       $imageVerifier,
       '--tag', $Tag,
@@ -1272,7 +1390,8 @@ try {
   Invoke-LoggedNative $nodeCommand $setupArgs (Join-Path $resolvedReportDir 'setup.log') $false | Out-Null
 
   New-Item -ItemType Directory -Path $newmanStageDir -Force | Out-Null
-  $runnerOutput = Invoke-LoggedNative $nodeCommand @(
+  Set-OptionalLaneEnvironment
+  $runnerOutput = Invoke-LoggedNative $nodeCommand (@(
     $runnerPath,
     '--collection', $collectionPath,
     '--environment', $resolvedPostmanEnvironment,
@@ -1280,9 +1399,9 @@ try {
     '--report-dir', $newmanStageDir,
     '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
     '--base-domain', $BaseDomain
-  ) (Join-Path $resolvedReportDir 'newman.log') $false
-  if ($runnerOutput -notmatch 'E2E finished:\s+215 requests captured,\s+exit code 0\.') {
-    Fail 'Newman did not execute and capture exactly all 201 request executions.'
+  ) + $(if ($UpdateSnapshots) { @('--update') } else { @() })) (Join-Path $resolvedReportDir 'newman.log') $false
+  if ($runnerOutput -notmatch ('E2E finished:\s+' + [regex]::Escape($requestCount) + ' requests captured,\s+exit code 0\.')) {
+    Fail "Newman did not execute and capture exactly all $requestCount request executions."
   }
   $junitPath = Join-Path $newmanStageDir 'junit.xml'
   Invoke-LoggedNative $nodeCommand @(
@@ -1443,7 +1562,9 @@ try {
       --teardown-status $teardownStatus `
       --project-name $ProjectName `
       --tag $Tag `
-      --request-count 201 `
+      --request-count $requestCount `
+      --evidence-kind $(if ($BaselineInstall) { 'baseline' } else { 'release' }) `
+      --optional-lanes $optionalLanesArgument `
       --manifest (Join-Path $resolvedReportDir 'evidence-manifest.json') `
       --manifest-hash (Join-Path $resolvedReportDir 'evidence-manifest.sha256')
     $finalizationExit = $LASTEXITCODE

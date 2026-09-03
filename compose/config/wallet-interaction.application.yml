@@ -12,6 +12,7 @@ server:
       enabled: true
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       expected-audience: enterprise-wallet-interaction
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
   service-identity:
