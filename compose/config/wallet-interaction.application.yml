@@ -21,6 +21,7 @@ server:
     client-id: wallet-interaction-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     audience: enterprise-platform
+    allowed-audiences: enterprise-wallet-onboarding,enterprise-wallet-unit,enterprise-tenant-kms
 sphereon:
   telemetry:
     enabled: true

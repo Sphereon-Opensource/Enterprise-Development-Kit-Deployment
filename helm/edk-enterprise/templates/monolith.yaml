@@ -291,6 +291,10 @@ spec:
               value: {{ .Values.secretManagement.authority.platformStorageKmsProviderId | quote }}
             - name: SECRET_MANAGEMENT_AUTHORITY_DEFAULT_TENANT_OFFERING_KMS_PROVIDER_ID
               value: {{ .Values.secretManagement.authority.defaultTenantOfferingKmsProviderId | quote }}
+            - name: SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS
+              value: {{ .Values.secretManagement.authority.allowTenantManagedProviders | quote }}
+            - name: SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_PLATFORM_OFFERINGS
+              value: {{ .Values.secretManagement.authority.allowPlatformOfferings | quote }}
             - name: EDK_KEYSTORE_PASSWORD
               valueFrom: { secretKeyRef: { name: {{ .Values.keystore.existingSecret | quote }}, key: {{ .Values.keystore.passwordKey | quote }} } }
             - name: SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY
@@ -714,6 +718,23 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
+    # Neutral public catalog-console page, same projection as the testing console.
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /catalog-console
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/catalog-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
+          port: {{ (index .Values.services "admin-console-tenant").restPort }}
     # Testing-console API requests use the same neutral public path.  Each
     # rewrite stays explicit so Gateway longest-prefix matching selects it over
     # the page projection above.
@@ -725,6 +746,25 @@ spec:
         - path:
             type: PathPrefix
             value: {{ printf "/testing-console%s" $apiPrefix | quote }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: {{ printf "/admin-console%s" $apiPrefix | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "admin-console-tenant") }}
+          port: {{ (index $.Values.services "admin-console-tenant").restPort }}
+    {{- end }}
+    # Same rewrite set for the catalog-console prefix.
+    {{- range $apiPrefix := list "/api/oid4vci/v1/catalog-console" "/api/oid4vp/v1/catalog-console" "/api/portal-oauth/login" "/api/portal-oauth/callback" "/api/portal-oauth/grant" "/api/portal-oauth/revoke" }}
+    - timeouts:
+        request: {{ $.Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: {{ printf "/catalog-console%s" $apiPrefix | quote }}
       filters:
         - type: URLRewrite
           urlRewrite:

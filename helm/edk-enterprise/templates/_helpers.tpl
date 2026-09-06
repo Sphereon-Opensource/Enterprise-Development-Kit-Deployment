@@ -358,6 +358,8 @@ name, or an empty list for services that are not tenant-routed.
 - /api/wallet-onboarding/v1
 {{- else if eq $name "admin-console-tenant" -}}
 {{/* Direct public testing-console support paths on the tenant-mode runtime. */}}
+- /admin-console/api/oid4vci/v1/catalog-console
+- /admin-console/api/oid4vp/v1/catalog-console
 - /admin-console/api/oid4vci/v1/testing
 - /admin-console/api/oid4vp/v1/testing
 - /admin-console/_next

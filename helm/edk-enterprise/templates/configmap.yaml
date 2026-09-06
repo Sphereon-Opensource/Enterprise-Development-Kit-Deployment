@@ -77,6 +77,8 @@ data:
           # Tenant-scoped platform-config APIs accept only issuers that resolve
           # to an active OAUTH2_AUTHORIZATION_SERVER registry binding.
           trust-tenant-registry-issuers: true
+          # The registry adds the tenant and AS UUID to this in-cluster base.
+          self-jwks-base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
       {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "tenant-kms").enabled }}
       service-identity:
         # The platform uses the tenant-bound KMS client registered during
@@ -338,6 +340,7 @@ data:
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "wallet-unit" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" . "role" "wallet-unit") | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "wallet-unit") | quote }}
             {{- end }}
             {{- if (index .Values.services "wallet-interaction").enabled }}
             wallet-interaction:

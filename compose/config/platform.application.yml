@@ -22,6 +22,9 @@ server:
       # Tenant-scoped platform-config APIs accept only issuers that resolve to an
       # active OAUTH2_AUTHORIZATION_SERVER binding in the server-owned registry.
       trust-tenant-registry-issuers: true
+      # Registry-selected tenant/AS identities select the internal JWKS route;
+      # public tenant domains need not be reachable from service containers.
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       # Open paths: first-run setup UI/API, OAuth protocol surface, discovery/JWKS,
       # the internal pre-auth registration channel. Everything else requires an
       # operator bearer.
@@ -237,10 +240,10 @@ secret-management:
       kms-provider-id: software
       kms-binding-template: isolated-tenant-secret-storage
     tenant-policy:
-      # The customer baseline must not publish synthetic cloud-provider offerings.
-      # Dedicated deployments opt into tenant-managed providers explicitly after
-      # configuring and validating the corresponding provider integration.
-      allow-tenant-managed-providers: false
+      # Cloud offerings are opt-in. A deployment may publish the typed Azure/AWS
+      # tenant offerings only after explicitly enabling this policy; provider
+      # instances and credentials are still registered through platform-config.
+      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false}
       # Publishes only the self-contained, per-tenant software-KMS offering.
       allow-platform-offerings: true
       retention-days: 30

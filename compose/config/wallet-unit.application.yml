@@ -20,6 +20,8 @@ server:
     client-id: wallet-unit-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     audience: enterprise-platform
+    # The packaged feature-manifest route calls onboarding; custody stays local.
+    allowed-audiences: enterprise-wallet-onboarding
 sphereon:
   telemetry:
     enabled: true

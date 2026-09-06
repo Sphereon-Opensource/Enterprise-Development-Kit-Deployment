@@ -277,6 +277,20 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
+    # Neutral public catalog-console page, same shape as the testing console.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /catalog-console
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/catalog-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
     # Browser-facing testing API under the neutral /testing-console prefix, so the
     # customer-facing surface never exposes admin-console URLs. One rule per path
     # because each carries its own ReplacePrefixMatch; longest-prefix precedence
@@ -286,6 +300,22 @@ spec:
         - path:
             type: PathPrefix
             value: {{ printf "/testing-console%s" $apiPrefix | quote }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: {{ printf "/admin-console%s" $apiPrefix | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    {{- end }}
+    # Same rewrite set for the catalog-console prefix.
+    {{- range $apiPrefix := list "/api/oid4vci/v1/catalog-console" "/api/oid4vp/v1/catalog-console" "/api/portal-oauth/login" "/api/portal-oauth/callback" "/api/portal-oauth/grant" "/api/portal-oauth/revoke" }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ printf "/catalog-console%s" $apiPrefix | quote }}
       filters:
         - type: URLRewrite
           urlRewrite:

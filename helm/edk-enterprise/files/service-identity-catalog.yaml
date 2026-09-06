@@ -154,13 +154,15 @@ roles:
     serviceId: service-wallet-unit
     receiverAudience: enterprise-wallet-unit
     defaultStsAudience: platform
-    extraStsAudiences: []
+    extraStsAudiences:
+      - wallet-onboarding
     grpcReceiver: true
     peersIn:
       - wallet-interaction
       - wallet-onboarding
     peersOut:
       - platform
+      - wallet-onboarding
   wallet-interaction:
     kind: satellite
     clientId: wallet-interaction-service
@@ -168,6 +170,7 @@ roles:
     receiverAudience: enterprise-wallet-interaction
     defaultStsAudience: platform
     extraStsAudiences:
+      - wallet-onboarding
       - tenant-kms
       - wallet-unit
     grpcReceiver: true
@@ -175,6 +178,7 @@ roles:
       - issuer
       - verifier
     peersOut:
+      - wallet-onboarding
       - wallet-unit
       - tenant-kms
       - platform

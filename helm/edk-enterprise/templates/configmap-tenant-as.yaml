@@ -162,6 +162,10 @@ data:
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s-tenant-kms:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
               keys: *tenantKmsGrpcRoute
+              # Invitation-token HMAC envelopes use the typed leaf unwrap/wrap
+              # commands. Keep those commands on the tenant-KMS execution plane;
+              # the tenant-AS has no local managed-key implementation.
+              leaf: *tenantKmsGrpcRoute
               signature:
                 target: SERVER
                 transport: GRPC

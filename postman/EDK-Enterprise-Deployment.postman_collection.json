@@ -384,6 +384,11 @@
 			"description": "Tenant-bound service token of acme-eu-hr, obtained from the authorization server of that sub-subtenant with the client_credentials grant. It authorizes the subtenant runtime requests of folder 03b and reaches no other tenant."
 		},
 		{
+			"key": "subTenantOwnerToken",
+			"value": "",
+			"description": "Access token of the activated acme-eu-hr owner, obtained in folder 03b through the authorization-code flow at the sub-subtenant host. Only this tenant-bound token registers the acme-eu-hr tenant service client, because its write-once secret is tenant secret material a platform administrator cannot create."
+		},
+		{
 			"key": "subTenantIssuerId",
 			"value": "",
 			"description": "Instance id of the hr-issuer issuer created inside acme-eu-hr. Folder 03b registers a credential configuration on it and selects it on the offer with issuer_id."
@@ -405,6 +410,9 @@
 						"followRedirects": false
 					},
 					"request": {
+						"auth": {
+							"type": "noauth"
+						},
 						"method": "GET",
 						"url": "{{platformUrl}}/authorize?response_type=code&client_id=platform-operator-cli&redirect_uri={{operatorRedirectUri}}&scope=openid&state=qa-operator-state-0001&prompt=login&code_challenge={{operatorCodeChallenge}}&code_challenge_method=S256",
 						"description": "Starts the authorization-code flow for the operator CLI client. The request uses standard OIDC prompt=login so an existing Postman or browser session cannot bypass the login form. The AS answers with a 302 to its hosted login page carrying the pending session id. The S256 code challenge is computed in the pre-request script from the fixed operatorCodeVerifier."
@@ -446,6 +454,9 @@
 				{
 					"name": "02 Open login page",
 					"request": {
+						"auth": {
+							"type": "noauth"
+						},
 						"method": "GET",
 						"url": "{{operatorLoginUrl}}",
 						"description": "Loads the hosted login page. The page sets the oidc_login_csrf cookie and embeds the matching tab_id and session_code hidden inputs that the credential submit must echo back."
@@ -475,6 +486,9 @@
 						"followRedirects": false
 					},
 					"request": {
+						"auth": {
+							"type": "noauth"
+						},
 						"method": "POST",
 						"url": "{{platformUrl}}/login",
 						"header": [
@@ -541,6 +555,9 @@
 						"followRedirects": false
 					},
 					"request": {
+						"auth": {
+							"type": "noauth"
+						},
 						"method": "GET",
 						"url": "{{platformUrl}}/authorize/callback?session_id={{operatorAuthSessionId}}",
 						"description": "Resumes the pending authorization with the fresh login session cookie. The callback URL is deterministic: /authorize/callback?session_id=<session id> from step 01; no customer-provided callback variable is required. The AS issues the authorization code and answers 302 to the registered redirect URI with code and state."
@@ -578,6 +595,9 @@
 				{
 					"name": "05 Exchange code for operator token",
 					"request": {
+						"auth": {
+							"type": "noauth"
+						},
 						"method": "POST",
 						"url": "{{platformUrl}}/token",
 						"header": [
@@ -1363,7 +1383,7 @@
 							"mode": "raw",
 							"raw": "{\n  \"tenant\": {\n    \"tenantType\": \"organization\",\n    \"name\": \"{{tenantName}} EU HR\",\n    \"description\": \"{{tenantName}} EU HR subtenant\",\n    \"slug\": \"{{subSubTenantSlug}}\",\n    \"parentTenantId\": \"{{subTenantId}}\",\n    \"initialPlatformSubdomain\": true\n  },\n  \"contacts\": {\n    \"technical\": {\n      \"email\": \"admin@{{subSubTenantSlug}}.example\",\n      \"displayName\": \"{{tenantName}} EU HR Technical Contact\"\n    },\n    \"administrativeSameAsTechnical\": true,\n    \"ownerAdmin\": {\n      \"source\": \"technical\"\n    }\n  },\n  \"login\": {\n    \"enabled\": true,\n    \"defaultAuthorizationServerRequired\": true\n  },\n  \"provisioning\": {\n    \"issuer\": true,\n    \"verifier\": true,\n    \"keysAndDids\": true,\n    \"sampleData\": true\n  }\n}"
 						},
-						"description": "Registers a second level of the hierarchy under acme-eu. A parent tenant must exist but is not required to be active, so registration at depth three does not wait for anything beyond the parent row. The QA licence fixture allows a hierarchy depth of 10."
+						"description": "Registers a second level of the hierarchy under acme-eu. A parent tenant must exist but is not required to be active, so registration at depth three does not wait for anything beyond the parent row. The QA licence fixture allows a hierarchy depth of 10. The response carries the one-time manual activation link of the acme-eu-hr owner; its fragment is the activation token the owner chapter below consumes."
 					},
 					"event": [
 						{
@@ -1381,7 +1401,16 @@
 									"pm.collectionVariables.set('subSubTenantId', tenant.id);",
 									"const correlationId = j.correlationId || (j.registration && j.registration.correlationId) || tenant.correlationId;",
 									"pm.expect(correlationId, 'tenant onboarding correlation id').to.be.a('string').and.not.empty;",
-									"pm.collectionVariables.set('subSubTenantOnboardingCorrelationId', correlationId);"
+									"pm.collectionVariables.set('subSubTenantOnboardingCorrelationId', correlationId);",
+									"pm.expect(j.created && j.created.ownerIdentityId, 'persisted owner identity id').to.be.a('string').and.not.empty;",
+									"pm.collectionVariables.set('subTenantOwnerIdentityId', j.created.ownerIdentityId);",
+									"pm.collectionVariables.set('subTenantOwnerEmail', 'admin@' + pm.variables.replaceIn('{{subSubTenantSlug}}') + '.example');",
+									"pm.expect(j.delivery && j.delivery.status, 'owner activation delivery state').to.eql('MANUAL_READY');",
+									"const activationLink = j.delivery && j.delivery.manualActivationLink;",
+									"pm.expect(activationLink, 'single-use manual owner activation link').to.be.a('string').and.not.empty;",
+									"const fragment = activationLink.split('#')[1] || '';",
+									"pm.expect(fragment, 'owner activation token fragment').to.be.a('string').and.not.empty;",
+									"pm.collectionVariables.set('subTenantOwnerActivationToken', decodeURIComponent(fragment));"
 								]
 							}
 						}
@@ -1525,7 +1554,367 @@
 					]
 				},
 				{
-					"name": "08 Resolve the acme-eu-hr hosted authorization server",
+					"name": "08 Resolve the acme-eu-hr owner activation",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"url": "{{platformUrl}}/api/account-actions/v1/resolve",
+						"description": "Resolves the one-time onboarding action of the acme-eu-hr owner through a request body. The activation token is never sent in a path or query parameter. The sub-subtenant needs its own owner: a platform administrator cannot create tenant secret material, and the tenant service client registered later in this folder carries a write-once secret.",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"{{subTenantOwnerActivationToken}}\"\n}"
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('acme-eu-hr owner activation resolves', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+									"const j = pm.response.json();",
+									"pm.expect(j.action, 'safe activation metadata').to.be.an('object');",
+									"pm.expect(j.action.action).to.be.oneOf(['tenant.onboarding', 'identity.activation']);",
+									"pm.expect(j.action.requiresPassword, 'activation requires a password').to.eql(true);",
+									"pm.expect(JSON.stringify(j)).not.to.include(pm.collectionVariables.get('subTenantOwnerActivationToken'));",
+									"for (const forbidden of ['tenantId', 'identityId', 'email', 'token']) pm.expect(j.action).not.to.have.property(forbidden);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "09 Complete the acme-eu-hr owner activation",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"url": "{{platformUrl}}/api/account-actions/v1/complete",
+						"description": "Selects the initial password of the acme-eu-hr owner and atomically consumes the one-time activation action.",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"{{subTenantOwnerActivationToken}}\",\n  \"password\": \"{{tenantOwnerPassword}}\"\n}"
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('acme-eu-hr owner activation completed', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+									"const j = pm.response.json();",
+									"pm.expect(j.action && j.action.outcomeRef, 'activation outcome').to.be.an('object');",
+									"pm.expect(JSON.stringify(j)).not.to.include(pm.variables.replaceIn('{{tenantOwnerPassword}}'));",
+									"pm.collectionVariables.unset('subTenantOwnerActivationToken');"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "10 Start the acme-eu-hr owner authorization",
+					"protocolProfileBehavior": {
+						"followRedirects": false
+					},
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"url": "{{subTenantAuthorizationEndpoint}}?response_type=code&client_id=platform-operator-cli&redirect_uri={{operatorRedirectUri}}&scope=openid&state=qa-subtenant-owner-state-0001&prompt=login&code_challenge={{subTenantOwnerCodeChallenge}}&code_challenge_method=S256",
+						"description": "Starts a fresh authorization-code flow for the activated acme-eu-hr owner at the sub-subtenant host. The S256 challenge is derived from the secret tenantOwnerCodeVerifier.",
+						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// The hosted authorization server of acme-eu-hr publishes under its own path on the sub-subtenant",
+									"// host. Ask that host for its authorization endpoint instead of assuming where it lives.",
+									"const discoveryUrl = String(pm.variables.get('subTenantGatewayUrl') || '').trim().replace(/\\/+$/, '') + '/.well-known/openid-configuration';",
+									"pm.sendRequest({ url: discoveryUrl, method: 'GET', header: { Accept: 'application/json', Host: pm.variables.replaceIn('{{subTenantPublicAuthority}}') } }, (err, res) => {",
+									"  if (err) { throw new Error('acme-eu-hr authorization-server discovery failed: ' + err); }",
+									"  if (res.code !== 200) { throw new Error('acme-eu-hr authorization-server discovery returned HTTP ' + res.code); }",
+									"  const endpoint = res.json().authorization_endpoint;",
+									"  if (!endpoint) { throw new Error('acme-eu-hr discovery document has no authorization_endpoint'); }",
+									"  pm.collectionVariables.set('subTenantAuthorizationEndpoint', endpoint);",
+									"});",
+									"['subTenantAuthorizationEndpoint', 'subTenantOwnerLoginUrl', 'subTenantOwnerLoginActionUrl', 'subTenantOwnerProtocolBase', 'subTenantOwnerAuthSessionId', 'subTenantOwnerReturnUrl', 'subTenantOwnerTabId', 'subTenantOwnerSessionCode', 'subTenantOwnerAuthCode', 'subTenantOwnerCodeChallenge', 'subTenantOwnerToken'].forEach((key) => pm.collectionVariables.unset(key));",
+									"const verifier = pm.variables.replaceIn('{{tenantOwnerCodeVerifier}}');",
+									"const challenge = CryptoJS.SHA256(verifier).toString(CryptoJS.enc.Base64)",
+									"  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+									"pm.collectionVariables.set('subTenantOwnerCodeChallenge', challenge);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('acme-eu-hr authorize redirects to hosted login', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(302));",
+									"const location = pm.response.headers.get('Location');",
+									"pm.expect(location, 'Location header').to.be.a('string').and.to.include('/login?');",
+									"const tenantBase = pm.variables.replaceIn('{{subTenantGatewayUrl}}').replace(/\\/$/, '');",
+									"const loginUrl = /^https?:\\/\\//.test(location) ? location : tenantBase + location;",
+									"pm.expect(loginUrl, 'acme-eu-hr scoped login URL').to.match(new RegExp('^' + tenantBase.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '(/as/[^/]+)?/login\\\\?'));",
+									"pm.collectionVariables.set('subTenantOwnerLoginUrl', loginUrl);",
+									"pm.collectionVariables.set('subTenantOwnerLoginActionUrl', loginUrl.split('?')[0]);",
+									"pm.collectionVariables.set('subTenantOwnerProtocolBase', loginUrl.replace(/\\/login\\?.*/, ''));",
+									"const sessionId = /[?&]session_id=([^&]+)/.exec(location);",
+									"pm.expect(sessionId, 'session_id in login URL').to.not.eql(null);",
+									"pm.collectionVariables.set('subTenantOwnerAuthSessionId', decodeURIComponent(sessionId[1]));",
+									"const returnUrl = /[?&]return_url=([^&]+)/.exec(location);",
+									"pm.expect(returnUrl, 'return_url in login URL').to.not.eql(null);",
+									"pm.collectionVariables.set('subTenantOwnerReturnUrl', decodeURIComponent(returnUrl[1]));"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "11 Open the acme-eu-hr owner login page",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"url": "{{subTenantOwnerLoginUrl}}",
+						"description": "Loads the login page hosted by acme-eu-hr and captures its CSRF-bound hidden inputs.",
+						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('acme-eu-hr owner login page rendered', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+									"const html = pm.response.text();",
+									"const tabId = /name=\"tab_id\" value=\"([^\"]+)\"/.exec(html);",
+									"const sessionCode = /name=\"session_code\" value=\"([^\"]+)\"/.exec(html);",
+									"pm.expect(tabId, 'tab_id hidden input').to.not.eql(null);",
+									"pm.expect(sessionCode, 'session_code hidden input').to.not.eql(null);",
+									"pm.collectionVariables.set('subTenantOwnerTabId', tabId[1]);",
+									"pm.collectionVariables.set('subTenantOwnerSessionCode', sessionCode[1]);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "12 Submit the acme-eu-hr owner credentials",
+					"protocolProfileBehavior": {
+						"followRedirects": false
+					},
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"url": "{{subTenantOwnerLoginActionUrl}}",
+						"description": "Authenticates the activated acme-eu-hr owner at the sub-subtenant host with the CSRF tuple from the rendered form.",
+						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "{{subTenantOwnerEmail}}"
+								},
+								{
+									"key": "password",
+									"value": "{{tenantOwnerPassword}}"
+								},
+								{
+									"key": "session_id",
+									"value": "{{subTenantOwnerAuthSessionId}}"
+								},
+								{
+									"key": "tab_id",
+									"value": "{{subTenantOwnerTabId}}"
+								},
+								{
+									"key": "session_code",
+									"value": "{{subTenantOwnerSessionCode}}"
+								},
+								{
+									"key": "return_url",
+									"value": "{{subTenantOwnerReturnUrl}}"
+								}
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('acme-eu-hr owner credentials accepted', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(302));",
+									"const location = pm.response.headers.get('Location');",
+									"pm.expect(location, 'Location header').to.be.a('string').and.to.include('/authorize/callback');",
+									"pm.expect(location).to.not.include('error=invalid_credentials');",
+									"const expectedUrl = pm.collectionVariables.get('subTenantOwnerReturnUrl');",
+									"const normalizedLocation = /^https?:\\/\\//.test(location) ? location : pm.variables.replaceIn('{{subTenantGatewayUrl}}').replace(/\\/$/, '') + location;",
+									"pm.expect(normalizedLocation, 'acme-eu-hr authorization callback URL').to.eql(expectedUrl);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "13 Resume the acme-eu-hr owner authorization",
+					"protocolProfileBehavior": {
+						"followRedirects": false
+					},
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"url": "{{subTenantOwnerReturnUrl}}",
+						"description": "Resumes the pending acme-eu-hr authorization with the authenticated owner session.",
+						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('acme-eu-hr owner authorization code issued', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(302));",
+									"const location = pm.response.headers.get('Location');",
+									"pm.expect(location, 'Location header').to.be.a('string').and.to.include('code=');",
+									"pm.expect(location).to.include('state=qa-subtenant-owner-state-0001');",
+									"const code = /[?&#]code=([^&]+)/.exec(location);",
+									"pm.expect(code, 'authorization code in redirect').to.not.eql(null);",
+									"pm.collectionVariables.set('subTenantOwnerAuthCode', decodeURIComponent(code[1]));"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "14 Exchange the acme-eu-hr owner authorization code",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"url": "{{subTenantOwnerProtocolBase}}/token",
+						"description": "Exchanges the acme-eu-hr authorization code with the matching PKCE verifier. Only this tenant-bound owner token is used on the tenant secret route below: the service client registration.",
+						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "authorization_code"
+								},
+								{
+									"key": "code",
+									"value": "{{subTenantOwnerAuthCode}}"
+								},
+								{
+									"key": "redirect_uri",
+									"value": "{{operatorRedirectUri}}"
+								},
+								{
+									"key": "client_id",
+									"value": "platform-operator-cli"
+								},
+								{
+									"key": "code_verifier",
+									"value": "{{tenantOwnerCodeVerifier}}"
+								}
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('acme-eu-hr owner token issued', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+									"const j = pm.response.json();",
+									"pm.expect(j.access_token, 'access_token').to.be.a('string').and.not.empty;",
+									"const parts = j.access_token.split('.');",
+									"pm.expect(parts, 'acme-eu-hr owner compact JWT').to.have.length(3);",
+									"const segment = parts[1].replace(/-/g, '+').replace(/_/g, '/');",
+									"const padded = segment + '='.repeat((4 - (segment.length % 4)) % 4);",
+									"const payload = JSON.parse(CryptoJS.enc.Base64.parse(padded).toString(CryptoJS.enc.Utf8));",
+									"const roles = payload.roles || (payload.realm_access && payload.realm_access.roles) || [];",
+									"const tokenTenant = payload.tenant_id || payload.tenantId || payload.tenant;",
+									"pm.expect(tokenTenant, 'acme-eu-hr owner token tenant').to.eql(pm.collectionVariables.get('subSubTenantId'));",
+									"pm.expect(payload.sub, 'acme-eu-hr owner token subject').to.eql(pm.collectionVariables.get('subTenantOwnerIdentityId'));",
+									"pm.expect(roles, 'acme-eu-hr owner roles').to.include('tenant-admin');",
+									"pm.expect(roles, 'acme-eu-hr owner is not a platform administrator').not.to.include('platform-admin');",
+									"pm.collectionVariables.set('subTenantOwnerToken', j.access_token);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "15 Resolve the acme-eu-hr hosted authorization server",
 					"request": {
 						"method": "GET",
 						"url": "{{subTenantPlatformConfigApiBaseUrl}}/tenants/{{subSubTenantId}}/authorization-servers?page=0&size=100",
@@ -1556,8 +1945,18 @@
 					]
 				},
 				{
-					"name": "09 Register the acme-eu-hr tenant service client",
+					"name": "16 Register the acme-eu-hr tenant service client",
 					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{subTenantOwnerToken}}",
+									"type": "string"
+								}
+							]
+						},
 						"method": "POST",
 						"url": "{{subTenantPlatformConfigApiBaseUrl}}/tenants/{{subSubTenantId}}/authorization-servers/{{subTenantAuthorizationServerId}}/clients",
 						"header": [
@@ -1575,7 +1974,7 @@
 							"mode": "raw",
 							"raw": "{\n  \"clientId\": \"{{subTenantServiceClientId}}\",\n  \"clientName\": \"{{tenantName}} EU HR walkthrough tenant service\",\n  \"clientType\": \"confidential\",\n  \"enabled\": true,\n  \"grantTypes\": [\n    \"client_credentials\"\n  ],\n  \"responseTypes\": [],\n  \"redirectUris\": [],\n  \"defaultAccessTokenAudience\": \"enterprise-platform\",\n  \"allowedAccessTokenAudiences\": [\n    \"enterprise-tenant-kms\",\n    \"enterprise-tenant-did\",\n    \"enterprise-issuer\",\n    \"enterprise-verifier\"\n  ],\n  \"tokenEndpointAuthMethod\": \"client_secret_basic\",\n  \"principalRoles\": [\n    \"tenant-admin\"\n  ],\n  \"clientCredential\": {\n    \"method\": \"client_secret_basic\",\n    \"clientId\": \"{{subTenantServiceClientId}}\",\n    \"secretValue\": \"{{subTenantServiceClientSecret}}\"\n  }\n}"
 						},
-						"description": "Registers a confidential client_credentials client on the hosted authorization server of acme-eu-hr, mirroring the root-tenant registration in folder 03. The secret is write-once: the read-back returns only its opaque reference."
+						"description": "Registers a confidential client_credentials client on the hosted authorization server of acme-eu-hr under the acme-eu-hr owner token, mirroring the root-tenant registration in folder 04. The client carries a write-once secret, which is tenant secret material a platform administrator cannot create, so the operator token of this folder is not used here. The read-back returns only the opaque secret reference."
 					},
 					"event": [
 						{
@@ -1613,7 +2012,7 @@
 					]
 				},
 				{
-					"name": "10 Obtain the acme-eu-hr tenant service token",
+					"name": "17 Obtain the acme-eu-hr tenant service token",
 					"request": {
 						"auth": {
 							"type": "basic",
@@ -1728,11 +2127,18 @@
 					]
 				},
 				{
-					"name": "11 List the issuer instances of acme-eu-hr",
+					"name": "18 List the issuer instances of acme-eu-hr",
 					"request": {
 						"method": "GET",
-						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{subSubTenantId}}/oid4vci/issuer/instances",
-						"description": "Reads the issuer instance the sub-subtenant registration provisioned. Its signing selection is reused for the additional issuer this folder creates."
+						"url": "{{subTenantPlatformConfigApiBaseUrl}}/tenants/{{subSubTenantId}}/oid4vci/issuer/instances",
+						"description": "Reads the issuer instance the sub-subtenant registration provisioned. Its signing selection is reused for the additional issuer this folder creates.",
+						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							}
+						]
 					},
 					"event": [
 						{
@@ -1754,11 +2160,18 @@
 					]
 				},
 				{
-					"name": "12 Read the provisioned EuPid signing selection in acme-eu-hr",
+					"name": "19 Read the provisioned EuPid signing selection in acme-eu-hr",
 					"request": {
 						"method": "GET",
-						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{subSubTenantId}}/oid4vci/issuer/instances/{{subTenantDefaultIssuerId}}/credential-config-settings/EuPid",
-						"description": "Reads the EuPid signing selection the subtenant provisioning created. The new issuer reuses the exact KMS resource, key alias and DID assertionMethod of the subtenant rather than inheriting anything from the parent tenant."
+						"url": "{{subTenantPlatformConfigApiBaseUrl}}/tenants/{{subSubTenantId}}/oid4vci/issuer/instances/{{subTenantDefaultIssuerId}}/credential-config-settings/EuPid",
+						"description": "Reads the EuPid signing selection the subtenant provisioning created. The new issuer reuses the exact KMS resource, key alias and DID assertionMethod of the subtenant rather than inheriting anything from the parent tenant.",
+						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							}
+						]
 					},
 					"event": [
 						{
@@ -1785,11 +2198,26 @@
 					]
 				},
 				{
-					"name": "13 Create the hr-issuer issuer instance",
+					"name": "20 Create the hr-issuer issuer instance",
 					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{subTenantOwnerToken}}",
+									"type": "string"
+								}
+							]
+						},
 						"method": "POST",
-						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{subSubTenantId}}/oid4vci/issuer/instances",
+						"url": "{{subTenantPlatformConfigApiBaseUrl}}/tenants/{{subSubTenantId}}/oid4vci/issuer/instances",
 						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							},
 							{
 								"key": "Content-Type",
 								"value": "application/json"
@@ -1799,7 +2227,7 @@
 							"mode": "raw",
 							"raw": "{\n  \"displayName\": \"HR Issuer\",\n  \"managementMode\": \"MANAGED\",\n  \"runtimeMode\": \"VDX_MANAGED\",\n  \"config\": {\n    \"supportedFormats\": [\n      \"dc+sd-jwt\"\n    ],\n    \"credentialEndpointPath\": \"/credential\",\n    \"preAuthorizedCodeEnabled\": true,\n    \"batchCredentialEnabled\": false\n  }\n}"
 						},
-						"description": "Creates a second issuer inside acme-eu-hr. The command creates the issuer software party, reserves its public endpoint on the subtenant host and writes the initial issuer configuration. The slug is derived from the display name; host and pathPrefix are omitted so the command derives a tenant-safe route prefix."
+						"description": "Creates a second issuer inside acme-eu-hr. The command creates the issuer software party, reserves its public endpoint on the subtenant host and writes the initial issuer configuration. The slug is derived from the display name; host and pathPrefix are omitted so the command derives a tenant-safe route prefix. Runs under the acme-eu-hr owner token: a tenant configuration mutation binds to the tenant of the caller, and the platform operator token would bind the request to the platform tenant."
 					},
 					"event": [
 						{
@@ -1823,11 +2251,26 @@
 					]
 				},
 				{
-					"name": "14 Register the EuPid credential configuration on hr-issuer",
+					"name": "21 Register the EuPid credential configuration on hr-issuer",
 					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{subTenantOwnerToken}}",
+									"type": "string"
+								}
+							]
+						},
 						"method": "PUT",
-						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{subSubTenantId}}/oid4vci/issuer/instances/{{subTenantIssuerId}}/credential-config-settings/EuPid",
+						"url": "{{subTenantPlatformConfigApiBaseUrl}}/tenants/{{subSubTenantId}}/oid4vci/issuer/instances/{{subTenantIssuerId}}/credential-config-settings/EuPid",
 						"header": [
+							{
+								"key": "Host",
+								"value": "{{subTenantPublicAuthority}}",
+								"type": "text"
+							},
 							{
 								"key": "Content-Type",
 								"value": "application/json"
@@ -1837,7 +2280,7 @@
 							"mode": "raw",
 							"raw": "{\n  \"resourceId\": \"7f1c2d34-1111-4a2b-9c3d-0000000000b5\",\n  \"credentialConfigurationId\": \"EuPid\",\n  \"format\": \"dc+sd-jwt\",\n  \"scope\": \"eu.europa.ec.eudi.pid.1\",\n  \"cryptographicBindingMethodsSupported\": [\n    \"jwk\"\n  ],\n  \"credentialSigningAlgValuesSupported\": [\n    \"ES256\"\n  ],\n  \"proofTypesSupported\": {\n    \"jwt\": {\n      \"proofSigningAlgValuesSupported\": [\n        \"ES256\"\n      ]\n    }\n  },\n  \"kmsResourceHandle\": \"{{subTenantKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{subTenantKmsKeyAlias}}\",\n  \"signingKeyMode\": \"{{subTenantSigningKeyMode}}\",\n  \"signingVerificationMethodId\": \"{{subTenantVerificationMethodId}}\",\n  \"validityPeriod\": \"P365D\"\n}"
 						},
-						"description": "Registers the EuPid credential configuration on the new issuer with the signing selection of the sub-subtenant. `resourceId` is the immutable consumer resource UUID of this credential configuration, so it stays stable across re-runs."
+						"description": "Registers the EuPid credential configuration on the new issuer with the signing selection of the sub-subtenant. `resourceId` is the immutable consumer resource UUID of this credential configuration, so it stays stable across re-runs. Runs under the acme-eu-hr owner token: a tenant configuration mutation binds to the tenant of the caller, and the platform operator token would bind the request to the platform tenant."
 					},
 					"event": [
 						{
@@ -1860,7 +2303,7 @@
 					]
 				},
 				{
-					"name": "15 Create a pre-authorized EuPid offer on hr-issuer",
+					"name": "22 Create a pre-authorized EuPid offer on hr-issuer",
 					"request": {
 						"auth": {
 							"type": "bearer",
@@ -1918,7 +2361,7 @@
 					]
 				},
 				{
-					"name": "16 Resolve the acme-eu-hr credential offer",
+					"name": "23 Resolve the acme-eu-hr credential offer",
 					"request": {
 						"auth": {
 							"type": "noauth"
@@ -1969,7 +2412,7 @@
 					]
 				},
 				{
-					"name": "17 Fetch the acme-eu-hr OID4VCI metadata",
+					"name": "24 Fetch the acme-eu-hr OID4VCI metadata",
 					"request": {
 						"auth": {
 							"type": "noauth"
@@ -2009,14 +2452,15 @@
 									"pm.collectionVariables.set('subTenantCredentialEndpoint', rewriteSubTenantUrl(j.credential_endpoint));",
 									"const advertisedAs = Array.isArray(j.authorization_servers) && j.authorization_servers.length ? j.authorization_servers[0] : null;",
 									"pm.expect(advertisedAs || j.token_endpoint, 'metadata advertises an authorization server or token endpoint').to.be.a('string');",
-									"pm.collectionVariables.set('subTenantVciTokenEndpoint', rewriteSubTenantUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));"
+									"pm.collectionVariables.set('subTenantVciTokenEndpoint', rewriteSubTenantUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));",
+									"if (j.nonce_endpoint) pm.collectionVariables.set('subTenantNonceEndpoint', rewriteSubTenantUrl(j.nonce_endpoint));"
 								]
 							}
 						}
 					]
 				},
 				{
-					"name": "18 Exchange the acme-eu-hr pre-authorized code",
+					"name": "25 Exchange the acme-eu-hr pre-authorized code",
 					"request": {
 						"auth": {
 							"type": "noauth"
@@ -2072,7 +2516,7 @@
 					]
 				},
 				{
-					"name": "19 Request the acme-eu-hr EuPid credential",
+					"name": "26 Request the acme-eu-hr EuPid credential",
 					"request": {
 						"auth": {
 							"type": "bearer",
@@ -2174,7 +2618,7 @@
 									"const base64Url = (wordArray) => CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
 									"const base64UrlHex = (hex) => base64Url(CryptoJS.enc.Hex.parse(hex));",
 									"const base64UrlJson = (value) => base64Url(CryptoJS.enc.Utf8.parse(JSON.stringify(value)));",
-									"if (pm.info.requestName === '15 Create a pre-authorized EuPid offer on hr-issuer') {",
+									"if (pm.info.requestName === '22 Create a pre-authorized EuPid offer on hr-issuer') {",
 									"  pm.collectionVariables.unset('holderWalletPrivateScalar');",
 									"  pm.collectionVariables.unset('holderWalletPublicJwk');",
 									"  pm.collectionVariables.unset('proofJwt');",
@@ -2216,9 +2660,22 @@
 									"  const signingInput = base64UrlJson(header) + '.' + base64UrlJson(payload);",
 									"  pm.collectionVariables.set('proofJwt', signingInput + '.' + signEs256(signingInput));",
 									"};",
-									"if (pm.info.requestName === '19 Request the acme-eu-hr EuPid credential') {",
+									"if (pm.info.requestName === '26 Request the acme-eu-hr EuPid credential') {",
 									"  const nonce = pm.collectionVariables.get('subTenantNonce');",
-									"  buildHolderProof(nonce);",
+									"  const nonceEndpoint = pm.collectionVariables.get('subTenantNonceEndpoint');",
+									"  if (nonce) {",
+									"    buildHolderProof(nonce);",
+									"  } else if (nonceEndpoint) {",
+									"    // The token response carries no c_nonce on this profile; the issuer hands one out at its nonce endpoint.",
+									"    pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { Host: pm.variables.replaceIn('{{subTenantPublicAuthority}}') } }, (error, response) => {",
+									"      if (error) throw new Error('OID4VCI nonce fetch failed: ' + error.message);",
+									"      const fresh = response.json().c_nonce;",
+									"      if (!fresh) throw new Error('OID4VCI nonce response did not contain c_nonce');",
+									"      buildHolderProof(fresh);",
+									"    });",
+									"  } else {",
+									"    buildHolderProof(undefined);",
+									"  }",
 									"}"
 								]
 							}
@@ -6674,6 +7131,270 @@
 			]
 		},
 		{
+			"name": "06c Platform Azure Key Vault Provisioning (optional)",
+			"disabled": true,
+			"description": "Explicit opt-in platform-operator checkpoint. Creates or reuses one exactly matching Azure Key Vault resource, attaches a write-only client secret only when needed, and does not offer, assign, or create keys.",
+			"item": [
+				{
+					"name": "01 Resolve exact platform Azure resource",
+					"request": {
+						"method": "GET",
+						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operatorToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
+									"const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+									"const required=['operatorToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+									"const token=String(pm.variables.get('operatorToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('operatorToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('operatorToken payload is invalid');}",
+									"const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('operatorToken is not bound to the platform-admin tenant');}",
+									"if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
+									"['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureResourceState','platformAzureCredentialSecretRef','platformAzureAlreadyConfigured','platformAzureLookupValidated','platformAzureConfigurationValidated'].forEach(name=>pm.collectionVariables.unset(name));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.expect(pm.response.code,'platform resources status').to.eql(200);",
+									"const page=pm.response.json();pm.expect(page).to.be.an('object');pm.expect(page.resources,'resources').to.be.an('array');const matches=page.resources.filter(candidate=>candidate.providerId===pm.variables.get('platformAzureProviderId'));pm.expect(matches.length,'providerId must be unique').to.be.at.most(1);if(matches.length===1){const resource=matches[0];",
+									"pm.expect(resource.handle).to.match(/^krh_[A-Za-z0-9_-]+$/);pm.expect(resource.providerId).to.eql(pm.variables.get('platformAzureProviderId'));pm.expect(resource.kind).to.eql('AZURE_KEY_VAULT');pm.expect(resource.displayName).to.eql(pm.variables.get('platformAzureDisplayName'));pm.expect(resource.credentialOwnership).to.eql('PRODUCT_MANAGED');pm.expect(['CONFIGURED','DEGRADED']).to.include(resource.state);pm.expect(['UNKNOWN','HEALTHY','STALE','DEGRADED','FAILED']).to.include(resource.health);pm.expect(Number.isInteger(resource.resourceVersion)&&resource.resourceVersion>0,'positive integer resourceVersion').to.eql(true);pm.expect(resource.credentialConfigured).to.be.a('boolean');pm.expect(resource.credentialSecretRef).to.be.a('string').and.not.empty;pm.expect(resource.providerAssignmentId).to.be.oneOf([null,undefined]);",
+									"const responseText=pm.response.text();pm.expect(responseText,'response omits supplied credential').to.not.include(pm.variables.get('platformAzureClientSecret'));pm.expect(responseText,'response has no secret value field').to.not.match(/\"(?:clientSecret|password|secretValue)\"\\s*:/i);",
+									"pm.collectionVariables.set('platformAzureResourceHandle',resource.handle);pm.collectionVariables.set('platformAzureResourceVersion',String(resource.resourceVersion));pm.collectionVariables.set('platformAzureResourceState',resource.state);pm.collectionVariables.set('platformAzureCredentialSecretRef',resource.credentialSecretRef);pm.collectionVariables.set('platformAzureAlreadyConfigured',String(resource.credentialConfigured===true));",
+									"}else{['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureResourceState','platformAzureCredentialSecretRef','platformAzureAlreadyConfigured'].forEach(name=>pm.collectionVariables.unset(name));}pm.collectionVariables.set('platformAzureLookupValidated','true');"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "02 Create platform Azure resource if absent",
+					"request": {
+						"method": "POST",
+						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operatorToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"providerId\": \"{{platformAzureProviderId}}\",\n  \"kind\": \"AZURE_KEY_VAULT\",\n  \"displayName\": \"{{platformAzureDisplayName}}\",\n  \"configuration\": {\n    \"vaultUri\": \"{{platformAzureVaultUri}}\",\n    \"applicationId\": \"{{platformAzureApplicationId}}\",\n    \"tenantId\": \"{{platformAzureTenantId}}\",\n    \"clientId\": \"{{platformAzureClientId}}\",\n    \"hsmType\": \"KEYVAULT\"\n  }\n}"
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
+									"const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+									"const required=['operatorToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+									"const token=String(pm.variables.get('operatorToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('operatorToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('operatorToken payload is invalid');}",
+									"const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('operatorToken is not bound to the platform-admin tenant');}",
+									"if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
+									"if(pm.collectionVariables.get('platformAzureLookupValidated')!=='true'){pm.test('06c lookup must validate before creation',()=>{throw new Error('Platform Azure lookup did not validate');});pm.execution.skipRequest();}",
+									"if(pm.collectionVariables.get('platformAzureResourceHandle'))pm.execution.skipRequest();"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.expect(pm.response.code,'platform Azure create status').to.eql(201);",
+									"const resource=pm.response.json();pm.expect(resource.state).to.eql('DEGRADED');pm.expect(resource.credentialConfigured).to.eql(false);pm.expect(resource.health).to.eql('UNKNOWN');",
+									"pm.expect(resource.handle).to.match(/^krh_[A-Za-z0-9_-]+$/);pm.expect(resource.providerId).to.eql(pm.variables.get('platformAzureProviderId'));pm.expect(resource.kind).to.eql('AZURE_KEY_VAULT');pm.expect(resource.displayName).to.eql(pm.variables.get('platformAzureDisplayName'));pm.expect(resource.credentialOwnership).to.eql('PRODUCT_MANAGED');pm.expect(['CONFIGURED','DEGRADED']).to.include(resource.state);pm.expect(['UNKNOWN','HEALTHY','STALE','DEGRADED','FAILED']).to.include(resource.health);pm.expect(Number.isInteger(resource.resourceVersion)&&resource.resourceVersion>0,'positive integer resourceVersion').to.eql(true);pm.expect(resource.credentialConfigured).to.be.a('boolean');pm.expect(resource.credentialSecretRef).to.be.a('string').and.not.empty;pm.expect(resource.providerAssignmentId).to.be.oneOf([null,undefined]);",
+									"const responseText=pm.response.text();pm.expect(responseText,'response omits supplied credential').to.not.include(pm.variables.get('platformAzureClientSecret'));pm.expect(responseText,'response has no secret value field').to.not.match(/\"(?:clientSecret|password|secretValue)\"\\s*:/i);",
+									"pm.collectionVariables.set('platformAzureResourceHandle',resource.handle);pm.collectionVariables.set('platformAzureResourceVersion',String(resource.resourceVersion));pm.collectionVariables.set('platformAzureResourceState',resource.state);pm.collectionVariables.set('platformAzureCredentialSecretRef',resource.credentialSecretRef);pm.collectionVariables.set('platformAzureAlreadyConfigured',String(resource.credentialConfigured===true));"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "03 Verify exact Azure configuration before credentials",
+					"request": {
+						"method": "GET",
+						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformAzureResourceHandle}}",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operatorToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
+									"const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+									"const required=['operatorToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+									"const token=String(pm.variables.get('operatorToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('operatorToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('operatorToken payload is invalid');}",
+									"const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('operatorToken is not bound to the platform-admin tenant');}",
+									"if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
+									"if(pm.collectionVariables.get('platformAzureLookupValidated')!=='true'){pm.test('06c lookup must validate before creation',()=>{throw new Error('Platform Azure lookup did not validate');});pm.execution.skipRequest();}",
+									"for(const name of ['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureCredentialSecretRef'])if(!String(pm.collectionVariables.get(name)||'').trim()){pm.test('06c requires response-derived resource identity',()=>{throw new Error('Required response-derived Azure resource value is unresolved: '+name);});pm.execution.skipRequest();}",
+									"pm.collectionVariables.unset('platformAzureConfigurationValidated');"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.expect(pm.response.code,'Azure detail status').to.eql(200);",
+									"const resource=pm.response.json();pm.expect(resource.handle).to.eql(pm.collectionVariables.get('platformAzureResourceHandle'));pm.expect(resource.providerId).to.eql(pm.variables.get('platformAzureProviderId'));pm.expect(resource.kind).to.eql('AZURE_KEY_VAULT');pm.expect(resource.credentialOwnership).to.eql('PRODUCT_MANAGED');pm.expect(['CONFIGURED','DEGRADED']).to.include(resource.state);pm.expect(['UNKNOWN','HEALTHY','STALE','DEGRADED','FAILED']).to.include(resource.health);pm.expect(resource.resourceVersion).to.eql(Number(pm.collectionVariables.get('platformAzureResourceVersion')));pm.expect(resource.credentialConfigured).to.eql(pm.collectionVariables.get('platformAzureAlreadyConfigured')==='true');pm.expect(resource.credentialSecretRef).to.be.oneOf([null,undefined]);",
+									"pm.expect(resource.configuration).to.deep.eql({vaultUri:pm.variables.get('platformAzureVaultUri'),applicationId:pm.variables.get('platformAzureApplicationId'),tenantId:pm.variables.get('platformAzureTenantId'),clientId:pm.variables.get('platformAzureClientId'),hsmType:'KEYVAULT'});",
+									"const responseText=pm.response.text();pm.expect(responseText,'response omits supplied credential').to.not.include(pm.variables.get('platformAzureClientSecret'));pm.expect(responseText,'response has no secret value field').to.not.match(/\"(?:clientSecret|password|secretValue)\"\\s*:/i);",
+									"pm.expect(resource.state).to.eql(pm.collectionVariables.get('platformAzureResourceState'));pm.collectionVariables.set('platformAzureConfigurationValidated','true');"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "04 Attach write-only Azure client secret if needed",
+					"request": {
+						"method": "PUT",
+						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformAzureResourceHandle}}/credentials/azure-key-vault",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operatorToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"expectedResourceVersion\": {{platformAzureResourceVersion}},\n  \"clientSecretRef\": \"{{platformAzureCredentialSecretRef}}\",\n  \"clientSecret\": \"{{platformAzureClientSecret}}\"\n}"
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
+									"const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+									"const required=['operatorToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+									"const token=String(pm.variables.get('operatorToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('operatorToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('operatorToken payload is invalid');}",
+									"const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('operatorToken is not bound to the platform-admin tenant');}",
+									"if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
+									"for(const name of ['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureCredentialSecretRef'])if(!String(pm.collectionVariables.get(name)||'').trim()){pm.test('06c requires response-derived resource identity',()=>{throw new Error('Required response-derived Azure resource value is unresolved: '+name);});pm.execution.skipRequest();}",
+									"if(pm.collectionVariables.get('platformAzureConfigurationValidated')!=='true'){pm.test('06c configuration must validate before credential mutation',()=>{throw new Error('Platform Azure configuration did not validate');});pm.execution.skipRequest();}",
+									"pm.collectionVariables.unset('platformAzureCredentialWriteValidated');if(pm.collectionVariables.get('platformAzureAlreadyConfigured')==='true')pm.execution.skipRequest();"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.expect(pm.response.code,'Azure credential write status').to.eql(200);",
+									"const result=pm.response.json();pm.expect(result.handle).to.eql(pm.collectionVariables.get('platformAzureResourceHandle'));pm.expect(result.credentialConfigured).to.eql(true);pm.expect(result.secretRef).to.eql(pm.collectionVariables.get('platformAzureCredentialSecretRef'));pm.expect(Number.isInteger(result.resourceVersion)&&result.resourceVersion>Number(pm.collectionVariables.get('platformAzureResourceVersion')),'credential write advances version').to.eql(true);",
+									"const responseText=pm.response.text();pm.expect(responseText,'response omits supplied credential').to.not.include(pm.variables.get('platformAzureClientSecret'));pm.expect(responseText,'response has no secret value field').to.not.match(/\"(?:clientSecret|password|secretValue)\"\\s*:/i);",
+									"pm.collectionVariables.set('platformAzureResourceVersion',String(result.resourceVersion));pm.collectionVariables.set('platformAzureAlreadyConfigured','true');pm.collectionVariables.set('platformAzureCredentialWriteValidated','true');"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "05 Read configured platform Azure resource",
+					"request": {
+						"method": "GET",
+						"url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources/{{platformAzureResourceHandle}}",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operatorToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
+									"const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+									"const required=['operatorToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+									"const token=String(pm.variables.get('operatorToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('operatorToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('operatorToken payload is invalid');}",
+									"const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('operatorToken is not bound to the platform-admin tenant');}",
+									"if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
+									"if(!(pm.collectionVariables.get('platformAzureConfigurationValidated')==='true'&&(pm.collectionVariables.get('platformAzureAlreadyConfigured')==='true'||pm.collectionVariables.get('platformAzureCredentialWriteValidated')==='true'))){pm.test('06c credential path must complete before final read',()=>{throw new Error('Platform Azure credential path did not complete');});pm.execution.skipRequest();}",
+									"for(const name of ['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureCredentialSecretRef'])if(!String(pm.collectionVariables.get(name)||'').trim()){pm.test('06c requires response-derived resource identity',()=>{throw new Error('Required response-derived Azure resource value is unresolved: '+name);});pm.execution.skipRequest();}"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.expect(pm.response.code,'configured Azure detail status').to.eql(200);",
+									"const resource=pm.response.json();pm.expect(resource.handle).to.eql(pm.collectionVariables.get('platformAzureResourceHandle'));pm.expect(resource.providerId).to.eql(pm.variables.get('platformAzureProviderId'));pm.expect(resource.kind).to.eql('AZURE_KEY_VAULT');pm.expect(resource.credentialOwnership).to.eql('PRODUCT_MANAGED');pm.expect(['CONFIGURED','DEGRADED']).to.include(resource.state);pm.expect(['UNKNOWN','HEALTHY','STALE','DEGRADED','FAILED']).to.include(resource.health);pm.expect(resource.resourceVersion).to.eql(Number(pm.collectionVariables.get('platformAzureResourceVersion')));pm.expect(resource.credentialConfigured).to.eql(pm.collectionVariables.get('platformAzureAlreadyConfigured')==='true');pm.expect(resource.credentialSecretRef).to.be.oneOf([null,undefined]);",
+									"pm.expect(resource.configuration).to.deep.eql({vaultUri:pm.variables.get('platformAzureVaultUri'),applicationId:pm.variables.get('platformAzureApplicationId'),tenantId:pm.variables.get('platformAzureTenantId'),clientId:pm.variables.get('platformAzureClientId'),hsmType:'KEYVAULT'});",
+									"const responseText=pm.response.text();pm.expect(responseText,'response omits supplied credential').to.not.include(pm.variables.get('platformAzureClientSecret'));pm.expect(responseText,'response has no secret value field').to.not.match(/\"(?:clientSecret|password|secretValue)\"\\s*:/i);",
+									"pm.expect(resource.credentialConfigured).to.eql(true);"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
 			"name": "07 Issuer Settings",
 			"description": "Creates the issuer design that represents the issuing party for the tenant and attaches its display metadata. Credential designs created later reference this issuer.",
 			"auth": {
@@ -7704,6 +8425,45 @@
 					"description": "Creates the CWT-proofed token status list for mdoc credentials with X.509 signing, verifies the hosted representation is an untagged COSE_Sign1 served as application/statuslist+cwt, binds it to the Mdl credential configuration, and runs the revoke, refetch and reactivate cycle. The REST create body has no mdoc profile selector, which is recorded as a gap on the create request.",
 					"item": [
 						{
+							"name": "00 Bind the mdoc-revocation signing key",
+							"request": {
+								"method": "PUT",
+								"url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/status-lists/mdoc-revocation/signing-key",
+								"description": "Binds the X.509 signing key of the mDL configuration to the mdoc-revocation status list. The platform authority accepts a status list only for a key bound to it; onboarding binds the EuPid list this way, and every list created here needs the same step.",
+								"header": [
+									{
+										"key": "Host",
+										"value": "{{tenantPublicAuthority}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"kmsResourceHandle\": \"{{statusListX509KmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListX509KmsKeyAlias}}\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('mdoc-revocation signing key bound', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+											"const j = pm.response.json();",
+											"pm.test('the binding echoes the exact handle and alias', () => {",
+											"  pm.expect(j.kmsResourceHandle && j.kmsResourceHandle.value, 'handle').to.eql(pm.collectionVariables.get('statusListX509KmsResourceHandle'));",
+											"  pm.expect(j.kmsKeyAlias && j.kmsKeyAlias.value, 'alias').to.eql(pm.collectionVariables.get('statusListX509KmsKeyAlias'));",
+											"});"
+										]
+									}
+								}
+							]
+						},
+						{
 							"name": "01 Create the CWT token status list",
 							"request": {
 								"method": "POST",
@@ -8015,6 +8775,45 @@
 					"name": "09c Bitstring VCDM",
 					"description": "Creates the W3C bitstring status list the VCDM credential configurations bind to, with the VC-JWT proof format, both the revocation and the suspension purpose, and two bits per status. It then walks a single entry through suspended, valid and revoked, asserting every transition through the entry read.",
 					"item": [
+						{
+							"name": "00 Bind the status-bitstring signing key",
+							"request": {
+								"method": "PUT",
+								"url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/status-lists/status-bitstring/signing-key",
+								"description": "Binds the DID signing key of the EuPid configuration to the status-bitstring list before the list is created.",
+								"header": [
+									{
+										"key": "Host",
+										"value": "{{tenantPublicAuthority}}",
+										"type": "text"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"kmsResourceHandle\": \"{{statusListDidKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListDidKmsKeyAlias}}\"\n}"
+								}
+							},
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('status-bitstring signing key bound', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+											"const j = pm.response.json();",
+											"pm.test('the binding echoes the exact handle and alias', () => {",
+											"  pm.expect(j.kmsResourceHandle && j.kmsResourceHandle.value, 'handle').to.eql(pm.collectionVariables.get('statusListDidKmsResourceHandle'));",
+											"  pm.expect(j.kmsKeyAlias && j.kmsKeyAlias.value, 'alias').to.eql(pm.collectionVariables.get('statusListDidKmsKeyAlias'));",
+											"});"
+										]
+									}
+								}
+							]
+						},
 						{
 							"name": "01 Create the bitstring status list",
 							"request": {
@@ -8630,7 +9429,8 @@
 											"pm.test('the binding advertises EuPidShared', () => pm.expect((j.credential_configurations_supported || {})['EuPidShared'], 'credential configuration').to.be.an('object'));",
 											"pm.collectionVariables.set('sharedConfigCredentialEndpoint', rewritePublicUrl(j.credential_endpoint));",
 											"const advertisedAs = Array.isArray(j.authorization_servers) && j.authorization_servers.length ? j.authorization_servers[0] : null;",
-											"pm.collectionVariables.set('sharedConfigTokenEndpoint', rewritePublicUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));"
+											"pm.collectionVariables.set('sharedConfigTokenEndpoint', rewritePublicUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));",
+											"if (j.nonce_endpoint) pm.collectionVariables.set('sharedConfigNonceEndpoint', rewritePublicUrl(j.nonce_endpoint));"
 										]
 									}
 								}
@@ -8836,7 +9636,20 @@
 											"};",
 											"if (pm.info.requestName === '10 Request the second-configuration credential') {",
 											"  const nonce = pm.collectionVariables.get('sharedConfigNonce');",
-											"  buildHolderProof(nonce);",
+											"  const nonceEndpoint = pm.collectionVariables.get('sharedConfigNonceEndpoint');",
+											"  if (nonce) {",
+											"    buildHolderProof(nonce);",
+											"  } else if (nonceEndpoint) {",
+											"    // The token response carries no c_nonce on this profile; the issuer hands one out at its nonce endpoint.",
+											"    pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { Host: pm.variables.replaceIn('{{tenantPublicAuthority}}') } }, (error, response) => {",
+											"      if (error) throw new Error('OID4VCI nonce fetch failed: ' + error.message);",
+											"      const fresh = response.json().c_nonce;",
+											"      if (!fresh) throw new Error('OID4VCI nonce response did not contain c_nonce');",
+											"      buildHolderProof(fresh);",
+											"    });",
+											"  } else {",
+											"    buildHolderProof(undefined);",
+											"  }",
 											"}"
 										]
 									}
@@ -9004,7 +9817,8 @@
 											"pm.test('the binding advertises EuPid', () => pm.expect((j.credential_configurations_supported || {})['EuPid'], 'credential configuration').to.be.an('object'));",
 											"pm.collectionVariables.set('sharedIssuerCredentialEndpoint', rewritePublicUrl(j.credential_endpoint));",
 											"const advertisedAs = Array.isArray(j.authorization_servers) && j.authorization_servers.length ? j.authorization_servers[0] : null;",
-											"pm.collectionVariables.set('sharedIssuerTokenEndpoint', rewritePublicUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));"
+											"pm.collectionVariables.set('sharedIssuerTokenEndpoint', rewritePublicUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));",
+											"if (j.nonce_endpoint) pm.collectionVariables.set('sharedIssuerNonceEndpoint', rewritePublicUrl(j.nonce_endpoint));"
 										]
 									}
 								}
@@ -9210,7 +10024,20 @@
 											"};",
 											"if (pm.info.requestName === '15 Request the second-issuer credential') {",
 											"  const nonce = pm.collectionVariables.get('sharedIssuerNonce');",
-											"  buildHolderProof(nonce);",
+											"  const nonceEndpoint = pm.collectionVariables.get('sharedIssuerNonceEndpoint');",
+											"  if (nonce) {",
+											"    buildHolderProof(nonce);",
+											"  } else if (nonceEndpoint) {",
+											"    // The token response carries no c_nonce on this profile; the issuer hands one out at its nonce endpoint.",
+											"    pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { Host: pm.variables.replaceIn('{{tenantPublicAuthority}}') } }, (error, response) => {",
+											"      if (error) throw new Error('OID4VCI nonce fetch failed: ' + error.message);",
+											"      const fresh = response.json().c_nonce;",
+											"      if (!fresh) throw new Error('OID4VCI nonce response did not contain c_nonce');",
+											"      buildHolderProof(fresh);",
+											"    });",
+											"  } else {",
+											"    buildHolderProof(undefined);",
+											"  }",
 											"}"
 										]
 									}
@@ -11205,7 +12032,8 @@
 									"});",
 									"pm.collectionVariables.set('employeeBadgeCredentialEndpoint', rewritePublicUrl(j.credential_endpoint));",
 									"const advertisedAs = Array.isArray(j.authorization_servers) && j.authorization_servers.length ? j.authorization_servers[0] : null;",
-									"pm.collectionVariables.set('employeeBadgeTokenEndpoint', rewritePublicUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));"
+									"pm.collectionVariables.set('employeeBadgeTokenEndpoint', rewritePublicUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));",
+									"if (j.nonce_endpoint) pm.collectionVariables.set('employeeBadgeNonceEndpoint', rewritePublicUrl(j.nonce_endpoint));"
 								]
 							}
 						}
@@ -11297,7 +12125,7 @@
 							"mode": "raw",
 							"raw": "{\n  \"credential_identifier\": \"{{employeeBadgeCredentialIdentifier}}\",\n  \"proofs\": {\n    \"jwt\": [\"{{proofJwt}}\"]\n  }\n}"
 						},
-						"description": "Issues the VCDM 1.1 credential as a VC-JWT with an ES256 proof of possession. The test decodes the returned JWT and checks the VCDM context, the credential type and the status entry. `credentialStatus.type` is `BitstringStatusListEntry` for VCDM 1.1 as well as VCDM 2.0; `StatusList2021Entry` is not implemented, so specification examples that name it are naming only."
+						"description": "Issues the VCDM 1.1 credential as a VC-JWT with an ES256 proof of possession. The test decodes the returned JWT and checks the VCDM context, the credential type and the status entry. `credentialStatus.type` is `BitstringStatusListEntry` for VCDM 1.1 as well as VCDM 2.0."
 					},
 					"event": [
 						{
@@ -11414,7 +12242,20 @@
 									"};",
 									"if (pm.info.requestName === '06 Request the EmployeeBadge credential') {",
 									"  const nonce = pm.collectionVariables.get('employeeBadgeNonce');",
-									"  buildHolderProof(nonce);",
+									"  const nonceEndpoint = pm.collectionVariables.get('employeeBadgeNonceEndpoint');",
+									"  if (nonce) {",
+									"    buildHolderProof(nonce);",
+									"  } else if (nonceEndpoint) {",
+									"    // The token response carries no c_nonce on this profile; the issuer hands one out at its nonce endpoint.",
+									"    pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { Host: pm.variables.replaceIn('{{tenantPublicAuthority}}') } }, (error, response) => {",
+									"      if (error) throw new Error('OID4VCI nonce fetch failed: ' + error.message);",
+									"      const fresh = response.json().c_nonce;",
+									"      if (!fresh) throw new Error('OID4VCI nonce response did not contain c_nonce');",
+									"      buildHolderProof(fresh);",
+									"    });",
+									"  } else {",
+									"    buildHolderProof(undefined);",
+									"  }",
 									"}"
 								]
 							}
@@ -11716,7 +12557,8 @@
 									"});",
 									"pm.collectionVariables.set('membershipCredentialEndpoint', rewritePublicUrl(j.credential_endpoint));",
 									"const advertisedAs = Array.isArray(j.authorization_servers) && j.authorization_servers.length ? j.authorization_servers[0] : null;",
-									"pm.collectionVariables.set('membershipTokenEndpoint', rewritePublicUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));"
+									"pm.collectionVariables.set('membershipTokenEndpoint', rewritePublicUrl(j.token_endpoint || (String(advertisedAs).replace(/\\/$/, '') + '/token')));",
+									"if (j.nonce_endpoint) pm.collectionVariables.set('membershipNonceEndpoint', rewritePublicUrl(j.nonce_endpoint));"
 								]
 							}
 						}
@@ -11808,7 +12650,7 @@
 							"mode": "raw",
 							"raw": "{\n  \"credential_identifier\": \"{{membershipCredentialIdentifier}}\",\n  \"proofs\": {\n    \"jwt\": [\"{{proofJwt}}\"]\n  }\n}"
 						},
-						"description": "Issues the VCDM 2.0 credential as a VC-JWT with an ES256 proof of possession. The test decodes the returned JWT and checks the VCDM context, the credential type and the status entry. `credentialStatus.type` is `BitstringStatusListEntry` for VCDM 1.1 as well as VCDM 2.0; `StatusList2021Entry` is not implemented, so specification examples that name it are naming only."
+						"description": "Issues the VCDM 2.0 credential as a VC-JWT with an ES256 proof of possession. The test decodes the returned JWT and checks the VCDM context, the credential type and the status entry. `credentialStatus.type` is `BitstringStatusListEntry` for VCDM 1.1 as well as VCDM 2.0."
 					},
 					"event": [
 						{
@@ -11925,7 +12767,20 @@
 									"};",
 									"if (pm.info.requestName === '06 Request the Membership credential') {",
 									"  const nonce = pm.collectionVariables.get('membershipNonce');",
-									"  buildHolderProof(nonce);",
+									"  const nonceEndpoint = pm.collectionVariables.get('membershipNonceEndpoint');",
+									"  if (nonce) {",
+									"    buildHolderProof(nonce);",
+									"  } else if (nonceEndpoint) {",
+									"    // The token response carries no c_nonce on this profile; the issuer hands one out at its nonce endpoint.",
+									"    pm.sendRequest({ url: nonceEndpoint, method: 'POST', header: { Host: pm.variables.replaceIn('{{tenantPublicAuthority}}') } }, (error, response) => {",
+									"      if (error) throw new Error('OID4VCI nonce fetch failed: ' + error.message);",
+									"      const fresh = response.json().c_nonce;",
+									"      if (!fresh) throw new Error('OID4VCI nonce response did not contain c_nonce');",
+									"      buildHolderProof(fresh);",
+									"    });",
+									"  } else {",
+									"    buildHolderProof(undefined);",
+									"  }",
 									"}"
 								]
 							}
@@ -12865,7 +13720,10 @@
 									"pm.collectionVariables.set('trustAnchorId', did.anchor.anchorId);",
 									"pm.collectionVariables.set('trustAnchorVersion', String(did.anchor.version));",
 									"pm.collectionVariables.set('trustIdentityIdentifierId', did.anchor.identityIdentifierId);",
-									"pm.test('seeded anchors are tenant-produced material', () => pm.expect(did.anchor.origin).to.eql('TENANT_PUBLIC'));"
+									"pm.test('seeded anchors are tenant-produced material', () => pm.expect(did.anchor.origin).to.eql('TENANT_PUBLIC'));",
+									"pm.test('issuer X.509 anchor seeded', () => pm.expect(mechanisms).to.include('X509'));",
+									"const x509 = items.find((i) => i.anchor.evidenceMechanism === 'X509');",
+									"pm.collectionVariables.set('trustX509IdentityIdentifierId', x509.anchor.identityIdentifierId);"
 								]
 							}
 						}
@@ -13160,7 +14018,7 @@
 					"request": {
 						"method": "POST",
 						"url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/anchors",
-						"description": "An anchor references public evidence by identity-identifier id rather than carrying raw material. This reuses the identifier the onboarding seeder already materialized.",
+						"description": "An anchor references public evidence by identity-identifier id rather than carrying raw material. This reuses the identifier the onboarding seeder already materialized. A VICAL is a COSE_Sign1 over an X.509 chain, so its signer anchor carries X.509 evidence; the seeded issuer certificate identifier stands in for the VICAL provider here.",
 						"header": [
 							{
 								"key": "Content-Type",
@@ -13169,7 +14027,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"domainId\": \"{{vicalDomainId}}\",\n  \"identityIdentifierId\": \"{{trustIdentityIdentifierId}}\",\n  \"evidenceMechanism\": \"DID\",\n  \"origin\": \"IMPORTED\",\n  \"status\": \"ACTIVE\",\n  \"metadata\": {\n    \"source\": \"customer-release-gate\",\n    \"productRole\": \"mdoc-vical-signer\"\n  }\n}"
+							"raw": "{\n  \"domainId\": \"{{vicalDomainId}}\",\n  \"identityIdentifierId\": \"{{trustX509IdentityIdentifierId}}\",\n  \"evidenceMechanism\": \"X509\",\n  \"origin\": \"IMPORTED\",\n  \"status\": \"ACTIVE\",\n  \"metadata\": {\n    \"source\": \"customer-release-gate\",\n    \"productRole\": \"mdoc-vical-signer\"\n  }\n}"
 						}
 					},
 					"event": [

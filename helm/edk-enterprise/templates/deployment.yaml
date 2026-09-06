@@ -274,6 +274,10 @@ spec:
             {{- if eq $name "platform" }}
             - name: EXTERNAL_BASE_URL
               value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS
+              value: {{ $.Values.secretManagement.authority.allowTenantManagedProviders | quote }}
+            - name: SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_PLATFORM_OFFERINGS
+              value: {{ $.Values.secretManagement.authority.allowPlatformOfferings | quote }}
             # Setup-API CORS allow-list origin and operator-cli OAuth redirect
             # base. The platform UI lives at the platform's own origin, so this
             # is externalBaseUrl by definition; a divergent value only breaks

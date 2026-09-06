@@ -98,6 +98,10 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
           keys: *tenantKmsGrpcRoute
+          # Invitation-token HMAC envelopes use the typed leaf unwrap/wrap
+          # commands. Keep those commands on the tenant-KMS execution plane;
+          # the tenant-AS has no local managed-key implementation.
+          leaf: *tenantKmsGrpcRoute
           signature:
             target: SERVER
             transport: GRPC

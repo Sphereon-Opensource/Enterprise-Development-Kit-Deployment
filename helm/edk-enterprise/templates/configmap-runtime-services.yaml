@@ -466,6 +466,7 @@ data:
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "wallet-unit") | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -516,6 +517,7 @@ data:
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "wallet-interaction") | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:

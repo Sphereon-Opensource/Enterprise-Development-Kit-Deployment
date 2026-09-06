@@ -338,7 +338,7 @@ assert.match(helmValues, /allowTenantManagedProviders: false/u, 'customer Helm m
 assert.match(e2eHelmValues, /allowTenantManagedProviders: false/u, 'E2E Helm must preserve the clean customer provider baseline')
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
-  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: false\n/u,
+  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: \$\{env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false\}\n/u,
   'customer Compose must not publish cloud-provider fixtures by default',
 )
 assert.match(

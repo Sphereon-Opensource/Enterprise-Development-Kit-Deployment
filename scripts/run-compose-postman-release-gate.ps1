@@ -889,7 +889,27 @@ if ($WebhookSink) {
 # The Azure Key Vault lane has no overlay: it runs against a real vault and needs every value
 # below. A missing value skips the lane (the collection folder self-skips on an empty
 # azureKeyVaultUri) and the manifest records it as skipped rather than failing the gate.
+# The live platform contract uses AZURE_KEYVAULT_* names; older Postman names remain aliases.
 $azureKmsEnvNames = @('AZURE_KEY_VAULT_URI', 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_HSM_KEY_NAME', 'AZURE_CERT_NAME')
+function Set-AzureKmsCredentialAliases {
+  $aliases = [ordered]@{
+    AZURE_KEY_VAULT_URI = 'AZURE_KEYVAULT_URL'
+    AZURE_TENANT_ID = 'AZURE_KEYVAULT_TENANT_ID'
+    AZURE_CLIENT_ID = 'AZURE_KEYVAULT_CLIENT_ID'
+    AZURE_CLIENT_SECRET = 'AZURE_KEYVAULT_CLIENT_SECRET'
+  }
+  foreach ($legacy in $aliases.Keys) {
+    $modern = $aliases[$legacy]
+    $legacyValue = [Environment]::GetEnvironmentVariable($legacy)
+    $modernValue = [Environment]::GetEnvironmentVariable($modern)
+    if ([string]::IsNullOrWhiteSpace($legacyValue) -and -not [string]::IsNullOrWhiteSpace($modernValue)) {
+      [Environment]::SetEnvironmentVariable($legacy, $modernValue, 'Process')
+    } elseif ([string]::IsNullOrWhiteSpace($modernValue) -and -not [string]::IsNullOrWhiteSpace($legacyValue)) {
+      [Environment]::SetEnvironmentVariable($modern, $legacyValue, 'Process')
+    }
+  }
+}
+Set-AzureKmsCredentialAliases
 $azureKmsMissing = @($azureKmsEnvNames | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
 $azureKmsLaneReady = [bool]($AzureKms -and $azureKmsMissing.Count -eq 0)
 if ($AzureKms -and -not $azureKmsLaneReady) {
