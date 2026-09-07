@@ -134,19 +134,20 @@ the tenant endpoints to the tenant host during onboarding.
 Use the upgrade wrapper instead of changing `EDK_TAG` and running `docker
 compose up` yourself. It detects the installed platform image, pulls each
 required release, and waits for the complete stack after every step. A direct
-RC1-to-RC3 request therefore runs RC1-to-RC2-to-RC3 so the application database
-migrations execute in release order. Repeating the command is idempotent.
+RC1-to-RC4 request therefore runs RC1-to-RC2-to-RC3-to-RC4 so the application
+database migrations execute in release order. Repeating the command is
+idempotent.
 
 Linux/macOS:
 
 ```bash
-bash ../scripts/upgrade-compose.sh --image-tag 0.25.0-RC3
+bash ../scripts/upgrade-compose.sh --image-tag 0.25.0-RC4
 ```
 
 Windows PowerShell:
 
 ```powershell
-..\scripts\upgrade-compose.ps1 -ImageTag 0.25.0-RC3
+..\scripts\upgrade-compose.ps1 -ImageTag 0.25.0-RC4
 ```
 
 For a gateway deployment, pass both the base file and overlay:

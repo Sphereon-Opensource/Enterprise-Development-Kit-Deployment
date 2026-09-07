@@ -93,7 +93,7 @@ $collectionPath = if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
     [System.IO.Path]::GetFullPath($CollectionPath)
 }
 # Pinned size of the shipped collection. Bump this in the same commit that adds or removes a request.
-$DefaultCollectionRequestCount = 284
+$DefaultCollectionRequestCount = 304
 $snapshotDir = Join-Path $repoRoot 'deploy\edk\e2e\snapshots'
 $runnerPath = Join-Path $repoRoot 'deploy\edk\e2e\runner\run-e2e.js'
 $imageVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-enterprise-image-set.mjs'
@@ -754,7 +754,7 @@ function Invoke-CanaryFileScan([string]$Path, [string]$Label, [string]$EvidenceP
   $lines = @(Get-Content -LiteralPath $Path -Raw -ErrorAction Stop |
     & $script:nodeCommand $script:canaryScanner `
       --environment $script:resolvedPostmanEnvironment `
-      --canary-key idpClientSecret `
+      --canary-key tenantServiceClientSecret `
       --label $Label 2>&1 |
     ForEach-Object { [string]$_ })
   $exitCode = $LASTEXITCODE
@@ -971,7 +971,8 @@ foreach ($key in @(
   'operatorPassword',
   'tenantOwnerPassword',
   'tenantOwnerCodeVerifier',
-  'idpClientSecret'
+  'tenantServiceClientId',
+  'tenantServiceClientSecret'
 )) {
   $candidate = [string]$postmanValues[$key]
   if ([string]::IsNullOrWhiteSpace($candidate) -or $candidate -match '^(?i)PASTE-|^replace-with-') {
@@ -989,8 +990,8 @@ if ($AccessMode -eq 'Localtest') {
     Fail "The Localtest gateway overlay must contain an active tenant alias for $($postmanValues['tenantSlug']).$BaseDomain so tenant JWKS resolves inside Compose."
   }
 }
-if ([string]$postmanValues['idpClientSecret'] -notmatch '^[A-Za-z0-9_-]{16,128}$') {
-  Fail "idpClientSecret must be an encoding-stable 16-128 character ASCII canary using only letters, digits, '_' or '-'."
+if ([string]$postmanValues['tenantServiceClientSecret'] -notmatch '^[A-Za-z0-9_-]{16,128}$') {
+  Fail "tenantServiceClientSecret must be an encoding-stable 16-128 character ASCII canary using only letters, digits, '_' or '-'."
 }
 Import-Module -Name $lifecycleModule -Force
 
@@ -1465,7 +1466,7 @@ try {
       $supportHelper,
       'scan-producer',
       '--environment', $resolvedPostmanEnvironment,
-      '--canary-key', 'idpClientSecret',
+      '--canary-key', 'tenantServiceClientSecret',
       '--scanner', $canaryScanner,
       '--label', $databaseScan.label,
       '--evidence', $canaryEvidence,
@@ -1577,7 +1578,7 @@ try {
     & $nodeCommand $supportHelper finalize-evidence `
       --root $resolvedReportDir `
       --environment $resolvedPostmanEnvironment `
-      --canary-key idpClientSecret `
+      --canary-key tenantServiceClientSecret `
       --candidate-status $candidateStatus `
       --teardown-status $teardownStatus `
       --project-name $ProjectName `

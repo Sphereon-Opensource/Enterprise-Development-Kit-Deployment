@@ -490,6 +490,18 @@ data:
               leaf:
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+              # Raw signature creation over a tenant key. Every JWS the platform
+              # builds for a customer tenant ends in kms.signature.create, which is
+              # a separate routing service from the typed leaves. Customer tenant
+              # sessions route it to tenant-KMS while the application tenant
+              # continues to select LOCAL. Verification is keyless and stays in
+              # process for every session.
+              signature:
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+                commands:
+                  "[kms.signature.verify]":
+                    target: LOCAL
               mac:
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}

@@ -90,7 +90,8 @@ function writeEnvironment(path, overrides = {}) {
     operatorPassword: 'operator-password-value',
     tenantOwnerPassword: 'tenant-owner-password-value',
     tenantOwnerCodeVerifier: 'tenant-owner-verifier-value',
-    idpClientSecret: 'StableCanary_0123456789',
+    tenantServiceClientId: 'walkthrough-client-id',
+    tenantServiceClientSecret: 'StableCanary_0123456789',
     ...overrides,
   }
   writeFileSync(path, `${JSON.stringify({
@@ -98,7 +99,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 288, 'shipped customer collection must contain 288 requests')
+assert.equal(requestCount(collection.item), 304, 'shipped customer collection must contain the current 304-request walkthrough')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -109,7 +110,8 @@ assert.equal(variableAudit.status, 0, `${variableAudit.stdout}\n${variableAudit.
 assert.match(variableAudit.stdout, /Postman variable audit passed\./u)
 
 // The platform operator signs in through the hosted authorization server. client_credentials is
-// reserved for the tenant service client the walkthrough registers itself in folder 03.
+// reserved for the tenant service client the walkthrough registers in the tenant
+// federation lane after the tenant authorization server has been discovered.
 assert.deepEqual(collection.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{operatorToken}}', type: 'string'}]})
 const operatorTokenRequest = requestByName.get('05 Exchange code for operator token')
 assert.ok(operatorTokenRequest, 'operator sign-in must end in an authorization-code token exchange')
@@ -125,11 +127,11 @@ assert.deepEqual(
 )
 assert.ok(JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantToken', tenantAccessToken)") ||
   JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantToken', j.access_token)"))
-const tenantServiceClientRegistration = requestByName.get('16 Register walkthrough tenant service client')
-assert.ok(tenantServiceClientRegistration, 'tenant service client registration must follow tenant registration in folder 03')
+const tenantServiceClientRegistration = requestByName.get('07b Register walkthrough tenant service client')
+assert.ok(tenantServiceClientRegistration, 'tenant service client registration must follow tenant authorization-server discovery in folder 04')
 assert.match(tenantServiceClientRegistration.request.body.raw, /"principalRoles": \[\s*"tenant-admin"\s*\]/u)
 assert.match(tenantServiceClientRegistration.request.body.raw, /"grantTypes": \[\s*"client_credentials"\s*\]/u)
-for (const folderName of ['06 Tenant Keys and DID', '07 Issuer Settings', '11 Issue Credentials Simple', '14 Verification']) {
+for (const folderName of ['06 Tenant Keys and DID', '10 Issuer Settings', '14 Issue Credentials Simple', '20 Verification']) {
   const folder = collection.item.find((item) => item.name === folderName)
   assert.deepEqual(folder.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{tenantToken}}', type: 'string'}]}, `${folderName} must inherit the tenant token`)
 }
@@ -567,21 +569,21 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const cleanScan = spawnSync(process.execPath, [
     scannerPath,
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--label', 'contract-clean',
   ], {input: 'safe evidence\n', encoding: 'utf8'})
   assert.equal(cleanScan.status, 0, cleanScan.stderr)
   const leakingScan = spawnSync(process.execPath, [
     scannerPath,
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--label', 'contract-leak',
   ], {input: `unsafe ${canary}\n`, encoding: 'utf8'})
   assert.notEqual(leakingScan.status, 0, 'scanner must fail for the submitted canary')
   const emptyScan = spawnSync(process.execPath, [
     scannerPath,
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--label', 'contract-empty',
   ], {input: '', encoding: 'utf8'})
   assert.notEqual(emptyScan.status, 0, 'scanner must reject empty producer input')
@@ -595,7 +597,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     supportPath,
     'scan-producer',
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--scanner', scannerPath,
     '--label', 'partial-db',
     '--evidence', producerEvidence,
@@ -646,7 +648,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const failedFinalization = finalizeEvidence({
     root: teardownFailureRoot,
     environmentPath,
-    canaryKey: 'idpClientSecret',
+    canaryKey: 'tenantServiceClientSecret',
     candidateStatus: 'passed',
     teardownStatus: 'failed',
     projectName: 'contract_project',
@@ -672,7 +674,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const baselineResult = finalizeEvidence({
     root: baselineRoot,
     environmentPath,
-    canaryKey: 'idpClientSecret',
+    canaryKey: 'tenantServiceClientSecret',
     candidateStatus: 'passed',
     teardownStatus: 'passed',
     projectName: 'contract_project',
@@ -697,7 +699,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     'finalize-evidence',
     '--root', cliRoot,
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--candidate-status', 'passed',
     '--teardown-status', 'passed',
     '--project-name', 'contract_project',
@@ -745,7 +747,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const lanesResult = finalizeEvidence({
     root: lanesRoot,
     environmentPath,
-    canaryKey: 'idpClientSecret',
+    canaryKey: 'tenantServiceClientSecret',
     candidateStatus: 'passed',
     teardownStatus: 'passed',
     projectName: 'contract_project',
@@ -766,7 +768,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     'finalize-evidence',
     '--root', lanesCliRoot,
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--candidate-status', 'passed',
     '--teardown-status', 'passed',
     '--project-name', 'contract_project',
@@ -789,7 +791,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     () => finalizeEvidence({
       root: baselineRoot,
       environmentPath,
-      canaryKey: 'idpClientSecret',
+      canaryKey: 'tenantServiceClientSecret',
       candidateStatus: 'passed',
       teardownStatus: 'passed',
       projectName: 'contract_project',
@@ -814,7 +816,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const sanitizedResult = finalizeEvidence({
     root: sanitizedRoot,
     environmentPath,
-    canaryKey: 'idpClientSecret',
+    canaryKey: 'tenantServiceClientSecret',
     candidateStatus: 'passed',
     teardownStatus: 'passed',
     projectName: 'contract_project',
@@ -930,7 +932,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 288)
+  assert.equal(plan.requestCount, 304)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -969,7 +971,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 288)
+  assert.equal(monolithPlan.requestCount, 304)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))

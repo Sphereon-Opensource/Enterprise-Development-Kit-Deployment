@@ -260,8 +260,8 @@ docker compose --project-directory ./compose -f ./compose/docker-compose.yml -f 
 
 Use the install and upgrade wrapper. The wrapper validates the model, pulls the
 published images, starts the services, waits for health checks, and records the
-installed tag. It also preserves the required RC1 to RC2 to RC3 migration order
-when an older release is detected.
+installed tag. It also preserves the required RC1 to RC2 to RC3 to RC4
+migration order when an older release is detected.
 
 On Windows PowerShell, run:
 
@@ -670,7 +670,7 @@ helm upgrade --install sphereon-edk-enterprise ./helm/edk-enterprise --namespace
 ```
 
 Do not use the direct command to skip release-transition steps during an
-upgrade. The wrapper handles the known RC1 to RC2 to RC3 order and the one-time
+upgrade. The wrapper handles the known RC1 to RC2 to RC3 to RC4 order and the one-time
 Deployment strategy conversion. See
 [the Kubernetes quickstart](docs/quickstart-kubernetes.md) for release-specific
 upgrade details.

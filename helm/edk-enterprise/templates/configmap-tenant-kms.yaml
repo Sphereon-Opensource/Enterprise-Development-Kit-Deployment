@@ -118,6 +118,11 @@ data:
                     target: LOCAL
                   leaf:
                     target: LOCAL
+                  # Raw signature creation over a tenant key. This service is the KMS
+                  # server tenant configuration points at, so the same setting
+                  # would make it call itself.
+                  signature:
+                    target: LOCAL
                   encryption:
                     target: LOCAL
                   # Tenant configuration points this group at the KMS server for

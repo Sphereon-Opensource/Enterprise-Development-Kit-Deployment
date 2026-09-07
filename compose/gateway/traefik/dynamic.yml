@@ -295,14 +295,14 @@ http:
       priority: 220
       tls: {}
 
-    # TS 11 catalogs are platform-owned. Public SchemaMeta stays anonymous
+    # TS 11 catalogs are issuer-owned. Public SchemaMeta stays anonymous
     # under /public/catalogs; management is /api/catalog/v1.
     tenant-catalogs:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
         (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
       entryPoints: ["websecure"]
-      service: svc-platform
+      service: svc-issuer
       priority: 220
       tls: {}
 

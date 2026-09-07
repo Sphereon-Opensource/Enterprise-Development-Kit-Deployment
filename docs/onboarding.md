@@ -204,11 +204,18 @@ API automation.
 Both helpers read `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`.
 The supplied file is a post-setup environment. It contains `baseDomain`,
 `tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword`,
-`tenantOwnerPassword`, `tenantOwnerCodeVerifier`, and `idpClientSecret`.
+`tenantOwnerPassword`, `tenantOwnerCodeVerifier`, `tenantServiceClientId`, and
+`tenantServiceClientSecret`.
 These are Postman/provision variables, not Docker Compose or Helm startup
 variables.
 The operator OAuth callback is derived from the platform URL and the hosted
 session during sign-in; do not add or fill any separate callback variable.
+The collection derives the platform origin, tenant gateway origin, protocol API
+roots, issuer/verifier display URLs, resource identifiers, and tenant-scoped
+`did:web` values from onboarding responses. Do not add a DID hostname or
+service-container URL to the environment. The optional VICAL source remains a
+collection-local HTTPS value because it belongs to the customer's published
+trust infrastructure; override that value only when using a real VICAL URL.
 
 ### Provision script
 
@@ -254,20 +261,21 @@ issuance and verification examples. Import these files into Postman:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-The supplied collection starts after platform setup. Run its 284 requests in
+The supplied collection starts after platform setup. Run its 304 requests in
 folder order:
 
 | Folder | What it does |
 | --- | --- |
 | `00 Before You Start` | Checks the imported environment and gateway contract before authenticated requests |
-| `02 Operator Token` | Obtains the operator token with the client_credentials grant of the confidential operator client that the setup script registered |
-| `03 Tenant Onboarding` | Registers the tenant, waits for onboarding completion, verifies tenant public endpoint bindings, and registers the tenant service client on the tenant authorization server |
-| `03b Subtenants` | Registers a two-level tenant hierarchy, lists the children at both levels, reconciles registration rows, and gives the deepest subtenant its own service client, issuer and issued credential |
-| `04 Tenant Federation` through `08 Credential Designs` | Configure tenant federation, the disposable SOFTWARE KMS create/write/validate/rotate/detach/retire lifecycle, DID, issuer settings and credential designs |
-| `09 Status Lists` | The JWT list, then `09b CWT mdoc` for the CWT-signed mdoc list, `09c Bitstring VCDM` for the two-bit bitstring list with revocation and suspension, and `09d Shared list` for one list shared by two credential configurations and two issuer instances |
-| `10 Hosted Branding Verification` through `11a OID4VCI Pre-authorized Transaction Code` | Hosted branding, SD-JWT and mdoc issuance, and the pre-authorized transaction-code flow |
-| `11b VCDM 1.1` and `11c VCDM 2.0` | Issue W3C VC-JWT credentials in both VCDM versions and check the `BitstringStatusListEntry` status entry each one carries |
-| `12 Issue Credentials Pipeline` through `15 Authorization Code Offer` | Pipeline issuance, DCQL, verification and the authorization-code offer examples |
+| `01 Operator Sign-in` | Obtains the operator token with the client_credentials grant of the confidential operator client that the setup script registered |
+| `02 Tenant Onboarding` | Registers the tenant, waits for onboarding completion, enables the tenant-owned Developer Console with its response-derived revision, verifies tenant public endpoint bindings, and registers the tenant service client on the tenant authorization server |
+| `03 Subtenants` | Registers a two-level tenant hierarchy, lists the children at both levels, reconciles registration rows, and gives the deepest subtenant its own service client, issuer and issued credential |
+| `04 Tenant Federation` through `11 Credential Designs` | Configure tenant federation, the disposable SOFTWARE KMS create/write/validate/rotate/detach/retire lifecycle, DID, issuer settings and credential designs |
+| `12 Status Lists` | The JWT list, then nested `01 CWT mdoc` for the CWT-signed mdoc list, `02 Bitstring VCDM` for the two-bit bitstring list with revocation and suspension, and `03 Shared list` for one list shared by two credential configurations and two issuer instances |
+| `13 Hosted Branding Verification` through `15 OID4VCI Pre-authorized Transaction Code` | Hosted branding, SD-JWT and mdoc issuance, and the pre-authorized transaction-code flow |
+| `16 VCDM 1.1` and `17 VCDM 2.0` | Issue W3C VC-JWT credentials in both VCDM versions and check the `BitstringStatusListEntry` status entry each one carries |
+| `18 Issue Credentials Pipeline` through `21 Authorization Code Offer` | Pipeline issuance, DCQL, verification and the authorization-code offer examples |
+| `22 Trust Domains` | Creates and verifies tenant trust-domain configuration and the VICAL/trust-list integration surface |
 
 ## After onboarding
 

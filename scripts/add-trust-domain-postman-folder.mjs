@@ -1,5 +1,5 @@
 /**
- * Adds the "16 Trust Domains" folder to the customer Postman collection.
+ * Adds the "22 Trust Domains" folder to the customer Postman collection.
  *
  * Idempotent: re-running replaces the folder rather than appending a second copy, so the script can
  * be re-applied after the collection is regenerated from OpenAPI.
@@ -16,7 +16,7 @@ import {dirname, join} from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 const collectionPath = join(here, '..', 'postman', 'EDK-Enterprise-Deployment.postman_collection.json')
 
-const FOLDER_NAME = '16 Trust Domains'
+const FOLDER_NAME = '22 Trust Domains'
 const AUTH = [{key: 'Authorization', value: 'Bearer {{tenantOwnerToken}}'}]
 const JSON_HEADERS = [...AUTH, {key: 'Content-Type', value: 'application/json'}]
 
@@ -278,7 +278,7 @@ const items = [
       'Negative check on the ISO 18013-5 Annex C path. The anchor exists and is ACTIVE but holds no MDOC_VICAL_SIGNER admission, so it must not be usable to vouch for a whole certificate list.',
     body: JSON.stringify(
       {
-        url: 'https://vical.example.com/vical.cbor',
+        url: '{{vicalSourceUrl}}',
         signerAnchorIds: ['{{vicalAnchorId}}'],
         issuerAnchorIds: [],
         requiredCertificateProfiles: [],
@@ -325,7 +325,7 @@ const items = [
     description: 'The signer anchor now holds MDOC_VICAL_SIGNER, so the same body that was refused in step 12 is accepted.',
     body: JSON.stringify(
       {
-        url: 'https://vical.example.com/vical.cbor',
+        url: '{{vicalSourceUrl}}',
         signerAnchorIds: ['{{vicalAnchorId}}'],
         issuerAnchorIds: [],
         requiredCertificateProfiles: ['iso18013-5-iaca'],
@@ -339,7 +339,7 @@ const items = [
       "pm.test('VICAL configured', () => pm.expect(pm.response.code, detail()).to.eql(200));",
       'const v = pm.response.json();',
       "pm.test('the source round-trips', () => {",
-      "  pm.expect(v.source.url).to.eql('https://vical.example.com/vical.cbor');",
+      "  pm.expect(v.source.url).to.eql(pm.variables.replaceIn('{{vicalSourceUrl}}'));",
       "  pm.expect(v.source.signerAnchorIds).to.include(pm.collectionVariables.get('vicalAnchorId'));",
       "  pm.expect(v.source.enabled).to.be.true;",
       '});',
@@ -350,8 +350,12 @@ const items = [
     method: 'PUT',
     url: `${B}/domains/{{vicalDomainId}}/anchors/{{vicalAnchorId}}/mdoc-vical`,
     description: 'A VICAL is fetched over the network, so the URL must be absolute HTTPS. Userinfo and fragments are rejected for the same reason.',
+    pre: [
+      "const source = pm.variables.replaceIn('{{vicalSourceUrl}}');",
+      "pm.collectionVariables.set('vicalHttpSourceUrl', source.replace(/^https:/i, 'http:'));",
+    ],
     body: JSON.stringify(
-      {url: 'http://vical.example.com/vical.cbor', signerAnchorIds: ['{{vicalAnchorId}}'], enabled: true},
+      {url: '{{vicalHttpSourceUrl}}', signerAnchorIds: ['{{vicalAnchorId}}'], enabled: true},
       null,
       2,
     ),
@@ -469,6 +473,16 @@ const folder = {
 }
 
 const collection = JSON.parse(readFileSync(collectionPath, 'utf8'))
+collection.variable ??= []
+if (!collection.variable.some((variable) => variable.key === 'vicalSourceUrl')) {
+  collection.variable.push({
+    key: 'vicalSourceUrl',
+    value: 'https://vical.example.com/vical.cbor',
+    type: 'string',
+    description:
+      "HTTPS URL of the published VICAL artifact used by the optional trust-domain example. Override it when running against a real published VICAL; it is not derived from the tenant host.",
+  })
+}
 const existing = collection.item.findIndex((f) => f.name === FOLDER_NAME)
 if (existing >= 0) collection.item.splice(existing, 1, folder)
 else collection.item.push(folder)

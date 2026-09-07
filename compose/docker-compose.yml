@@ -32,6 +32,10 @@
 
 name: edk-enterprise
 
+x-edk-public-urls: &edk-public-urls
+  platform: &edk-platform-public-url ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
+  onboarding: &edk-onboarding-ui-public-url ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}}
+
 x-edk-common-env: &edk-common-env
   APP_PROFILE: container
   PORT: "8080"
@@ -41,7 +45,7 @@ x-edk-common-env: &edk-common-env
   GRPC_AUTH_MODE: service-jwt
   SPHEREON_CONFIG_LOCATION: /app/config
   EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
-  EDK_PLATFORM_PUBLIC_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
+  EDK_PLATFORM_PUBLIC_URL: *edk-platform-public-url
   EDK_TRUST_TENANT_REGISTRY_ISSUERS: ${EDK_TRUST_TENANT_REGISTRY_ISSUERS:-true}
   EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD}
   EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
@@ -224,8 +228,8 @@ services:
       # Fail-closed cloud offering gate; Azure/AWS credentials are never copied
       # into this file and are attached through the typed platform-config API.
       SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS: ${SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:-false}
-      EXTERNAL_BASE_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
-      ONBOARDING_UI_BASE_URL: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
+      EXTERNAL_BASE_URL: *edk-platform-public-url
+      ONBOARDING_UI_BASE_URL: *edk-onboarding-ui-public-url
       ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
       PORT: "18080"
       REST_PORT: "18080"
@@ -468,7 +472,7 @@ services:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: PLATFORM
       ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
-      ADMIN_CONSOLE_PUBLIC_ORIGIN: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: *edk-onboarding-ui-public-url
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "true"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: DIRECT
       ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-blob:8080
