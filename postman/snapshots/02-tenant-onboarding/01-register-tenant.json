@@ -88,7 +88,7 @@
         "status": "MANUAL_READY",
         "invitationId": "00000000-0000-4000-8000-000000000000",
         "expiresAt": "2027-01-01T00:00:00Z",
-        "manualActivationLink": "https://rc4customer.example.com/as/rc4customer/account-action#36:00000000-0000-4000-8000-000000000000qY14sJ734EFJiolo-Y5q3YMW0q1qMmveHH8FfYa_-vg68F4T-vrIoCW73gxeQYNPC1D9md1dKRMBYIYwWRaSqQ",
+        "manualActivationLink": "https://rc4customer.example.com/as/rc4customer/account-action#<activation-token>",
         "reason": null
       }
     }

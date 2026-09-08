@@ -89,7 +89,7 @@
         "status": "MANUAL_READY",
         "invitationId": "00000000-0000-4000-8000-000000000000",
         "expiresAt": "2027-01-01T00:00:00Z",
-        "manualActivationLink": "https://rc4customer-eu.rc4.nk.sphereon.com/as/rc4customer-eu/account-action#36:00000000-0000-4000-8000-000000000000BT733-7jhVqSes3_SpS3dI-Gcm0Cdt73z9PrmB4Ba3E9roaniwSLhukvnmX2dJPTSQ6UMSyBy2M9zLgOZYX4cA",
+        "manualActivationLink": "https://rc4customer-eu.rc4.nk.sphereon.com/as/rc4customer-eu/account-action#<activation-token>",
         "reason": null
       }
     }

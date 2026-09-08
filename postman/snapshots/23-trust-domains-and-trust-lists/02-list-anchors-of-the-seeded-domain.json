@@ -18,6 +18,28 @@
       "items": [
         {
           "anchor": {
+            "anchorId": "trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did",
+            "domainId": "trust-domain-issuer-00000000-0000-4000-8000-000000000000",
+            "identityIdentifierId": "00000000-0000-4000-8000-000000000000",
+            "evidenceMechanism": "DID",
+            "origin": "TENANT_PUBLIC",
+            "status": "ACTIVE",
+            "metadata": {
+              "source": "tenant-onboarding",
+              "productRole": "issuer-did"
+            },
+            "version": 2,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z"
+          },
+          "identifier": {
+            "anchorId": "trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did",
+            "identityIdentifierId": "00000000-0000-4000-8000-000000000000",
+            "resolved": false
+          }
+        },
+        {
+          "anchor": {
             "anchorId": "trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-jwk",
             "domainId": "trust-domain-issuer-00000000-0000-4000-8000-000000000000",
             "identityIdentifierId": "00000000-0000-4000-8000-000000000000",
@@ -56,28 +78,6 @@
           },
           "identifier": {
             "anchorId": "trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-x509",
-            "identityIdentifierId": "00000000-0000-4000-8000-000000000000",
-            "resolved": false
-          }
-        },
-        {
-          "anchor": {
-            "anchorId": "trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did",
-            "domainId": "trust-domain-issuer-00000000-0000-4000-8000-000000000000",
-            "identityIdentifierId": "00000000-0000-4000-8000-000000000000",
-            "evidenceMechanism": "DID",
-            "origin": "TENANT_PUBLIC",
-            "status": "ACTIVE",
-            "metadata": {
-              "source": "tenant-onboarding",
-              "productRole": "issuer-did"
-            },
-            "version": 2,
-            "createdAt": "2026-01-01T00:00:00Z",
-            "updatedAt": "2026-01-01T00:00:00Z"
-          },
-          "identifier": {
-            "anchorId": "trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did",
             "identityIdentifierId": "00000000-0000-4000-8000-000000000000",
             "resolved": false
           }

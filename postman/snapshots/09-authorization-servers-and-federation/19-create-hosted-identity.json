@@ -39,7 +39,7 @@
         "invitationExpiresAt": "2027-01-01T00:00:00Z",
         "createdAt": "2026-01-01T00:00:00Z"
       },
-      "manualActivationLink": "https://rc4customer.example.com/as/walkthrough-as/account-action#36:00000000-0000-4000-8000-000000000000A4WmIKYjY9DM2kYM2RrcyTDaoqRdqlonhDGRX5RZWTBrVvghpk6ALhunfss1jutgaqmOa-UBI77c4blZEv53Kw"
+      "manualActivationLink": "https://rc4customer.example.com/as/walkthrough-as/account-action#<activation-token>"
     }
   }
 }

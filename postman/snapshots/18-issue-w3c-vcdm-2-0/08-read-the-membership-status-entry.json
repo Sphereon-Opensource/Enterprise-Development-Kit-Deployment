@@ -2,7 +2,7 @@
   "title": "08 Read the Membership status entry",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/entries/130769",
+    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/entries/74253",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -16,7 +16,7 @@
     },
     "body": {
       "statusListId": "00000000-0000-4000-8000-000000000000",
-      "statusListIndex": 130769,
+      "statusListIndex": 74253,
       "entryCorrelationId": "",
       "credentialId": "<jti>",
       "credentialHash": null,

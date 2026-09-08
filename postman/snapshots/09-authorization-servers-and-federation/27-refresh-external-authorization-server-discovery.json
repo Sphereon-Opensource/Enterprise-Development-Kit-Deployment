@@ -69,8 +69,7 @@
         "scopesSupported": [
           "openid",
           "profile",
-          "email",
-          "developer-console.read"
+          "email"
         ],
         "idTokenSigningAlgorithms": [
           "ES256"
@@ -79,7 +78,7 @@
           "https://platform.example.com/.well-known/oauth-authorization-server",
           "https://platform.example.com/.well-known/openid-configuration"
         ],
-        "digest": "cbfc952f51f68d5b3d8c7923825c4a03838bac7e00ad979b193f807c51facf40",
+        "digest": "70f62cb421ccdf24103a3250f5273fea740061718936b8c5fb1b349117bc3422",
         "validatedAt": "2026-01-01T00:00:00Z",
         "validUntil": "2027-01-01T00:00:00Z",
         "freshness": "CURRENT"

@@ -67,7 +67,7 @@
         "method": "client_secret_basic",
         "clientId": "rc4-release-client",
         "secretReference": {
-          "resourceHandle": "sec_XeZk3xxogvJ5R3DKzGDg7K-BA9oo9xqB",
+          "resourceHandle": "sec_3mACyOne3LaUYajaImIYmKhvyIwrWMmT",
           "purpose": "OAUTH_CLIENT_SECRET"
         }
       },
