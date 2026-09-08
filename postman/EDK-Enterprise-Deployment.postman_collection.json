@@ -491,6 +491,12 @@
       "description": "Captured from the response of '12 Status Lists / CWT mdoc / 01 Create the CWT token status list'."
     },
     {
+      "key": "cwtStatusListValidUntil",
+      "value": "",
+      "type": "string",
+      "description": "Expiry the CWT mdoc status list is created with; computed by the create request as one year from the run."
+    },
+    {
       "key": "did",
       "value": "",
       "description": "Derived before every request from baseDomain and tenantSlug."
@@ -1104,6 +1110,21 @@
       "key": "x5cStatusListUri",
       "value": "",
       "description": "Captured from the response of '12 Status Lists / 04a Create X.509 token status list'."
+    },
+    {
+      "key": "restoreIssuerBindingId",
+      "value": "",
+      "description": "Id of the issuer authorization-server binding that carries the restored default. Captured by 09 / 47a."
+    },
+    {
+      "key": "restoreIssuerBindingRevision",
+      "value": "",
+      "description": "Revision of that binding, sent as the compare-and-set precondition of the restore. Captured by 09 / 47a."
+    },
+    {
+      "key": "strayIssuerBindingId",
+      "value": "",
+      "description": "Id of the walkthrough authorization-server binding to delete once the default is restored; absent when the walkthrough binding itself carried the default. Captured by 09 / 47a."
     }
   ],
   "item": [
@@ -2902,10 +2923,10 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "// Every input below is a collection variable you replace before enabling this sub-folder.",
+                      "// This example needs your own provider values. Until the collection variables below are filled in it is skipped.",
                       "for (const name of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\"]) {",
                       "  const value = String(pm.variables.get(name) || '').trim();",
-                      "  if (!value || /^replace-with-/i.test(value)) throw new Error('Fill in the collection variable ' + name + ' before enabling the tenant cloud KMS examples');",
+                      "  if (!value || /^replace-with-/i.test(value)) { pm.test('Azure Key Vault example skipped: fill in ' + name + ' before enabling it', () => {}); pm.execution.skipRequest(); }",
                       "}",
                       "['tenantAzureResourceHandle', 'tenantAzureResourceVersion', 'tenantAzureCredentialSecretRef'].forEach((key) => pm.collectionVariables.unset(key));"
                     ]
@@ -2932,7 +2953,8 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "disabled": true
             },
             {
               "name": "02 Attach the Azure client secret",
@@ -2968,6 +2990,11 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
+                      "// This example needs your own provider values. Until the collection variables below are filled in it is skipped.",
+                      "for (const name of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\"]) {",
+                      "  const value = String(pm.variables.get(name) || '').trim();",
+                      "  if (!value || /^replace-with-/i.test(value)) { pm.test('Azure Key Vault example skipped: fill in ' + name + ' before enabling it', () => {}); pm.execution.skipRequest(); }",
+                      "}",
                       "// expectedResourceVersion is an integer; Postman substitutes it into the JSON body unquoted.",
                       "const raw = pm.request.body.raw.replace('\"{{tenantAzureResourceVersion}}\"', String(Number(pm.collectionVariables.get('tenantAzureResourceVersion'))));",
                       "pm.request.body.update(raw);"
@@ -2994,7 +3021,8 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "disabled": true
             },
             {
               "name": "03 Validate the Azure Key Vault resource",
@@ -3012,6 +3040,19 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// This example needs your own provider values. Until the collection variables below are filled in it is skipped.",
+                      "for (const name of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\"]) {",
+                      "  const value = String(pm.variables.get(name) || '').trim();",
+                      "  if (!value || /^replace-with-/i.test(value)) { pm.test('Azure Key Vault example skipped: fill in ' + name + ' before enabling it', () => {}); pm.execution.skipRequest(); }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -3026,7 +3067,8 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "disabled": true
             },
             {
               "name": "04 Create an AWS KMS resource",
@@ -3062,10 +3104,10 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "// Every input below is a collection variable you replace before enabling this sub-folder.",
+                      "// This example needs your own provider values. Until the collection variables below are filled in it is skipped.",
                       "for (const name of [\"tenantAwsRegion\",\"tenantAwsSecretAccessKey\"]) {",
                       "  const value = String(pm.variables.get(name) || '').trim();",
-                      "  if (!value || /^replace-with-/i.test(value)) throw new Error('Fill in the collection variable ' + name + ' before enabling the tenant cloud KMS examples');",
+                      "  if (!value || /^replace-with-/i.test(value)) { pm.test('AWS KMS example skipped: fill in ' + name + ' before enabling it', () => {}); pm.execution.skipRequest(); }",
                       "}",
                       "['tenantAwsResourceHandle', 'tenantAwsResourceVersion', 'tenantAwsCredentialSecretRef'].forEach((key) => pm.collectionVariables.unset(key));"
                     ]
@@ -3092,7 +3134,8 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "disabled": true
             },
             {
               "name": "05 Attach the AWS secret access key",
@@ -3128,6 +3171,11 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
+                      "// This example needs your own provider values. Until the collection variables below are filled in it is skipped.",
+                      "for (const name of [\"tenantAwsRegion\",\"tenantAwsSecretAccessKey\"]) {",
+                      "  const value = String(pm.variables.get(name) || '').trim();",
+                      "  if (!value || /^replace-with-/i.test(value)) { pm.test('AWS KMS example skipped: fill in ' + name + ' before enabling it', () => {}); pm.execution.skipRequest(); }",
+                      "}",
                       "const raw = pm.request.body.raw.replace('\"{{tenantAwsResourceVersion}}\"', String(Number(pm.collectionVariables.get('tenantAwsResourceVersion'))));",
                       "pm.request.body.update(raw);"
                     ]
@@ -3152,7 +3200,8 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "disabled": true
             },
             {
               "name": "06 Validate the AWS KMS resource",
@@ -3170,6 +3219,19 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// This example needs your own provider values. Until the collection variables below are filled in it is skipped.",
+                      "for (const name of [\"tenantAwsRegion\",\"tenantAwsSecretAccessKey\"]) {",
+                      "  const value = String(pm.variables.get(name) || '').trim();",
+                      "  if (!value || /^replace-with-/i.test(value)) { pm.test('AWS KMS example skipped: fill in ' + name + ' before enabling it', () => {}); pm.execution.skipRequest(); }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -3184,7 +3246,8 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "disabled": true
             },
             {
               "name": "07 Make the cloud KMS the tenant default",
@@ -3220,7 +3283,7 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "if (!String(pm.collectionVariables.get('tenantCloudKmsProviderId') || '').trim()) throw new Error('Create the Azure Key Vault or AWS KMS resource first');"
+                      "if (!String(pm.collectionVariables.get('tenantCloudKmsProviderId') || '').trim()) { pm.test('tenant default provider skipped: create the Azure Key Vault or AWS KMS resource first', () => {}); pm.execution.skipRequest(); }"
                     ]
                   }
                 },
@@ -3238,7 +3301,8 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "disabled": true
             }
           ]
         },
@@ -4172,7 +4236,7 @@
     },
     {
       "name": "09 Authorization Servers and Federation",
-      "description": "The tenant-scoped authorization-server resources: a hosted authorization server with its clients and identities, an external authorization server registered from OIDC discovery, a federation binding that lets holders authenticate at that external provider, and the issuer bindings and protocol profile that select which server an issuer uses.",
+      "description": "The tenant-scoped authorization-server resources: a hosted authorization server with its clients and identities, an external authorization server registered from OIDC discovery, a federation binding that lets holders authenticate at that external provider, and the issuer bindings and protocol profile that select which server an issuer uses. The folder ends by restoring the issuer default to the tenant's own hosted authorization server and removing the walkthrough override and binding, so issuance keeps using the pre-authorized code grant.",
       "auth": {
         "type": "bearer",
         "bearer": [
@@ -4986,6 +5050,189 @@
               }
             }
           ]
+        },
+        {
+          "name": "47a Refresh issuer authorization server bindings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/authorization-server-bindings",
+              "host": [
+                "{{tenantPlatformConfigApiBaseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenantId}}",
+                "oid4vci",
+                "issuers",
+                "{{issuerId}}",
+                "authorization-server-bindings"
+              ]
+            },
+            "description": "Lists the issuer bindings after the walkthrough server was made the default, and picks the binding to restore: the tenant's own hosted authorization server from onboarding. The walkthrough binding is remembered as the one to delete."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer AS bindings refreshed', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                  "const items = pm.response.json().items;",
+                  "const seededAs = pm.collectionVariables.get('tenantHostedAuthorizationServerId');",
+                  "const walkthrough = items.find((item) => item.authorizationServerId === pm.collectionVariables.get('hostedAuthorizationServerId'));",
+                  "const seeded = items.find((item) => item.authorizationServerId === seededAs);",
+                  "const restore = seeded || walkthrough;",
+                  "pm.expect(restore, 'binding to carry the restored default').to.be.an('object');",
+                  "pm.collectionVariables.set('restoreIssuerBindingId', restore.id);",
+                  "pm.collectionVariables.set('restoreIssuerBindingRevision', String(restore.revision));",
+                  "if (seeded && walkthrough) {",
+                  "  pm.collectionVariables.set('strayIssuerBindingId', walkthrough.id);",
+                  "} else {",
+                  "  pm.collectionVariables.unset('strayIssuerBindingId');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "47b Restore the issuer default to the seeded authorization server",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/authorization-server-bindings/{{restoreIssuerBindingId}}",
+              "host": [
+                "{{tenantPlatformConfigApiBaseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenantId}}",
+                "oid4vci",
+                "issuers",
+                "{{issuerId}}",
+                "authorization-server-bindings",
+                "{{restoreIssuerBindingId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"authorizationServerId\": \"{{tenantHostedAuthorizationServerId}}\",\n  \"enabled\": true,\n  \"default\": true,\n  \"expectedRevision\": \"{{restoreIssuerBindingRevision}}\"\n}"
+            },
+            "description": "Puts the issuer default back on the tenant's own hosted authorization server, which allows the pre-authorized code grant the issuance folders use. Leaving the default on the walkthrough server, bound to authorization_code only, would refuse every pre-authorized offer."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('issuer default restored to the seeded AS', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                  "const j = pm.response.json();",
+                  "pm.expect(j.default).to.eql(true);",
+                  "pm.expect(j.authorizationServerId).to.eql(pm.collectionVariables.get('tenantHostedAuthorizationServerId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "42 Delete credential authorization server override under revision CAS",
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/credential-configurations/EuPid/authorization-server",
+            "description": "Removes the EuPid override so that configuration follows the restored issuer default again.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"{{credentialAuthorizationServerOverrideRevision}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('credential AS override deleted under revision CAS', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "name": "47d Delete leftover walkthrough issuer authorization server binding",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/authorization-server-bindings/{{strayIssuerBindingId}}",
+              "host": [
+                "{{tenantPlatformConfigApiBaseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenantId}}",
+                "oid4vci",
+                "issuers",
+                "{{issuerId}}",
+                "authorization-server-bindings",
+                "{{strayIssuerBindingId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('strayIssuerBindingId')) {",
+                  "  pm.test('no leftover walkthrough binding to delete', () => pm.expect([400, 404]).to.include(pm.response.code));",
+                  "} else {",
+                  "  pm.test('leftover walkthrough binding deleted', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(204));",
+                  "}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -5770,7 +6017,7 @@
                   "  pm.expect(statusList.id, 'status list id').to.be.a('string').and.not.empty;",
                   "});",
                   "if (statusList && statusList.id) pm.collectionVariables.set('statusListId', statusList.id);",
-                  "if (statusList && statusList.statusListUri) pm.collectionVariables.set('statusListUri', statusList.statusListUri);"
+                  "if (statusList) pm.collectionVariables.set('statusListUri', statusList.statusListUri || expectedUri);"
                 ]
               }
             }
@@ -5841,13 +6088,13 @@
                   "  pm.expect(pm.response.headers.get('Content-Type') || '', 'content type').to.include('application/statuslist+jwt');",
                   "  pm.expect(hostedHeader.typ).to.eql('statuslist+jwt');",
                   "  pm.expect(hostedHeader.kid, 'absolute DID verification-method kid').to.be.a('string').and.not.empty;",
-                  "  pm.expect(hostedHeader.kid.startsWith(pm.variables.get('did') + '#')).to.eql(true);",
+                  "  pm.expect(hostedHeader.kid.startsWith(pm.variables.get('did') + '#'), 'kid ' + hostedHeader.kid + ' starts with did ' + pm.variables.get('did')).to.eql(true);",
                   "  pm.expect(hostedHeader).not.to.have.property('x5c');",
                   "  pm.expect(hostedPayload.iss).to.eql(pm.variables.get('did'));",
                   "  const subGatewayOrigin = String(pm.variables.get('tenantGatewayUrl') || '').replace(/\\/$/, '');",
                   "pm.expect(hostedPayload.sub, 'sub is the hosted list URI on the tenant gateway').to.be.a('string');",
-                  "pm.expect(hostedPayload.sub.startsWith(subGatewayOrigin)).to.eql(true);",
-                  "pm.expect(hostedPayload.sub.endsWith('/public/statuslists/eupid-revocation')).to.eql(true);",
+                  "pm.expect(hostedPayload.sub.startsWith(subGatewayOrigin), 'sub ' + hostedPayload.sub + ' starts with ' + subGatewayOrigin).to.eql(true);",
+                  "pm.expect(hostedPayload.sub.endsWith('/public/statuslists/eupid-revocation'), 'sub ' + hostedPayload.sub + ' names the eupid-revocation list').to.eql(true);",
                   "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.bits).to.eql(1);",
                   "  pm.expect(hostedPayload.status_list && hostedPayload.status_list.lst).to.be.a('string').and.not.empty;",
                   "});",
@@ -6126,11 +6373,22 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"correlationId\": \"mdoc-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"cwt\",\n  \"hostingMode\": \"hosted\",\n  \"purposes\": [\n    \"revocation\"\n  ],\n  \"issuer\": \"{{tenantGatewayUrl}}\",\n  \"signingKeyMode\": \"x5c\",\n  \"kmsResourceHandle\": \"{{statusListX509KmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListX509KmsKeyAlias}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/mdoc-revocation\",\n  \"length\": 131072,\n  \"bitsPerStatus\": 1,\n  \"ttlSeconds\": 300\n}"
+                  "raw": "{\n  \"correlationId\": \"mdoc-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"cwt\",\n  \"hostingMode\": \"hosted\",\n  \"purposes\": [\n    \"revocation\"\n  ],\n  \"issuer\": \"{{tenantGatewayUrl}}\",\n  \"signingKeyMode\": \"x5c\",\n  \"kmsResourceHandle\": \"{{statusListX509KmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListX509KmsKeyAlias}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/mdoc-revocation\",\n  \"length\": 131072,\n  \"bitsPerStatus\": 1,\n  \"mdocProfile\": \"status_list\",\n  \"validUntil\": \"{{cwtStatusListValidUntil}}\",\n  \"ttlSeconds\": 300\n}"
                 },
-                "description": "Creates the CWT-proofed Token Status List that mdoc credentials reference, signed with the certificate chain of the mDL signing key. The REST create body is a closed class: it rejects unknown keys, and it has no `mdocProfile` and no `aggregationUri` field, so the ISO mdoc profile selector and the aggregation URI cannot be set over the API. Only configuration sets them today."
+                "description": "Creates the CWT-proofed Token Status List that mdoc credentials reference, signed with the certificate chain of the mDL signing key."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// The ISO 18013-5 mdoc profile requires an expiry on the list; one year from now keeps the example valid.",
+                      "const validUntil = new Date(); validUntil.setUTCFullYear(validUntil.getUTCFullYear() + 1);",
+                      "pm.collectionVariables.set('cwtStatusListValidUntil', validUntil.toISOString());"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -6152,12 +6410,9 @@
                       "  pm.expect(j.bitsPerStatus, 'bits per status').to.eql(1);",
                       "  pm.expect(j.contentType, 'hosted content type').to.eql('application/statuslist+cwt');",
                       "});",
-                      "pm.test('the REST create body carries no mdoc profile or aggregation URI', () => {",
-                      "  // Backend gap: CreateStatusListArgs in the specification has mdocProfile and aggregationUri,",
-                      "  // but the REST request class is closed and has neither, so the ISO mdoc profile example in the",
-                      "  // specification cannot be sent as written. Sending either field fails the request outright.",
-                      "  pm.expect(j, 'mdocProfile is not part of the REST resource').to.not.have.property('mdocProfile');",
-                      "  pm.expect(j, 'aggregationUri is not part of the REST resource').to.not.have.property('aggregationUri');",
+                      "pm.test('the list declares the ISO 18013-5 mdoc status_list profile', () => {",
+                      "  if (pm.response.code === 409) return;",
+                      "  pm.expect(j.mdocProfile, 'mdocProfile is echoed by the resource').to.eql('status_list');",
                       "});"
                     ]
                   }
@@ -9838,8 +10093,7 @@
                   "pm.test('consumers listed', () => pm.expect(pm.response.code, detail()).to.eql(200));",
                   "const items = pm.response.json().items || [];",
                   "pm.test('the tenant consumes the seeded domain', () =>",
-                  "// Each consumer is the whole attachment aggregate, so the kind sits on its attachment.",
-                  "  pm.expect(items.map((c) => (c.attachment || {}).consumerKind)).to.include('TENANT'));"
+                  "  pm.expect(items.map((c) => c.consumerKind)).to.include('TENANT'));"
                 ]
               }
             }
@@ -10240,7 +10494,7 @@
     },
     {
       "name": "24 KMS Runtime API",
-      "description": "The runtime KMS surface a tenant integrates against: discover providers, then generate, read, use and remove a key by provider id and alias. Keys are addressed by the alias the tenant chose, never by a server-issued key id, so the same request works across deployments.",
+      "description": "The runtime KMS surface a tenant integrates against: discover providers, then generate, read, use and remove a key by provider id and alias. Keys are addressed by the alias the tenant chose, never by a server-issued key id, so the same request works across deployments. Requests run under the tenant service token (folder 04); the tenant KMS API rejects the platform operator token because its audience is the platform, not the tenant KMS.",
       "item": [
         {
           "name": "01 List runtime providers",
@@ -10759,7 +11013,17 @@
             }
           ]
         }
-      ]
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{tenantToken}}",
+            "type": "string"
+          }
+        ]
+      }
     },
     {
       "name": "25 Developer Console Settings",

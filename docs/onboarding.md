@@ -262,7 +262,7 @@ issuance and verification examples. Import these files into Postman:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-The supplied collection starts after platform setup. Run its 210 requests in
+The supplied collection starts after platform setup. Run its 214 requests in
 folder order:
 
 | Folder | What it does |
