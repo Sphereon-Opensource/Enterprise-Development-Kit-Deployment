@@ -392,6 +392,22 @@
       "key": "subTenantIssuerId",
       "value": "",
       "description": "Instance id of the hr-issuer issuer created inside acme-eu-hr. Folder 03b registers a credential configuration on it and selects it on the offer with issuer_id."
+    },
+    {
+      "key": "kmsTenantKeyAlias",
+      "value": ""
+    },
+    {
+      "key": "kmsTenantCertificateAlias",
+      "value": ""
+    },
+    {
+      "key": "kmsTenantKeyChain",
+      "value": ""
+    },
+    {
+      "key": "kmsTenantCertificateReferenceId",
+      "value": ""
     }
   ],
   "item": [
@@ -5091,7 +5107,7 @@
           "request": {
             "method": "GET",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}",
-            "description": "",
+            "description": "Requires a tenant that already holds a failed authorization-server migration. Request 48 returns an empty list on an ordinary run, so the migration id and revision these requests need are never set and the call goes out with unresolved variables. Enable this alongside a scenario that produces a failed migration first.",
             "header": [
               {
                 "key": "Host",
@@ -5120,14 +5136,15 @@
                 ]
               }
             }
-          ]
+          ],
+          "disabled": true
         },
         {
           "name": "50 Reject ordinary resume for changed migration source",
           "request": {
             "method": "POST",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}/resume",
-            "description": "",
+            "description": "Requires a tenant that already holds a failed authorization-server migration. Request 48 returns an empty list on an ordinary run, so the migration id and revision these requests need are never set and the call goes out with unresolved variables. Enable this alongside a scenario that produces a failed migration first.",
             "header": [
               {
                 "key": "Host",
@@ -5158,14 +5175,15 @@
                 ]
               }
             }
-          ]
+          ],
+          "disabled": true
         },
         {
           "name": "51 Resume unchanged authorization server migration",
           "request": {
             "method": "POST",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{unchangedMigrationId}}/resume",
-            "description": "",
+            "description": "Requires a tenant that already holds a failed authorization-server migration. Request 48 returns an empty list on an ordinary run, so the migration id and revision these requests need are never set and the call goes out with unresolved variables. Enable this alongside a scenario that produces a failed migration first.",
             "header": [
               {
                 "key": "Host",
@@ -5200,14 +5218,15 @@
                 ]
               }
             }
-          ]
+          ],
+          "disabled": true
         },
         {
           "name": "52 Accept reviewed authorization server migration source change",
           "request": {
             "method": "POST",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}/accept-source-change",
-            "description": "",
+            "description": "Requires a tenant that already holds a failed authorization-server migration. Request 48 returns an empty list on an ordinary run, so the migration id and revision these requests need are never set and the call goes out with unresolved variables. Enable this alongside a scenario that produces a failed migration first.",
             "header": [
               {
                 "key": "Host",
@@ -5242,14 +5261,15 @@
                 ]
               }
             }
-          ]
+          ],
+          "disabled": true
         },
         {
           "name": "53 Reject stale authorization server source-change acceptance",
           "request": {
             "method": "POST",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}/accept-source-change",
-            "description": "",
+            "description": "Requires a tenant that already holds a failed authorization-server migration. Request 48 returns an empty list on an ordinary run, so the migration id and revision these requests need are never set and the call goes out with unresolved variables. Enable this alongside a scenario that produces a failed migration first.",
             "header": [
               {
                 "key": "Host",
@@ -5280,14 +5300,15 @@
                 ]
               }
             }
-          ]
+          ],
+          "disabled": true
         },
         {
           "name": "54 Verify stale acceptance did not mutate migration ledger",
           "request": {
             "method": "GET",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-server-migrations/{{changedMigrationId}}",
-            "description": "",
+            "description": "Requires a tenant that already holds a failed authorization-server migration. Request 48 returns an empty list on an ordinary run, so the migration id and revision these requests need are never set and the call goes out with unresolved variables. Enable this alongside a scenario that produces a failed migration first.",
             "header": [
               {
                 "key": "Host",
@@ -5314,7 +5335,8 @@
                 ]
               }
             }
-          ]
+          ],
+          "disabled": true
         },
         {
           "name": "55 Delete disabled federation binding",
@@ -8033,6 +8055,51 @@
           ]
         },
         {
+          "name": "00 Bind the walkthrough-revocation signing key",
+          "request": {
+            "method": "PUT",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/status-lists/walkthrough-revocation/signing-key",
+            "description": "A status list can only be created once its signing key is bound. The seeded lists arrive with a binding already in place; a list the walkthrough creates for itself needs this step first, otherwise creation is refused because the platform authority holds no binding for that id.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kmsResourceHandle\": \"{{statusListDidKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListDidKmsKeyAlias}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('walkthrough-revocation signing key bound', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '')).to.be.oneOf([200, 201]));",
+                  "const j = pm.response.json();",
+                  "pm.test('the binding echoes the exact handle and alias', () => {",
+                  "  pm.expect(j.kmsResourceHandle && j.kmsResourceHandle.value, 'handle').to.eql(pm.collectionVariables.get('statusListDidKmsResourceHandle'));",
+                  "  pm.expect(j.kmsKeyAlias && j.kmsKeyAlias.value, 'alias').to.eql(pm.collectionVariables.get('statusListDidKmsKeyAlias'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "01 Create token status list",
           "request": {
             "method": "POST",
@@ -8050,7 +8117,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"correlationId\": \"eupid-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{did}}\",\n  \"signingKeyMode\": \"did:web\",\n  \"kmsResourceHandle\": \"{{statusListDidKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListDidKmsKeyAlias}}\",\n  \"signingVerificationMethodId\": \"{{statusListDidVerificationMethodId}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/eupid-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
+              "raw": "{\n  \"correlationId\": \"walkthrough-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{did}}\",\n  \"signingKeyMode\": \"did:web\",\n  \"kmsResourceHandle\": \"{{statusListDidKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListDidKmsKeyAlias}}\",\n  \"signingVerificationMethodId\": \"{{statusListDidVerificationMethodId}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/walkthrough-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
             },
             "description": "Creates the IETF Token Status List referenced by the EuPid configuration with its exact provisioned KMS resource, key alias, and DID assertionMethod. The platform authority owns that selection; the issuer validates it and does not rewrite tenant configuration."
           },
@@ -8060,11 +8127,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status list created or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
+                  "pm.test('status list created', () => pm.expect([200, 201]).to.include(pm.response.code));",
                   "const j = pm.response.json();",
                   "if (j.id) pm.collectionVariables.set('statusListId', j.id);",
                   "if (j.statusListUri) pm.collectionVariables.set('statusListUri', j.statusListUri);",
-                  "if (!pm.collectionVariables.get('statusListUri')) pm.collectionVariables.set('statusListUri', pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation');",
+                  "if (!pm.collectionVariables.get('statusListUri')) pm.collectionVariables.set('statusListUri', pm.variables.get('tenantGatewayUrl') + '/public/statuslists/walkthrough-revocation');",
                   "const decodeJwtPart = (jwt, index) => {",
                   "  const compact = String(jwt || '').split('~')[0];",
                   "  const segment = compact.split('.')[index];",
@@ -8074,15 +8141,11 @@
                   "  return JSON.parse(atob(padded));",
                   "};",
                   "pm.test('status list response matches EuPid revocation contract', () => {",
-                  "  if (pm.response.code === 409) {",
-                  "    pm.expect(j.error && j.error.code).to.eql('STATUSLIST_DUPLICATE_CORRELATION_ID');",
-                  "    return;",
-                  "  }",
-                  "  pm.expect(j.correlationId).to.eql('eupid-revocation');",
+                  "  pm.expect(j.correlationId).to.eql('walkthrough-revocation');",
                   "  pm.expect(j.spec).to.eql('token_status_list');",
                   "  pm.expect(j.proofFormat).to.eql('jwt');",
                   "  pm.expect(j.bitsPerStatus).to.eql(1);",
-                  "  pm.expect(j.statusListUri).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/statuslists/eupid-revocation');",
+                  "  pm.expect(j.statusListUri).to.eql(pm.variables.get('tenantGatewayUrl') + '/public/statuslists/walkthrough-revocation');",
                   "  pm.expect(j.contentType).to.eql('application/statuslist+jwt');",
                   "});",
                   "if (j.signedToken) {",
@@ -13100,7 +13163,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"queryId\": \"eupid-sdjwt\",\n  \"name\": \"EuPid identity check\",\n  \"description\": \"Requests name and age attestation from the EU Personal ID\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] },\n          { \"path\": [\"age_over_18\"] }\n        ]\n      }\n    ]\n  }\n}"
+              "raw": "{\n  \"queryId\": \"walkthrough-eupid-sdjwt\",\n  \"name\": \"EuPid identity check\",\n  \"description\": \"Requests name and age attestation from the EU Personal ID\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] },\n          { \"path\": [\"age_over_18\"] }\n        ]\n      }\n    ]\n  }\n}"
             },
             "description": "Selects only family_name, given_name, and age_over_18 from the EuPid. The other claims stay undisclosed."
           },
@@ -13110,24 +13173,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('eupid query stored or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
+                  "pm.test('eupid query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
                   "const q = pm.response.json();",
-                  "const alreadyExists = pm.response.code === 409;",
-                  "if (alreadyExists) {",
-                  "  pm.test('EuPid DCQL query is already provisioned', () => {",
-                  "    pm.expect(q.error.code).to.eql('ALREADY_EXISTS_ERROR');",
-                  "    pm.expect(q.error.message).to.include('eupid-sdjwt');",
-                  "  });",
-                  "} else {",
                   "pm.test('EuPid DCQL query content is versioned and enabled', () => {",
-                  "  pm.expect(q.queryId).to.eql('eupid-sdjwt');",
+                  "  pm.expect(q.queryId).to.eql('walkthrough-eupid-sdjwt');",
                   "  pm.expect(q.enabled).to.eql(true);",
                   "  pm.expect(q.currentVersion).to.eql(1);",
                   "  const credential = q.dcqlQuery.credentials[0];",
                   "  pm.expect(credential.format).to.eql('dc+sd-jwt');",
                   "  pm.expect(credential.meta.vct_values).to.eql([pm.variables.get('tenantGatewayUrl') + '/public/schema/vct/EuPid']);",
-                  "});",
-                  "}"
+                  "});"
                 ]
               }
             }
@@ -13151,7 +13206,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"queryId\": \"mdl-mdoc\",\n  \"name\": \"Driving licence check\",\n  \"description\": \"Requests the holder name from the mobile driving licence\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] }\n        ]\n      }\n    ]\n  }\n}"
+              "raw": "{\n  \"queryId\": \"walkthrough-mdl-mdoc\",\n  \"name\": \"Driving licence check\",\n  \"description\": \"Requests the holder name from the mobile driving licence\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] }\n        ]\n      }\n    ]\n  }\n}"
             },
             "description": "Selects family_name and given_name from the ISO 18013-5 namespace."
           },
@@ -13161,25 +13216,17 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('mdl query stored or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
+                  "pm.test('mdl query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
                   "const q = pm.response.json();",
-                  "const alreadyExists = pm.response.code === 409;",
-                  "if (alreadyExists) {",
-                  "  pm.test('mDL DCQL query is already provisioned', () => {",
-                  "    pm.expect(q.error.code).to.eql('ALREADY_EXISTS_ERROR');",
-                  "    pm.expect(q.error.message).to.include('mdl-mdoc');",
-                  "  });",
-                  "} else {",
                   "pm.test('mDL DCQL query content is versioned and enabled', () => {",
-                  "  pm.expect(q.queryId).to.eql('mdl-mdoc');",
+                  "  pm.expect(q.queryId).to.eql('walkthrough-mdl-mdoc');",
                   "  pm.expect(q.enabled).to.eql(true);",
                   "  pm.expect(q.currentVersion).to.eql(1);",
                   "  const credential = q.dcqlQuery.credentials[0];",
                   "  pm.expect(credential.format).to.eql('mso_mdoc');",
                   "  pm.expect(credential.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
                   "  pm.expect(credential.claims.map((claim) => claim.path)).to.eql([['org.iso.18013.5.1', 'family_name'], ['org.iso.18013.5.1', 'given_name']]);",
-                  "});",
-                  "}"
+                  "});"
                 ]
               }
             }
@@ -13203,7 +13250,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"queryId\": \"eupid-and-mdl\",\n  \"name\": \"Identity and driving licence\",\n  \"description\": \"Requests the EuPid and the mobile driving licence in one presentation\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] }\n        ]\n      },\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] }\n        ]\n      }\n    ]\n  }\n}"
+              "raw": "{\n  \"queryId\": \"walkthrough-eupid-and-mdl\",\n  \"name\": \"Identity and driving licence\",\n  \"description\": \"Requests the EuPid and the mobile driving licence in one presentation\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] }\n        ]\n      },\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] }\n        ]\n      }\n    ]\n  }\n}"
             },
             "description": "Requests both credentials in a single presentation, each with its own claim selection."
           },
@@ -13213,17 +13260,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('combined query stored or already provisioned', () => pm.expect([200, 201, 409]).to.include(pm.response.code));",
+                  "pm.test('combined query stored', () => pm.expect([200, 201]).to.include(pm.response.code));",
                   "const q = pm.response.json();",
-                  "const alreadyExists = pm.response.code === 409;",
-                  "if (alreadyExists) {",
-                  "  pm.test('combined DCQL query is already provisioned', () => {",
-                  "    pm.expect(q.error.code).to.eql('ALREADY_EXISTS_ERROR');",
-                  "    pm.expect(q.error.message).to.include('eupid-and-mdl');",
-                  "  });",
-                  "} else {",
                   "pm.test('combined DCQL query contains EuPid and mDL credentials', () => {",
-                  "  pm.expect(q.queryId).to.eql('eupid-and-mdl');",
+                  "  pm.expect(q.queryId).to.eql('walkthrough-eupid-and-mdl');",
                   "  pm.expect(q.enabled).to.eql(true);",
                   "  pm.expect(q.currentVersion).to.eql(1);",
                   "  const byId = Object.fromEntries(q.dcqlQuery.credentials.map((credential) => [credential.id, credential]));",
@@ -13232,8 +13272,7 @@
                   "  pm.expect(byId.mdl.format).to.eql('mso_mdoc');",
                   "  pm.expect(byId.mdl.meta.doctype_value).to.eql('org.iso.18013.5.1.mDL');",
                   "  pm.expect(byId.mdl.claims.map((claim) => claim.path)).to.eql([['org.iso.18013.5.1', 'family_name'], ['org.iso.18013.5.1', 'given_name']]);",
-                  "});",
-                  "}"
+                  "});"
                 ]
               }
             }
@@ -14436,9 +14475,11 @@
                   "pm.expect(providers, 'at least one runtime provider is addressable').to.not.be.empty;",
                   "const preferred = providers.find((p) => (p.id || p.providerId) === \"default\") || providers[0];",
                   "pm.collectionVariables.set(\"kmsRuntimeProviderId\", preferred.id || preferred.providerId);",
-                  "// Fixed alias: the snapshot must be byte-stable across runs, and each run onboards a fresh",
-                  "// tenant, so there is nothing to collide with. Request 07 removes it again.",
-                  "pm.collectionVariables.set(\"kmsRuntimeKeyAlias\", \"customer-runtime-signing-key\");"
+                  "// Fixed aliases: the snapshot must be byte-stable across runs, and each run onboards a fresh",
+                  "// tenant, so there is nothing to collide with. Requests 07 and 16 remove them again.",
+                  "pm.collectionVariables.set(\"kmsRuntimeKeyAlias\", \"customer-runtime-signing-key\");",
+                  "pm.collectionVariables.set(\"kmsTenantKeyAlias\", \"customer-tenant-signing-key\");",
+                  "pm.collectionVariables.set(\"kmsTenantCertificateAlias\", \"customer-tenant-signing-chain\");"
                 ]
               }
             }
@@ -14490,7 +14531,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"alias\": \"{{kmsRuntimeKeyAlias}}\",\n  \"keyType\": \"EC\",\n  \"curve\": \"P-256\",\n  \"use\": \"sig\"\n}",
+              "raw": "{\n  \"alias\": \"{{kmsRuntimeKeyAlias}}\",\n  \"use\": \"sig\",\n  \"alg\": \"ECDSA_SHA256\",\n  \"keyOperations\": [\n    \"sign\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -14506,7 +14547,12 @@
                 "exec": [
                   "pm.test('key generated', () => pm.expect([200, 201]).to.include(pm.response.code));",
                   "const body = pm.response.json();",
-                  "pm.expect(body.alias || body.keyAlias, 'the response echoes the requested alias').to.eql(pm.collectionVariables.get('kmsRuntimeKeyAlias'));"
+                  "const pair = body.keyPair || body;",
+                  "pm.expect(pair.alias, 'the response echoes the requested alias').to.eql(pm.collectionVariables.get('kmsRuntimeKeyAlias'));",
+                  "// The software provider mints a self-signed certificate for a generated signing key.",
+                  "// Requests 11 onwards register that chain, so carry it forward when it is present.",
+                  "const x5c = pair.jose && pair.jose.publicJwk && pair.jose.publicJwk.x5c;",
+                  "pm.collectionVariables.set(\"kmsRuntimeKeyChain\", Array.isArray(x5c) ? JSON.stringify(x5c) : \"\");"
                 ]
               }
             }
@@ -14558,7 +14604,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"providerId\": \"{{kmsRuntimeProviderId}}\",\n  \"alias\": \"{{kmsRuntimeKeyAlias}}\",\n  \"algorithm\": \"ES256\",\n  \"payload\": \"c3RhdHVzLWxpc3QtcnVudGltZS1zaWduaW5nLXNhbXBsZQ\"\n}",
+              "raw": "{\n  \"keyInfo\": {\n    \"providerId\": \"{{kmsRuntimeProviderId}}\",\n    \"alias\": \"{{kmsRuntimeKeyAlias}}\"\n  },\n  \"input\": \"aGVsbG8=\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -14573,7 +14619,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('raw signature created', () => pm.expect([200, 201]).to.include(pm.response.code));",
-                  "const signature = pm.response.json().signature || pm.response.json().value;",
+                  "const signature = pm.response.json().signature;",
                   "pm.expect(signature, 'a signature value is returned').to.be.a('string');",
                   "pm.collectionVariables.set(\"kmsRuntimeSignature\", signature);"
                 ]
@@ -14601,7 +14647,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"providerId\": \"{{kmsRuntimeProviderId}}\",\n  \"alias\": \"{{kmsRuntimeKeyAlias}}\",\n  \"algorithm\": \"ES256\",\n  \"payload\": \"c3RhdHVzLWxpc3QtcnVudGltZS1zaWduaW5nLXNhbXBsZQ\",\n  \"signature\": \"{{kmsRuntimeSignature}}\"\n}",
+              "raw": "{\n  \"keyInfo\": {\n    \"providerId\": \"{{kmsRuntimeProviderId}}\",\n    \"alias\": \"{{kmsRuntimeKeyAlias}}\"\n  },\n  \"input\": \"aGVsbG8=\",\n  \"signature\": \"{{kmsRuntimeSignature}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -14616,7 +14662,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('raw signature verified', () => pm.response.to.have.status(200));",
-                  "pm.expect(pm.response.json().valid, 'the signature verifies against its own key').to.eql(true);"
+                  "pm.expect(pm.response.json().isValid, 'the signature verifies against its own key').to.eql(true);"
                 ]
               }
             }
@@ -14643,6 +14689,279 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('generated key deleted', () => pm.expect([200, 204]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 List keys across every provider",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantKmsApiBaseUrl}}/keys",
+            "description": "Lists key metadata across every provider the tenant has, rather than one provider at a time. Each entry names its own providerId. Add ?providerId= to narrow it to a single provider.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tenant-wide key list returned', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().keyInfos, 'the response uses the keyInfos envelope').to.be.an('array');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 Generate a key without naming a provider in the path",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantKmsApiBaseUrl}}/keys",
+            "description": "Generates a key through the tenant-wide route. providerId travels in the body here instead of the path; omitting it would use the tenant default provider. The response carries the public JWK and, where the provider mints one, its self-signed certificate.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alias\": \"{{kmsTenantKeyAlias}}\",\n  \"use\": \"sig\",\n  \"alg\": \"ECDSA_SHA256\",\n  \"keyOperations\": [\n    \"sign\"\n  ],\n  \"providerId\": \"{{kmsRuntimeProviderId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('key generated through the tenant-wide route', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const pair = pm.response.json().keyPair;",
+                  "pm.expect(pair.alias, 'the response echoes the requested alias').to.eql(pm.collectionVariables.get('kmsTenantKeyAlias'));",
+                  "const x5c = pair.jose && pair.jose.publicJwk && pair.jose.publicJwk.x5c;",
+                  "pm.expect(x5c, 'the provider mints a certificate for a generated signing key').to.be.an('array').that.is.not.empty;",
+                  "pm.collectionVariables.set(\"kmsTenantKeyChain\", JSON.stringify(x5c));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Read the key by alias",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantKmsApiBaseUrl}}/keys/{{kmsTenantKeyAlias}}?providerId={{kmsRuntimeProviderId}}",
+            "description": "Reads one key by alias or kid across the tenant. providerId is optional and only needed to disambiguate an alias that exists in more than one provider.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('key read by alias', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().keyInfo.alias).to.eql(pm.collectionVariables.get('kmsTenantKeyAlias'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Register the key certificate chain",
+          "request": {
+            "method": "POST",
+            "url": "{{tenantKmsApiBaseUrl}}/certificates/register",
+            "description": "Registers public certificate material against the key generated above. stored_public_material carries the chain in the request and needs no provider certificate API, so it works against the software provider. The service checks that the leaf public key matches the linked key before storing the reference.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{kmsRuntimeProviderId}}\",\n  \"alias\": \"{{kmsTenantCertificateAlias}}\",\n  \"kind\": \"key_certificate_chain\",\n  \"source\": \"stored_public_material\",\n  \"linkedKeyAlias\": \"{{kmsTenantKeyAlias}}\",\n  \"certificateChain\": {{kmsTenantKeyChain}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('certificate reference registered', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const created = pm.response.json();",
+                  "const id = created.id || (created.reference && created.reference.id);",
+                  "pm.expect(id, 'the response carries the reference id').to.be.a('string');",
+                  "pm.collectionVariables.set(\"kmsTenantCertificateReferenceId\", id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 List certificate references",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantKmsApiBaseUrl}}/certificate-references",
+            "description": "Lists the tenant's own certificate references. It never enumerates a provider's certificate inventory, and returns public metadata only. Filter with ?providerId=, ?kind= or ?source=.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('certificate references listed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 Read one certificate reference",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantKmsApiBaseUrl}}/certificate-references/{{kmsTenantCertificateReferenceId}}",
+            "description": "Reads the public metadata projection for one reference: provider, alias, kind, source, control mode, the linked key alias and kid, and the public fingerprints. No certificate bytes, no provider credentials.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('certificate reference read', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 Read the registered chain",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantKmsApiBaseUrl}}/certificate-chains/{{kmsTenantCertificateAlias}}?providerId={{kmsRuntimeProviderId}}",
+            "description": "Reads the stored chain back by alias. The certificates array is ordered leaf to root, so the first entry is the one whose public key must match the linked key.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('registered chain read', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 Delete the certificate reference",
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantKmsApiBaseUrl}}/certificate-chains/{{kmsTenantCertificateAlias}}?providerId={{kmsRuntimeProviderId}}",
+            "description": "Removes the EDK reference only. For an externally managed reference this never touches the provider certificate; here it removes material this walkthrough itself stored.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('certificate reference deleted', () => pm.expect([200, 204]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16 Delete the tenant-wide key",
+          "request": {
+            "method": "DELETE",
+            "url": "{{tenantKmsApiBaseUrl}}/keys/{{kmsTenantKeyAlias}}?providerId={{kmsRuntimeProviderId}}",
+            "description": "Removes the key created by request 09 so the run leaves no residue.",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{tenantPublicAuthority}}",
+                "type": "text"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tenant-wide key deleted', () => pm.expect([200, 204]).to.include(pm.response.code));"
                 ]
               }
             }

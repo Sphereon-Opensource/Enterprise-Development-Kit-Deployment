@@ -297,6 +297,21 @@ http:
 
     # TS 11 catalogs are issuer-owned. Public SchemaMeta stays anonymous
     # under /public/catalogs; management is /api/catalog/v1.
+    # A catalog slug is unique within its tenant, not across the install, so the
+    # platform host cannot resolve which tenant owns one and must never guess.
+    # Catalog paths that reach the platform host go to the issuer anyway, so the
+    # caller gets the catalog service's own not-found answer for the platform
+    # tenant instead of a platform error for a route it does not serve. The
+    # canonical public catalog URL is on the tenant host.
+    platform-host-catalogs:
+      rule: >-
+        Host(`platform.saas.localtest.me`) &&
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 1050
+      tls: {}
+
     tenant-catalogs:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&

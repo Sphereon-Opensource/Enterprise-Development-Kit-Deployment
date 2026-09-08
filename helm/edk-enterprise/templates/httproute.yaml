@@ -516,6 +516,37 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "issuer") }}
           port: {{ .Values.services.issuer.restPort }}
 ---
+# A catalog slug is unique within its tenant, not across the install, so the
+# operator host cannot resolve which tenant owns one and must never guess. These
+# paths are more specific than the platform route's / catch-all, so a catalog URL
+# typed against the operator host reaches the catalog service and gets its own
+# not-found answer for the platform tenant instead of a platform error. The
+# canonical public catalog URL is on the tenant host.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-operator-host-catalogs
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: issuer
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/catalog/v1
+        - path:
+            type: PathPrefix
+            value: /public/catalogs
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "issuer") }}
+          port: {{ .Values.services.issuer.restPort }}
+---
 {{- end }}
 {{- if (index .Values.services "tenant-as").enabled }}
 # Customer identities and credentials are workload data. Route the canonical
