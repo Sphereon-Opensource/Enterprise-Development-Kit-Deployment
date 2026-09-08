@@ -1,0 +1,12 @@
+{
+  "name": "webhook ok",
+  "request": {
+    "method": "POST",
+    "urlPath": "/hooks/ok"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "accepted": true }
+  }
+}

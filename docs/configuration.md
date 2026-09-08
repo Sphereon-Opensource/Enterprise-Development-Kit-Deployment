@@ -17,6 +17,10 @@ mounts the config templates under `compose/config/`. Both surfaces map to the
 same underlying settings, so the table values below are the inputs you supply
 once and apply through whichever surface you use.
 
+The explicit WeBuild trust-domain command and its fail-closed operator inputs
+are documented in [trust-domain-webuild.md](trust-domain-webuild.md). It is a
+post-provision operation and is not an automatic Compose or Helm hook.
+
 ## Configuration mount and file layout
 
 Configuration files are read from the config location the images set to
@@ -360,8 +364,17 @@ prerequisites, provider offerings, opaque handles, and migration behavior.
 Internal service-to-service calls use platform-issued JWTs, not public gateway
 routes and not trusted headers alone. The platform authorization server is the
 STS for these workload tokens. Each satellite has a confidential client id, a
-shared internal client secret, an asserted workload service id, and a receiver
-audience. These values must move as one contract:
+distinct per-client STS secret, an asserted workload service id, and a receiver
+audience. These values must move as one contract.
+
+The product-neutral **service-identity catalog**
+(`helm/edk-enterprise/files/service-identity-catalog.yaml`) is the source of
+truth for receiver audiences, default/extra STS audiences, and peer edges. The
+same catalog is vendored into VDX Helm and the frontend BFF; there is no
+`eastWest.*` audience helper family and no customer-editable
+`serviceIdentity.audiences` object. Helm credential bindings stay under
+`serviceIdentity.clientIds`, `serviceIdentity.serviceIds`, and
+`serviceIdentity.clientSecretKeys`.
 
 | Service | STS client id | Asserted service id | Receiver audience |
 | --- | --- | --- | --- |
@@ -374,14 +387,28 @@ audience. These values must move as one contract:
 | wallet-interaction | `wallet-interaction-service` | `service-wallet-interaction` | `enterprise-wallet-interaction` |
 | tenant-AS | `tenant-as-service` | `service-tenant-as` | `enterprise-tenant-as` |
 
-In Helm the configurable credential bindings live under
-`serviceIdentity.clientIds` and `serviceIdentity.serviceIds`. Audience names are
-fixed protocol identifiers shared with source-level STS and tenant-registration
-contracts; the chart rejects `serviceIdentity.audiences`. The chart renders the
+The chart renders the
 platform internal OAuth clients, validated-workload bindings, service token
-endpoints, fixed receiver audiences, and NetworkPolicy peer edges. Docker
+endpoints, catalog receiver audiences, and NetworkPolicy peer edges. Docker
 Compose uses the same fixed names in the mounted `compose/config/*.yml` files
-and admin-console environment.
+and admin-console environment. Compose and Helm both give each satellite its
+own confidential-client secret. Satellites still read the env name
+`EDK_INTERNAL_CLIENT_SECRET`; Compose sources that value from
+`EDK_INTERNAL_CLIENT_SECRET_<ROLE>` and the platform interpolates every
+role-specific env into `internal-clients`.
+
+Helm distinguishes **identity-ready** from **serving-ready**. `/health/identity`
+is 200 when gRPC is listening and the platform can serve `/token` and
+`/.well-known/jwks.json`; it does not wait for tenant ceremony. `/ready` stays
+the boot-ceremony gate. Kubernetes has one pod Ready bit, so identity Services
+publish not-ready addresses while serving `*-platform` / `*-tenant-kms`
+Services do not. Distributed installs render `*-platform-identity` and
+`*-tenant-kms-identity` ClusterIP Services for that identity plane.
+Tenant-KMS is the only caller of `*-platform-identity` (token, JWKS, and gRPC).
+The platform boot ceremony is the only caller of `*-tenant-kms-identity`.
+Issuer, verifier, DID, tenant-AS, wallets, and the admin console keep using the
+serving `*-platform` Service, whose readiness is `/ready`. Compose shares
+`appnet` and keeps `enterprise-platform:9090`; it does not add identity aliases.
 
 Keep these four audience concepts distinct:
 
@@ -417,14 +444,23 @@ values:
 | verifier | `serviceIdentity.clientIds.verifier` / `serviceIdentity.serviceIds.verifier` | `enterprise-platform` | `enterprise-tenant-kms` | tenant-KMS, platform trust-domain |
 | wallet-interaction | `serviceIdentity.clientIds.wallet-interaction` / `serviceIdentity.serviceIds.wallet-interaction` | `enterprise-platform` | `enterprise-wallet-unit` | wallet-unit |
 
-The service-identity credential, portal-BFF credential, and software-keystore password are
+The service-identity credentials, portal-BFF credential, and software-keystore password are
 deployment bootstrap Secrets. In Kubernetes, create a Secret in the Helm release
-namespace with three independently generated keys and reference it by name:
+namespace with independently generated per-client STS keys and reference it by name:
 
 ```yaml
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
   passwordKey: keystore-password
@@ -435,14 +471,15 @@ portalBff:
 
 | Kubernetes Secret key | Runtime input | Purpose |
 | --- | --- | --- |
-| `internal-client-secret` | `SERVER_SERVICE_IDENTITY_CLIENT_SECRET` | Shared secret used by registered satellite confidential clients to obtain short-lived platform-issued east-west tokens. |
+| `serviceIdentity.clientSecretKeys.<role>` | Satellite `EDK_INTERNAL_CLIENT_SECRET` / `SERVER_SERVICE_IDENTITY_CLIENT_SECRET`; platform `EDK_INTERNAL_CLIENT_SECRET_<ROLE>` | Distinct confidential-client secret for one registered satellite STS client. |
 | `admin-console-portal-bff-secret` | `ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Dedicated confidential client secret used only by the admin-console server and platform AS registration. |
 | `keystore-password` | `EDK_KEYSTORE_PASSWORD` | Password protecting the platform and tenant-KMS software PKCS#12 keystores. |
 
-`edk-runtime-secrets` is only an example Secret name. The chart requires all three
+`edk-runtime-secrets` is only an example Secret name. The chart requires the
 Secret references at render time but Kubernetes verifies the Secret object and
 keys when it creates containers. Secret data changes under the same name do not
-automatically restart pods; roll the platform and satellites after rotation.
+automatically restart pods; roll the platform and the satellite whose key
+changed after rotation. `serviceIdentity.internalClientSecretKey` is retired.
 
 The binary/gRPC path is security-sensitive. Tenant, principal, and workload
 identity come only from validated JWT claims. The following checks are required:
@@ -494,7 +531,15 @@ Set the transport globally in Helm under `grpc`:
 | --- | --- |
 | `grpc.enabled` | Whether internal command routing uses gRPC. The shipped default is `true`: platform, tenant-KMS, wallet-unit, and wallet-interaction expose internal gRPC receivers and the chart renders `grpc://` peer endpoints for routes to those services. |
 | `grpc.port` | gRPC port (default `9090`). |
-| `grpc.authMode` | Auth mode for peer gRPC traffic. Use `service-jwt` for token-based service identity, or `mesh-mtls` when a service mesh provides mutual TLS. |
+| `grpc.authMode` | Auth mode for peer gRPC traffic. `service-jwt` is application JWT on plaintext gRPC; it is not mTLS. `mtls` is application-terminated mutual TLS and requires `grpc.tls` cert paths. `mesh-mtls` means a sidecar provides TLS while the app still uses JWT. `none` is rejected unless `grpc.allowInsecureNone` is true. |
+
+Internal gRPC is plaintext plus application JWT when `grpc.authMode=service-jwt`.
+Use `mtls` only with application-terminated cert paths, or `mesh-mtls` when a
+sidecar terminates TLS while the app still presents JWT on the local socket.
+The platform issuer satellites use to mint those JWTs (`iss`) must be `https://`.
+Loopback HTTP is rejected at STS client start (`Deployment platform issuer is invalid`).
+SPIFFE is the planned later identity root for this transport and is not required
+for this release.
 
 With `grpc.enabled=true` the chart renders platform, tenant-KMS, wallet-unit,
 and wallet-interaction gRPC receivers and points internal routes at those
@@ -548,9 +593,10 @@ The intended peer call graph:
 | wallet-unit | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
 | wallet-interaction | platform | `PLATFORM` / platform config | Platform service over internal gRPC |
 
-For mTLS between peers, set `grpc.authMode=mesh-mtls` and inject your mesh
-sidecar through `podAnnotations`; `examples/mesh-mtls-values.yaml` shows the
-Istio form.
+For mesh-provided TLS between peers, set `grpc.authMode=mesh-mtls` and inject
+your mesh sidecar through `podAnnotations`; `examples/mesh-mtls-values.yaml`
+shows the Istio form. That combination is sidecar TLS plus application JWT, not
+application mTLS.
 
 ## Per-service overrides
 
@@ -637,7 +683,7 @@ server public origins. Browser resource API calls stay same-origin through
 | Variable | Value | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_BASE_PATH` | `/admin-console` | The path prefix the app is served under. The app owns the prefix and emits assets at `/admin-console/_next/...`. |
-| `ADMIN_CONSOLE_PLATFORM_BASE_URL` | Internal platform upstream URL | Server-side platform base used by the BFF for setup-status, runtime-config bootstrap lookups, platform-admin, platform-config, and token exchange. |
+| `ADMIN_CONSOLE_PLATFORM_BASE_URL` | Internal platform upstream URL | Server-side platform base used by the BFF for setup-status, runtime-config bootstrap lookups, platform-admin, platform-config, and token exchange. Platform console only; the tenant console receives the narrow `ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL` instead and resolves the rest from runtime bootstrap. |
 | `ADMIN_CONSOLE_PUBLIC_ORIGIN` | `https://platform.<base-domain>` | Canonical operator host; the complete console is served only for this origin. |
 | `ADMIN_CONSOLE_TRUSTED_INGRESS_MODE` / `ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS` | `X_FORWARDED` / `1` | Select exactly one trusted gateway hop for the untrusted instance-origin candidate. |
 | `ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS` | Exact internal platform origin | Server-only exception for the configured in-cluster HTTP platform service; wildcards, paths, credentials, and arbitrary HTTP origins are rejected. |

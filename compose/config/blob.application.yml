@@ -88,16 +88,6 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
-    secret-management-admin:
-      dialect: postgresql
-      isolation: shared
-      host: ${env:EDK_TENANT_DB_HOST}
-      port: 5432
-      database: ${env:EDK_TENANT_DB_NAME}
-      username: secret_management_admin
-      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      pool:
-        dedicated-pool: true
     secret-management-tenant:
       dialect: postgresql
       isolation: shared
@@ -106,6 +96,16 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: secret_management_tenant_serving
       password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-runtime:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_runtime
+      password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
       pool:
         dedicated-pool: true
   tenants:

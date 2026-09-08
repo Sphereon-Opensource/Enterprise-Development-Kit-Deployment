@@ -14,9 +14,12 @@ server:
       # during tenant onboarding, not deployment-time URLs.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      # Internal JWKS fetch base for dynamic tenant AS issuers; persisted tenant
+      # and AS identities plus the public issuer path are appended during validation.
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       expected-audience: enterprise-issuer
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
-      anonymous-path-prefixes: /oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers
+      anonymous-path-prefixes: /oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/public/catalogs,/credentials/offers
   # Wallet-driven issuance signs credentials by routing KMS commands, but the
   # wallet session carries no operator bearer. The issuer presents its own token
   # for those system calls, obtained from the tenant AS via client_credentials.
@@ -33,6 +36,13 @@ server:
     tenant-bound-client-id: true
     audience: enterprise-platform
     allowed-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as
+
+# Public TS 11 SchemaMeta GET signing. The signing key comes from the
+# catalog-public-signing KMS role binding; without an issuer origin the public catalog GETs stay at 503.
+catalog:
+  public:
+    iss: ${env:EDK_ISSUER_PUBLIC_URL:}
+    jku: ${env:EDK_ISSUER_PUBLIC_URL:}/.well-known/jwks.json
 east-west:
   tenant-did:
     base-url: http://enterprise-did:8080
@@ -175,16 +185,6 @@ database:
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
     # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
-    secret-management-admin:
-      dialect: postgresql
-      isolation: shared
-      host: ${env:EDK_TENANT_DB_HOST}
-      port: 5432
-      database: ${env:EDK_TENANT_DB_NAME}
-      username: secret_management_admin
-      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      pool:
-        dedicated-pool: true
     secret-management-tenant:
       dialect: postgresql
       isolation: shared
@@ -193,6 +193,16 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: secret_management_tenant_serving
       password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-runtime:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_runtime
+      password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
       pool:
         dedicated-pool: true
   tenants:
@@ -260,6 +270,29 @@ kv:
     # Pins token-derived OID4VCI protocol sessions to their first routed issuer
     # instance using the database KV backend's atomic version chains.
     oid4vci:
+      # Public offer and protocol-continuation state must be shared across
+      # issuer requests and replicas. Local hosts retain in-memory fallbacks
+      # when these explicit deployment entries are absent.
+      offers:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+      sessions:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+      nonces:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+      deferred:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+      notifications:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
       credential-request-identities:
         type: KvStoreConfig
         backendId: database

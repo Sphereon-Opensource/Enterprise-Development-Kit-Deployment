@@ -12,6 +12,7 @@ function parseArgs(args) {
   }
   return {
     platformUrl: value('--platform-url').replace(/\/+$/, ''),
+    mailpitUrl: value('--mailpit-url').replace(/\/+$/, ''),
     environmentPath: value('--environment'),
     evidencePath: value('--evidence'),
     licenseBundlePath: value('--license-bundle'),
@@ -100,6 +101,46 @@ async function responseBody(response) {
   }
 }
 
+async function mailpitMessages(fetchImpl, mailpitUrl) {
+  const response = await fetchImpl(`${mailpitUrl}/api/v1/messages`, {headers: {Accept: 'application/json'}})
+  if (!response.ok) throw new Error(`Mailpit message listing failed (HTTP ${response.status})`)
+  const body = await response.json()
+  return Array.isArray(body) ? body : (Array.isArray(body?.messages) ? body.messages : [])
+}
+
+async function findActivationLinkInMailpit(fetchImpl, mailpitUrl, platformUrl, baselineIds) {
+  const platformOrigin = new URL(platformUrl).origin
+  const deadline = Date.now() + 20_000
+  while (Date.now() < deadline) {
+    const messages = await mailpitMessages(fetchImpl, mailpitUrl)
+    for (const message of messages) {
+      if (!message?.ID || baselineIds.has(message.ID)) continue
+      const detailResponse = await fetchImpl(
+        `${mailpitUrl}/api/v1/message/${encodeURIComponent(message.ID)}`,
+        {headers: {Accept: 'application/json'}},
+      )
+      if (!detailResponse.ok) continue
+      const detail = await detailResponse.json()
+      const content = `${detail?.HTML ?? ''}\n${detail?.Text ?? ''}`.replaceAll('&amp;', '&')
+      const candidates = content.match(/https?:\/\/[^\s"'<>]+\/admin-console\/account-action#[^\s"'<>]+/giu) ?? []
+      for (const candidate of candidates) {
+        try {
+          const activationUrl = new URL(candidate)
+          if (
+            activationUrl.origin === platformOrigin &&
+            activationUrl.pathname === '/admin-console/account-action' &&
+            activationUrl.hash.length > 1
+          ) return activationUrl.href
+        } catch {
+          // Ignore unrelated or malformed links in the message body.
+        }
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  return null
+}
+
 async function request(fetchImpl, platformUrl, jar, method, target, {body, headers = {}} = {}) {
   const url = target instanceof URL ? target : new URL(target, platformUrl)
   if (url.origin !== new URL(platformUrl).origin) throw new Error('Refusing setup request outside the platform origin')
@@ -139,7 +180,11 @@ export async function authenticateExactOperator({
 
   const authorizeResponse = await request(fetchImpl, platformUrl, jar, 'GET', authorize)
   if (authorizeResponse.status !== 302) {
-    throw new Error(`Operator authorization did not start (HTTP ${authorizeResponse.status})`)
+    const details = await responseBody(authorizeResponse)
+    const detailText = typeof details === 'string'
+      ? details.replace(/<[^>]*>/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 500)
+      : JSON.stringify(details)
+    throw new Error(`Operator authorization did not start (HTTP ${authorizeResponse.status}): ${detailText}`)
   }
   const loginUrl = sameOriginLocation(platformUrl, authorizeResponse.headers.get('location'), 'Operator authorization')
   const loginPage = await request(fetchImpl, platformUrl, jar, 'GET', loginUrl)
@@ -238,6 +283,8 @@ async function main(argv, fetchImpl = fetch) {
     setupPerformed: false,
     productStateVerified: false,
     operatorAuthenticated: false,
+    activationDeliveryState: null,
+    activationSource: null,
     licenseBundle: args.licenseBundlePath ? {provided: true, consumed: false} : {provided: false, consumed: false},
   }
   const statusResponse = await request(fetchImpl, args.platformUrl, null, 'GET', '/api/platform/setup/v1/status', {
@@ -268,11 +315,18 @@ async function main(argv, fetchImpl = fetch) {
         basename(args.licenseBundlePath),
       )
       const response = await request(fetchImpl, args.platformUrl, null, 'POST', pathname, {body: form})
-      if (!response.ok) throw new Error(`POST ${pathname} failed (HTTP ${response.status})`)
+      if (!response.ok) {
+        const details = await responseBody(response)
+        const detailText = typeof details === 'string' ? details : JSON.stringify(details)
+        throw new Error(`POST ${pathname} failed (HTTP ${response.status}): ${detailText}`)
+      }
     }
     await importBundle('/api/platform/setup/v1/license/import/preview')
     await importBundle('/api/platform/setup/v1/license/import')
     evidence.licenseBundle.consumed = true
+    const mailpitBaseline = args.mailpitUrl
+      ? new Set((await mailpitMessages(fetchImpl, args.mailpitUrl)).map((message) => message?.ID).filter(Boolean))
+      : new Set()
     const bootstrapResponse = await request(fetchImpl, args.platformUrl, null, 'POST', '/api/platform/setup/v1/bootstrap', {
       headers: {Accept: 'application/json', 'Content-Type': 'application/json'},
       body: JSON.stringify({adminEmail: operatorEmail, adminDisplayName: operatorDisplayName}),
@@ -281,7 +335,13 @@ async function main(argv, fetchImpl = fetch) {
     if (!bootstrapResponse.ok) {
       throw new Error(`Platform operator bootstrap failed (HTTP ${bootstrapResponse.status})`)
     }
-    const activationLink = bootstrapBody?.activation?.manualActivationLink
+    evidence.activationDeliveryState = bootstrapBody?.activation?.deliveryState ?? null
+    let activationLink = bootstrapBody?.activation?.manualActivationLink
+    if (activationLink) evidence.activationSource = 'api-manual'
+    if (!activationLink && args.mailpitUrl) {
+      activationLink = await findActivationLinkInMailpit(fetchImpl, args.mailpitUrl, args.platformUrl, mailpitBaseline)
+      if (activationLink) evidence.activationSource = 'mailpit'
+    }
     const separator = typeof activationLink === 'string' ? activationLink.indexOf('#') : -1
     if (separator < 0 || separator === activationLink.length - 1) {
       throw new Error(

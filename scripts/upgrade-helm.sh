@@ -154,9 +154,9 @@ done
 [[ "$NAMESPACE" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid Kubernetes namespace: $NAMESPACE"
 [[ "$RUNTIME_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid runtime Secret name."
 [[ "$PIPELINE_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid pipeline Secret name."
-if [[ "$IMAGE_TAG" =~ ^0\.25\.0-RC3([._-][A-Za-z0-9][A-Za-z0-9._-]*)?$ ]]; then
+if [[ "$IMAGE_TAG" =~ ^0\.25\.0-RC[34]([._-][A-Za-z0-9][A-Za-z0-9._-]*)?$ ]]; then
   [[ -n "$RELEASE_SET_EVIDENCE" ]] ||
-    die "--release-set-evidence is required for immutable RC3 upgrades."
+    die "--release-set-evidence is required for immutable RC3 and RC4 upgrades."
 fi
 
 require_command helm
@@ -245,6 +245,7 @@ append_unique_file() {
 
 RC1_TO_RC2_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc1-to-0.25.0-rc2-values.yaml"
 V0_25_0_RC2_TO_V0_25_0_RC3_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc2-to-0.25.0-rc3-values.yaml"
+V0_25_0_RC3_TO_V0_25_0_RC4_VALUES="$DEPLOYMENT_ROOT/helm/edk-enterprise/examples/upgrades/0.25.0-rc3-to-0.25.0-rc4-values.yaml"
 
 # Resolve the currently installed immutable image tag before rendering. Known
 # release transitions are selected automatically. Compatibility overlays are
@@ -263,7 +264,8 @@ if [[ -n "$INSTALLED_IMAGE_TAG" && -n "$IMAGE_TAG" ]]; then
     "$INSTALLED_IMAGE_TAG" \
     "$IMAGE_TAG" \
     "$(absolute_file "$RC1_TO_RC2_VALUES")" \
-    "$(absolute_file "$V0_25_0_RC2_TO_V0_25_0_RC3_VALUES")"; then
+    "$(absolute_file "$V0_25_0_RC2_TO_V0_25_0_RC3_VALUES")" \
+    "$(absolute_file "$V0_25_0_RC3_TO_V0_25_0_RC4_VALUES")"; then
     die "Refusing unsupported release downgrade: $INSTALLED_IMAGE_TAG -> $IMAGE_TAG"
   fi
   AUTO_MIGRATION_VALUE_FILES=("${EDK_AUTO_MIGRATION_VALUE_FILES[@]}")
@@ -335,19 +337,34 @@ if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
   kubectl create namespace "$NAMESPACE"
 fi
 
-# Never rotate an existing internal-client or keystore credential implicitly.
+# Never rotate an existing per-client STS or keystore credential implicitly.
+CLIENT_SECRET_KEYS=(
+  kms-service-client-secret
+  tenant-as-service-client-secret
+  did-service-client-secret
+  blob-service-client-secret
+  issuer-service-client-secret
+  verifier-service-client-secret
+  wallet-unit-service-client-secret
+  wallet-interaction-service-client-secret
+  trust-domain-service-client-secret
+)
 if ! secret_exists "$RUNTIME_SECRET_NAME"; then
   printf 'Creating new runtime Secret/%s.\n' "$RUNTIME_SECRET_NAME"
-  INTERNAL_CLIENT_SECRET="$(base64url_secret 48)"
   KEYSTORE_PASSWORD="$(base64url_secret 48)"
   PORTAL_BFF_SECRET="$(base64url_secret 48)"
-  apply_secret_fields "$RUNTIME_SECRET_NAME" \
-    "\"internal-client-secret\":\"$INTERNAL_CLIENT_SECRET\",\"keystore-password\":\"$KEYSTORE_PASSWORD\",\"admin-console-portal-bff-secret\":\"$PORTAL_BFF_SECRET\""
-  unset INTERNAL_CLIENT_SECRET KEYSTORE_PASSWORD PORTAL_BFF_SECRET
+  json_fields="\"keystore-password\":\"$KEYSTORE_PASSWORD\",\"admin-console-portal-bff-secret\":\"$PORTAL_BFF_SECRET\""
+  for client_secret_key in "${CLIENT_SECRET_KEYS[@]}"; do
+    client_secret_value="$(base64url_secret 48)"
+    json_fields+=",\"${client_secret_key}\":\"${client_secret_value}\""
+    unset client_secret_value
+  done
+  apply_secret_fields "$RUNTIME_SECRET_NAME" "$json_fields"
+  unset KEYSTORE_PASSWORD PORTAL_BFF_SECRET json_fields
 else
-  for required_key in internal-client-secret keystore-password; do
+  for required_key in keystore-password "${CLIENT_SECRET_KEYS[@]}"; do
     secret_has_key "$RUNTIME_SECRET_NAME" "$required_key" ||
-      die "Existing Secret/$RUNTIME_SECRET_NAME is missing '$required_key'. Restore the original value; it is unsafe to generate a replacement during an upgrade."
+      die "Existing Secret/$RUNTIME_SECRET_NAME is missing '$required_key'. Restore or add a distinct per-client STS key; it is unsafe to generate a replacement during an upgrade. serviceIdentity.internalClientSecretKey / internal-client-secret is no longer used."
   done
   if ! secret_has_key "$RUNTIME_SECRET_NAME" admin-console-portal-bff-secret; then
     printf 'Adding the missing portal BFF key without changing existing runtime credentials.\n'
@@ -358,7 +375,7 @@ else
   fi
 fi
 
-for required_key in internal-client-secret keystore-password admin-console-portal-bff-secret; do
+for required_key in keystore-password admin-console-portal-bff-secret "${CLIENT_SECRET_KEYS[@]}"; do
   secret_has_key "$RUNTIME_SECRET_NAME" "$required_key" ||
     die "Secret/$RUNTIME_SECRET_NAME is missing '$required_key' after runtime-secret reconciliation."
 done

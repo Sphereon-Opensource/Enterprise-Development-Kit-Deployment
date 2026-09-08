@@ -15,7 +15,11 @@ import {spawnSync} from 'node:child_process'
 import {fileURLToPath} from 'node:url'
 import {
   decideProjectDisposition,
+  EVIDENCE_LABELS,
   finalizeEvidence,
+  normalizeOptionalLanes,
+  OPTIONAL_LANES,
+  parseOptionalLanes,
   redactSensitiveText,
   validateJunitText,
 } from './compose-postman-release-gate-support.mjs'
@@ -37,6 +41,10 @@ const setupPath = join(scriptDir, 'prepare-compose-postman-setup.mjs')
 const scannerPath = join(scriptDir, 'assert-plaintext-canary-absent.mjs')
 const supportPath = join(scriptDir, 'compose-postman-release-gate-support.mjs')
 const lifecycleModulePath = join(scriptDir, 'ComposePostmanReleaseGateLifecycle.psm1')
+const variableAuditPath = join(repoRoot, 'deploy', 'edk', 'e2e', 'scripts', 'audit-postman-variables.mjs')
+const idkExampleCollectionPath = join(
+  repoRoot, 'vdx', 'edk', 'idk', 'examples', 'oid4vc', 'services', 'postman', 'IDK-OID4VCI-OID4VP-E2E.postman_collection.json',
+)
 const secretAuthorityGeneratorPath = join(scriptDir, 'generate-secret-authority-keys.ps1')
 const secretAuthorityShellGeneratorPath = join(scriptDir, 'generate-secret-authority-keys.sh')
 const collectionPath = join(customerRoot, 'postman', 'EDK-Enterprise-Deployment.postman_collection.json')
@@ -82,7 +90,8 @@ function writeEnvironment(path, overrides = {}) {
     operatorPassword: 'operator-password-value',
     tenantOwnerPassword: 'tenant-owner-password-value',
     tenantOwnerCodeVerifier: 'tenant-owner-verifier-value',
-    idpClientSecret: 'StableCanary_0123456789',
+    tenantServiceClientId: 'walkthrough-client-id',
+    tenantServiceClientSecret: 'StableCanary_0123456789',
     ...overrides,
   }
   writeFileSync(path, `${JSON.stringify({
@@ -90,9 +99,50 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 113, 'shipped customer collection must contain 113 requests')
+assert.equal(requestCount(collection.item), 214, 'shipped customer collection must contain the current 214-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
+
+// Every variable the collection reads is either declared or set by an earlier request, and every
+// declared variable is used. The audit also flags names copied into the IDK example collection.
+const variableAudit = spawnSync(process.execPath, [variableAuditPath, collectionPath, idkExampleCollectionPath], {encoding: 'utf8'})
+assert.equal(variableAudit.status, 0, `${variableAudit.stdout}\n${variableAudit.stderr}`)
+assert.match(variableAudit.stdout, /Postman variable audit passed\./u)
+
+// The platform operator signs in through the hosted authorization server. client_credentials is
+// reserved for the tenant service client the walkthrough registers in the tenant
+// federation lane after the tenant authorization server has been discovered.
+assert.deepEqual(collection.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{operatorToken}}', type: 'string'}]})
+const operatorTokenRequest = requestByName.get('05 Exchange code for operator token')
+assert.ok(operatorTokenRequest, 'operator sign-in must end in an authorization-code token exchange')
+assert.equal(operatorTokenRequest.request.url, '{{platformUrl}}/token')
+assert.ok(operatorTokenRequest.request.body.urlencoded.some((entry) => entry.key === 'grant_type' && entry.value === 'authorization_code'))
+assert.ok(JSON.stringify(operatorTokenRequest.event).includes("pm.collectionVariables.set('operatorToken', j.access_token)"))
+const tenantTokenRequest = requestByName.get('01 Tenant service token (client credentials)')
+assert.ok(tenantTokenRequest, 'tenant service token request must exist')
+assert.equal(tenantTokenRequest.request.auth.type, 'basic')
+assert.deepEqual(
+  tenantTokenRequest.request.auth.basic.map((entry) => entry.value),
+  ['{{tenantServiceClientId}}', '{{tenantServiceClientSecret}}'],
+)
+assert.ok(JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantToken', tenantAccessToken)") ||
+  JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantToken', j.access_token)"))
+const tenantServiceClientRegistration = requestByName.get('07b Register walkthrough tenant service client')
+assert.ok(tenantServiceClientRegistration, 'tenant service client registration must follow tenant authorization-server discovery in folder 04')
+assert.match(tenantServiceClientRegistration.request.body.raw, /"principalRoles": \[\s*"tenant-admin"\s*\]/u)
+assert.match(tenantServiceClientRegistration.request.body.raw, /"grantTypes": \[\s*"client_credentials"\s*\]/u)
+for (const folderName of ['06 Tenant Keys and DID', '10 Issuer Settings', '15 Issue SD-JWT VC and mdoc', '22 Verification']) {
+  const folder = collection.item.find((item) => item.name === folderName)
+  assert.deepEqual(folder.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{tenantToken}}', type: 'string'}]}, `${folderName} must inherit the tenant token`)
+}
+assert.equal(
+  collectionRequests.filter((item) => (item.request.header ?? []).some((header) => /^authorization$/iu.test(header.key))).length,
+  0,
+  'bearer credentials come from collection, folder, or request auth, never from a header',
+)
+assert.ok(collection.variable.some((entry) => entry.key === 'operatorCodeVerifier'), 'operator sign-in keeps its PKCE helper variable')
+assert.ok(requestByName.has('03 Submit operator credentials'), 'the platform operator signs in through the hosted login form')
+assert.ok(requestByName.has('05 Submit tenant owner credentials'), 'tenant owner activation keeps its forms login')
 for (const name of [
   '00a Resolve EuPid DID signing selection',
   '00b Resolve mDL X.509 signing selection',
@@ -102,53 +152,20 @@ for (const name of [
 ]) {
   assert.ok(requestByName.has(name), `customer collection must retain release signing coverage: ${name}`)
 }
-const kmsLifecycleContract = [
-  ['04 Create disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources'],
-  ['05 Read SOFTWARE KMS credential status', 'GET', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/credentials/software-keystore'],
-  ['06 Attach SOFTWARE KMS credential', 'PUT', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/credentials/software-keystore'],
-  ['07 Validate disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/validate'],
-  ['08 Rotate SOFTWARE KMS credential', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/rotate'],
-  ['09 Detach disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/detach'],
-  ['10 Retire disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/retire'],
-]
-for (const [name, method, url] of kmsLifecycleContract) {
+// The customer reference reads and validates the KMS resources the tenant holds; the disposable
+// SOFTWARE lifecycle (create, credential, rotate, detach, retire) is internal breadth and lives in
+// the overlay folder checked by the internal gate.
+for (const [name, method, url] of [
+  ['01 List KMS offerings', 'GET', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/offerings'],
+  ['02 List KMS resources', 'GET', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources'],
+  ['03 Validate tenant setup KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsResourceHandle}}/validate'],
+]) {
   const item = requestByName.get(name)
-  assert.ok(item, `customer KMS lifecycle request '${name}' must exist`)
+  assert.ok(item, `customer KMS resource request '${name}' must exist`)
   assert.equal(item.request.method, method, `${name} method`)
   assert.equal(item.request.url, url, `${name} path`)
 }
-const lifecycleItems = kmsLifecycleContract.map(([name]) => requestByName.get(name))
-const lifecycleSource = JSON.stringify(lifecycleItems)
-assert.match(
-  requestByName.get('04 Create disposable SOFTWARE KMS resource').request.body.raw,
-  /"kind": "SOFTWARE"[\s\S]*"storageMode": "MEMORY"/u,
-  'customer lifecycle must create its own MEMORY-backed SOFTWARE resource',
-)
-for (const name of [
-  '06 Attach SOFTWARE KMS credential',
-  '08 Rotate SOFTWARE KMS credential',
-  '09 Detach disposable SOFTWARE KMS resource',
-  '10 Retire disposable SOFTWARE KMS resource',
-]) {
-  assert.ok(
-    requestByName.get(name).request.body.raw.includes('{{kmsLifecycleResourceVersion}}'),
-    `${name} must use the version captured from the preceding response`,
-  )
-}
-for (const invariant of [
-  "pm.collectionVariables.set('kmsLifecycleResourceHandle', j.handle)",
-  "pm.collectionVariables.set('kmsLifecycleResourceVersion', String(j.resourceVersion))",
-  "pm.collectionVariables.set('kmsLifecycleCredentialSecretRef', j.credentialSecretRef)",
-  "pm.collectionVariables.unset('kmsLifecycleCredential')",
-  "pm.expect(j.state, 'resource state').to.eql('CONFIGURED')",
-  "pm.expect(j.state, 'resource state').to.eql('DETACHED')",
-  "pm.expect(j.state, 'resource state').to.eql('RETIRED')",
-]) {
-  assert.ok(lifecycleSource.includes(invariant), `customer KMS lifecycle must retain '${invariant}'`)
-}
-assert.ok(lifecycleSource.includes("pm.variables.replaceIn('{{$randomUUID}}')"), 'customer KMS lifecycle must generate transient credentials and labels')
-assert.ok(!/krh_[A-Za-z0-9_-]{20,}/u.test(lifecycleSource), 'customer KMS lifecycle must never hardcode an opaque resource handle')
-assert.ok(!lifecycleSource.includes('/reference'), 'SOFTWARE lifecycle must not call the cloud-only change-reference route')
+assert.ok(!/krh_[A-Za-z0-9_-]{20,}/u.test(JSON.stringify(collection)), 'customer collection must never hardcode an opaque resource handle')
 const tenantOriginContractItems = [
   '01 Register tenant',
   '05 List tenant gateway endpoint bindings',
@@ -181,12 +198,23 @@ const composeReleaseImages = [...new Set(
 )].sort()
 assert.deepEqual(composeReleaseImages, [...expectedImages].sort(), 'customer Compose must use exactly eight release images')
 const tenantDbEnv = compose.match(/x-edk-tenant-db-env:[\s\S]*?(?=\nx-[a-z]|\nservices:)/u)?.[0] ?? ''
+// Every runtime hosts the secret-use broker, so the tenant-serving and narrow runtime roles are
+// shared. The authority-admin credential is not: it stays on enterprise-platform alone.
 for (const credential of [
-  'EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD',
   'EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD',
+  'EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD',
 ]) {
   assert.ok(tenantDbEnv.includes(`${credential}:`), `customer tenant DB environment must propagate ${credential} to every runtime`)
 }
+assert.ok(
+  !tenantDbEnv.includes('EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:'),
+  'the authority-admin DB credential must not reach every runtime through the shared tenant DB anchor',
+)
+const platformService = compose.match(/\n  enterprise-platform:[\s\S]*?(?=\n  [a-z][a-z0-9-]*:\n)/u)?.[0] ?? ''
+assert.ok(
+  platformService.includes('EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:'),
+  'enterprise-platform must be the one runtime that receives the authority-admin DB credential',
+)
 for (const workload of ['service-platform', 'service-crypto', 'service-data', 'service-blob', 'service-tenant-as', 'service-oid4vci', 'service-oid4vp']) {
   assert.ok(compose.includes(`/workload/${workload}:/app/secret-authority/workload:ro`), `customer Compose must mount the ${workload} assertion key only into its owner`)
 }
@@ -223,10 +251,22 @@ for (const [configName, workloadId] of [
       `${configName} must route the central secret-authority module to the platform with its downscoped bearer`,
     )
   }
-  for (const [route, username, passwordEnvironment] of [
-    ['secret-management-admin', 'secret_management_admin', 'EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD'],
-    ['secret-management-tenant', 'secret_management_tenant_serving', 'EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD'],
-  ]) {
+  // The authority-admin database route is platform-only. Satellites host the secret-use broker
+  // and get the tenant-serving role alone, so requiring the admin route of them would pin the
+  // inverse of that boundary.
+  const expectedSecretRoutes = configName === "platform"
+    ? [
+        ['secret-management-admin', 'secret_management_admin', 'EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD'],
+        ['secret-management-tenant', 'secret_management_tenant_serving', 'EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD'],
+      ]
+    : [['secret-management-tenant', 'secret_management_tenant_serving', 'EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD']]
+  if (configName !== 'platform') {
+    assert.ok(
+      !config.includes('    secret-management-admin:\n'),
+      `${configName} must not configure the authority-admin database route`,
+    )
+  }
+  for (const [route, username, passwordEnvironment] of expectedSecretRoutes) {
     const marker = `    ${route}:\n`
     const roleStart = config.indexOf(marker)
     assert.notEqual(roleStart, -1, `${configName} must configure the ${route} database route`)
@@ -267,7 +307,7 @@ assert.match(helmValues, /allowTenantManagedProviders: false/u, 'customer Helm m
 assert.match(e2eHelmValues, /allowTenantManagedProviders: false/u, 'E2E Helm must preserve the clean customer provider baseline')
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
-  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: false\n/u,
+  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: \$\{env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false\}\n/u,
   'customer Compose must not publish cloud-provider fixtures by default',
 )
 assert.match(
@@ -301,7 +341,7 @@ assert.doesNotMatch(
 )
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
-  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp\n/u,
+  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email\n/u,
   'customer Compose must map authenticated service clients to their authorized secret workload identities',
 )
 assert.ok(
@@ -335,7 +375,7 @@ for (const sourceInvariant of [
   'verify-enterprise-image-set.mjs',
   'compose-postman-release-gate-support.mjs',
   "'--pull', 'never'",
-  "'E2E finished:\\s+115 requests captured,\\s+exit code 0\\.'",
+  "'E2E finished:\\s+' + [regex]::Escape($requestCount) + ' requests captured,\\s+exit code 0\\.'",
   "'pg_dump --schema-only --no-owner --no-privileges",
   "'scan-producer'",
   'finalize-evidence',
@@ -359,10 +399,73 @@ for (const sourceInvariant of [
   "c.relname = '_schema_version'",
   'runtime_can_read',
   'Publish-NewmanSafeArtifacts',
+  "if ($Topology -eq 'Distributed' -and $BaselineInstall) {",
+  "'-BaselineInstall requires -KeepUp; a torn-down baseline cannot be upgraded.'",
+  "'-BaselineInstall cannot be combined with -UpdateSnapshots.'",
+  "--evidence-kind $(if ($BaselineInstall) { 'baseline' } else { 'release' })",
+  '--request-count $requestCount',
+  // Preflight: the five vendored openapi checkouts must agree before the stack comes up.
+  'verify-openapi-checkouts.mjs',
+  '& $nodeCommand $openapiCheckoutVerifier --allow-missing',
+  // Optional lanes: overlay per switch, Postman values only via the runner's env channel,
+  // and every lane recorded in the manifest as ran or skipped.
+  '[switch]$Keycloak',
+  '[switch]$WebhookSink',
+  "'docker-compose.keycloak.yml'",
+  "'keycloak\\edk-realm.json'",
+  "'docker-compose.webhook-sink.yml'",
+  'Set-OptionalLaneEnvironment',
+  '$env:EDK_E2E_ENV_keycloakIssuerUrl',
+  '$env:EDK_E2E_ENV_keycloakClientSecret',
+  '$env:EDK_E2E_ENV_webhookSinkInternalUrl',
+  '$env:EDK_E2E_ENV_webhookSinkAdminUrl',
+  // The Azure lane has no overlay; it is ran only when -AzureKms is given and every AZURE_*
+  // value is present, and a missing value skips it rather than failing the gate.
+  '[switch]$AzureKms',
+  "$azureKmsEnvNames = @('AZURE_KEY_VAULT_URI', 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_HSM_KEY_NAME', 'AZURE_CERT_NAME')",
+  '$azureKmsLaneReady = [bool]($AzureKms -and $azureKmsMissing.Count -eq 0)',
+  '"Azure lane skipped (missing: $($azureKmsMissing -join ', '))"',
+  '$env:EDK_E2E_ENV_azureKeyVaultUri',
+  '$env:EDK_E2E_ENV_azureClientSecret',
+  "azureKms = if ($azureKmsLaneReady) { 'ran' } else { 'skipped' }",
+  "eudi = 'skipped'",
+  '--optional-lanes $optionalLanesArgument',
 ]) {
   assert.ok(wrapper.includes(sourceInvariant), `wrapper must retain '${sourceInvariant}'`)
 }
-assert.ok(!wrapper.includes("'--skip-snapshots'") && !wrapper.includes("'--update'"), 'release gate must enforce snapshot drift')
+// The customer overlays the switches append must exist and join the same networks as the
+// tenant AS so the AS can reach Keycloak and the dispatcher can reach the sink in-network.
+const customerKeycloakOverlay = readFileSync(join(customerRoot, 'compose', 'docker-compose.keycloak.yml'), 'utf8')
+assert.ok(customerKeycloakOverlay.includes('KC_DB_URL: jdbc:postgresql://platform-postgres:5432/keycloak'))
+assert.ok(customerKeycloakOverlay.includes('KC_HOSTNAME: http://keycloak:8080'))
+assert.ok(customerKeycloakOverlay.includes('- appnet'))
+assert.ok(customerKeycloakOverlay.includes('- platform-db-net'))
+assert.ok(customerKeycloakOverlay.includes('20-keycloak-database.sh:/docker-entrypoint-initdb.d/20-keycloak-database.sh:ro'))
+assert.ok(customerKeycloakOverlay.includes('${EDK_KEYCLOAK_DB_PASSWORD:?Set EDK_KEYCLOAK_DB_PASSWORD}'), 'customer lane must not ship a default Keycloak database password')
+const customerRealm = JSON.parse(readFileSync(join(customerRoot, 'compose', 'keycloak', 'edk-realm.json'), 'utf8'))
+assert.equal(customerRealm.realm, 'edk')
+const tenantAsClient = customerRealm.clients.find((client) => client.clientId === 'edk-tenant-as')
+assert.ok(tenantAsClient && tenantAsClient.publicClient === false && tenantAsClient.standardFlowEnabled === true)
+assert.ok(tenantAsClient.redirectUris.includes('http://enterprise-tenant-as:18083/federation/callback'))
+assert.ok(customerRealm.users.some((user) => user.username === 'wallet-user' && user.emailVerified === true))
+const customerWebhookOverlay = readFileSync(join(customerRoot, 'compose', 'docker-compose.webhook-sink.yml'), 'utf8')
+assert.ok(customerWebhookOverlay.includes('image: wiremock/wiremock:${EDK_WEBHOOK_SINK_IMAGE_TAG:-3}'))
+assert.ok(customerWebhookOverlay.includes('./webhook-sink/mappings:/home/wiremock/mappings:ro'))
+for (const mapping of ['hooks-ok.json', 'hooks-fail.json', 'hooks-flaky.json']) {
+  JSON.parse(readFileSync(join(customerRoot, 'compose', 'webhook-sink', 'mappings', mapping), 'utf8'))
+}
+// Drift enforcement is never switched off. Re-minting the baselines is a deliberate, explicit
+// choice, so --update may reach the runner only behind the -UpdateSnapshots switch.
+assert.ok(!wrapper.includes("'--skip-snapshots'"), 'release gate must never skip snapshot comparison')
+assert.ok(
+  wrapper.includes("$(if ($UpdateSnapshots) { @('--update') } else { @() })"),
+  'release gate must gate snapshot minting behind -UpdateSnapshots',
+)
+assert.equal(
+  (wrapper.match(/'--update'/gu) ?? []).length,
+  1,
+  'release gate must pass --update from exactly the one guarded site',
+)
 assert.ok(setup.includes('/api/platform/setup/v1/license/import/preview'), 'setup must preview the protected bundle')
 assert.ok(setup.includes('/api/platform/setup/v1/bootstrap'), 'setup must use the product bootstrap API')
 
@@ -433,21 +536,21 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const cleanScan = spawnSync(process.execPath, [
     scannerPath,
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--label', 'contract-clean',
   ], {input: 'safe evidence\n', encoding: 'utf8'})
   assert.equal(cleanScan.status, 0, cleanScan.stderr)
   const leakingScan = spawnSync(process.execPath, [
     scannerPath,
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--label', 'contract-leak',
   ], {input: `unsafe ${canary}\n`, encoding: 'utf8'})
   assert.notEqual(leakingScan.status, 0, 'scanner must fail for the submitted canary')
   const emptyScan = spawnSync(process.execPath, [
     scannerPath,
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--label', 'contract-empty',
   ], {input: '', encoding: 'utf8'})
   assert.notEqual(emptyScan.status, 0, 'scanner must reject empty producer input')
@@ -461,7 +564,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     supportPath,
     'scan-producer',
     '--environment', environmentPath,
-    '--canary-key', 'idpClientSecret',
+    '--canary-key', 'tenantServiceClientSecret',
     '--scanner', scannerPath,
     '--label', 'partial-db',
     '--evidence', producerEvidence,
@@ -512,12 +615,12 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const failedFinalization = finalizeEvidence({
     root: teardownFailureRoot,
     environmentPath,
-    canaryKey: 'idpClientSecret',
+    canaryKey: 'tenantServiceClientSecret',
     candidateStatus: 'passed',
     teardownStatus: 'failed',
     projectName: 'contract_project',
     tag: '0.25.0-RC3-contract',
-    requestCount: 113,
+    requestCount: 169,
     manifestPath: failedManifest,
     manifestHashPath: failedManifestHash,
   })
@@ -528,6 +631,145 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   assert.equal(detachedHash, createHash('sha256').update(readFileSync(failedManifest)).digest('hex'))
   assert.ok(failedDocument.evidence.some((entry) => entry.path === 'compose-teardown.log'))
   assert.equal(failedDocument.detachedManifestHash.scope, 'evidence-manifest.json')
+
+  // A baseline install is not a release verdict: it carries its own kind into the manifest so a
+  // reader (and the console line) can never mistake it for a gate pass.
+  const baselineRoot = join(testRoot, 'baseline-evidence')
+  mkdirSync(baselineRoot)
+  writeFileSync(join(baselineRoot, 'newman.log'), 'baseline run\n', 'utf8')
+  const baselineManifest = join(baselineRoot, 'evidence-manifest.json')
+  const baselineResult = finalizeEvidence({
+    root: baselineRoot,
+    environmentPath,
+    canaryKey: 'tenantServiceClientSecret',
+    candidateStatus: 'passed',
+    teardownStatus: 'passed',
+    projectName: 'contract_project',
+    tag: '0.25.0-RC3',
+    requestCount: 113,
+    manifestPath: baselineManifest,
+    manifestHashPath: join(baselineRoot, 'evidence-manifest.sha256'),
+    evidenceKind: 'baseline',
+  })
+  assert.equal(baselineResult.evidenceKind, 'baseline')
+  assert.equal(EVIDENCE_LABELS.baseline, 'customer-compose-baseline')
+  assert.notEqual(EVIDENCE_LABELS.baseline, EVIDENCE_LABELS.release)
+  assert.equal(JSON.parse(readFileSync(baselineManifest, 'utf8')).kind, 'baseline')
+  // The helper parses options into a Map, so the CLI must read it with .get. Exercising the
+  // command line here is what catches a property read that silently falls back to 'release'.
+  const cliRoot = join(testRoot, 'baseline-cli')
+  mkdirSync(cliRoot)
+  writeFileSync(join(cliRoot, 'newman.log'), 'baseline cli run\n', 'utf8')
+  const cliManifest = join(cliRoot, 'evidence-manifest.json')
+  const cli = spawnSync(process.execPath, [
+    join(customerRoot, 'scripts', 'compose-postman-release-gate-support.mjs'),
+    'finalize-evidence',
+    '--root', cliRoot,
+    '--environment', environmentPath,
+    '--canary-key', 'tenantServiceClientSecret',
+    '--candidate-status', 'passed',
+    '--teardown-status', 'passed',
+    '--project-name', 'contract_project',
+    '--tag', '0.25.0-RC3',
+    '--request-count', '113',
+    '--manifest', cliManifest,
+    '--manifest-hash', join(cliRoot, 'evidence-manifest.sha256'),
+    '--evidence-kind', 'baseline',
+  ], {encoding: 'utf8'})
+  assert.equal(cli.status, 0, `${cli.stdout}\n${cli.stderr}`)
+  assert.match(cli.stdout, /customer-compose-baseline:passed/u)
+  assert.doesNotMatch(cli.stdout, /customer-compose-evidence:/u)
+  assert.equal(JSON.parse(readFileSync(cliManifest, 'utf8')).kind, 'baseline')
+  // A run without lane flags still records every optional lane, as skipped.
+  assert.deepEqual(JSON.parse(readFileSync(cliManifest, 'utf8')).optionalLanes, {
+    keycloak: 'skipped',
+    webhookSink: 'skipped',
+    azureKms: 'skipped',
+    eudi: 'skipped',
+  })
+
+  // Optional lanes: the manifest names each lane as ran or skipped. Lanes without a switch yet
+  // (azureKms, eudi) are still listed so their absence is explicit rather than silent.
+  assert.deepEqual([...OPTIONAL_LANES], ['keycloak', 'webhookSink', 'azureKms', 'eudi'])
+  assert.deepEqual(normalizeOptionalLanes({keycloak: 'ran'}), {
+    keycloak: 'ran',
+    webhookSink: 'skipped',
+    azureKms: 'skipped',
+    eudi: 'skipped',
+  })
+  assert.throws(() => normalizeOptionalLanes({mailpit: 'ran'}), /Unknown optional lane 'mailpit'/u)
+  assert.throws(() => normalizeOptionalLanes({keycloak: 'yes'}), /must be ran or skipped/u)
+  assert.deepEqual(parseOptionalLanes('keycloak=ran, webhookSink=ran'), {
+    keycloak: 'ran',
+    webhookSink: 'ran',
+    azureKms: 'skipped',
+    eudi: 'skipped',
+  })
+  assert.deepEqual(parseOptionalLanes(''), normalizeOptionalLanes({}))
+  assert.throws(() => parseOptionalLanes('keycloak'), /expected name=ran\|skipped/u)
+  const lanesRoot = join(testRoot, 'optional-lanes')
+  mkdirSync(lanesRoot)
+  writeFileSync(join(lanesRoot, 'newman.log'), 'keycloak lane run\n', 'utf8')
+  const lanesManifest = join(lanesRoot, 'evidence-manifest.json')
+  const lanesResult = finalizeEvidence({
+    root: lanesRoot,
+    environmentPath,
+    canaryKey: 'tenantServiceClientSecret',
+    candidateStatus: 'passed',
+    teardownStatus: 'passed',
+    projectName: 'contract_project',
+    tag: '0.25.0-RC3',
+    requestCount: 113,
+    manifestPath: lanesManifest,
+    manifestHashPath: join(lanesRoot, 'evidence-manifest.sha256'),
+    optionalLanes: {keycloak: 'ran', webhookSink: 'ran'},
+  })
+  assert.deepEqual(lanesResult.optionalLanes, {keycloak: 'ran', webhookSink: 'ran', azureKms: 'skipped', eudi: 'skipped'})
+  assert.deepEqual(JSON.parse(readFileSync(lanesManifest, 'utf8')).optionalLanes, lanesResult.optionalLanes)
+  const lanesCliRoot = join(testRoot, 'optional-lanes-cli')
+  mkdirSync(lanesCliRoot)
+  writeFileSync(join(lanesCliRoot, 'newman.log'), 'lanes cli run\n', 'utf8')
+  const lanesCliManifest = join(lanesCliRoot, 'evidence-manifest.json')
+  const lanesCli = spawnSync(process.execPath, [
+    join(customerRoot, 'scripts', 'compose-postman-release-gate-support.mjs'),
+    'finalize-evidence',
+    '--root', lanesCliRoot,
+    '--environment', environmentPath,
+    '--canary-key', 'tenantServiceClientSecret',
+    '--candidate-status', 'passed',
+    '--teardown-status', 'passed',
+    '--project-name', 'contract_project',
+    '--tag', '0.25.0-RC3',
+    '--request-count', '113',
+    '--manifest', lanesCliManifest,
+    '--manifest-hash', join(lanesCliRoot, 'evidence-manifest.sha256'),
+    '--optional-lanes', 'keycloak=ran,webhookSink=skipped',
+  ], {encoding: 'utf8'})
+  assert.equal(lanesCli.status, 0, `${lanesCli.stdout}\n${lanesCli.stderr}`)
+  assert.match(lanesCli.stdout, /customer-compose-optional-lanes:keycloak=ran,webhookSink=skipped,azureKms=skipped,eudi=skipped/u)
+  assert.deepEqual(JSON.parse(readFileSync(lanesCliManifest, 'utf8')).optionalLanes, {
+    keycloak: 'ran',
+    webhookSink: 'skipped',
+    azureKms: 'skipped',
+    eudi: 'skipped',
+  })
+
+  assert.throws(
+    () => finalizeEvidence({
+      root: baselineRoot,
+      environmentPath,
+      canaryKey: 'tenantServiceClientSecret',
+      candidateStatus: 'passed',
+      teardownStatus: 'passed',
+      projectName: 'contract_project',
+      tag: '0.25.0-RC3',
+      requestCount: 113,
+      manifestPath: baselineManifest,
+      manifestHashPath: join(baselineRoot, 'evidence-manifest.sha256'),
+      evidenceKind: 'release-ish',
+    }),
+    /Unknown evidence kind/u,
+  )
 
   const sanitizedRoot = join(testRoot, 'sanitized-success')
   mkdirSync(sanitizedRoot)
@@ -541,12 +783,12 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const sanitizedResult = finalizeEvidence({
     root: sanitizedRoot,
     environmentPath,
-    canaryKey: 'idpClientSecret',
+    canaryKey: 'tenantServiceClientSecret',
     candidateStatus: 'passed',
     teardownStatus: 'passed',
     projectName: 'contract_project',
     tag: '0.25.0-RC3-contract',
-    requestCount: 113,
+    requestCount: 169,
     manifestPath: sanitizedManifest,
     manifestHashPath: sanitizedHash,
   })
@@ -657,7 +899,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 113)
+  assert.equal(plan.requestCount, 214)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -665,6 +907,90 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
     plan.releaseImages.map((reference) => reference.split('/').at(-1).split(':')[0]),
     expectedImages,
   )
+
+  const monolithReportDir = join(testRoot, 'dry-run-monolith')
+  mkdirSync(monolithReportDir)
+  const monolithDryRun = spawnSync(powershell, [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', wrapperPath,
+    '-Tag', '0.25.0-RC3-contract',
+    '-Topology', 'Monolith',
+    '-MonolithImage', 'sphereon/vdx-svc-monolith:0.25.0-RC3-contract',
+    '-ProjectName', 'edk_customer_monolith_contract',
+    '-ReportDir', monolithReportDir,
+    '-AccessMode', 'Localtest',
+    '-BaseDomain', 'saas.localtest.me',
+    '-SourceState', sourceState,
+    '-ExpectedSource', 'https://github.com/Sphereon-Opensource/VDX-infra',
+    '-ComposeEnvFile', join(customerRoot, 'compose', '.env.example'),
+    '-PostmanEnvironmentFile', join(customerRoot, 'postman', 'EDK-Enterprise-Deployment.customer.postman_environment.json'),
+    '-PreProvisionedSetup',
+    '-DryRun',
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    env: {...process.env, PATH: dirname(process.execPath)},
+  })
+  assert.equal(monolithDryRun.status, 0, `${monolithDryRun.stdout}\n${monolithDryRun.stderr}`)
+  const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
+  assert.equal(monolithPlan.topology, 'Monolith')
+  assert.equal(monolithPlan.accessMode, 'Localtest')
+  assert.equal(monolithPlan.requestCount, 214)
+  assert.equal(monolithPlan.composeFiles.length, 3)
+  assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
+  assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))
+  assert.match(readFileSync(monolithPlan.composeFiles[1], 'utf8'), /LICENSE_GATE_SERVICE_ROLE: \$\{VDX_LICENSE_GATE_SERVICE_ROLE:-platform\}/u)
+  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /svc-monolith/u)
+  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /acme\.saas\.localtest\.me/u)
+  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /TENANT_RESOLUTION_SELF_HOSTS: localhost,svc-monolith,platform\.saas\.localtest\.me/u)
+  assert.match(readFileSync(monolithPlan.gatewayDynamic, 'utf8'), /http:\/\/svc-monolith:8080/u)
+  assert.doesNotMatch(readFileSync(monolithPlan.gatewayDynamic, 'utf8'), /http:\/\/enterprise-/u)
+
+  // An explicitly supplied collection is how an older release is gated against the collection it
+  // actually shipped with. Its own size becomes the contract, so the pinned default count must not
+  // reject it, and the plan must record the count that will really be executed.
+  const suppliedCollection = join(testRoot, 'supplied.postman_collection.json')
+  writeFileSync(suppliedCollection, `${JSON.stringify({
+    info: {name: 'supplied', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'},
+    item: [
+      {name: 'folder', item: [{name: 'one', request: {method: 'GET', url: 'http://example.test/1'}}]},
+      {name: 'two', request: {method: 'GET', url: 'http://example.test/2'}},
+    ],
+  }, null, 2)}
+`, 'utf8')
+  const suppliedReportDir = join(testRoot, 'dry-run-supplied-collection')
+  mkdirSync(suppliedReportDir)
+  const suppliedDryRun = spawnSync(powershell, [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', wrapperPath,
+    '-Tag', '0.25.0-RC3-contract',
+    '-ProjectName', 'edk_customer_supplied_contract',
+    '-ReportDir', suppliedReportDir,
+    '-AccessMode', 'Localtest',
+    '-BaseDomain', 'saas.localtest.me',
+    '-CollectionPath', suppliedCollection,
+    '-SourceState', sourceState,
+    '-ExpectedSource', 'https://github.com/Sphereon-Opensource/VDX-infra',
+    '-ComposeEnvFile', join(customerRoot, 'compose', '.env.example'),
+    '-PostmanEnvironmentFile', join(customerRoot, 'postman', 'EDK-Enterprise-Deployment.customer.postman_environment.json'),
+    '-PreProvisionedSetup',
+    '-DryRun',
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    env: {...process.env, PATH: dirname(process.execPath)},
+  })
+  assert.equal(suppliedDryRun.status, 0, `${suppliedDryRun.stdout}
+${suppliedDryRun.stderr}`)
+  const suppliedPlan = JSON.parse(readFileSync(join(suppliedReportDir, 'release-gate-plan.json'), 'utf8').replace(/^﻿/u, ''))
+  assert.equal(suppliedPlan.collection, suppliedCollection)
+  assert.equal(suppliedPlan.requestCount, 2)
 
   const edgeReportDir = join(testRoot, 'dry-run-behind-edge')
   const edgeEnvironment = join(testRoot, 'behind-edge.postman_environment.json')

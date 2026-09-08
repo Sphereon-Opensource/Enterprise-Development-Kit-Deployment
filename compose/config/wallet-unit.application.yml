@@ -2,6 +2,8 @@
 #
 # Server-side wallet-unit state is PostgreSQL-backed. This service has no public
 # ingress in the customer stack; callers use the shared gRPC command transport.
+"wallet.browser.session.issuer": "${env:WALLET_BROWSER_SESSION_ISSUER:https://wallet.example.invalid/wallet}"
+"wallet.browser.session.jwks-uri": "${env:WALLET_BROWSER_SESSION_JWKS_URI:http://enterprise-wallet-browser:8080/wallet/.well-known/session-jwks.json}"
 server:
   rest:
     port: 8080
@@ -9,6 +11,7 @@ server:
       enabled: true
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       expected-audience: enterprise-wallet-unit
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
   service-identity:
@@ -17,6 +20,8 @@ server:
     client-id: wallet-unit-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     audience: enterprise-platform
+    # The packaged feature-manifest route calls onboarding; custody stays local.
+    allowed-audiences: enterprise-wallet-onboarding
 sphereon:
   telemetry:
     enabled: true
@@ -55,6 +60,9 @@ transport:
     enabled: true
     port: 9090
   routing:
+    # Platform/license endpoints are deployment topology and must remain
+    # available before tenant/principal configuration has loaded.
+    configScope: APP
     modules:
       platform:
         target: SERVER

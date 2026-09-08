@@ -4,7 +4,7 @@ shared Deployment environment. The enterprise images do not bake an
 application.yml, so every service with service-specific routing, persistence, or
 security policy receives an explicit base file here.
 */ -}}
-{{- if .Values.services.did.enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.did.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -30,8 +30,8 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
-        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
     east-west:
       tenant-did:
         base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
@@ -71,12 +71,12 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             # RemoteOpaqueSecretResolver supplies its already downscoped tenant
             # bootstrap bearer; do not recurse through the credential being unlocked.
             preferServiceTokenOverSessionBearer: false
           kms:
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               key: &didTenantKmsGrpcRoute
@@ -96,7 +96,7 @@ data:
               ecdh: *didTenantKmsGrpcRoute
 ---
 {{- end }}
-{{- if .Values.services.blob.enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.blob.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -122,15 +122,15 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
-        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
     transport:
       routing:
         configScope: APP
         modules:
 {{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
           kms:
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               key: &blobPlatformKmsGrpcRoute
@@ -146,7 +146,7 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: false
     connector:
       vault:
@@ -175,7 +175,7 @@ data:
         service-role: service-data
 ---
 {{- end }}
-{{- if .Values.services.issuer.enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.issuer.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -203,8 +203,8 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
-        allowed-audiences: {{ printf "%s,%s,%s" (include "edk-enterprise.serviceAudience" "tenant-kms") (include "edk-enterprise.serviceAudience" "did") (include "edk-enterprise.serviceAudience" "tenant-as") | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ printf "%s,%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-as")) | quote }}
     east-west:
       tenant-did:
         base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
@@ -248,10 +248,10 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: false
           kms:
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               key: &issuerTenantKmsGrpcRoute
@@ -277,17 +277,17 @@ data:
             target: SERVER
             transport: HTTP
             endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-as" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-as") | quote }}
             preferServiceTokenOverSessionBearer: true
           trust:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: true
           {{- if (index .Values.services "wallet-interaction").enabled }}
           wallet:
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "wallet-interaction" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "wallet-interaction") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               interaction:
@@ -313,12 +313,19 @@ data:
           scopeBinding: TENANT
         design-assets: *tenantDatabaseKv
         oid4vci:
+          # Public offer and protocol-continuation state remain tenant isolated
+          # while sharing the tenant database across issuer requests and replicas.
+          offers: *tenantDatabaseKv
+          sessions: *tenantDatabaseKv
+          nonces: *tenantDatabaseKv
+          deferred: *tenantDatabaseKv
+          notifications: *tenantDatabaseKv
           credential-request-identities: *tenantDatabaseKv
         blob:
           metadata: *tenantDatabaseKv
 ---
 {{- end }}
-{{- if .Values.services.verifier.enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.verifier.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -344,8 +351,8 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
-        allowed-audiences: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -385,10 +392,10 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: false
           kms:
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               key: &verifierTenantKmsGrpcRoute
@@ -417,11 +424,17 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+            preferServiceTokenOverSessionBearer: true
+          catalog:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: true
           {{- if (index .Values.services "wallet-interaction").enabled }}
           wallet:
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "wallet-interaction" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "wallet-interaction") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               interaction:
@@ -432,7 +445,7 @@ data:
           {{- end }}
 ---
 {{- end }}
-{{- if (index .Values.services "wallet-unit").enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "wallet-unit").enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -452,7 +465,8 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "wallet-unit") | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -478,11 +492,11 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: false
 ---
 {{- end }}
-{{- if (index .Values.services "wallet-interaction").enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "wallet-interaction").enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -502,7 +516,8 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        allowed-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "wallet-interaction") | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -522,10 +537,10 @@ data:
             target: SERVER
             transport: GRPC
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: false
           kms:
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "tenant-kms" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               # Client-instance keys stay in this workload's software WSCD.
@@ -540,7 +555,7 @@ data:
                     transport: GRPC
                     endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
           wallet:
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "wallet-unit" | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "wallet-unit") | quote }}
             preferServiceTokenOverSessionBearer: true
             services:
               unit:
@@ -600,6 +615,7 @@ data:
         scope-binding: TENANT
       wallet-interaction-blobs: *walletDatabaseKv
       wallet-interaction-sessions: *walletDatabaseKv
+      handoff-sessions: *walletDatabaseKv
     wallet:
       interaction:
         trust:
@@ -610,4 +626,26 @@ data:
           holder:
             signing-key-id: wallet-interaction-holder-signing
             signing-algorithm: ES256
+{{- end }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "wallet-onboarding").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-wallet-onboarding-config
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wallet-onboarding
+data:
+  application.yml: |
+    # This source file is the same reviewed runtime contract shipped in the
+    # native wallet-onboarding image. Endpoint substitutions bind it to the
+    # release-local Services while keeping tenant and activation policy keys
+    # explicit and auditable.
+{{ $walletOnboardingConfig := .Files.Get "files/wallet-onboarding.application.yml" -}}
+{{- $walletOnboardingConfig = replace "grpc://enterprise-platform:9090" (printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port) $walletOnboardingConfig -}}
+{{- $walletOnboardingConfig = replace "grpc://enterprise-tenant-kms:9090" (printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port) $walletOnboardingConfig -}}
+{{- $walletOnboardingConfig = replace "grpc://enterprise-wallet-unit:9090" (printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-unit")) .Values.grpc.port) $walletOnboardingConfig -}}
+{{- $walletOnboardingConfig = replace "http://enterprise-platform:18080" (printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) (index .Values.services "platform").restPort) $walletOnboardingConfig -}}
+{{ $walletOnboardingConfig | indent 4 }}
+---
 {{- end }}

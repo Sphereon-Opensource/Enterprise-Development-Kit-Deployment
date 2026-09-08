@@ -47,6 +47,36 @@ use authenticated east-west gRPC calls for platform configuration and KMS
 operations. These gRPC endpoints must remain inside the Compose network or
 Kubernetes cluster.
 
+## Use the customer Postman collection
+
+Import these two files into Postman after the selected Compose or Helm
+installation is running:
+
+- `postman/EDK-Enterprise-Deployment.postman_collection.json`
+- `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
+
+Create a private copy of the environment and fill in its six values: `baseDomain`,
+`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword` and
+`tenantOwnerPassword`. Keep that copy out of Git. Every URL, host, API base and
+`did:web` identifier in the collection is derived from `baseDomain` and
+`tenantSlug` before each request (`platform.<baseDomain>` for the operator plane,
+`<tenantSlug>.<baseDomain>` for the tenant), so pointing the collection at another
+installation or another tenant is a two-value change. The collection never writes
+derived values back into the environment.
+
+The collection is a reference for the REST APIs a customer uses, in the order a
+customer uses them: operator sign-in, tenant registration, tenant owner activation
+and the tenant service token, keys and DID, bringing your own KMS and certificate
+chains, authorization servers and federation to an external OIDC provider, issuer
+branding and credential designs, status lists and per-credential configuration,
+issuance of SD-JWT VC, mdoc and W3C VCDM credentials through pre-authorized code,
+transaction code, pipeline and authorization code, DCQL and verification, trust
+domains and trust lists, the KMS runtime API for keys, certificates and
+signatures, and the Developer Console policy. Folders that need resources you own
+(your Azure Key Vault or AWS KMS, existing external keys and certificates, an
+on-premises platform vault) ship disabled; fill in their collection variables and
+enable them.
+
 ## Domain, DNS, and TLS model
 
 Every installation uses one customer-controlled base domain. The platform and
@@ -128,8 +158,9 @@ Set every required value in `compose/.env` before rendering the stack.
 | `EDK_TENANT_DB_PASSWORD` | Set a different tenant database owner password. |
 | `EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD` | Set the password for the fixed `secret_management_admin` database role. |
 | `EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD` | Set a different password for the fixed `secret_management_tenant_serving` database role. |
+| `EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD` | Set a third password for the narrow `secret_management_runtime` replay-ledger role used by satellite services. |
 | `EDK_KEYSTORE_PASSWORD` | Set the password that protects the platform and tenant KMS keystores. |
-| `EDK_INTERNAL_CLIENT_SECRET` | Set the shared confidential-client secret used for authenticated east-west service tokens. |
+| `EDK_INTERNAL_CLIENT_SECRET_<ROLE>` | Distinct confidential-client secret per STS registration (`TENANT_KMS`, `TENANT_AS`, `DID`, `BLOB`, `ISSUER`, `VERIFIER`, `EMAIL`). Satellites still read `EDK_INTERNAL_CLIENT_SECRET` (one value per container). Platform interpolates every role-specific env. |
 | `EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Set an independent secret for the admin-console portal BFF client. |
 | `EDK_PIPELINE_MASTER_KEK` | Replace the example value with a new 32-byte base64url value. |
 | `EDK_PIPELINE_BLIND_INDEX_KEY` | Replace the example value with a different 32-byte base64url value. |
@@ -232,8 +263,8 @@ docker compose --project-directory ./compose -f ./compose/docker-compose.yml -f 
 
 Use the install and upgrade wrapper. The wrapper validates the model, pulls the
 published images, starts the services, waits for health checks, and records the
-installed tag. It also preserves the required RC1 to RC2 to RC3 migration order
-when an older release is detected.
+installed tag. It also preserves the required RC1 to RC2 to RC3 to RC4
+migration order when an older release is detected.
 
 On Windows PowerShell, run:
 
@@ -355,6 +386,7 @@ database:
     existingSecret: edk-secret-management-database
     adminPasswordKey: admin-password
     tenantPasswordKey: tenant-password
+    runtimePasswordKey: runtime-password
   tenant:
     host: tenant-postgres.example.net
     port: 5432
@@ -376,7 +408,16 @@ platform:
 
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
 
 keystore:
   existingSecret: edk-runtime-secrets
@@ -474,7 +515,8 @@ kubectl -n edk create secret generic edk-tenant-postgres \
 
 kubectl -n edk create secret generic edk-secret-management-database \
   --from-literal=admin-password='<secret-management-admin-password>' \
-  --from-literal=tenant-password='<secret-management-tenant-password>'
+  --from-literal=tenant-password='<secret-management-tenant-password>' \
+  --from-literal=runtime-password='<secret-management-runtime-password>'
 ```
 
 The two passwords in `edk-secret-management-database` must match the fixed role
@@ -491,7 +533,15 @@ When installing directly with Helm, create these objects before rendering:
 
 ```bash
 kubectl -n edk create secret generic edk-runtime-secrets \
-  --from-literal=internal-client-secret='<independent-random-secret>' \
+  --from-literal=kms-service-client-secret='<independent-random-secret>' \
+  --from-literal=tenant-as-service-client-secret='<independent-random-secret>' \
+  --from-literal=did-service-client-secret='<independent-random-secret>' \
+  --from-literal=blob-service-client-secret='<independent-random-secret>' \
+  --from-literal=issuer-service-client-secret='<independent-random-secret>' \
+  --from-literal=verifier-service-client-secret='<independent-random-secret>' \
+  --from-literal=wallet-unit-service-client-secret='<independent-random-secret>' \
+  --from-literal=wallet-interaction-service-client-secret='<independent-random-secret>' \
+  --from-literal=trust-domain-service-client-secret='<independent-random-secret>' \
   --from-literal=admin-console-portal-bff-secret='<independent-random-secret>' \
   --from-literal=keystore-password='<independent-random-password>'
 
@@ -623,7 +673,7 @@ helm upgrade --install sphereon-edk-enterprise ./helm/edk-enterprise --namespace
 ```
 
 Do not use the direct command to skip release-transition steps during an
-upgrade. The wrapper handles the known RC1 to RC2 to RC3 order and the one-time
+upgrade. The wrapper handles the known RC1 to RC2 to RC3 to RC4 order and the one-time
 Deployment strategy conversion. See
 [the Kubernetes quickstart](docs/quickstart-kubernetes.md) for release-specific
 upgrade details.

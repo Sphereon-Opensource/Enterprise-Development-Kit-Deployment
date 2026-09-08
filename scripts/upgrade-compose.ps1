@@ -23,10 +23,15 @@ function Invoke-DockerCompose {
 }
 
 function Get-ReleaseNumber([string]$Tag) {
+    if ([string]::IsNullOrWhiteSpace($Tag)) { return 0 }
+
     $normalized = $Tag.Trim().ToUpperInvariant()
     if ($normalized -eq '0.25.0-RC1') { return 1 }
     if ($normalized -eq '0.25.0-RC2') { return 2 }
-    if ($normalized -match '^0\.25\.0-RC3(?:$|[-._].+)$') { return 3 }
+    # RC3/RC4 builds may carry a delimited immutable suffix. Do not classify
+    # RC30 or RC40 as a supported release.
+    if ($normalized -match '^0\.25\.0-RC3(?:$|[-._].+)') { return 3 }
+    if ($normalized -match '^0\.25\.0-RC4(?:$|[-._].+)') { return 4 }
     return 0
 }
 

@@ -16,7 +16,7 @@ template renders.
 
 Rendered only for the tenant KMS.
 */ -}}
-{{- if (index .Values.services "tenant-kms").enabled }}
+{{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "tenant-kms").enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -39,7 +39,7 @@ data:
         client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
-        audience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
     # Workload identities the tenant KMS trusts on east-west command-transport
     # calls, each bound to the client id of the service token the caller presents.
     # Tenant and principal claims are taken only from the validated workload JWT.
@@ -54,6 +54,9 @@ data:
           {{- if (index .Values.services "wallet-interaction").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
           {{- end }}
+          {{- if (eq (include "edk-enterprise.walletOnboardingEnabled" .) "true") }}
+          - {{ index .Values.serviceIdentity.serviceIds "wallet-onboarding" | quote }}
+          {{- end }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
@@ -63,39 +66,41 @@ data:
           {{- if (index .Values.services "wallet-interaction").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}
           {{- end }}
+          {{- if (eq (include "edk-enterprise.walletOnboardingEnabled" .) "true") }}
+          "[{{ index .Values.serviceIdentity.serviceIds "wallet-onboarding" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-onboarding" | quote }}
+          {{- end }}
     # Tenant configuration routes platform-side KMS commands to SERVER. This
     # workload is that receiver, so its deployment-local routing must remain
     # LOCAL to avoid recursively invoking the remote KMS endpoint.
     transport:
       routing:
+        # Platform/license endpoints are deployment topology and must remain
+        # available before tenant/principal configuration has loaded.
+        configScope: APP
         modules:
-          # Tenant registration migrations run while the ordinary platform
-          # Service can still select the RC2 pod. Configuration refresh must
-          # use the same RC3-only, publish-not-ready bootstrap Service as the
-          # secret-authority reads below; otherwise tenant-KMS keeps the
-          # pre-migration snapshot and cannot resolve the newly committed
-          # resource handle.
+          # Tenant-KMS is the only caller of the platform identity Service.
+          # Identity-ready is /health/identity (gRPC + token/JWKS), not /ready.
           platform:
             target: SERVER
             transport: GRPC
-            endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             services:
               config:
                 target: SERVER
                 transport: GRPC
-                endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
-                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
           application:
             target: SERVER
             transport: GRPC
-            endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
           secret:
             target: SERVER
             transport: GRPC
-            endpoint: {{ printf "grpc://%s-platform-authority-bootstrap:%v" (include "edk-enterprise.fullname" .) .Values.grpc.port | quote }}
-            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" "platform" | quote }}
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             # Resolving the active KMS workload credential uses the dedicated
             # tenant bootstrap bearer supplied by RemoteOpaqueSecretResolver.
             preferServiceTokenOverSessionBearer: false
@@ -112,6 +117,11 @@ data:
                   key:
                     target: LOCAL
                   leaf:
+                    target: LOCAL
+                  # Raw signature creation over a tenant key. This service is the KMS
+                  # server tenant configuration points at, so the same setting
+                  # would make it call itself.
+                  signature:
                     target: LOCAL
                   encryption:
                     target: LOCAL

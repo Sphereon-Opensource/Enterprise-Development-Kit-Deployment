@@ -1,4 +1,4 @@
-{{- if .Values.gateway.enabled }}
+{{- if and .Values.gateway.enabled (eq (include "edk-enterprise.topologyMode" .) "distributed") }}
 {{- $base := include "edk-enterprise.gateway.baseDomain" . }}
 {{- $wildcard := printf "*.%s" $base }}
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
@@ -152,6 +152,92 @@ spec:
   hostnames:
     - {{ $wildcard | quote }}
   rules:
+    # Public Developer Console page and OAuth callback. ReplacePrefixMatch
+    # requires exactly one PathPrefix match, so Exact page mounts use
+    # ReplaceFullPath instead of a broad /developer-console PathPrefix that
+    # would also swallow the auth API Exact rules below.
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/developer-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console/oauth/callback
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/developer-console/oauth/callback
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    # Public Developer Console API under the same public prefix. Longer PathPrefix
+    # matches win over the page rule above.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /developer-console/api/developer-console/v1
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/api/developer-console/v1
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    # Exact auth endpoints rewrite path mid-segment, so use ReplaceFullPath
+    # (ReplacePrefixMatch forbids Exact matches).
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console/api/auth/session
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/api/developer-console-auth/session
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console/api/auth/login
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/api/developer-console-auth/login
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    - matches:
+        - path:
+            type: Exact
+            value: /developer-console/api/auth/callback
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin-console/api/developer-console-auth/callback
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
     # Only the browser-safe admin-console runtime projection is exposed from
     # the platform service on tenant hosts.
     - matches:
@@ -191,6 +277,20 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
+    # Neutral public catalog-console page, same shape as the testing console.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /catalog-console
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/catalog-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
     # Browser-facing testing API under the neutral /testing-console prefix, so the
     # customer-facing surface never exposes admin-console URLs. One rule per path
     # because each carries its own ReplacePrefixMatch; longest-prefix precedence
@@ -200,6 +300,22 @@ spec:
         - path:
             type: PathPrefix
             value: {{ printf "/testing-console%s" $apiPrefix | quote }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: {{ printf "/admin-console%s" $apiPrefix | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    {{- end }}
+    # Same rewrite set for the catalog-console prefix.
+    {{- range $apiPrefix := list "/api/oid4vci/v1/catalog-console" "/api/oid4vp/v1/catalog-console" "/api/portal-oauth/login" "/api/portal-oauth/callback" "/api/portal-oauth/grant" "/api/portal-oauth/revoke" }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ printf "/catalog-console%s" $apiPrefix | quote }}
       filters:
         - type: URLRewrite
           urlRewrite:
@@ -364,6 +480,73 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "issuer") }}
           port: {{ .Values.services.issuer.restPort }}
 ---
+# TS 11 attestation catalogs are issuer-owned. Platform is central control and
+# carries no catalog route, so both the management API and the anonymous public
+# SchemaMeta reads project onto the tenant host against the issuer.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-issuer-catalogs
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: issuer
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /api/catalog/v1
+        - path:
+            type: PathPrefix
+            value: /public/catalogs
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "issuer") }}
+          port: {{ .Values.services.issuer.restPort }}
+---
+# A catalog slug is unique within its tenant, not across the install, so the
+# operator host cannot resolve which tenant owns one and must never guess. These
+# paths are more specific than the platform route's / catch-all, so a catalog URL
+# typed against the operator host reaches the catalog service and gets its own
+# not-found answer for the platform tenant instead of a platform error. The
+# canonical public catalog URL is on the tenant host.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-operator-host-catalogs
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: issuer
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/catalog/v1
+        - path:
+            type: PathPrefix
+            value: /public/catalogs
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "issuer") }}
+          port: {{ .Values.services.issuer.restPort }}
+---
 {{- end }}
 {{- if (index .Values.services "tenant-as").enabled }}
 # Customer identities and credentials are workload data. Route the canonical
@@ -394,17 +577,17 @@ spec:
       matches:
         - path:
             type: RegularExpression
-            value: "^/api/(identity/v1|identity-auth/v1/admin|party/v1|trust-domain/v1)(/.*)?$"
+            value: "^/api/(identity/v1|identity-auth/v1/admin|party/v1)(/.*)?$"
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as") }}
           port: {{ (index .Values.services "tenant-as").restPort }}
 ---
 {{- end }}
 {{- if .Values.services.platform.enabled }}
-# Tenant-host platform projections used by the theme, wallet-entitlement and
-# tenant-scoped platform-config APIs (which include typed KMS resource
-# management). These are intentionally narrow; the platform's operator-host
-# catch-all must not become a wildcard tenant-host catch-all.
+# Tenant-host platform projections used by the theme, trust-domain, and
+# tenant-scoped platform-config APIs. Wallet entitlement moves to the dedicated
+# onboarding route whenever the in-chart service or an external integration is
+# enabled.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -431,15 +614,58 @@ spec:
         - path:
             type: PathPrefix
             value: /api/theme/v1
+        {{- if ne (include "edk-enterprise.walletOnboardingEnabled" .) "true" }}
+        - path:
+            type: PathPrefix
+            value: /api/wallet-entitlement/v1
+        {{- end }}
+        - path:
+            type: PathPrefix
+            value: /api/platform/config/v1/tenants
+        # Trust-domain administration is platform-owned: enterprise-tenant-as carries no
+        # lib-trust-domain module, so routing it there returns 404. Compose has always
+        # pointed this at the platform service.
+        - path:
+            type: PathPrefix
+            value: /api/trust-domain/v1
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
+          port: {{ .Values.services.platform.restPort }}
+---
+{{- end }}
+{{- if eq (include "edk-enterprise.walletOnboardingEnabled" .) "true" }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-wallet-onboarding-tenant
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wallet-onboarding
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
         - path:
             type: PathPrefix
             value: /api/wallet-entitlement/v1
         - path:
             type: PathPrefix
-            value: /api/platform/config/v1/tenants
+            value: /api/wallet-onboarding/v1
       backendRefs:
-        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
-          port: {{ .Values.services.platform.restPort }}
+        - name: {{ include "edk-enterprise.walletOnboardingBackendServiceName" . }}
+          port: {{ include "edk-enterprise.walletOnboardingBackendRestPort" . | int }}
 ---
 {{- end }}
 {{- range $name := list "did" }}

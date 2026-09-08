@@ -1,0 +1,12 @@
+{
+  "name": "webhook fail",
+  "request": {
+    "method": "POST",
+    "urlPath": "/hooks/fail"
+  },
+  "response": {
+    "status": 500,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "accepted": false, "reason": "receiver failure" }
+  }
+}

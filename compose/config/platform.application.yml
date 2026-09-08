@@ -22,17 +22,20 @@ server:
       # Tenant-scoped platform-config APIs accept only issuers that resolve to an
       # active OAUTH2_AUTHORIZATION_SERVER binding in the server-owned registry.
       trust-tenant-registry-issuers: true
+      # Registry-selected tenant/AS identities select the internal JWKS route;
+      # public tenant domains need not be reachable from service containers.
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       # Open paths: first-run setup UI/API, OAuth protocol surface, discovery/JWKS,
       # the internal pre-auth registration channel. Everything else requires an
       # operator bearer.
-      anonymous-path-prefixes: /,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**
+      anonymous-path-prefixes: /,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
     token-endpoint-allow-http: true
     token-endpoint-source: configured
     active-as-client-role: kms
     client-id: kms-service
-    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
     tenant-bound-client-id: true
     audience: enterprise-platform
     allowed-audiences: enterprise-tenant-kms
@@ -117,6 +120,18 @@ transport:
           leaf:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
+          # Raw signature creation over a tenant key. Every JWS the platform builds
+          # for a customer tenant (LoTE publications among them) ends in
+          # kms.signature.create, which is a separate routing service from the typed
+          # leaves. Customer tenant sessions route it to tenant-KMS while the
+          # application tenant continues to select LOCAL. Verification is keyless and
+          # stays in process for every session.
+          signature:
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+            commands:
+              "[kms.signature.verify]":
+                target: LOCAL
           mac:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
@@ -177,6 +192,16 @@ database:
       password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
       pool:
         dedicated-pool: true
+    secret-management-runtime:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_PLATFORM_DB_HOST}
+      port: 5432
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: secret_management_runtime
+      password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
     tenant-migrator:
       dialect: postgresql
       isolation: shared
@@ -227,10 +252,10 @@ secret-management:
       kms-provider-id: software
       kms-binding-template: isolated-tenant-secret-storage
     tenant-policy:
-      # The customer baseline must not publish synthetic cloud-provider offerings.
-      # Dedicated deployments opt into tenant-managed providers explicitly after
-      # configuring and validating the corresponding provider integration.
-      allow-tenant-managed-providers: false
+      # Cloud offerings are opt-in. A deployment may publish the typed Azure/AWS
+      # tenant offerings only after explicitly enabling this policy; provider
+      # instances and credentials are still registered through platform-config.
+      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false}
       # Publishes only the self-contained, per-tenant software-KMS offering.
       allow-platform-offerings: true
       retention-days: 30
@@ -239,7 +264,7 @@ secret-management:
     allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
     # System credentials are authorized to workload identities, not OAuth client principals.
     # Keep this aligned with each satellite's service identity binding below.
-    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp
+    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email
   deployment:
     environment:
       enabled: true
@@ -270,27 +295,6 @@ trust-domain:
       client-id: trust-domain-service
       tenant-bound-client-id: true
       audience: enterprise-tenant-as
-# Dedicated trust-domain router registry, deliberately kept under its own
-# prefix and separate from database.* above: that shared registry also backs
-# every other platform-side tenant-scoped store (auth sessions, signing keys,
-# DID records, the blob metadata KV), none of which have per-tenant schema
-# provisioning today. This prefix is read only by the trust-domain providers,
-# so it alone can carry isolation: schema (schema-per-tenant) with zero effect
-# on anything else. Still the same platform-postgres instance as database.*
-# above - only the isolation strategy differs. The platform DB user needs
-# CREATE SCHEMA privilege for the schema-per-tenant auto-provisioning this
-# enables.
-database-trust-domain:
-  tenants:
-    default:
-      dialect: postgresql
-      isolation: schema
-      schema-pattern: tenant_{id}
-      host: ${env:EDK_PLATFORM_DB_HOST}
-      port: 5432
-      database: ${env:EDK_PLATFORM_DB_NAME}
-      username: ${env:EDK_PLATFORM_DB_USERNAME}
-      password: ${env:EDK_PLATFORM_DB_PASSWORD}
 kv-stores:
   # Email catalog templates share one durable platform store. The catalog
   # namespaces per-tenant published state inside it using the resolved tenant id.
@@ -349,6 +353,18 @@ kms:
         # mounted at /keystore. The file path is derived as
         # /keystore/<tenantId>/<providerId>.p12.
         keystoreRoot: /keystore
+    softwaresym:
+      id: softwaresym
+      type: software
+      enabled: true
+      exposePrivateKeysDuringGeneration: false
+      persistKeysDuringGeneration: true
+      autoCreateCertificate: false
+      keystore:
+        type: pkcs12
+        id: softwaresym
+        path: ${env:EDK_SOFTWARESYM_KEYSTORE_PATH:/keystore/softwaresym.p12}
+        password: ${env:EDK_KEYSTORE_PASSWORD}
     license:
       id: license
       type: software
@@ -424,6 +440,7 @@ oauth2:
       # readStringList, which resolves a delimited string here, not block-sequence items).
       post-logout-redirect-uris: "${env:EXTERNAL_BASE_URL}/admin-console"
       allowed-scopes: openid
+      default-access-token-audience: enterprise-platform
       token-endpoint-auth-method: none
     # Interactive documentation playground (docs site). Public client: authorization code +
     # required PKCE (S256) + required PAR. Redirect URIs are one /docs-env/callback per origin.
@@ -443,6 +460,10 @@ oauth2:
   servers:
     default:
       mode: HOSTED
+      # The platform AS is provisioned entirely from this shipped configuration, so
+      # configuration is authoritative for its client registry and persisted
+      # registrations are secondary. Set statically so it holds from the first request.
+      client-registry-source-precedence: configuration-primary
       signing-key:
         auto-generate: true
       issuer: ${env:EXTERNAL_BASE_URL}
@@ -452,6 +473,20 @@ oauth2:
       # re-authenticating on the next /authorize.
       logout: SUPPORTED
       pkce: REQUIRED
+      # Native platform passkey login uses the same public platform origin in
+      # every deployment topology. A verified WebAuthn assertion is the AAL2
+      # factor; device biometrics, device PIN, or screen lock stay inside the
+      # authenticator and never enter platform state.
+      webauthn:
+        enabled: true
+        rp-id: "platform.${env:EDK_PLATFORM_BASE_DOMAIN}"
+        allowed-origins: "${env:EXTERNAL_BASE_URL}"
+        attestation-policy: none
+        user-verification: required
+        allowed-transports: "internal,hybrid"
+        backup-state-policy: allow-any
+        challenge-ttl-seconds: 300
+        level3-prf-enabled: false
       par: SUPPORTED
       token-format: JWT
       scopes-supported: "openid,profile,email"
@@ -462,43 +497,43 @@ oauth2:
       internal-clients:
         issuer:
           client-id: issuer-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_ISSUER}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as
         kms:
           client-id: kms-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
         did:
           client-id: did-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_DID}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
         blob:
           client-id: blob-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_BLOB}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-blob
         verifier:
           client-id: verifier-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
         tenantas:
           client-id: tenant-as-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
         email:
           client-id: email-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_EMAIL}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
     platform:
@@ -536,6 +571,8 @@ auth:
   login:
     require-application: false
 platform:
+  config-distribution:
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
   sts:
     workload-client-id: kms-service
     secret-bootstrap-workload-client-ids: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service

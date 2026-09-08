@@ -6,7 +6,7 @@
 #
 # Secrets expected in the namespace:
 #   edk-platform-postgres / edk-tenant-postgres : { username, password }
-#   edk-runtime-secrets  : { internal-client-secret, keystore-password }
+#   edk-runtime-secrets  : { per-client STS keys from serviceIdentity.clientSecretKeys, keystore-password }
 #   edk-license-root-ca  : { license-root-ca.pem }   (evaluation license root)
 
 global:
@@ -60,7 +60,6 @@ platform:
 
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
-  internalClientSecretKey: internal-client-secret
 
 keystore:
   existingSecret: edk-runtime-secrets

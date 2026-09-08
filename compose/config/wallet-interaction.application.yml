@@ -3,6 +3,8 @@
 # Server-side headless wallet interaction state is PostgreSQL-backed. Internal
 # callers use gRPC command transport; the REST projection is not public in the
 # default customer stack.
+"wallet.browser.session.issuer": "${env:WALLET_BROWSER_SESSION_ISSUER:https://wallet.example.invalid/wallet}"
+"wallet.browser.session.jwks-uri": "${env:WALLET_BROWSER_SESSION_JWKS_URI:http://enterprise-wallet-browser:8080/wallet/.well-known/session-jwks.json}"
 server:
   rest:
     port: 8080
@@ -10,6 +12,7 @@ server:
       enabled: true
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       expected-audience: enterprise-wallet-interaction
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
   service-identity:
@@ -18,6 +21,7 @@ server:
     client-id: wallet-interaction-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     audience: enterprise-platform
+    allowed-audiences: enterprise-wallet-onboarding,enterprise-wallet-unit,enterprise-tenant-kms
 sphereon:
   telemetry:
     enabled: true

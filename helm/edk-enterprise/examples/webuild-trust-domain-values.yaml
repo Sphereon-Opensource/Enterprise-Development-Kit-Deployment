@@ -1,0 +1,21 @@
+# Metadata for the explicit post-provision command only. The chart does not
+# create a Job, call the Trust Domain API, or render an operator token.
+# Replace every empty value with operator-supplied material before running the
+# shared customer/edk/scripts/configure-webuild-trust-domain script.
+trustDomainBootstrap:
+  mode: ""
+  apiBaseUrl: ""
+  domainId: ""
+  operatorTokenExistingSecret: ""
+  operatorTokenKey: ""
+  eu:
+    enabled: ""
+    ifMatch: ""
+  custom:
+    sourceId: ""
+    url: ""
+    schemeIdentity: ""
+    allowedHost: ""
+    signerAnchorIds: []
+    enabled: ""
+    ifMatch: ""

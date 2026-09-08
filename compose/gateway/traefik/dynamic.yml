@@ -30,6 +30,16 @@ tls:
 http:
   routers:
     # --- Operator / platform host -------------------------------------------
+    # Keep the one-request Secrets delegation issuer east-west/BFF-only. The
+    # public exact path is shadowed to the absent platform console route (404);
+    # the BFF calls the platform service directly.
+    platform-secret-delegation-hidden:
+      rule: "Host(`platform.saas.localtest.me`) && Path(`/api/platform/admin/v1/application/secrets/internal/delegated-token`)"
+      entryPoints: ["websecure"]
+      service: svc-admin-console
+      priority: 1200
+      tls: {}
+
     # No path constraint: the platform plane owns this host entirely (setup,
     # admin, operator login AS, onboarding + admin UI). Higher priority than the
     # tenant wildcard so platform.saas.localtest.me never falls through to it.
@@ -127,13 +137,16 @@ http:
       service: svc-platform
       priority: 300
       tls: {}
-    # Typed KMS resource management is part of the platform configuration API and
-    # is served by the platform, which owns the secret authority state; the tenant
-    # host supplies the tenant-routing context.
-    tenant-platform-config-kms:
+    # The platform configuration API is served by the platform, which owns the
+    # configuration and secret-authority state; the tenant host supplies the
+    # tenant-routing context. This mirrors the Helm HTTPRoute, which routes the whole
+    # /api/platform/config/v1/tenants prefix. A narrower rule leaves the
+    # authorization-server, issuer-instance and verifier-instance slices unrouted on the
+    # tenant host, where the admin console and the release gate address them.
+    tenant-platform-config:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        PathRegexp(`^/api/platform/config/v1/tenants/[^/]+/kms(/.*)?$`)
+        PathPrefix(`/api/platform/config/v1/tenants`)
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 300
@@ -191,6 +204,39 @@ http:
       priority: 250
       tls: {}
 
+    # Public Developer Console projection. Keep the browser contract neutral
+    # while rewriting only the page/API/callback paths into the app's internal
+    # Next mount. No generic /developer-console/api route is allowed here.
+    developer-console-page:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (Path(`/developer-console`) || Path(`/developer-console/oauth/callback`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-page-rewrite"]
+      priority: 280
+      tls: {}
+    developer-console-api:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        PathPrefix(`/developer-console/api/developer-console/v1`)
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-api-rewrite"]
+      priority: 285
+      tls: {}
+    developer-console-auth:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (Path(`/developer-console/api/auth/session`) ||
+         Path(`/developer-console/api/auth/login`) ||
+         Path(`/developer-console/api/auth/callback`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-auth-rewrite"]
+      priority: 290
+      tls: {}
+
     # --- Tenant hosts: OID4VCI issuer ---------------------------------------
     tenant-issuer:
       rule: >-
@@ -200,7 +246,7 @@ http:
          PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
          PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
          PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
-         PathPrefix(`/api/statuslist/v1`))
+         PathPrefix(`/api/statuslist/v1`) || PathPrefix(`/api/invitation`))
       entryPoints: ["websecure"]
       service: svc-issuer
       priority: 200
@@ -210,8 +256,7 @@ http:
     tenant-verifier:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        (PathPrefix(`/oid4vp`) || PathPrefix(`/request_uri`) ||
-         PathPrefix(`/direct_post`) || PathPrefix(`/api/oid4vp/v1`) ||
+        (PathPrefix(`/oid4vp`) || PathPrefix(`/api/oid4vp/v1`) ||
          PathPrefix(`/api/dcql/v1`))
       entryPoints: ["websecure"]
       service: svc-verifier
@@ -250,13 +295,38 @@ http:
       priority: 220
       tls: {}
 
+    # TS 11 catalogs are issuer-owned. Public SchemaMeta stays anonymous
+    # under /public/catalogs; management is /api/catalog/v1.
+    # A catalog slug is unique within its tenant, not across the install, so the
+    # platform host cannot resolve which tenant owns one and must never guess.
+    # Catalog paths that reach the platform host go to the issuer anyway, so the
+    # caller gets the catalog service's own not-found answer for the platform
+    # tenant instead of a platform error for a route it does not serve. The
+    # canonical public catalog URL is on the tenant host.
+    platform-host-catalogs:
+      rule: >-
+        Host(`platform.saas.localtest.me`) &&
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 1050
+      tls: {}
+
+    tenant-catalogs:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 220
+      tls: {}
+
     # --- Tenant hosts: authorization server (lowest tenant priority so the
     # protocol-specific routers above win their paths first) -----------------
     tenant-as:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        (PathPrefix(`/authorize`) || PathPrefix(`/token`) || PathPrefix(`/par`) ||
-         PathPrefix(`/userinfo`) || PathPrefix(`/oauth2`) || PathPrefix(`/login`) || PathPrefix(`/logout`) ||
+        (PathPrefix(`/as`) || PathPrefix(`/par`) || PathPrefix(`/logout`) ||
          PathPrefix(`/.well-known/oauth-authorization-server`) ||
          PathPrefix(`/.well-known/openid-configuration`) ||
          PathPrefix(`/.well-known/jwks.json`))
@@ -273,6 +343,18 @@ http:
       replacePathRegex:
         regex: "^/testing-console/(.*)"
         replacement: "/admin-console/$1"
+    developer-console-page-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console(?:/(.*))?$"
+        replacement: "/admin-console/developer-console/$1"
+    developer-console-api-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console/(.*)"
+        replacement: "/admin-console/$1"
+    developer-console-auth-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console/api/auth/(session|login|callback)$"
+        replacement: "/admin-console/api/developer-console-auth/$1"
 
   services:
     svc-platform:

@@ -1,0 +1,27 @@
+# Optional webhook sink lane: a WireMock receiver the webhook dispatcher can be
+# pointed at. Layer it over the base file or pass -WebhookSink to run-compose-postman-release-gate.ps1.
+#
+# Inside the network the sink is http://webhook-sink:8080; the admin API and
+# request journal are reachable from the host at http://localhost:18095/__admin.
+# Mappings (see ./webhook-sink/mappings):
+#   POST /hooks/ok     200
+#   POST /hooks/fail   500
+#   POST /hooks/flaky  500 twice, then 200 (scenario "flaky-webhook")
+services:
+  webhook-sink:
+    image: wiremock/wiremock:${EDK_WEBHOOK_SINK_IMAGE_TAG:-3}
+    # The request journal and admin API are on by default; --verbose logs every
+    # received call so the compose log doubles as delivery evidence.
+    command: ["--port", "8080", "--verbose"]
+    ports:
+      - "${EDK_WEBHOOK_SINK_HOST_PORT:-18095}:8080"
+    volumes:
+      - ./webhook-sink/mappings:/home/wiremock/mappings:ro
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /__admin/health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q 200"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s

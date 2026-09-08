@@ -28,7 +28,7 @@ x-edk-gateway-public-env: &edk-gateway-public-env
   # The platform AS is the fixed operator issuer. Tenant AS issuers are not
   # configured at deployment time; tenant onboarding creates registry-backed
   # public endpoint bindings such as https://<tenant>.<base-domain>.
-  EDK_PLATFORM_PUBLIC_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+  EDK_PLATFORM_PUBLIC_URL: &edk-gateway-platform-public-url https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
   EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
 
 services:
@@ -66,8 +66,8 @@ services:
   enterprise-platform:
     environment:
       <<: *edk-gateway-public-env
-      EXTERNAL_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
-      ONBOARDING_UI_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      EXTERNAL_BASE_URL: *edk-gateway-platform-public-url
+      ONBOARDING_UI_BASE_URL: *edk-gateway-platform-public-url
       # LOCAL-EVALUATION-ONLY: trust the local CA so the platform accepts the
       # gateway certificate when it resolves its own AS JWKS over TLS. For
       # production with a publicly-trusted certificate, remove this line and the
@@ -156,7 +156,7 @@ services:
     networks:
       appnet: {}
     environment:
-      ADMIN_CONSOLE_PUBLIC_ORIGIN: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: *edk-gateway-platform-public-url
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
       ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"

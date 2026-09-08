@@ -18,6 +18,7 @@ server:
       # STS tokens (RFC 8693) from the admin console are accepted.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       expected-audience: enterprise-tenant-kms
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
   service-identity:
@@ -78,6 +79,9 @@ transport:
     enabled: true
     port: 9090
   routing:
+    # Platform/license endpoints are deployment topology and must remain
+    # available before tenant/principal configuration has loaded.
+    configScope: APP
     modules:
       platform:
         target: SERVER
@@ -117,6 +121,11 @@ config:
                 target: LOCAL
               leaf:
                 target: LOCAL
+              # Raw signature creation over a tenant key. Tenant configuration points
+              # this group at the KMS server for every other workload. This service
+              # is that server, so the same setting would make it call itself.
+              signature:
+                target: LOCAL
               mac:
                 target: LOCAL
               encryption:
@@ -147,17 +156,6 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
-    # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
-    secret-management-admin:
-      dialect: postgresql
-      isolation: shared
-      host: ${env:EDK_TENANT_DB_HOST}
-      port: 5432
-      database: ${env:EDK_TENANT_DB_NAME}
-      username: secret_management_admin
-      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      pool:
-        dedicated-pool: true
     secret-management-tenant:
       dialect: postgresql
       isolation: shared
@@ -166,6 +164,16 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: secret_management_tenant_serving
       password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-runtime:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_runtime
+      password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
       pool:
         dedicated-pool: true
   tenants:

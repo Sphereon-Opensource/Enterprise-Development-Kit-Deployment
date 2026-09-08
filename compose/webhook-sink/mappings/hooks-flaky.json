@@ -1,0 +1,39 @@
+{
+  "mappings": [
+    {
+      "name": "webhook flaky: first delivery fails",
+      "scenarioName": "flaky-webhook",
+      "requiredScenarioState": "Started",
+      "newScenarioState": "failed-once",
+      "request": { "method": "POST", "urlPath": "/hooks/flaky" },
+      "response": {
+        "status": 500,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "accepted": false, "attempt": 1 }
+      }
+    },
+    {
+      "name": "webhook flaky: second delivery fails",
+      "scenarioName": "flaky-webhook",
+      "requiredScenarioState": "failed-once",
+      "newScenarioState": "recovered",
+      "request": { "method": "POST", "urlPath": "/hooks/flaky" },
+      "response": {
+        "status": 500,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "accepted": false, "attempt": 2 }
+      }
+    },
+    {
+      "name": "webhook flaky: recovered",
+      "scenarioName": "flaky-webhook",
+      "requiredScenarioState": "recovered",
+      "request": { "method": "POST", "urlPath": "/hooks/flaky" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "accepted": true }
+      }
+    }
+  ]
+}

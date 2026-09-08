@@ -32,30 +32,49 @@
 
 name: edk-enterprise
 
+x-edk-public-urls: &edk-public-urls
+  platform: &edk-platform-public-url ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
+  onboarding: &edk-onboarding-ui-public-url ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}}
+
 x-edk-common-env: &edk-common-env
   APP_PROFILE: container
   PORT: "8080"
   REST_PORT: "8080"
+  # DualTransport parses GRPC_AUTH_MODE at boot even when gRPC is disabled.
+  # Canonical alias matches Helm grpc.authMode; unknown/blank fails closed.
+  GRPC_AUTH_MODE: service-jwt
   SPHEREON_CONFIG_LOCATION: /app/config
   EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
-  EDK_PLATFORM_PUBLIC_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
+  EDK_PLATFORM_PUBLIC_URL: *edk-platform-public-url
   EDK_TRUST_TENANT_REGISTRY_ISSUERS: ${EDK_TRUST_TENANT_REGISTRY_ISSUERS:-true}
   EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD}
-  EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET}
   EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
   EDK_OWNER_INITIAL_CREDENTIAL: ${EDK_OWNER_INITIAL_CREDENTIAL}
   SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY: ${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate the secret-authority key window before starting the stack}
   SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS: ${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate the secret-authority key window before starting the stack}
+
+# Distinct confidential-client passwords per STS registration. Satellites still
+# consume EDK_INTERNAL_CLIENT_SECRET (one value per container). Platform sees
+# every EDK_INTERNAL_CLIENT_SECRET_<ROLE> for internal-clients interpolation.
+x-edk-platform-sts-secrets: &edk-platform-sts-secrets
+  EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
+  EDK_INTERNAL_CLIENT_SECRET_TENANT_AS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
+  EDK_INTERNAL_CLIENT_SECRET_DID: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
+  EDK_INTERNAL_CLIENT_SECRET_BLOB: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
+  EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+  EDK_INTERNAL_CLIENT_SECRET_VERIFIER: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
+  EDK_INTERNAL_CLIENT_SECRET_EMAIL: ${EDK_INTERNAL_CLIENT_SECRET_EMAIL:?Set EDK_INTERNAL_CLIENT_SECRET_EMAIL}
 
 x-edk-tenant-db-env: &edk-tenant-db-env
   EDK_TENANT_DB_HOST: tenant-postgres
   EDK_TENANT_DB_NAME: ${EDK_TENANT_DB_NAME:-tenant}
   EDK_TENANT_DB_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
   EDK_TENANT_DB_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
-  # Every runtime hosts the secret-use broker and must connect through the two
-  # restricted secret-management roles, never through the general tenant role.
-  EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+  # Every runtime hosts the secret-use broker and uses only the tenant-serving
+  # role. Authority-admin persistence credentials are platform-only.
   EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+  # Narrow runtime role for the shared replay ledger. It is not an authority-admin credential.
+  EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
 
 x-edk-runtime-healthcheck-8080: &edk-runtime-healthcheck-8080
   # The runtime image ships no curl or wget; bash /dev/tcp is always available.
@@ -93,6 +112,7 @@ services:
       POSTGRES_DB: ${EDK_PLATFORM_DB_NAME:-platform}
       SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
       SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
     volumes:
       - platform-postgres-data:/var/lib/postgresql/data
       - ./postgres-init/10-secret-management-roles.sh:/docker-entrypoint-initdb.d/10-secret-management-roles.sh:ro
@@ -105,6 +125,9 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+      # initdb runs the same script as postgres while the healthcheck runs it as root. Holding
+      # the first probe back until initdb has finished keeps the two out of each other's way.
+      start_period: 20s
 
   tenant-postgres:
     image: postgres:16-alpine
@@ -114,6 +137,7 @@ services:
       POSTGRES_DB: ${EDK_TENANT_DB_NAME:-tenant}
       SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
       SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
     volumes:
       - tenant-postgres-data:/var/lib/postgresql/data
       - ./postgres-init/10-secret-management-roles.sh:/docker-entrypoint-initdb.d/10-secret-management-roles.sh:ro
@@ -122,10 +146,13 @@ services:
     ports:
       - "127.0.0.1:${EDK_TENANT_POSTGRES_HOST_PORT:-15433}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "POSTGRES_USER=${EDK_TENANT_DB_USERNAME:-edk_tenant} POSTGRES_DB=${EDK_TENANT_DB_NAME:-tenant} SECRET_MANAGEMENT_ADMIN_DB_PASSWORD=$${SECRET_MANAGEMENT_ADMIN_DB_PASSWORD} SECRET_MANAGEMENT_TENANT_DB_PASSWORD=$${SECRET_MANAGEMENT_TENANT_DB_PASSWORD} sh /docker-entrypoint-initdb.d/10-secret-management-roles.sh"]
+      test: ["CMD-SHELL", "POSTGRES_USER=${EDK_TENANT_DB_USERNAME:-edk_tenant} POSTGRES_DB=${EDK_TENANT_DB_NAME:-tenant} SECRET_MANAGEMENT_ADMIN_DB_PASSWORD=$${SECRET_MANAGEMENT_ADMIN_DB_PASSWORD} SECRET_MANAGEMENT_TENANT_DB_PASSWORD=$${SECRET_MANAGEMENT_TENANT_DB_PASSWORD} SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=$${SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD} sh /docker-entrypoint-initdb.d/10-secret-management-roles.sh"]
       interval: 3s
       timeout: 3s
       retries: 20
+      # Same reason as platform-postgres: the healthcheck and initdb run this script as
+      # different users, so let initdb settle before the first probe.
+      start_period: 20s
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.96.0
@@ -166,7 +193,7 @@ services:
       - platform-db-net
       - tenant-db-net
     environment:
-      <<: [*edk-common-env, *edk-tenant-db-env]
+      <<: [*edk-common-env, *edk-tenant-db-env, *edk-platform-sts-secrets]
       EDK_PLATFORM_DB_HOST: platform-postgres
       SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY: ${SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY:?Generate the secret-authority key window before starting the stack}
       SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS: ${SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS:?Generate the secret-authority key window before starting the stack}
@@ -197,15 +224,23 @@ services:
       DATABASE_TENANTS_DEFAULT_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
       EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
       EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
-      EXTERNAL_BASE_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
-      ONBOARDING_UI_BASE_URL: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
+      EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      # Fail-closed cloud offering gate; Azure/AWS credentials are never copied
+      # into this file and are attached through the typed platform-config API.
+      SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS: ${SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:-false}
+      EXTERNAL_BASE_URL: *edk-platform-public-url
+      ONBOARDING_UI_BASE_URL: *edk-onboarding-ui-public-url
       ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
       PORT: "18080"
       REST_PORT: "18080"
       REST_ENABLED: "false"
       GRPC_ENABLED: "true"
       GRPC_PORT: "9090"
+      TRANSPORT_AUTH_EXPECTED_AUDIENCE: enterprise-platform
       SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE: enterprise-platform
+      AUTHORIZATION_SERVER_MIGRATION_RESUME_FAILED: ${AUTHORIZATION_SERVER_MIGRATION_RESUME_FAILED:-false}
+      TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST: enterprise-tenant-kms
+      TENANT_KMS_AUTHORITY_BOOTSTRAP_PORT: "9090"
     volumes:
       - ./config/platform.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
@@ -240,6 +275,8 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
+      EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
       PORT: "18083"
       REST_PORT: "18083"
       # Authenticated issuer/verifier workloads call the Trust Domain API on
@@ -277,6 +314,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
       EXTERNAL_BASE_URL: ${EDK_KMS_INTERNAL_BASE_URL:-http://enterprise-tenant-kms:8080}
       REST_ENABLED: "false"
       GRPC_ENABLED: "true"
@@ -309,6 +347,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
       EXTERNAL_BASE_URL: ${EDK_DID_EXTERNAL_BASE_URL:-http://localhost:18082}
     volumes:
       - ./config/did.application.yml:/app/config/application.yml:ro
@@ -336,6 +375,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
       EXTERNAL_BASE_URL: ${EDK_BLOB_EXTERNAL_BASE_URL:-http://enterprise-blob:8080}
       REST_ENABLED: "true"
       GRPC_ENABLED: "false"
@@ -368,6 +408,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
       EXTERNAL_BASE_URL: ${EDK_ISSUER_EXTERNAL_BASE_URL:-http://localhost:18084}
       EDK_PIPELINE_MASTER_KEK: ${EDK_PIPELINE_MASTER_KEK}
       EDK_PIPELINE_BLIND_INDEX_KEY: ${EDK_PIPELINE_BLIND_INDEX_KEY}
@@ -401,6 +442,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
       EXTERNAL_BASE_URL: ${EDK_VERIFIER_EXTERNAL_BASE_URL:-http://localhost:18085}
     volumes:
       - ./config/verifier.application.yml:/app/config/application.yml:ro
@@ -430,7 +472,7 @@ services:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: PLATFORM
       ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
-      ADMIN_CONSOLE_PUBLIC_ORIGIN: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-http://localhost:18080}
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: *edk-onboarding-ui-public-url
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "true"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: DIRECT
       ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-blob:8080
@@ -482,7 +524,8 @@ services:
     environment:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: TENANT
-      ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL: http://enterprise-platform:18080
+      ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1
       ADMIN_CONSOLE_TENANT_CONTEXT_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1/admin-console-context
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED

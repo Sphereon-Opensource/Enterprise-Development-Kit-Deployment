@@ -1,32 +1,19 @@
-{{- if .Values.networkPolicy.enabled }}
+{{- if and .Values.networkPolicy.enabled (eq (include "edk-enterprise.topologyMode" .) "distributed") }}
+{{- if eq ($.Values.database.platform.networkPolicy.ipBlock.cidr | default "") "0.0.0.0/0" }}
+{{- fail "database.platform.networkPolicy.ipBlock must not be 0.0.0.0/0" }}
+{{- end }}
+{{- if eq ($.Values.database.tenant.networkPolicy.ipBlock.cidr | default "") "0.0.0.0/0" }}
+{{- fail "database.tenant.networkPolicy.ipBlock must not be 0.0.0.0/0" }}
+{{- end }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
-{{- $grpcReceiver := or (eq $name "platform") (eq $name "tenant-kms") (eq $name "wallet-unit") (eq $name "wallet-interaction") }}
+{{- $row := include "edk-enterprise.serviceIdentity.role" (dict "root" $ "role" $name) | fromYaml }}
+{{- $grpcReceiver := eq (include "edk-enterprise.serviceIdentity.grpcReceiver" (dict "root" $ "role" $name)) "true" }}
 {{- $isAdminConsole := or (eq $name "admin-console") (eq $name "admin-console-tenant") }}
 {{- $tenantGatewayPaths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
 {{- $gatewayRouted := and $.Values.gateway.enabled (or (eq $name "platform") (eq $name "admin-console") (eq $name "admin-console-tenant") (ne $tenantGatewayPaths "")) }}
-{{- $peersIn := list }}
-{{- if eq $name "tenant-kms" }}{{- $peersIn = list "platform" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-interaction" }}{{- end }}
-{{- if eq $name "platform" }}{{- $peersIn = list "tenant-kms" "tenant-as" "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" "admin-console" "admin-console-tenant" }}{{- end }}
-{{- if eq $name "tenant-as" }}{{- $peersIn = list "platform" "tenant-kms" "did" "blob" "issuer" "verifier" "admin-console-tenant" }}{{- end }}
-{{- if eq $name "did" }}{{- $peersIn = list "platform" "verifier" "admin-console" "admin-console-tenant" }}{{- end }}
-{{- if eq $name "blob" }}{{- $peersIn = list "tenant-as" "admin-console" "admin-console-tenant" }}{{- end }}
-{{- if eq $name "issuer" }}{{- $peersIn = list "platform" "admin-console" "admin-console-tenant" }}{{- end }}
-{{- if eq $name "verifier" }}{{- $peersIn = list "platform" "admin-console" "admin-console-tenant" }}{{- end }}
-{{- if eq $name "wallet-unit" }}{{- $peersIn = list "wallet-interaction" }}{{- end }}
-{{- if eq $name "wallet-interaction" }}{{- $peersIn = list "issuer" "verifier" }}{{- end }}
-{{- $peersOut := list }}
-{{- if eq $name "platform" }}{{- $peersOut = list "tenant-as" "tenant-kms" "did" "blob" "issuer" "verifier" }}{{- end }}
-{{- if eq $name "tenant-kms" }}{{- $peersOut = list "tenant-as" "platform" }}{{- end }}
-{{- if eq $name "did" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
-{{- if eq $name "blob" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" }}{{- end }}
-{{- if eq $name "tenant-as" }}{{- $peersOut = list "platform" "tenant-kms" "blob" }}{{- end }}
-{{- if eq $name "wallet-unit" }}{{- $peersOut = list "platform" }}{{- end }}
-{{- if eq $name "wallet-interaction" }}{{- $peersOut = list "wallet-unit" "tenant-kms" "platform" }}{{- end }}
-{{- if eq $name "issuer" }}{{- $peersOut = list "tenant-kms" "tenant-as" "platform" "wallet-interaction" }}{{- end }}
-{{- if eq $name "verifier" }}{{- $peersOut = list "tenant-kms" "tenant-as" "did" "platform" "wallet-interaction" }}{{- end }}
-{{- if eq $name "admin-console" }}{{- $peersOut = list "platform" "did" "blob" "issuer" "verifier" }}{{- end }}
-{{- if eq $name "admin-console-tenant" }}{{- $peersOut = list "platform" "tenant-as" "did" "blob" "issuer" "verifier" }}{{- end }}
+{{- $peersIn := $row.peersIn | default list }}
+{{- $peersOut := $row.peersOut | default list }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -136,8 +123,7 @@ spec:
             {{- toYaml $.Values.database.platform.networkPolicy.podSelector | nindent 12 }}
           {{- end }}
           {{- else }}
-          ipBlock:
-            cidr: 0.0.0.0/0
+          {{- fail "database.platform.networkPolicy must identify the platform database with a pod/namespace selector or explicit private ipBlock; broad CIDR fallback is forbidden" }}
           {{- end }}
       ports:
         - protocol: TCP
@@ -156,8 +142,7 @@ spec:
             {{- toYaml $.Values.database.tenant.networkPolicy.podSelector | nindent 12 }}
           {{- end }}
           {{- else }}
-          ipBlock:
-            cidr: 0.0.0.0/0
+          {{- fail "database.tenant.networkPolicy must identify the tenant database with a pod/namespace selector or explicit private ipBlock; broad CIDR fallback is forbidden" }}
           {{- end }}
       ports:
         - protocol: TCP
@@ -177,8 +162,7 @@ spec:
             {{- toYaml $.Values.database.tenant.networkPolicy.podSelector | nindent 12 }}
           {{- end }}
           {{- else }}
-          ipBlock:
-            cidr: 0.0.0.0/0
+          {{- fail "database.tenant.networkPolicy must identify the tenant database with a pod/namespace selector or explicit private ipBlock; broad CIDR fallback is forbidden" }}
           {{- end }}
       ports:
         - protocol: TCP
@@ -187,7 +171,7 @@ spec:
     {{- end }}
     {{- range $peer := $peersOut }}
     {{- $peerSvc := index $.Values.services $peer }}
-    {{- $peerGrpcReceiver := or (eq $peer "platform") (eq $peer "tenant-kms") (eq $peer "wallet-unit") (eq $peer "wallet-interaction") }}
+    {{- $peerGrpcReceiver := eq (include "edk-enterprise.serviceIdentity.grpcReceiver" (dict "root" $ "role" $peer)) "true" }}
     {{- if $peerSvc.enabled }}
     - to:
         - podSelector:

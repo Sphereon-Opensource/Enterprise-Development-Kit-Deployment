@@ -19,12 +19,16 @@ server:
       # transport is
       # intentionally protected: tenant resolution validates the platform-issued
       # bearer and uses its tenant_id claim before the tenant's public host is active.
-      anonymous-path-prefixes: /authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect
+      anonymous-path-prefixes: /authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/internal/jwks,/introspect,/account-action,/api/account-actions,/as
       # Trust anchor for the platform AS. The internal east-west surfaces validate a short-lived,
       # platform-issued bearer bound to this tenant (per-tenant audience), so they need the platform
       # issuer and JWKS, the same anchor the tenant runtime services trust.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      # Resolve dynamic tenant issuer JWKS through the identity-addressed
+      # internal bridge while preserving the public issuer path (for example
+      # /as/acme) during bearer validation.
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       expected-audience: enterprise-tenant-as
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
@@ -94,6 +98,10 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
           keys: *tenantKmsGrpcRoute
+          # Invitation-token HMAC envelopes use the typed leaf unwrap/wrap
+          # commands. Keep those commands on the tenant-KMS execution plane;
+          # the tenant-AS has no local managed-key implementation.
+          leaf: *tenantKmsGrpcRoute
           signature:
             target: SERVER
             transport: GRPC
@@ -138,6 +146,19 @@ transport:
         endpoint: grpc://enterprise-platform:9090
         serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: false
+# The issuer is a resource server of every tenant AS and obtains a tenant-scoped
+# token through this confidential client. Helm registers each satellite with a
+# distinct clientSecretKeys entry (still exposed to the pod as
+# EDK_INTERNAL_CLIENT_SECRET). Compose mounts that same issuer secret on this
+# container as EDK_INTERNAL_CLIENT_SECRET_ISSUER so the AS registration matches
+# the issuer satellite.
+oauth2:
+  servers:
+    default:
+      internal-clients:
+        issuer:
+          client-id: issuer-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_ISSUER}
 config:
   providers:
     platform-config-remote:
@@ -155,16 +176,6 @@ database:
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
     # Runtime roles validate the platform-migrated shared schema and never receive DDL credentials.
-    secret-management-admin:
-      dialect: postgresql
-      isolation: shared
-      host: ${env:EDK_TENANT_DB_HOST}
-      port: 5432
-      database: ${env:EDK_TENANT_DB_NAME}
-      username: secret_management_admin
-      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      pool:
-        dedicated-pool: true
     secret-management-tenant:
       dialect: postgresql
       isolation: shared
@@ -173,6 +184,16 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: secret_management_tenant_serving
       password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-runtime:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: secret_management_runtime
+      password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
       pool:
         dedicated-pool: true
   tenants:

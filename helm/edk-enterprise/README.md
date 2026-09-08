@@ -10,6 +10,12 @@ This chart deploys the EDK enterprise backing workloads:
 - OID4VP verifier backing workload
 - Admin console (operator web UI served at `platform.<baseDomain>/admin-console`)
 
+`topology.mode=distributed` is the established default and renders the backing
+workloads individually. `topology.mode=monolith` renders one application
+process, while retaining the same database, licence, origin, tenant, and email
+value names. The two admin-console personas remain separate web deployments in
+both modes.
+
 These workload names are deployment components, not public service hosts. The
 customer-facing contract is the Gateway route table: `platform.<baseDomain>`
 for the operator/platform plane and `<tenant>.<baseDomain>` for tenant protocol
@@ -65,7 +71,7 @@ The wrapper leaves the release stopped and never rolls application pods back
 automatically. Restore the pre-upgrade database snapshots before an explicit
 binary rollback.
 
-Existing `internal-client-secret`, `keystore-password`, BFF credentials, and
+Existing per-client STS keys, `keystore-password`, BFF credentials, and
 issuer-pipeline keys are preserved. If an existing Secret is missing a key that
 cannot be regenerated safely, the wrapper stops instead of rotating it.
 
@@ -92,11 +98,21 @@ Kubernetes at public Docker Hub, not the EDK enterprise registry.
 
 Before installing, create the runtime Secret in the same namespace as the Helm
 release. `edk-runtime-secrets` is an example Secret **name**, not an image or a
-prepackaged file. It holds three independently generated values:
+prepackaged file. It holds independently generated per-client STS keys, the
+portal-BFF secret, and the keystore password:
 
 ```powershell
 kubectl --namespace edk create secret generic edk-runtime-secrets `
-  --from-literal=internal-client-secret='<long-random-confidential-client-secret>' `
+  --from-literal=kms-service-client-secret='<independent-secret>' `
+  --from-literal=tenant-as-service-client-secret='<independent-secret>' `
+  --from-literal=did-service-client-secret='<independent-secret>' `
+  --from-literal=blob-service-client-secret='<independent-secret>' `
+  --from-literal=issuer-service-client-secret='<independent-secret>' `
+  --from-literal=verifier-service-client-secret='<independent-secret>' `
+  --from-literal=wallet-unit-service-client-secret='<independent-secret>' `
+  --from-literal=wallet-interaction-service-client-secret='<independent-secret>' `
+  --from-literal=wallet-onboarding-service-client-secret='<independent-secret>' `
+  --from-literal=trust-domain-service-client-secret='<independent-secret>' `
   --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' `
   --from-literal=keystore-password='<long-random-pkcs12-password>'
 ```
@@ -120,7 +136,17 @@ Then configure all Secret references:
 ```yaml
 serviceIdentity:
   internalClientExistingSecret: edk-runtime-secrets
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    wallet-onboarding: wallet-onboarding-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
   passwordKey: keystore-password
@@ -134,19 +160,22 @@ portalBff:
   clientSecretKey: admin-console-portal-bff-secret
 ```
 
-`internal-client-secret` is shared by the platform authorization server and its
-registered internal confidential clients. Satellites use it at the platform
-token endpoint to obtain short-lived east-west bearer tokens; it is what causes
-`SERVER_SERVICE_IDENTITY_CLIENT_SECRET` to be rendered. `keystore-password`
-protects the platform and tenant-KMS software PKCS#12 stores and is rendered as
-`EDK_KEYSTORE_PASSWORD`. `admin-console-portal-bff-secret` is a separate
-credential used only by the dedicated `admin-console-portal-bff` client and the
-admin-console server. Generate all three independently, keep them out of values
-files and Git, and rotate them as credentials. The Secret name and key names may
-be changed, but the referenced Secret and keys must already exist in the release
+Each `clientSecretKeys.<role>` entry is a distinct key in that Secret. The
+platform authorization server registers every enabled satellite client with its
+own value. Satellites still read `EDK_INTERNAL_CLIENT_SECRET` /
+`SERVER_SERVICE_IDENTITY_CLIENT_SECRET`, but each pod mounts only that role's
+key. `keystore-password` protects the platform and tenant-KMS software PKCS#12
+stores and is rendered as `EDK_KEYSTORE_PASSWORD`. `admin-console-portal-bff-secret`
+is a separate credential used only by the dedicated `admin-console-portal-bff`
+client and the admin-console server; do not point the console at a satellite
+STS key. Generate every value independently, keep them out of values files and
+Git, and rotate them as credentials. The Secret name and key names may be
+changed, but the referenced Secret and keys must already exist in the release
 namespace. A Helm value change rolls the affected Deployments; when only Secret
-data changes under the same name, restart the platform and satellite pods because
-environment-variable Secret values are read only when a container starts.
+data changes under the same name, restart the platform and the satellite whose
+key changed because environment-variable Secret values are read only when a
+container starts. `serviceIdentity.internalClientSecretKey` is retired and
+fails chart render.
 
 ## Main Values
 
@@ -157,13 +186,12 @@ environment-variable Secret values are read only when a container starts.
 | `global.imagePullPolicy` | `IfNotPresent` | Kubernetes image pull policy. Non-production `latest` requires `Always` to avoid silently reusing a stale node-local image. |
 | `global.imagePullSecrets` | `[]` | Pull secrets rendered into every service pod. |
 | `global.platformBaseDomain` | `example.com` | Customer-controlled base domain. The platform is `platform.<baseDomain>` and tenants are `<tenant-slug>.<baseDomain>`. |
+| `topology.mode` | `distributed` | `distributed` renders the established backing workloads. `monolith` renders one application workload with local implementations and no gRPC receiver. |
+| `monolith.image` | `sphereon/vdx-svc-monolith` | Monolith application image. The tag defaults to `global.imageTag`; use only an immutable, release-approved image. |
 | `database.enabled` | `true` | Enables database environment wiring. |
 | `database.platform.existingSecret` | `edk-platform-postgres` | Secret with credentials for the control-plane (platform) database. |
-| `database.secretManagement.existingSecret` | `edk-secret-management-database` | Secret with distinct passwords for the fixed non-superuser secret-management admin and tenant-serving runtime roles. Schema migration uses the platform database owner from `database.platform.existingSecret` only during startup. |
+| `database.secretManagement.existingSecret` | `edk-secret-management-database` | Secret with distinct passwords for the fixed non-superuser secret-management admin, tenant-serving, and narrow replay-ledger runtime roles. Schema migration uses the platform database owner from `database.platform.existingSecret` only during startup. |
 | `database.tenant.existingSecret` | `edk-tenant-postgres` | Secret with credentials for the tenant workload database. |
-| `database.trustDomain.isolation` | `schema` | Isolation strategy for the trust-domain router registry (`database-trust-domain`). |
-| `database.trustDomain.host` | `""` | Trust-domain database host override. Empty co-locates it on `database.platform.host`. |
-| `database.trustDomain.existingSecret` | `""` | Trust-domain database Secret override. Empty co-locates it on `database.platform.existingSecret`. |
 | `secretManagement.bootstrap.kek.mode` | `SOFTWARE_KMS` | Self-contained baseline backed by the persisted platform software KMS. External providers are configured explicitly and are not startup dependencies. |
 | `secretManagement.bootstrap.kek.identity` | `secret-management-bootstrap-kek` | Server-owned software-KMS binding name; it is not a physical path or public API field. |
 | `secretManagement.bootstrap.kek.kmsProviderId` | `software` | Persisted platform software KMS provider that owns the bootstrap key. |
@@ -175,9 +203,12 @@ environment-variable Secret values are read only when a container starts.
 | `secretManagement.authority.defaultTenantOfferingKmsBindingTemplate` | `isolated-tenant-secret-storage` | Server-owned provisioner template; onboarding derives a distinct capability-bound KEK for every tenant binding. |
 | `secretManagement.authority.allowTenantManagedProviders` | `false` | Cloud-provider offerings are absent by default. Enable only for an explicitly configured integration; tenant APIs cannot change the deployment bootstrap itself. |
 | `secretManagement.authority.retentionDays` | `30` | Global migration retention period before an explicitly fenced purge. |
+| `email.enabled` | `false` | Enables the optional shared deployment SMTP account. It is rendered into the distributed platform process or the monolith process, never into a topology-specific configuration branch. |
+| `email.accounts.default.*` | see `values.yaml` | Non-secret default SMTP account metadata. When enabled, `fromAddress` and `smtp.host` are required. |
+| `email.allowedPrivateDestinations` | `""` | Comma-separated reviewed private SMTP relay `host:port` pairs. Empty retains the public-unicast-only runtime default; loopback is always rejected. |
 | `auth.enabled` | `true` | Enables REST auth. |
 | `auth.jwt.enabled` | `true` | Enables JWT auth environment wiring. |
-| `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, and renders gRPC peer endpoints for routed calls to those receivers. |
+| `grpc.enabled` | `true` | Renders inbound gRPC for platform, tenant-KMS, wallet-unit, and wallet-interaction, plus the optional in-chart wallet-onboarding service, and renders gRPC peer endpoints for routed calls to those receivers. |
 | `config.providers.platformConfigRemote.enabled` | `true` | Enables platform-owned remote config reads for every satellite/workload service. |
 | `config.providers.tenantConfigDb.enabled` | `false` | Disables direct tenant-config DB reads on satellites so platform remains the config authority. |
 | `issuerPipeline.existingSecret` | `""` | Required Secret name for issuer pipeline encryption and blind-index keys. |
@@ -190,9 +221,41 @@ environment-variable Secret values are read only when a container starts.
 | `serviceMonitor.enabled` | `false` | Renders Prometheus Operator ServiceMonitors. |
 | `opentelemetry.enabled` | `false` | Renders OTLP exporter environment variables. |
 
+## Optional Email
+
+Email is disabled unless `email.enabled=true`. When enabled, configure the
+shared default account once, independently of topology:
+
+```yaml
+email:
+  enabled: true
+  routing:
+    defaultAccountId: default
+  accounts:
+    default:
+      transportId: smtp
+      fromAddress: notifications@example.com
+      fromName: VDX Notifications
+      smtp:
+        host: smtp.example.com
+        port: 587
+        username: mailer
+        useStarttls: true
+        useSsl: false
+```
+
+The chart never accepts or renders an SMTP password. If `username` is set,
+the password is a resource-bound `smtp-password` secret managed through the
+email account and secret-management APIs. For an internal relay, add its exact
+`host:port` to `email.allowedPrivateDestinations`; this is an explicit security
+exception and does not permit loopback, link-local, or arbitrary private
+destinations. The chart does not deploy or assume Mailpit. Any Mailpit test
+must be installed and configured as an explicit email environment choice, in
+either topology.
+
 ## Service Values
 
-Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `wallet-unit`, `wallet-interaction`, `issuer`, `verifier`, or `admin-console`.
+Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `wallet-unit`, `wallet-interaction`, `wallet-onboarding`, `issuer`, `verifier`, or `admin-console`.
 
 | Value | Purpose |
 | --- | --- |
@@ -215,32 +278,52 @@ Default backing components:
 | `tenant-as` | `true` | `enterprise-tenant-as` | Tenant OAuth2 authorization server behind the tenant gateway |
 | `wallet-unit` | `true` | `enterprise-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
 | `wallet-interaction` | `true` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
+| `wallet-onboarding` | `false` | `enterprise-wallet-onboarding` | Managed wallet IDV, profile activation, readiness, and wallet-unit provisioning |
 | `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
 | `admin-console` | `true` | `admin-console` | Platform operator UI on the platform host |
 | `admin-console-tenant` | `true` | `admin-console` | Tenant-only UI and testing console on registered tenant hosts |
 
 Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
-wallet-unit, wallet-interaction, issuer, and verifier remain backing workloads
-behind `platform.<baseDomain>` and `<tenant>.<baseDomain>` host/path routes.
+wallet-unit, wallet-interaction, wallet-onboarding, issuer, and verifier remain
+backing workloads behind `platform.<baseDomain>` and `<tenant>.<baseDomain>`
+host/path routes. Enable `wallet-onboarding` together with wallet-unit and
+wallet-interaction when the managed-wallet profile is hosted in this release;
+the default keeps it disabled for installations that use an external onboarding
+provider. The edge browser frontend remains a separately deployed client.
 Kubernetes uses the workload health endpoints inside the cluster. Do not
 publish those endpoints as customer routes.
 
 ## East-West Service Identity
 
-The chart renders internal service identity from one `serviceIdentity` contract:
+The chart renders internal service identity from one `serviceIdentity` contract
+plus the product-neutral service-identity catalog in
+`files/service-identity-catalog.yaml`. That catalog owns receiver audiences,
+default/extra STS audiences, and peer edges; the same file is vendored into VDX
+Helm and the frontend BFF. There is no `eastWest.*` audience helper family and
+no customer-editable `serviceIdentity.audiences` object.
 
 | Value | Purpose |
 | --- | --- |
-| `serviceIdentity.internalClientExistingSecret` | Secret containing the shared confidential-client secret used by internal service clients. |
-| `serviceIdentity.internalClientSecretKey` | Key in that Secret; defaults to `internal-client-secret`. |
+| `serviceIdentity.internalClientExistingSecret` | Secret containing the distinct confidential-client secrets used by internal service clients. |
+| `serviceIdentity.clientSecretKeys.<role>` | Key in that Secret for one satellite client. Defaults match `<client-id>-client-secret`. Satellites still read the env name `EDK_INTERNAL_CLIENT_SECRET`. |
 | `serviceIdentity.clientIds.<service>` | OAuth client id each satellite presents to the platform AS for client-credentials service tokens. |
 | `serviceIdentity.serviceIds.<service>` | Local workload label used to select and configure the service credential. It is not transmitted as identity metadata. |
 
 These values drive platform internal OAuth clients, platform and receiver
-validated-workload bindings, and satellite service-token credentials. Receiver
-audiences are fixed protocol identifiers shared with source-level STS and
+validated-workload bindings, and satellite service-token credentials. Catalog
+audiences are protocol identifiers shared with source-level STS and
 tenant-registration contracts; the chart does not expose audience overrides.
+
+Distributed installs also split **identity-ready** from **serving-ready**.
+`*-platform-identity` / `*-tenant-kms-identity` publish not-ready addresses
+because Kubernetes has one Ready bit gated on `/ready`; serving Services do not.
+Tenant-KMS dials `*-platform-identity` for token, JWKS, and gRPC. Issuer,
+verifier, DID, tenant-AS, wallets, and the admin console keep the serving
+`*-platform` Service.
+
+`grpc.authMode` defaults to `service-jwt`: application JWT on plaintext gRPC, not
+mTLS. SPIFFE is a later identity root and is not required for this chart.
 
 The receiver expected audience, route-requested audience, client default, and
 additional allowlist are different controls. The receiver validates its
@@ -262,6 +345,7 @@ The chart renders this fixed registration matrix:
 | issuer | `clientIds.issuer` / `serviceIds.issuer` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-tenant-as` |
 | verifier | `clientIds.verifier` / `serviceIds.verifier` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-wallet-interaction` |
 | wallet-interaction | `clientIds.wallet-interaction` / `serviceIds.wallet-interaction` | `enterprise-platform` | `enterprise-wallet-unit` |
+| wallet-onboarding | `clientIds.wallet-onboarding` / `serviceIds.wallet-onboarding` | `enterprise-platform` | `enterprise-tenant-kms`, `enterprise-wallet-unit`, `service-email` |
 
 An audience-free client-credentials request is valid only when its default is
 nonblank. Exactly one requested audience is valid only when it equals the
@@ -280,7 +364,7 @@ Render-time validation cannot query the target namespace. When a configured
 Secret name does not exist, Kubernetes leaves affected pods in
 `CreateContainerConfigError` with `secret "<name>" not found`. When the Secret
 exists without the configured key, events report `couldn't find key
-internal-client-secret` or `couldn't find key keystore-password`. Inspect events
+<client-secret-key>` or `couldn't find key keystore-password`. Inspect events
 with `kubectl get events --namespace <namespace>
 --sort-by=.metadata.creationTimestamp`; do not print Secret values into
 diagnostic logs. Correct the Secret through the cluster's secret-management
@@ -331,11 +415,12 @@ separately constrained access. Do not configure `database.platform.name` and
 credentials into tenant-KMS, DID, tenant-AS, issuer, or verifier pods. Do not
 mount tenant database credentials into the platform pod.
 
-The trust-domain router registry (`database-trust-domain`) is co-located on
-the platform database by default: same host/name/Secret as `database.platform`,
-only `isolation: schema` differs, so the connecting Postgres user needs CREATE
-SCHEMA privilege. Set `database.trustDomain.host`/`name`/`existingSecret` to
-split it onto a dedicated instance instead.
+Trust-domain persistence uses the shared AppScope `DatabaseRouter` and the
+explicit tenant id on each repository operation. Its physical placement and
+isolation therefore follow the existing `database.tenants.*` configuration;
+there is no trust-domain-specific database value or fallback. Keep the tenant
+database credentials and isolation settings available to every service that
+owns tenant-scoped persistence.
 
 ## Domain, Gateway, and TLS
 
@@ -450,3 +535,27 @@ Gateway/HTTPRoute rendering, no legacy public service hosts, KMS internal-only
 behavior, platform/KMS-only gRPC receiver rendering, external Postgres secret
 wiring, resource/security defaults, NetworkPolicies, ServiceMonitor, and
 OpenTelemetry values.
+
+## WeBuild TS 119 612 trust-domain configuration
+
+The chart exposes `trustDomainBootstrap` as operator metadata and secret
+wiring only. It does not run an install hook or Job that mutates the
+platform-owned Trust Domain API. This is intentional because an authenticated
+credential and current ETags are not safely available during every Helm
+install or upgrade.
+
+Copy `examples/webuild-trust-domain-values.yaml`, fill it with the real
+operator-supplied values, and provide the credential through the referenced
+existing Secret or a protected runtime file. Then run the shared command from
+the deployment checkout:
+
+```bash
+node customer/edk/scripts/configure-webuild-trust-domain.mjs
+```
+
+The canonical API is version `0.1.0` at `/api/trust-domain/v1`. The EU source
+accepts only its explicit enabled flag. The WeBuild source is a custom ETSI TS
+119 612 XML LoTL with an HTTPS URL, matching allowed host, scheme identity, and
+pinned signer-anchor IDs. The command creates, validates, and activates in
+three separate requests and never activates a candidate whose validation did
+not succeed. TS 119 602 LoTE profiles are not accepted by this path.

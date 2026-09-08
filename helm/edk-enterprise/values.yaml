@@ -17,6 +17,39 @@ global:
   # OIDF conformance lane injects its ephemeral suite callback host explicitly.
   hostAliases: []
 
+# Select process composition without renaming topology-neutral deployment
+# settings. `distributed` is the established customer deployment; `monolith`
+# hosts the same platform and tenant capability set in one application process.
+topology:
+  mode: distributed
+
+# External product integrations the chart wires (HttpRoute / STS / console BASE_URL)
+# but does not deploy. The managed-wallet onboarding service defaults to this
+# external mode; set services.wallet-onboarding.enabled=true to host it in-chart.
+integrations:
+  walletOnboarding:
+    enabled: false
+    # Existing Service (same namespace) that fronts enterprise-wallet-onboarding.
+    serviceName: ""
+    restPort: 8080
+
+# Settings that exist only because the monolith is one Kubernetes workload.
+# Database, license, origin, email, tenant, and secret values remain in their
+# normal shared sections above and below.
+monolith:
+  image: sphereon/vdx-svc-monolith
+  imageTag: ""
+  replicas: 1
+  restPort: 8080
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+  env: []
+
 database:
   enabled: true
   dialect: postgresql
@@ -40,16 +73,23 @@ database:
     # DNS/external managed Postgres; set podSelector or ipBlock in production values
     # to restrict egress to the platform database only.
     networkPolicy:
-      podSelector: {}
+      # Empty selectors must never fall back to a broad CIDR. The default
+      # assumes an in-cluster PostgreSQL workload with this reviewed label;
+      # external databases must provide an explicit private endpoint CIDR and
+      # enforce the same identity boundary at the database/firewall layer.
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: edk-platform-postgres
       namespaceSelector: {}
       ipBlock: {}
-  # Secret management uses two fixed, separately credentialed PostgreSQL runtime roles
-  # in the platform database. Neither role owns or creates schema objects. The deployment-only
+  # Secret management uses three fixed, separately credentialed PostgreSQL runtime roles
+  # in the platform/tenant databases. None owns or creates schema objects. The deployment-only
   # migrator reuses the platform database owner during startup, then closes that connection.
   secretManagement:
     existingSecret: edk-secret-management-database
     adminPasswordKey: admin-password
     tenantPasswordKey: tenant-password
+    runtimePasswordKey: runtime-password
   tenant:
     host: edk-tenant-postgres
     port: 5432
@@ -65,26 +105,33 @@ database:
     # DNS/external managed Postgres; set podSelector or ipBlock in production values
     # to restrict egress to the tenant database only.
     networkPolicy:
-      podSelector: {}
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: edk-tenant-postgres
       namespaceSelector: {}
       ipBlock: {}
-  # Dedicated trust-domain router registry. Co-located by default: it reuses
-  # the platform database connection above (host/port/name/existingSecret
-  # fall back to database.platform.* whenever left empty here) and only adds
-  # isolation: schema, so per-tenant trust-domain state lives in its own
-  # schema instead of the shared pool every other platform-side store uses.
-  # The database.platform Postgres user therefore needs CREATE SCHEMA
-  # privilege. Set host/port/name/existingSecret below only to split
-  # trust-domain onto a separate/dedicated Postgres instance instead.
-  trustDomain:
-    isolation: schema
-    schemaPattern: "tenant_{id}"
-    host: ""
-    port: 0
-    name: ""
-    existingSecret: ""
-    usernameKey: username
-    passwordKey: password
+# Metadata for the explicit post-provision WeBuild TS 119 612 operator command.
+# Helm never performs this authenticated mutation and never renders the token.
+# Leave these values empty until the operator has the real domain, URL, scheme,
+# signer-anchor references, and current ETags. The command reads its credential
+# from TRUST_DOMAIN_OPERATOR_TOKEN_FILE or the runtime environment.
+trustDomainBootstrap:
+  mode: ""
+  apiBaseUrl: ""
+  domainId: ""
+  operatorTokenExistingSecret: ""
+  operatorTokenKey: ""
+  eu:
+    enabled: ""
+    ifMatch: ""
+  custom:
+    sourceId: ""
+    url: ""
+    schemeIdentity: ""
+    allowedHost: ""
+    signerAnchorIds: []
+    enabled: ""
+    ifMatch: ""
 
 # Self-contained secret-management bootstrap. The persisted software KMS is the
 # baseline. Vault and cloud providers are configured separately and are never
@@ -139,6 +186,34 @@ secretManagement:
     # deployment preparation tooling. Plaintext Secret values are not hashed.
     manifestSha256: ""
 
+# Optional deployment-wide SMTP account. The same configuration belongs to the
+# application process in both topologies: platform in distributed mode and the
+# monolith process in monolith mode. It intentionally has no development relay
+# default. An authenticated account receives its password through the normal
+# email account / secret-management lifecycle, never through Helm values.
+email:
+  enabled: false
+  routing:
+    defaultAccountId: default
+  accounts:
+    default:
+      transportId: smtp
+      fromAddress: ""
+      fromName: ""
+      replyTo: ""
+      smtp:
+        host: ""
+        port: 587
+        username: ""
+        useStarttls: true
+        useSsl: false
+        connectionTimeoutMs: 5000
+        readTimeoutMs: 10000
+  # Comma-separated exact host:port pairs for reviewed private SMTP relays.
+  # Empty preserves the runtime's public-unicast-only default; loopback remains
+  # rejected even if listed here.
+  allowedPrivateDestinations: ""
+
 # Secret-use authority material is operator supplied and isolated per workload.
 # Each referenced Secret contains only the private key needed by that workload,
 # the central permit public key, and the opaque coordinate strings consumed by
@@ -156,6 +231,7 @@ secretAuthority:
     verifier: ""
     wallet-unit: ""
     wallet-interaction: ""
+    wallet-onboarding: ""
   keys:
     centralPermitSigningKey: central-permit-signing-key
     centralAssertionVerificationKeys: central-assertion-verification-keys
@@ -174,6 +250,7 @@ secretAuthority:
       service-oid4vp: service-oid4vp-assertion.pub.pem
       service-wallet-unit: service-wallet-unit-assertion.pub.pem
       service-wallet-interaction: service-wallet-interaction-assertion.pub.pem
+      service-wallet-onboarding: service-wallet-onboarding-assertion.pub.pem
 
 auth:
   enabled: true
@@ -185,10 +262,18 @@ auth:
 
 grpc:
   # Platform, tenant KMS, wallet-unit, and wallet-interaction carry the gRPC
-  # server transport. The other services use routed command clients.
+  # server transport. The optional in-chart wallet-onboarding service and an
+  # external wallet-onboarding integration also receive gRPC when enabled.
+  # Other services use routed command clients.
   enabled: true
   port: 9090
+  # service-jwt is application JWT on plaintext gRPC; it is not mTLS.
   authMode: service-jwt
+  allowInsecureNone: false
+  tls:
+    cert: ""
+    key: ""
+    clientCa: ""
 
 config:
   providers:
@@ -256,6 +341,13 @@ platform:
   # validating east-west platform bearers. It must equal the EXTERNAL_BASE_URL the
   # platform service stamps on the tokens it mints.
   externalBaseUrl: https://platform.example.com
+  # Additional browser origins that legitimately call the tenant-routed public
+  # APIs served by this installation. Tenant-scoped Business Wallet and account-
+  # action pages run on tenant subdomains, so list their exact HTTPS origins.
+  # An unrestricted wildcard origin is deliberately not implied.
+  corsOrigins: []
+  # true lets the platform resume authorization-server migration sources that failed on an earlier start.
+  authorizationServerMigrationResumeFailed: false
   setup:
     licenseRequest:
       # KMS material defaults used when creating the installation-bound license
@@ -328,16 +420,27 @@ tenantAs:
 
 # Service identity for the platform-issued east-west service tokens. The tenant
 # AS authenticates here as a client_credentials client to mint a platform service
-# token for its KMS hop during tenant registration. Provide the shared internal
-# client secret through a Secret referenced by `internalClientExistingSecret`.
+# token for its KMS hop during tenant registration. Provide distinct per-client
+# secrets through a Secret referenced by `internalClientExistingSecret`.
 serviceIdentity:
-  # Secret holding the internal client secret (key `internal-client-secret` by
-  # default). Required when any satellite is enabled. The platform AS registers
-  # the internal service clients and every satellite authenticates with the same
-  # value to obtain short-lived east-west service tokens. This is a Secret name,
-  # not the secret value; `edk-runtime-secrets` is the documented example name.
+  # Secret holding per-client confidential-client secrets. Required when any
+  # satellite is enabled. The platform AS registers each internal service client
+  # with its own key from `clientSecretKeys`; each satellite pod mounts only
+  # that role's key as `EDK_INTERNAL_CLIENT_SECRET`. This is a Secret name, not
+  # the secret value; `edk-runtime-secrets` is the documented example name.
+  # `internalClientSecretKey` is retired: Helm fails if that value is still set.
   internalClientExistingSecret: ""
-  internalClientSecretKey: internal-client-secret
+  clientSecretKeys:
+    tenant-kms: kms-service-client-secret
+    tenant-as: tenant-as-service-client-secret
+    did: did-service-client-secret
+    blob: blob-service-client-secret
+    issuer: issuer-service-client-secret
+    verifier: verifier-service-client-secret
+    wallet-unit: wallet-unit-service-client-secret
+    wallet-interaction: wallet-interaction-service-client-secret
+    wallet-onboarding: wallet-onboarding-service-client-secret
+    trust-domain-identifier: trust-domain-service-client-secret
   # Per-service client_credentials client id each satellite presents to the
   # platform AS to mint its east-west service token. These match the platform's
   # registered internal clients.
@@ -351,6 +454,7 @@ serviceIdentity:
     trust-domain-identifier: trust-domain-service
     wallet-unit: wallet-unit-service
     wallet-interaction: wallet-interaction-service
+    wallet-onboarding: wallet-onboarding-service
   # Local workload labels used to select credentials and configure the binding
   # to each platform-issued JWT client id. They are never sent as identity headers.
   serviceIds:
@@ -362,8 +466,10 @@ serviceIdentity:
     verifier: service-oid4vp
     wallet-unit: service-wallet-unit
     wallet-interaction: service-wallet-interaction
-  # East-west JWT audiences are fixed protocol identifiers in the chart and
-  # source contracts. They are not configurable deployment values.
+    wallet-onboarding: service-wallet-onboarding
+  # Receiver and STS audiences come from files/service-identity-catalog.yaml
+  # (vendored with VDX Helm and the frontend). They are not Helm values and
+  # there is no serviceIdentity.audiences override surface.
   # In-network surfaces each satellite admits without an operator bearer. The
   # tenant-AS signing-key provisioning endpoint is deliberately absent here:
   # it must validate the platform-issued bearer during tenant resolution so the
@@ -372,15 +478,16 @@ serviceIdentity:
   # in-network command/introspection channels stay open by design (each enforces
   # its own validation). Empty leaves the service's baked default.
   anonymousPathPrefixes:
-    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**"
-    tenant-as: "/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/introspect"
+    platform: "/,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**"
+    tenant-as: "/as,/authorize,/login,/logout,/token,/par,/.well-known,/internal/preauth,/internal/jwks,/introspect,/account-action,/api/account-actions"
     tenant-kms: ""
     did: "/.well-known"
     blob: "/public/assets"
-    issuer: "/oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/credentials/offers"
+    issuer: "/oid4vci,/credential,/deferredCredential,/nonce,/notification,/.well-known,/public/statuslists,/public/schema,/public/assets,/public/catalogs,/credentials/offers"
     verifier: "/oid4vp/request-uri,/oid4vp/auth/response,/.well-known"
     wallet-unit: ""
     wallet-interaction: ""
+    wallet-onboarding: "/api/wallet-onboarding/v1/idv/email/callback,/wallet/verify"
 
 # Interactive documentation site (docs playground). When enabled, registers a
 # public OAuth client on the platform AS (authorization code + required PKCE +
@@ -397,8 +504,10 @@ docsPlayground:
 
 # Dedicated confidential client and cryptographic state protection for the
 # public issuer/verifier testing-console BFF. The client secret is independent
-# from the east-west service-identity secret and is consumed only by the
-# platform authorization server and the admin-console server process.
+# from satellite serviceIdentity.clientSecretKeys and is consumed only by the
+# platform authorization server and the admin-console server process
+# (ADMIN_CONSOLE_WORKLOAD_CLIENT_*). Do not point the console at
+# EDK_INTERNAL_CLIENT_SECRET.
 portalBff:
   clientId: admin-console-portal-bff
   audience: application-bff-oauth-client
@@ -433,6 +542,14 @@ issuerPipeline:
   masterKekKey: master-kek
   blindIndexKey: blind-index-key
 
+# Deployment-scoped encryption for pending federation/session records. The
+# chart references an existing Secret and never generates or stores key
+# material itself.
+federationSessionEncryption:
+  existingSecret: ""
+  key: federation-session-encryption-key
+  activeKeyId: federation-session-v1
+
 license:
   # Optional explicit installation pin for the license gate. Leave empty during
   # first-run setup; the protected license bundle supplies the installation id.
@@ -456,6 +573,7 @@ license:
     verifier: enterprise-verifier
     wallet-unit: enterprise-wallet-unit
     wallet-interaction: enterprise-wallet-interaction
+    wallet-onboarding: enterprise-wallet-onboarding
   # License trust anchor and bundle delivery. The platform is the local
   # licensing authority; it trusts the installed license bundle's root CA. The
   # bundle itself is imported through the setup API after the platform boots.
@@ -549,6 +667,7 @@ opentelemetry:
   endpoint: ""
   protocol: http/protobuf
   metricsExporter: otlp
+  metricsExportIntervalMillis: 60000
   headers: ""
   resourceAttributes: ""
 
@@ -613,7 +732,9 @@ gateway:
 # Backing workload configuration. These entries create Kubernetes Deployments
 # and Services; they do not define customer-facing hosts. Customer traffic enters
 # through the single-port Gateway (`platform.<baseDomain>` and
-# `<tenant>.<baseDomain>`). Runtime probes stay internal to Kubernetes.
+# `<tenant>.<baseDomain>`). Runtime probes stay internal to Kubernetes. Any
+# service may set `imageTag` to override `global.imageTag`; when omitted, the
+# global tag remains authoritative.
 services:
   platform:
     enabled: true
@@ -705,9 +826,9 @@ services:
       host: ""
       paths:
         - /api/did/v1
-        - /1.0/create
-        - /1.0/update
-        - /1.0/deactivate
+        - /universal-registrar/1.0/create
+        - /universal-registrar/1.0/update
+        - /universal-registrar/1.0/deactivate
       annotations: {}
     resources:
       requests:
@@ -847,6 +968,47 @@ services:
       - name: WALLET_INTERACTION_KEYSTORE_ROOT
         value: /keystore
 
+  # Optional managed-wallet onboarding satellite. Enable this together with
+  # wallet-unit and wallet-interaction for a self-contained edge-wallet backend.
+  # The activation and readiness values are deliberately supplied by the
+  # deployment profile/operator through env; the chart never invents production
+  # attestation evidence or release readiness.
+  wallet-onboarding:
+    enabled: false
+    image: enterprise-wallet-onboarding
+    replicas: 1
+    restPort: 8080
+    publicIngress:
+      enabled: false
+      className: ""
+      host: ""
+      paths: []
+      annotations: {}
+    internalIngress:
+      enabled: false
+      className: internal
+      host: ""
+      paths: []
+      annotations: {}
+    resources:
+      requests:
+        cpu: 250m
+        memory: 768Mi
+      limits:
+        cpu: "1"
+        memory: 1536Mi
+    env:
+      - name: WALLET_ACTIVATION_PROFILE
+        # The chart's explicit local profile is suitable for development only.
+        # Production must replace it and supply the corresponding evidence.
+        value: development-email-software-wscd
+      - name: WALLET_MANAGED_READINESS_DEPENDENCY_RECORDS
+        value: "[]"
+      - name: WALLET_MANAGED_READINESS_RELEASE_EVIDENCE_RECORDS
+        value: "[]"
+      - name: WALLET_MANAGED_READINESS_RELEASE_SIGNING_KEYS
+        value: "[]"
+
   issuer:
     enabled: true
     image: enterprise-issuer
@@ -864,9 +1026,12 @@ services:
         - /nonce
         - /notification
         - /public/statuslists
+        - /public/schema
+        - /public/catalogs
         - /api/oid4vci/v1
         - /api/credential-design/v1
         - /api/statuslist/v1
+        - /api/catalog/v1
       annotations: {}
     internalIngress:
       enabled: false
@@ -876,6 +1041,7 @@ services:
         - /api/oid4vci/v1
         - /api/credential-design/v1
         - /api/statuslist/v1
+        - /api/catalog/v1
       annotations: {}
     resources:
       requests:
@@ -985,3 +1151,31 @@ services:
         value: /admin-console
       - name: PORT
         value: "3000"
+
+  # One tenant-host runtime serves every configured business wallet. Tenant and
+  # wallet selection remain request-scoped through the platform bootstrap API.
+  business-wallet:
+    enabled: true
+    image: business-wallet
+    replicas: 1
+    restPort: 3006
+    publicIngress:
+      enabled: false
+      className: public
+      host: "*.example.com"
+      paths:
+        - /wallets
+        - /_next
+      annotations: {}
+    internalIngress:
+      enabled: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    env:
+      - name: PORT
+        value: "3006"
