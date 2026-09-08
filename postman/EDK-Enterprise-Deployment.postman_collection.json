@@ -10499,6 +10499,50 @@
       "description": "The runtime KMS surface a tenant integrates against: discover providers, then generate, read, use and remove a key by provider id and alias. Keys are addressed by the alias the tenant chose, never by a server-issued key id, so the same request works across deployments. Requests run under the tenant service token (folder 04); the tenant KMS API rejects the platform operator token because its audience is the platform, not the tenant KMS.",
       "item": [
         {
+          "name": "00 List platform secret offerings",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{operatorToken}}", "type": "string" }] },
+            "url": "{{platformUrl}}/api/platform/admin/v1/application/secrets/offerings"
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('platform secret offerings returned', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "00 Get platform secret storage",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{operatorToken}}", "type": "string" }] },
+            "url": "{{platformUrl}}/api/platform/admin/v1/application/secrets/storage"
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('platform secret storage returned', () => pm.response.to.have.status(200));"] } }
+          ]
+        },
+        {
+          "name": "00 Get tenant secret options",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Host", "value": "{{tenantPublicAuthority}}", "type": "text" }
+            ],
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/secrets/options"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('tenant secret options returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "00 Get tenant secret assignment",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Host", "value": "{{tenantPublicAuthority}}", "type": "text" }
+            ],
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/secrets/assignment"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('tenant secret assignment returned', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
           "name": "01 List runtime providers",
           "request": {
             "method": "GET",
