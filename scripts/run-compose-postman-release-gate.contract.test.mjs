@@ -99,7 +99,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 304, 'shipped customer collection must contain the current 304-request walkthrough')
+assert.equal(requestCount(collection.item), 210, 'shipped customer collection must contain the current 210-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -131,7 +131,7 @@ const tenantServiceClientRegistration = requestByName.get('07b Register walkthro
 assert.ok(tenantServiceClientRegistration, 'tenant service client registration must follow tenant authorization-server discovery in folder 04')
 assert.match(tenantServiceClientRegistration.request.body.raw, /"principalRoles": \[\s*"tenant-admin"\s*\]/u)
 assert.match(tenantServiceClientRegistration.request.body.raw, /"grantTypes": \[\s*"client_credentials"\s*\]/u)
-for (const folderName of ['06 Tenant Keys and DID', '10 Issuer Settings', '14 Issue Credentials Simple', '20 Verification']) {
+for (const folderName of ['06 Tenant Keys and DID', '10 Issuer Settings', '15 Issue SD-JWT VC and mdoc', '22 Verification']) {
   const folder = collection.item.find((item) => item.name === folderName)
   assert.deepEqual(folder.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{tenantToken}}', type: 'string'}]}, `${folderName} must inherit the tenant token`)
 }
@@ -152,53 +152,20 @@ for (const name of [
 ]) {
   assert.ok(requestByName.has(name), `customer collection must retain release signing coverage: ${name}`)
 }
-const kmsLifecycleContract = [
-  ['04 Create disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources'],
-  ['05 Read SOFTWARE KMS credential status', 'GET', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/credentials/software-keystore'],
-  ['06 Attach SOFTWARE KMS credential', 'PUT', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/credentials/software-keystore'],
-  ['07 Validate disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/validate'],
-  ['08 Rotate SOFTWARE KMS credential', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/rotate'],
-  ['09 Detach disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/detach'],
-  ['10 Retire disposable SOFTWARE KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsLifecycleResourceHandle}}/retire'],
-]
-for (const [name, method, url] of kmsLifecycleContract) {
+// The customer reference reads and validates the KMS resources the tenant holds; the disposable
+// SOFTWARE lifecycle (create, credential, rotate, detach, retire) is internal breadth and lives in
+// the overlay folder checked by the internal gate.
+for (const [name, method, url] of [
+  ['01 List KMS offerings', 'GET', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/offerings'],
+  ['02 List KMS resources', 'GET', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources'],
+  ['03 Validate tenant setup KMS resource', 'POST', '{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsResourceHandle}}/validate'],
+]) {
   const item = requestByName.get(name)
-  assert.ok(item, `customer KMS lifecycle request '${name}' must exist`)
+  assert.ok(item, `customer KMS resource request '${name}' must exist`)
   assert.equal(item.request.method, method, `${name} method`)
   assert.equal(item.request.url, url, `${name} path`)
 }
-const lifecycleItems = kmsLifecycleContract.map(([name]) => requestByName.get(name))
-const lifecycleSource = JSON.stringify(lifecycleItems)
-assert.match(
-  requestByName.get('04 Create disposable SOFTWARE KMS resource').request.body.raw,
-  /"kind": "SOFTWARE"[\s\S]*"storageMode": "MEMORY"/u,
-  'customer lifecycle must create its own MEMORY-backed SOFTWARE resource',
-)
-for (const name of [
-  '06 Attach SOFTWARE KMS credential',
-  '08 Rotate SOFTWARE KMS credential',
-  '09 Detach disposable SOFTWARE KMS resource',
-  '10 Retire disposable SOFTWARE KMS resource',
-]) {
-  assert.ok(
-    requestByName.get(name).request.body.raw.includes('{{kmsLifecycleResourceVersion}}'),
-    `${name} must use the version captured from the preceding response`,
-  )
-}
-for (const invariant of [
-  "pm.collectionVariables.set('kmsLifecycleResourceHandle', j.handle)",
-  "pm.collectionVariables.set('kmsLifecycleResourceVersion', String(j.resourceVersion))",
-  "pm.collectionVariables.set('kmsLifecycleCredentialSecretRef', j.credentialSecretRef)",
-  "pm.collectionVariables.unset('kmsLifecycleCredential')",
-  "pm.expect(j.state, 'resource state').to.eql('CONFIGURED')",
-  "pm.expect(j.state, 'resource state').to.eql('DETACHED')",
-  "pm.expect(j.state, 'resource state').to.eql('RETIRED')",
-]) {
-  assert.ok(lifecycleSource.includes(invariant), `customer KMS lifecycle must retain '${invariant}'`)
-}
-assert.ok(lifecycleSource.includes("pm.variables.replaceIn('{{$randomUUID}}')"), 'customer KMS lifecycle must generate transient credentials and labels')
-assert.ok(!/krh_[A-Za-z0-9_-]{20,}/u.test(lifecycleSource), 'customer KMS lifecycle must never hardcode an opaque resource handle')
-assert.ok(!lifecycleSource.includes('/reference'), 'SOFTWARE lifecycle must not call the cloud-only change-reference route')
+assert.ok(!/krh_[A-Za-z0-9_-]{20,}/u.test(JSON.stringify(collection)), 'customer collection must never hardcode an opaque resource handle')
 const tenantOriginContractItems = [
   '01 Register tenant',
   '05 List tenant gateway endpoint bindings',
@@ -932,7 +899,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 304)
+  assert.equal(plan.requestCount, 210)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -971,7 +938,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 304)
+  assert.equal(monolithPlan.requestCount, 210)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))

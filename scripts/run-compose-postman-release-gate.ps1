@@ -970,7 +970,8 @@ foreach ($key in @(
   'operatorEmail',
   'operatorPassword',
   'tenantOwnerPassword',
-  'tenantOwnerCodeVerifier',
+  # The shipped customer environment stops at tenantOwnerPassword; the collection generates the
+  # service client. The release gate pins both so the plaintext canary has a known value to hunt.
   'tenantServiceClientId',
   'tenantServiceClientSecret'
 )) {

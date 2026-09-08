@@ -55,24 +55,27 @@ installation is running:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-Create a private copy of the environment, replace every example host and
-credential with values for the installation, and keep that populated copy out
-of Git. The collection follows the supported platform and tenant gateway URLs.
-Optional folders are disabled by default when they require provider-native
-resources, such as an existing AWS KMS or Azure Key Vault key. Enable such a
-folder only after its provider, aliases, key identifiers, and public
-certificate material have been configured for the target tenant.
+Create a private copy of the environment and fill in its six values: `baseDomain`,
+`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword` and
+`tenantOwnerPassword`. Keep that copy out of Git. Every URL, host, API base and
+`did:web` identifier in the collection is derived from `baseDomain` and
+`tenantSlug` before each request (`platform.<baseDomain>` for the operator plane,
+`<tenantSlug>.<baseDomain>` for the tenant), so pointing the collection at another
+installation or another tenant is a two-value change. The collection never writes
+derived values back into the environment.
 
-The maintained collection contains 217 requests. Its authorization-server
-segment covers hosted and external UUID resources, discovery validation and
-refresh, lifecycle and tenant-isolation failures, public and confidential
-clients with secret redaction, identities, federation-binding validation and
-ordering, issuer default and override selection, protocol-profile dry-run and
-apply, and the distinct migration resume and audited source-change commands.
-Several negative and remediation scenarios require controlled preloaded
-database and discovery-source states. Prepare those states before running the
-collection. The public administration API deliberately cannot fabricate a
-stale discovery snapshot or a failed migration entry.
+The collection is a reference for the REST APIs a customer uses, in the order a
+customer uses them: operator sign-in, tenant registration, tenant owner activation
+and the tenant service token, keys and DID, bringing your own KMS and certificate
+chains, authorization servers and federation to an external OIDC provider, issuer
+branding and credential designs, status lists and per-credential configuration,
+issuance of SD-JWT VC, mdoc and W3C VCDM credentials through pre-authorized code,
+transaction code, pipeline and authorization code, DCQL and verification, trust
+domains and trust lists, the KMS runtime API for keys, certificates and
+signatures, and the Developer Console policy. Folders that need resources you own
+(your Azure Key Vault or AWS KMS, existing external keys and certificates, an
+on-premises platform vault) ship disabled; fill in their collection variables and
+enable them.
 
 ## Domain, DNS, and TLS model
 

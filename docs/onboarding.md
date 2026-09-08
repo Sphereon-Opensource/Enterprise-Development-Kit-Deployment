@@ -202,20 +202,21 @@ normal customer setup path; they are useful for validation, demos, and repeatabl
 API automation.
 
 Both helpers read `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`.
-The supplied file is a post-setup environment. It contains `baseDomain`,
-`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword`,
-`tenantOwnerPassword`, `tenantOwnerCodeVerifier`, `tenantServiceClientId`, and
-`tenantServiceClientSecret`.
-These are Postman/provision variables, not Docker Compose or Helm startup
-variables.
-The operator OAuth callback is derived from the platform URL and the hosted
-session during sign-in; do not add or fill any separate callback variable.
-The collection derives the platform origin, tenant gateway origin, protocol API
-roots, issuer/verifier display URLs, resource identifiers, and tenant-scoped
-`did:web` values from onboarding responses. Do not add a DID hostname or
-service-container URL to the environment. The optional VICAL source remains a
-collection-local HTTPS value because it belongs to the customer's published
-trust infrastructure; override that value only when using a real VICAL URL.
+The supplied file is a post-setup environment with six values: `baseDomain`,
+`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword` and
+`tenantOwnerPassword`. These are Postman/provision variables, not Docker Compose
+or Helm startup variables.
+The collection derives the platform origin, the tenant gateway origin, every
+protocol API root, the tenant KMS and trust-domain API bases and the tenant-scoped
+`did:web` values from `baseDomain` and `tenantSlug` before each request, and keeps
+them in collection scope. Do not add a platform URL, a DID hostname or a
+service-container URL to the environment; changing `baseDomain` or `tenantSlug`
+is enough. The operator OAuth callback is derived from the platform URL and the
+hosted session during sign-in; the PKCE verifiers and the tenant service client
+secret are generated during the run and cleared afterwards. Provider-specific
+values (your Azure Key Vault or AWS KMS, external keys and certificates, a
+published trust list) are collection variables with `replace-with-` placeholders
+next to the disabled folders that use them.
 
 ### Provision script
 
@@ -261,21 +262,30 @@ issuance and verification examples. Import these files into Postman:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-The supplied collection starts after platform setup. Run its 304 requests in
+The supplied collection starts after platform setup. Run its 210 requests in
 folder order:
 
 | Folder | What it does |
 | --- | --- |
-| `00 Before You Start` | Checks the imported environment and gateway contract before authenticated requests |
-| `01 Operator Sign-in` | Obtains the operator token with the client_credentials grant of the confidential operator client that the setup script registered |
-| `02 Tenant Onboarding` | Registers the tenant, waits for onboarding completion, enables the tenant-owned Developer Console with its response-derived revision, verifies tenant public endpoint bindings, and registers the tenant service client on the tenant authorization server |
-| `03 Subtenants` | Registers a two-level tenant hierarchy, lists the children at both levels, reconciles registration rows, and gives the deepest subtenant its own service client, issuer and issued credential |
-| `04 Tenant Federation` through `11 Credential Designs` | Configure tenant federation, the disposable SOFTWARE KMS create/write/validate/rotate/detach/retire lifecycle, DID, issuer settings and credential designs |
-| `12 Status Lists` | The JWT list, then nested `01 CWT mdoc` for the CWT-signed mdoc list, `02 Bitstring VCDM` for the two-bit bitstring list with revocation and suspension, and `03 Shared list` for one list shared by two credential configurations and two issuer instances |
-| `13 Hosted Branding Verification` through `15 OID4VCI Pre-authorized Transaction Code` | Hosted branding, SD-JWT and mdoc issuance, and the pre-authorized transaction-code flow |
-| `16 VCDM 1.1` and `17 VCDM 2.0` | Issue W3C VC-JWT credentials in both VCDM versions and check the `BitstringStatusListEntry` status entry each one carries |
-| `18 Issue Credentials Pipeline` through `21 Authorization Code Offer` | Pipeline issuance, DCQL, verification and the authorization-code offer examples |
-| `22 Trust Domains` | Creates and verifies tenant trust-domain configuration and the VICAL/trust-list integration surface |
+| `00 Before You Start` | Explains the six environment values, how every URL derives from them, and what each folder covers |
+| `01 Operator Sign-in` | Signs the platform operator in with the authorization-code flow and PKCE and stores the operator token |
+| `02 Tenant Onboarding` | Registers the tenant, waits for onboarding to complete, verifies the tenant public endpoint bindings, checks that the runtime service discovery matches the derived API bases, and resolves the issuer and verifier instance ids |
+| `03 Tenant Owner Activation and Sign-in` | Activates the tenant owner through the one-time link, signs the owner in on the tenant host, and registers the confidential tenant service client |
+| `04 Tenant Service Token` | Obtains the tenant service token with client_credentials |
+| `05 Subtenants` | Registers a subtenant and lists the children of the parent |
+| `06 Tenant Keys and DID` | Lists the KMS offerings and resources the tenant holds, validates the setup KMS, and discovers the activation-created `did:web` and its hosted `did.json` |
+| `07 Bring Your Own KMS` | Registers your own Azure Key Vault or AWS KMS as a tenant KMS resource, registers references to existing external keys and certificate chains, and (for operators) the platform tenant's vault. Disabled until you fill in your provider values |
+| `08 KMS Provider Sharing` | How the platform offers one of its KMSes to a tenant, how the tenant enables it and picks its default provider, and the runtime provider list that joins both planes |
+| `09 Authorization Servers and Federation` | A hosted authorization server with clients and identities, an external authorization server from OIDC discovery, the federation binding that lets holders sign in there, and the issuer bindings and protocol profile |
+| `10 Issuer Settings` and `11 Credential Designs` | Issuer branding and the EuPid (SD-JWT VC) and Mdl (mdoc) designs with render variants and logo assets |
+| `12 Status Lists` | The did:web-signed JWT list, the x5c-signed list, revoke, reactivate and read, then the `CWT mdoc` list and the two-bit `Bitstring VCDM` list with suspension |
+| `13 Credential Configurations` | How a credential configuration expresses its signing key, trust mechanism, validity, scope and status-list binding: reads of the provisioned EuPid and Mdl configurations, the VCDM 1.1 and 2.0 registrations, and binding the CWT list to Mdl |
+| `14 Hosted Branding Verification` | The hosted VCT metadata, issuer well-known metadata and content-addressed assets |
+| `15 Issue SD-JWT VC and mdoc` through `20 Authorization Code Issuance` | Issuance by pre-authorized code with a headless wallet, with a transaction code, of W3C VCDM 1.1 and 2.0 credentials with `BitstringStatusListEntry`, through the pipeline API, and the authorization-code offer with its authorization server metadata |
+| `21 DCQL Queries` and `22 Verification` | DCQL queries and verifier bindings, then a verification request, its signed request object, status polling and cancellation |
+| `23 Trust Domains and Trust Lists` | Trust domains, anchors, admissions, attachments and eligibility grants; the mdoc VICAL source; a trust list you publish (ETSI TS 119 612) and a list of trusted entities (ETSI TS 119 602) registered as sources |
+| `24 KMS Runtime API` | Providers, keys, raw signatures and verification, and certificate chains and references on the tenant KMS API |
+| `25 Developer Console Settings` | The tenant's Developer Console policy |
 
 ## After onboarding
 
