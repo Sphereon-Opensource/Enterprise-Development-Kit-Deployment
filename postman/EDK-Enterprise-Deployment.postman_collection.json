@@ -458,7 +458,7 @@
     {
       "key": "customerLoteEtag",
       "value": "",
-      "description": "Entity version of the LoTE source to send as If-Match on its next mutation. Set by 23 / 17c."
+      "description": "Etag of the LoTE source as last read; present it as If-Match on the next mutation of the source."
     },
     {
       "key": "asIdentityActivationToken",
@@ -10412,7 +10412,7 @@
           "request": {
             "method": "PUT",
             "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/lote-sources/{{customerLoteSourceId}}",
-            "description": "Registers a list of trusted entities (ETSI TS 119 602, a JAdES-signed JSON document) that you publish. REMOTE fetches the list from url on validation and refresh; profile states which provider role the list carries; verificationTrustAnchorIds names the anchor that pins the list signer. A list supplied by value uses sourceKind INLINE with the JWS in artifact instead of url.",
+            "description": "Registers a published list of trusted entities (TS 119 602 LoTE) as a remote source of the domain. The call creates the first candidate revision of the source and returns that revision; the source itself, with the etag later mutations must present, is read in the next request.",
             "header": [
               {
                 "key": "Content-Type",
@@ -10452,14 +10452,14 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('LoTE source registered', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.be.oneOf([200,201]));",
-                  "const source = pm.response.json();",
-                  "pm.test('the LoTE source is registered on the domain with its provider profile', () => {",
-                  "  pm.expect(source.sourceId, 'source id').to.eql(pm.variables.get('customerLoteSourceId'));",
-                  "  pm.expect(source.domainId, 'domain id').to.eql(pm.collectionVariables.get('vicalDomainId'));",
-                  "  pm.expect(source.profile, 'profile').to.eql('PUB_EAA_PROVIDER');",
-                  "  pm.expect(source.etag, 'etag for the next mutation').to.be.a('string').and.not.empty;",
-                  "});",
-                  "pm.collectionVariables.set('customerLoteEtag', source.etag);"
+                  "const revision = pm.response.json();",
+                  "pm.test('the registration returns the first candidate revision of the source', () => {",
+                  "  pm.expect(revision.sourceId, 'source id').to.eql(pm.variables.get('customerLoteSourceId'));",
+                  "  pm.expect(revision.domainId, 'domain id').to.eql(pm.collectionVariables.get('vicalDomainId'));",
+                  "  pm.expect(revision.profile, 'profile').to.eql('PUB_EAA_PROVIDER');",
+                  "  pm.expect(revision.revision, 'revision number').to.eql(1);",
+                  "  pm.expect(revision.etag, 'revision etag').to.be.a('string').and.not.empty;",
+                  "});"
                 ]
               }
             }
@@ -10470,7 +10470,7 @@
           "request": {
             "method": "GET",
             "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/lote-sources/{{customerLoteSourceId}}",
-            "description": "Reads the registered LoTE source. activeRevision and activeSnapshotId are set once a revision has been validated and activated.",
+            "description": "Reads the LoTE source. Its etag is the If-Match value for the next change to the source (enable, disable, replace); revisions carry their own etags.",
             "header": []
           },
           "event": [
@@ -10481,10 +10481,12 @@
                 "exec": [
                   "pm.test('LoTE source read', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.be.oneOf([200]));",
                   "const source = pm.response.json();",
-                  "pm.test('the source reads back with the etag the registration returned', () => {",
+                  "pm.test('the source carries the registered profile and an etag for the next mutation', () => {",
                   "  pm.expect(source.sourceId, 'source id').to.eql(pm.variables.get('customerLoteSourceId'));",
-                  "  pm.expect(source.etag, 'etag').to.eql(pm.collectionVariables.get('customerLoteEtag'));",
-                  "});"
+                  "  pm.expect(source.profile, 'profile').to.eql('PUB_EAA_PROVIDER');",
+                  "  pm.expect(source.etag, 'source etag').to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('customerLoteEtag', source.etag);"
                 ]
               }
             }
