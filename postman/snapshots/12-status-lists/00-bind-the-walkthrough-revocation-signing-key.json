@@ -1,0 +1,33 @@
+{
+  "title": "00 Bind the walkthrough-revocation signing key",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/status-lists/walkthrough-revocation/signing-key",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "kmsResourceHandle": "krh_<opaque>",
+      "kmsKeyAlias": "issuer-signing-rc4customer"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "kmsResourceHandle": {
+        "value": "krh_<opaque>",
+        "source": "tenant"
+      },
+      "kmsKeyAlias": {
+        "value": "issuer-signing-rc4customer",
+        "source": "tenant"
+      }
+    }
+  }
+}

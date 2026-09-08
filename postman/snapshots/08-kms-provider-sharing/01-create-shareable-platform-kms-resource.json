@@ -1,0 +1,47 @@
+{
+  "title": "01 Create shareable platform KMS resource",
+  "request": {
+    "method": "POST",
+    "url": "https://platform.example.com/api/platform/config/v1/tenants/platform/kms/resources",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "providerId": "platform-shared-<generated>",
+      "kind": "SOFTWARE",
+      "displayName": "Platform shared SOFTWARE <generated>",
+      "configuration": {
+        "storageMode": "MEMORY"
+      }
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "handle": "krh_<opaque>",
+      "providerId": "platform-shared-<generated>",
+      "kind": "SOFTWARE",
+      "displayName": "Platform shared SOFTWARE <generated>",
+      "state": "DEGRADED",
+      "resourceVersion": 1,
+      "credentialConfigured": false,
+      "health": "UNKNOWN",
+      "credentialOwnership": "PRODUCT_MANAGED",
+      "softwareStorageMode": "MEMORY",
+      "softwareKeyStoreFileName": null,
+      "credentialSecretRef": "<redacted>",
+      "providerAssignmentId": null,
+      "availableActions": [
+        "VALIDATE",
+        "UPDATE_CREDENTIAL",
+        "DETACH"
+      ]
+    }
+  }
+}

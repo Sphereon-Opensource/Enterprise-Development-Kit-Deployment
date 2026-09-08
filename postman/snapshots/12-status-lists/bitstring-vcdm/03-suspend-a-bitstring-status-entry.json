@@ -1,0 +1,33 @@
+{
+  "title": "03 Suspend a bitstring status entry",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/status",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "statusListIndex": 11,
+      "value": 2
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "statusListId": "00000000-0000-4000-8000-000000000000",
+      "statusListIndex": 11,
+      "entryCorrelationId": null,
+      "credentialId": null,
+      "credentialHash": null,
+      "value": 2,
+      "purpose": "revocation",
+      "identifier": null
+    }
+  }
+}

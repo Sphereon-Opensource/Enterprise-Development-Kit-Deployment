@@ -1,0 +1,73 @@
+{
+  "title": "05 List tenant gateway endpoint bindings",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/api/platform/admin/v1/tenants/00000000-0000-4000-8000-000000000000/public-endpoints",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "data": [
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "tenantId": "00000000-0000-4000-8000-000000000000",
+          "serviceType": "OAUTH2_AUTHORIZATION_SERVER",
+          "instanceId": "00000000-0000-4000-8000-000000000000",
+          "host": "rc4customer.example.com",
+          "pathPrefix": "/as/rc4customer",
+          "wellKnownPath": null,
+          "enabled": true,
+          "primaryEndpoint": true,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "createdById": null,
+          "updatedAt": "2026-01-01T00:00:00Z",
+          "updatedById": null,
+          "deletedAt": null,
+          "deletedById": null
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "tenantId": "00000000-0000-4000-8000-000000000000",
+          "serviceType": "OID4VCI_ISSUER",
+          "instanceId": "00000000-0000-4000-8000-000000000000",
+          "host": "rc4customer.example.com",
+          "pathPrefix": "/oid4vci/rc4customer",
+          "wellKnownPath": null,
+          "enabled": true,
+          "primaryEndpoint": true,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "createdById": null,
+          "updatedAt": "2026-01-01T00:00:00Z",
+          "updatedById": null,
+          "deletedAt": null,
+          "deletedById": null
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "tenantId": "00000000-0000-4000-8000-000000000000",
+          "serviceType": "OID4VP_VERIFIER",
+          "instanceId": "rc4customer",
+          "host": "rc4customer.example.com",
+          "pathPrefix": "/oid4vp/rc4customer",
+          "wellKnownPath": null,
+          "enabled": true,
+          "primaryEndpoint": true,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "createdById": null,
+          "updatedAt": "2026-01-01T00:00:00Z",
+          "updatedById": null,
+          "deletedAt": null,
+          "deletedById": null
+        }
+      ]
+    }
+  }
+}

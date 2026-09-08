@@ -1,0 +1,17 @@
+{
+  "title": "06 Resume tenant owner authorization",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/as/rc4customer/authorize/callback?session_id=<authorization-session>",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "Found",
+    "code": 302,
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

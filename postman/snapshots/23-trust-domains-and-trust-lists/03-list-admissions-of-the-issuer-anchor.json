@@ -1,0 +1,26 @@
+{
+  "title": "03 List admissions of the issuer anchor",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/trust-domain-issuer-00000000-0000-4000-8000-000000000000/anchors/trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did/admissions",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "items": [
+        {
+          "anchorId": "trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did",
+          "admissionClass": "CREDENTIAL_ISSUER"
+        }
+      ]
+    }
+  }
+}

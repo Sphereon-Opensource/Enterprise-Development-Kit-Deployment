@@ -1,0 +1,28 @@
+{
+  "title": "04 Read the suspended entry",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/entries/11",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "statusListId": "00000000-0000-4000-8000-000000000000",
+      "statusListIndex": 11,
+      "entryCorrelationId": null,
+      "credentialId": null,
+      "credentialHash": null,
+      "value": 2,
+      "purpose": "revocation",
+      "identifier": null
+    }
+  }
+}

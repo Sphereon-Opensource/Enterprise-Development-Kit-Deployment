@@ -1,0 +1,41 @@
+{
+  "title": "10 Read the key by alias",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/kms/v1/keys/customer-tenant-signing-key?providerId=default",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "keyInfo": {
+        "key": {
+          "kty": "EC",
+          "kid": "<key-id>",
+          "crv": "P-256",
+          "x": "<public-key-material>",
+          "y": "<public-key-material>",
+          "x5c": [
+            "<certificate>"
+          ]
+        },
+        "alias": "customer-tenant-signing-key",
+        "providerId": "default",
+        "kid": "<key-id>",
+        "signatureAlgorithm": "ECDSA_SHA256",
+        "x5c": [
+          "<certificate>"
+        ],
+        "keyType": "EC",
+        "keyEncoding": "JOSE"
+      }
+    }
+  }
+}

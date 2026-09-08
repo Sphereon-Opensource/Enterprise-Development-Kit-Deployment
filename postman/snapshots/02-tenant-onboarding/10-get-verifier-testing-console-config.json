@@ -1,0 +1,38 @@
+{
+  "title": "10 Get verifier testing-console config",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vp/verifier/instances/rc4customer/testing-console",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "enabled": {
+        "value": true,
+        "source": "tenant"
+      },
+      "exposureMode": {
+        "value": "public",
+        "source": "tenant"
+      },
+      "allowTrustAnchorManagement": {
+        "value": true,
+        "source": "tenant"
+      },
+      "allowTrustDomainDisable": {
+        "value": true,
+        "source": "tenant"
+      },
+      "publicBaseUrl": "https://rc4customer.example.com/oid4vp/rc4customer",
+      "displayUrl": "https://rc4customer.example.com/testing-console/verifier/rc4customer?publicBaseUrl=https%3A%2F%2Frc4customer.example.com%2Foid4vp%2Frc4customer"
+    }
+  }
+}

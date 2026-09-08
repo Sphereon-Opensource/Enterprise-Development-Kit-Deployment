@@ -1,0 +1,229 @@
+{
+  "title": "02 Wait for the acme-eu onboarding to complete",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/api/platform/admin/v1/tenant-onboarding/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "correlationId": "00000000-0000-4000-8000-000000000000",
+      "tenantId": "00000000-0000-4000-8000-000000000000",
+      "status": "COMPLETED",
+      "startedAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z",
+      "completedAt": "2026-01-01T00:00:00Z",
+      "lastError": null,
+      "steps": [
+        {
+          "step": {
+            "id": "as-endpoint-bound"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "as-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "contacts-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "default-kms-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "default-settings-applied"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "did-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "did-state-migrated"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "internal-client-credential-catalog-v2-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "isolation-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "issuer-endpoint-bound"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "issuer-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "opaque-internal-client-credentials-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "organization-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "owner-invitation-minted"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "owner-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "relationships-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "routing-inserted"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "sample-data-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "software-catalog-reconciled"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "software-resource-authorization-server-authority-migrated"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "software-resource-oid4vci-issuer-authorization-bound"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "tenant-schemas-ensured"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "tenant-workload-clients-migrated"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "verifier-endpoint-bound"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
+            "id": "verifier-provisioned"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "title": "13 Read one certificate reference",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/kms/v1/certificate-references/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "alias": "customer-tenant-signing-chain",
+      "providerId": "default",
+      "kind": "key_certificate_chain",
+      "source": "stored_public_material",
+      "controlMode": "externally_managed",
+      "origin": "external",
+      "linkedKeyReferenceId": "00000000-0000-4000-8000-000000000000",
+      "linkedKeyAlias": "customer-tenant-signing-key",
+      "linkedKeyKid": "<key-id>",
+      "certificateFingerprint": "80X73AfjO60jh2HxNkWnHUFlTwfXoOfxVAePvaRxDGQ=",
+      "publicKeyFingerprint": "uVndr52z65bnUoGXUpQnKMfaRTlAPBOXDE03afJDc78="
+    }
+  }
+}

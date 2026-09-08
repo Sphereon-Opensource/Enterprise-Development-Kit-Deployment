@@ -1,0 +1,19 @@
+{
+  "title": "07 Read the tenant default KMS provider",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/default-provider",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {}
+  }
+}

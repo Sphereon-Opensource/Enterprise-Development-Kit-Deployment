@@ -1,0 +1,35 @@
+{
+  "title": "12 Refuse a VICAL whose signer anchor is not admitted",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors/00000000-0000-4000-8000-000000000000/mdoc-vical",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "url": "https://vical.example.com/vical.cbor",
+      "signerAnchorIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "issuerAnchorIds": [],
+      "requiredCertificateProfiles": [],
+      "enabled": true
+    }
+  },
+  "response": {
+    "status": "Bad Request",
+    "code": 400,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "ILLEGAL_ARGUMENT_ERROR",
+        "message": "Frozen mdoc VICAL anchor lacks its required admission MDOC_VICAL_SIGNER",
+        "category": "VALIDATION"
+      }
+    }
+  }
+}

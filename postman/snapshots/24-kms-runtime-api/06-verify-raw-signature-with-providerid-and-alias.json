@@ -1,0 +1,30 @@
+{
+  "title": "06 Verify raw signature with providerId and alias",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/kms/v1/signatures/raw/verify",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "keyInfo": {
+        "providerId": "default",
+        "alias": "customer-runtime-signing-key"
+      },
+      "input": "aGVsbG8=",
+      "signature": "WNhEDEOX9QQf8/fTiaTQmu5mK1RBiQlZngfots2kWDt0zzSNwQRSKZ4/4P35dGhsPsKZha7e2t0pZC8PDSNMQA=="
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "isValid": true
+    }
+  }
+}

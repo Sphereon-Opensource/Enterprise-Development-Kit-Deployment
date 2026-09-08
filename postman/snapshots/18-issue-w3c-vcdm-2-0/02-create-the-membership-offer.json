@@ -1,0 +1,42 @@
+{
+  "title": "02 Create the Membership offer",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/credential/offers",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "credential_configuration_ids": [
+        "Membership"
+      ],
+      "grants": {
+        "pre_authorized_code": {}
+      },
+      "credential_subject_data": {
+        "id": "did:example:member-0001",
+        "type": "MembershipCredential",
+        "name": "Erika Mustermann",
+        "membershipNumber": "ACME-M-2026-0042",
+        "membershipLevel": "gold",
+        "validFrom": "2026-01-01"
+      },
+      "correlation_id": "e2e-membership-001"
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "correlation_id": "e2e-membership-001",
+      "session_id": "00000000-0000-4000-8000-000000000000",
+      "offer_uri": "openid-credential-offer://?credential_offer_uri=https%3A%2F%2Frc4customer.example.com%2Foid4vci%2Frc4customer%2Foid4vci%2Fcredentials%2Foffers%2F00000000-0000-4000-8000-000000000000",
+      "status_uri": "https://rc4customer.example.com/api/oid4vci/v1/backend/credential/offers/e2e-membership-001"
+    }
+  }
+}

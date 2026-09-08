@@ -1,0 +1,533 @@
+{
+  "title": "09 Attach render variant to Mdl design",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/credentials/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "displays": [
+        {
+          "locale": "en",
+          "name": "Mobile Driving Licence",
+          "description": "ISO 18013-5 mobile driving licence",
+          "preferredRenderVariantIds": [
+            "00000000-0000-4000-8000-000000000000"
+          ]
+        },
+        {
+          "locale": "nl",
+          "name": "Mobiel Rijbewijs",
+          "description": "ISO 18013-5 mobiel rijbewijs",
+          "preferredRenderVariantIds": [
+            "00000000-0000-4000-8000-000000000000"
+          ]
+        }
+      ],
+      "renderVariantIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ]
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "tenantId": "00000000-0000-4000-8000-000000000000",
+      "alias": "mdl",
+      "hostingMode": "LOCAL",
+      "bindings": [
+        {
+          "vct": null,
+          "vctHostingMode": "NONE",
+          "credentialConfigurationId": "Mdl",
+          "schemaId": null,
+          "docType": "org.iso.18013.5.1.mDL",
+          "type": null,
+          "@context": null,
+          "issuerId": "00000000-0000-4000-8000-000000000000",
+          "issuerDid": null,
+          "issuerUri": "https://rc4customer.example.com",
+          "verifierClientId": null,
+          "ocaSaid": null,
+          "credentialType": null,
+          "credentialDesignId": null,
+          "credentialDesignVersion": null,
+          "activeFrom": null,
+          "activeUntil": null
+        }
+      ],
+      "credentialTemplateId": null,
+      "issuerDesignId": null,
+      "displays": [
+        {
+          "locale": "en",
+          "name": "Mobile Driving Licence",
+          "description": "ISO 18013-5 mobile driving licence",
+          "issuerNameOverride": null,
+          "preferredRenderVariantIds": [
+            "00000000-0000-4000-8000-000000000000"
+          ]
+        },
+        {
+          "locale": "nl",
+          "name": "Mobiel Rijbewijs",
+          "description": "ISO 18013-5 mobiel rijbewijs",
+          "issuerNameOverride": null,
+          "preferredRenderVariantIds": [
+            "00000000-0000-4000-8000-000000000000"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "family_name"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Family name",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Achternaam",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 1,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "given_name"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Given name",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Voornaam",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 2,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "birth_date"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Date of birth",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Geboortedatum",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 3,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "issue_date"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Issue date",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Datum van uitgifte",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 4,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "expiry_date"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Expiry date",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Vervaldatum",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 5,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "issuing_country"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Issuing country",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Land van uitgifte",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 6,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "issuing_authority"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Issuing authority",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Uitgevende autoriteit",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 7,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "document_number"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Document number",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Documentnummer",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 8,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "portrait"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Portrait",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Portret",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 9,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "driving_privileges"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Driving privileges",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Rijbevoegdheden",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 10,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "org.iso.18013.5.1"
+            },
+            {
+              "type": "property",
+              "name": "un_distinguishing_sign"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "UN distinguishing sign",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "VN-onderscheidingsteken",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 11,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        }
+      ],
+      "renderVariantIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "derivedRenderHintsId": null,
+      "sourceSnapshotIds": [],
+      "contentHash": null,
+      "semanticAttributeSetRef": {
+        "bundleId": "credential-design:00000000-0000-4000-8000-000000000000",
+        "version": "00000000-0000-4000-8000-000000000000"
+      },
+      "attributeProfileId": null,
+      "attributeProfileVersion": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z",
+      "credentialType": {
+        "format": "MSO_MDOC",
+        "vct": null,
+        "docType": "org.iso.18013.5.1.mDL",
+        "type": null,
+        "@context": null
+      },
+      "deferral": null
+    }
+  }
+}

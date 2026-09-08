@@ -1,0 +1,97 @@
+{
+  "title": "01 Register the acme-eu subtenant",
+  "request": {
+    "method": "POST",
+    "url": "https://platform.example.com/api/platform/admin/v1/tenants",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "tenant": {
+        "tenantType": "organization",
+        "name": "RC4 Release Verification EU",
+        "description": "RC4 Release Verification EU subtenant",
+        "slug": "rc4customer-eu",
+        "parentTenantId": "00000000-0000-4000-8000-000000000000",
+        "initialPlatformSubdomain": true
+      },
+      "contacts": {
+        "technical": {
+          "email": "admin@rc4customer-eu.example",
+          "displayName": "RC4 Release Verification EU Technical Contact"
+        },
+        "administrativeSameAsTechnical": true,
+        "ownerAdmin": {
+          "source": "technical"
+        }
+      },
+      "login": {
+        "enabled": true,
+        "defaultAuthorizationServerRequired": true
+      },
+      "provisioning": {
+        "issuer": true,
+        "verifier": true,
+        "keysAndDids": true,
+        "sampleData": true
+      }
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "tenant": {
+        "id": "00000000-0000-4000-8000-000000000000",
+        "tenantType": "organization",
+        "name": "RC4 Release Verification EU",
+        "description": "RC4 Release Verification EU subtenant",
+        "slug": "rc4customer-eu",
+        "parentTenantId": "00000000-0000-4000-8000-000000000000",
+        "status": "ACTIVE",
+        "system": false,
+        "ownerPartyId": null,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "createdById": "00000000-0000-4000-8000-000000000000",
+        "updatedAt": "2026-01-01T00:00:00Z",
+        "updatedById": "00000000-0000-4000-8000-000000000000",
+        "deletedAt": null,
+        "deletedById": null
+      },
+      "tenantUrl": "https://rc4customer-eu.rc4.nk.sphereon.com",
+      "serviceUrls": {
+        "authorizationServerUrl": "https://rc4customer-eu.rc4.nk.sphereon.com/as/rc4customer-eu",
+        "issuerUrl": "https://rc4customer-eu.rc4.nk.sphereon.com/as/rc4customer-eu",
+        "oid4vciIssuerUrl": "https://rc4customer-eu.rc4.nk.sphereon.com/oid4vci/rc4customer-eu",
+        "oid4vpVerifierUrl": "https://rc4customer-eu.rc4.nk.sphereon.com/oid4vp/rc4customer-eu"
+      },
+      "correlationId": "00000000-0000-4000-8000-000000000000",
+      "created": {
+        "ownerPartyId": "00000000-0000-4000-8000-000000000000",
+        "technicalContactPartyId": "00000000-0000-4000-8000-000000000000",
+        "administrativeContactPartyId": "00000000-0000-4000-8000-000000000000",
+        "ownerAdminPartyId": "00000000-0000-4000-8000-000000000000",
+        "ownerAccountId": "00000000-0000-4000-8000-000000000000",
+        "ownerIdentityId": "00000000-0000-4000-8000-000000000000",
+        "relationshipIds": [
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000000",
+          "00000000-0000-4000-8000-000000000000"
+        ]
+      },
+      "delivery": {
+        "status": "MANUAL_READY",
+        "invitationId": "00000000-0000-4000-8000-000000000000",
+        "expiresAt": "2027-01-01T00:00:00Z",
+        "manualActivationLink": "https://rc4customer-eu.rc4.nk.sphereon.com/as/rc4customer-eu/account-action#36:00000000-0000-4000-8000-000000000000BT733-7jhVqSes3_SpS3dI-Gcm0Cdt73z9PrmB4Ba3E9roaniwSLhukvnmX2dJPTSQ6UMSyBy2M9zLgOZYX4cA",
+        "reason": null
+      }
+    }
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "title": "01 Create EuPid query",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/dcql/v1/queries",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "queryId": "walkthrough-eupid-sdjwt",
+      "name": "EuPid identity check",
+      "description": "Requests name and age attestation from the EU Personal ID",
+      "enabled": true,
+      "dcqlQuery": {
+        "credentials": [
+          {
+            "id": "eupid",
+            "format": "dc+sd-jwt",
+            "meta": {
+              "vct_values": [
+                "https://rc4customer.example.com/public/schema/vct/EuPid"
+              ]
+            },
+            "claims": [
+              {
+                "path": [
+                  "family_name"
+                ]
+              },
+              {
+                "path": [
+                  "given_name"
+                ]
+              },
+              {
+                "path": [
+                  "age_over_18"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "queryId": "walkthrough-eupid-sdjwt",
+      "name": "EuPid identity check",
+      "description": "Requests name and age attestation from the EU Personal ID",
+      "dcqlQuery": {
+        "credentials": [
+          {
+            "id": "eupid",
+            "format": "dc+sd-jwt",
+            "meta": {
+              "vct_values": [
+                "https://rc4customer.example.com/public/schema/vct/EuPid"
+              ]
+            },
+            "claims": [
+              {
+                "path": [
+                  "family_name"
+                ]
+              },
+              {
+                "path": [
+                  "given_name"
+                ]
+              },
+              {
+                "path": [
+                  "age_over_18"
+                ]
+              }
+            ],
+            "require_cryptographic_holder_binding": true,
+            "multiple": false
+          }
+        ]
+      },
+      "enabled": true,
+      "createdAt": 1767225600000,
+      "updatedAt": 1767225600000,
+      "currentVersion": 1
+    }
+  }
+}

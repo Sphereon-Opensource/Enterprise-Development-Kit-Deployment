@@ -1,0 +1,32 @@
+{
+  "title": "02 Complete tenant owner activation",
+  "request": {
+    "method": "POST",
+    "url": "https://platform.example.com/api/account-actions/v1/complete",
+    "headers": {
+      "Content-Type": "application/json",
+      "Accept": "*/*"
+    },
+    "body": {
+      "token": "<activation-token>",
+      "password": "<redacted>"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "action": {
+        "invitationId": "00000000-0000-4000-8000-000000000000",
+        "action": "tenant.onboarding",
+        "outcomeRef": {
+          "type": "tenant",
+          "id": "00000000-0000-4000-8000-000000000000"
+        }
+      }
+    }
+  }
+}

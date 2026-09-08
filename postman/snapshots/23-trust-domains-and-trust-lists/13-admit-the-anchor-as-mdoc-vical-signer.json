@@ -1,0 +1,27 @@
+{
+  "title": "13 Admit the anchor as MDOC_VICAL_SIGNER",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors/00000000-0000-4000-8000-000000000000/admissions/MDOC_VICAL_SIGNER",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "anchorId": "00000000-0000-4000-8000-000000000000",
+      "admissionClass": "MDOC_VICAL_SIGNER"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "anchorId": "00000000-0000-4000-8000-000000000000",
+      "admissionClass": "MDOC_VICAL_SIGNER"
+    }
+  }
+}

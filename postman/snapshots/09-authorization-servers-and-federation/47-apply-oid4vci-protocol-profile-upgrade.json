@@ -1,0 +1,31 @@
+{
+  "title": "47 Apply OID4VCI protocol profile upgrade",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/protocol-profile/upgrade/apply",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "targetProfile": "OID4VCI_1_1_DRAFT_2A1F0513",
+      "expectedRevision": "0",
+      "reason": "Validated by the customer deployment authorization-server walkthrough",
+      "idempotencyKey": "00000000-0000-4000-8000-000000000000"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "issuerId": "00000000-0000-4000-8000-000000000000",
+      "profile": "OID4VCI_1_1_DRAFT_2A1F0513",
+      "revision": 1,
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

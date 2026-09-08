@@ -1,0 +1,28 @@
+{
+  "title": "17b Read the trust list source",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/trust-sources/customer-trust-list",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "sourceId": "customer-trust-list",
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "kind": "ETSI_119612_CUSTOM_LOTL",
+      "enabled": true,
+      "managedBy": "00000000-0000-4000-8000-000000000000",
+      "managedAt": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

@@ -1,0 +1,454 @@
+{
+  "title": "02 Fetch issuer well-known metadata",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/.well-known/openid-credential-issuer",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "credential_issuer": "https://rc4customer.example.com/oid4vci/rc4customer",
+      "authorization_servers": [
+        "https://rc4customer.example.com/as/rc4customer"
+      ],
+      "credential_endpoint": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/credential",
+      "deferred_credential_endpoint": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/deferredCredential",
+      "notification_endpoint": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/notification",
+      "nonce_endpoint": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/nonce",
+      "credential_configurations_supported": {
+        "EuPid": {
+          "format": "dc+sd-jwt",
+          "scope": "eu_pid",
+          "cryptographic_binding_methods_supported": [
+            "jwk",
+            "did:jwk",
+            "did:key"
+          ],
+          "credential_signing_alg_values_supported": [
+            "ES256"
+          ],
+          "proof_types_supported": {
+            "jwt": {
+              "proof_signing_alg_values_supported": [
+                "ES256"
+              ]
+            }
+          },
+          "vct": "https://rc4customer.example.com/public/schema/vct/EuPid",
+          "credential_metadata": {
+            "display": [
+              {
+                "name": "EU Personal ID",
+                "locale": "en",
+                "logo": {
+                  "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                  "alt_text": "EU PID logo"
+                },
+                "description": "European personal identity credential",
+                "background_color": "#0B5FFF",
+                "text_color": "#FFFFFF"
+              },
+              {
+                "name": "EU Persoonlijke ID",
+                "locale": "nl",
+                "logo": {
+                  "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                  "alt_text": "EU PID logo"
+                },
+                "description": "Europese persoonlijke identiteitscredential",
+                "background_color": "#0B5FFF",
+                "text_color": "#FFFFFF"
+              }
+            ],
+            "claims": [
+              {
+                "path": [
+                  "family_name"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Family name",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Achternaam",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "given_name"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Given name",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Voornaam",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "birth_date"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Date of birth",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Geboortedatum",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "age_over_18"
+                ],
+                "display": [
+                  {
+                    "name": "Age over 18",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Ouder dan 18",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "nationality"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Nationality",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Nationaliteit",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "issuing_authority"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Issuing authority",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Uitgevende autoriteit",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "issuing_country"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Issuing country",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Land van uitgifte",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "document_number"
+                ],
+                "display": [
+                  {
+                    "name": "Document number",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Documentnummer",
+                    "locale": "nl"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "Mdl": {
+          "format": "mso_mdoc",
+          "scope": "mdl",
+          "cryptographic_binding_methods_supported": [
+            "cose_key"
+          ],
+          "credential_signing_alg_values_supported": [
+            -7
+          ],
+          "proof_types_supported": {
+            "jwt": {
+              "proof_signing_alg_values_supported": [
+                "ES256"
+              ]
+            }
+          },
+          "doctype": "org.iso.18013.5.1.mDL",
+          "credential_metadata": {
+            "display": [
+              {
+                "name": "Mobile Driving Licence",
+                "locale": "en",
+                "logo": {
+                  "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                  "alt_text": "Mobile driving licence logo"
+                },
+                "description": "ISO 18013-5 mobile driving licence",
+                "background_color": "#1B5E20",
+                "text_color": "#FFFFFF"
+              },
+              {
+                "name": "Mobiel Rijbewijs",
+                "locale": "nl",
+                "logo": {
+                  "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                  "alt_text": "Mobile driving licence logo"
+                },
+                "description": "ISO 18013-5 mobiel rijbewijs",
+                "background_color": "#1B5E20",
+                "text_color": "#FFFFFF"
+              }
+            ],
+            "claims": [
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "family_name"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Family name",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Achternaam",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "given_name"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Given name",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Voornaam",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "birth_date"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Date of birth",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Geboortedatum",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "issue_date"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Issue date",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Datum van uitgifte",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "expiry_date"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Expiry date",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Vervaldatum",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "issuing_country"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Issuing country",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Land van uitgifte",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "issuing_authority"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Issuing authority",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Uitgevende autoriteit",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "document_number"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Document number",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Documentnummer",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "portrait"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Portrait",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Portret",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "driving_privileges"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "Driving privileges",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "Rijbevoegdheden",
+                    "locale": "nl"
+                  }
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "un_distinguishing_sign"
+                ],
+                "mandatory": true,
+                "display": [
+                  {
+                    "name": "UN distinguishing sign",
+                    "locale": "en"
+                  },
+                  {
+                    "name": "VN-onderscheidingsteken",
+                    "locale": "nl"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "display": [
+        {
+          "name": "RC4 Release Verification Authority",
+          "locale": "en",
+          "logo": {
+            "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+            "alt_text": "RC4 Release Verification authority logo"
+          }
+        },
+        {
+          "name": "RC4 Release Verification Autoriteit",
+          "locale": "nl",
+          "logo": {
+            "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+            "alt_text": "RC4 Release Verification authority logo"
+          }
+        }
+      ]
+    }
+  }
+}

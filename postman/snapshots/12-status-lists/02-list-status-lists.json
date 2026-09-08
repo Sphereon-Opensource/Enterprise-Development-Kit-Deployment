@@ -1,0 +1,67 @@
+{
+  "title": "02 List status lists",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "data": [
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "correlationId": "walkthrough-revocation",
+          "spec": "token_status_list",
+          "purposes": [
+            "revocation"
+          ],
+          "proofFormat": "jwt",
+          "hostingMode": "hosted",
+          "bitsPerStatus": 1,
+          "length": 131072,
+          "issuedCount": 0,
+          "remainingCapacity": 131072,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z",
+          "mdocProfile": null,
+          "aggregationUri": null
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "correlationId": "eupid-revocation",
+          "spec": "token_status_list",
+          "purposes": [
+            "revocation"
+          ],
+          "proofFormat": "jwt",
+          "hostingMode": "hosted",
+          "bitsPerStatus": 1,
+          "length": 131072,
+          "issuedCount": 0,
+          "remainingCapacity": 131072,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z",
+          "mdocProfile": null,
+          "aggregationUri": null
+        }
+      ],
+      "pagination": {
+        "limit": 20,
+        "offset": 0,
+        "page": 0,
+        "size": 20,
+        "total": 2,
+        "totalPages": 1,
+        "hasMore": false
+      }
+    }
+  }
+}

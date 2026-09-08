@@ -1,0 +1,18 @@
+{
+  "title": "16 Delete the tenant-wide key",
+  "request": {
+    "method": "DELETE",
+    "url": "https://rc4customer.example.com/api/kms/v1/keys/customer-tenant-signing-key?providerId=default",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "No Content",
+    "code": 204,
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

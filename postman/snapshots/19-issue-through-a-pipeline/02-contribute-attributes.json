@@ -1,0 +1,58 @@
+{
+  "title": "02 Contribute attributes",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "groups": [
+        {
+          "contributorId": "registration-office",
+          "phase": "oid4vci_credential_request",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "attributes": [
+            {
+              "path": "family_name",
+              "value": "Mustermann",
+              "verified": true
+            },
+            {
+              "path": "given_name",
+              "value": "Erika",
+              "verified": true
+            },
+            {
+              "path": "birth_date",
+              "value": "1964-08-12",
+              "verified": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "sessionId": "00000000-0000-4000-8000-000000000000",
+      "status": "AWAITING_APPROVAL",
+      "completedPhases": [
+        {
+          "value": "oid4vci_credential_request"
+        }
+      ],
+      "instanceId": null,
+      "versionId": "00000000-0000-4000-8000-000000000000",
+      "developerPipeline": false,
+      "connectorInvocations": []
+    }
+  }
+}

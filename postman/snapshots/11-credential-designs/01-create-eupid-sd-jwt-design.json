@@ -1,0 +1,552 @@
+{
+  "title": "01 Create EuPid SD-JWT design",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/credentials",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "bindings": [
+        {
+          "vct": "EuPid",
+          "vctHostingMode": "HOSTED",
+          "credentialConfigurationId": "EuPid",
+          "issuerUri": "https://rc4customer.example.com",
+          "issuerId": "00000000-0000-4000-8000-000000000000"
+        }
+      ],
+      "alias": "eu-pid",
+      "hostingMode": "LOCAL",
+      "credentialType": {
+        "format": "SD_JWT_VC",
+        "vct": "EuPid"
+      },
+      "displays": [
+        {
+          "locale": "en",
+          "name": "EU Personal ID",
+          "description": "European personal identity credential"
+        },
+        {
+          "locale": "nl",
+          "name": "EU Persoonlijke ID",
+          "description": "Europese persoonlijke identiteitscredential"
+        }
+      ],
+      "claims": [
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "family_name"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Family name"
+            },
+            {
+              "locale": "nl",
+              "label": "Achternaam"
+            }
+          ],
+          "mandatory": true,
+          "order": 1,
+          "sdPolicy": "ALWAYS"
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "given_name"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Given name"
+            },
+            {
+              "locale": "nl",
+              "label": "Voornaam"
+            }
+          ],
+          "mandatory": true,
+          "order": 2,
+          "sdPolicy": "ALWAYS"
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "birth_date"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Date of birth"
+            },
+            {
+              "locale": "nl",
+              "label": "Geboortedatum"
+            }
+          ],
+          "mandatory": true,
+          "order": 3
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "age_over_18"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Age over 18"
+            },
+            {
+              "locale": "nl",
+              "label": "Ouder dan 18"
+            }
+          ],
+          "mandatory": false,
+          "order": 4
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "nationality"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Nationality"
+            },
+            {
+              "locale": "nl",
+              "label": "Nationaliteit"
+            }
+          ],
+          "mandatory": true,
+          "order": 5
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "issuing_authority"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Issuing authority"
+            },
+            {
+              "locale": "nl",
+              "label": "Uitgevende autoriteit"
+            }
+          ],
+          "mandatory": true,
+          "order": 6
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "issuing_country"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Issuing country"
+            },
+            {
+              "locale": "nl",
+              "label": "Land van uitgifte"
+            }
+          ],
+          "mandatory": true,
+          "order": 7,
+          "sdPolicy": "ALWAYS"
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "document_number"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Document number"
+            },
+            {
+              "locale": "nl",
+              "label": "Documentnummer"
+            }
+          ],
+          "mandatory": false,
+          "order": 8
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "tenantId": "00000000-0000-4000-8000-000000000000",
+      "alias": "eu-pid",
+      "hostingMode": "LOCAL",
+      "bindings": [
+        {
+          "vct": "EuPid",
+          "vctHostingMode": "HOSTED",
+          "credentialConfigurationId": "EuPid",
+          "schemaId": null,
+          "docType": null,
+          "type": null,
+          "@context": null,
+          "issuerId": "00000000-0000-4000-8000-000000000000",
+          "issuerDid": null,
+          "issuerUri": "https://rc4customer.example.com",
+          "verifierClientId": null,
+          "ocaSaid": null,
+          "credentialType": null,
+          "credentialDesignId": null,
+          "credentialDesignVersion": null,
+          "activeFrom": null,
+          "activeUntil": null
+        }
+      ],
+      "credentialTemplateId": null,
+      "issuerDesignId": null,
+      "displays": [
+        {
+          "locale": "en",
+          "name": "EU Personal ID",
+          "description": "European personal identity credential",
+          "issuerNameOverride": null,
+          "preferredRenderVariantIds": []
+        },
+        {
+          "locale": "nl",
+          "name": "EU Persoonlijke ID",
+          "description": "Europese persoonlijke identiteitscredential",
+          "issuerNameOverride": null,
+          "preferredRenderVariantIds": []
+        }
+      ],
+      "claims": [
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "family_name"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Family name",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Achternaam",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALWAYS",
+          "order": 1,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "given_name"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Given name",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Voornaam",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALWAYS",
+          "order": 2,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "birth_date"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Date of birth",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Geboortedatum",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 3,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "age_over_18"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Age over 18",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Ouder dan 18",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": false,
+          "sdPolicy": "ALLOWED",
+          "order": 4,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "nationality"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Nationality",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Nationaliteit",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 5,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "issuing_authority"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Issuing authority",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Uitgevende autoriteit",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALLOWED",
+          "order": 6,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "issuing_country"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Issuing country",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Land van uitgifte",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": true,
+          "sdPolicy": "ALWAYS",
+          "order": 7,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        },
+        {
+          "path": [
+            {
+              "type": "property",
+              "name": "document_number"
+            }
+          ],
+          "labels": [
+            {
+              "locale": "en",
+              "label": "Document number",
+              "description": null,
+              "entryValues": null
+            },
+            {
+              "locale": "nl",
+              "label": "Documentnummer",
+              "description": null,
+              "entryValues": null
+            }
+          ],
+          "mandatory": false,
+          "sdPolicy": "ALLOWED",
+          "order": 8,
+          "group": null,
+          "svgId": null,
+          "valueKind": null,
+          "widgetHint": null,
+          "markdownAllowed": false,
+          "entryCodes": null,
+          "unit": null,
+          "defaultValue": null,
+          "exampleValue": null
+        }
+      ],
+      "renderVariantIds": [],
+      "derivedRenderHintsId": null,
+      "sourceSnapshotIds": [],
+      "contentHash": null,
+      "semanticAttributeSetRef": {
+        "bundleId": "credential-design:00000000-0000-4000-8000-000000000000",
+        "version": "00000000-0000-4000-8000-000000000000"
+      },
+      "attributeProfileId": null,
+      "attributeProfileVersion": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z",
+      "credentialType": {
+        "format": "SD_JWT_VC",
+        "vct": "EuPid",
+        "docType": null,
+        "type": null,
+        "@context": null
+      },
+      "deferral": null
+    }
+  }
+}

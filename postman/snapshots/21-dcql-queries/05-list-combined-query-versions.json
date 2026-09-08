@@ -1,0 +1,25 @@
+{
+  "title": "05 List combined query versions",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/dcql/v1/queries/eupid-and-mdl/versions",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": [
+      {
+        "version": 1,
+        "createdAt": 1767225600000,
+        "createdBy": "00000000-0000-4000-8000-000000000000"
+      }
+    ]
+  }
+}

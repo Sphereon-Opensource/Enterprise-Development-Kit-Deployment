@@ -1,0 +1,26 @@
+{
+  "title": "08 Set the tenant default KMS provider",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/default-provider",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "providerId": "default"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "providerId": "default",
+      "source": "TENANT"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "title": "03 Offer the platform KMS as a shared instance",
+  "request": {
+    "method": "PUT",
+    "url": "https://platform.example.com/api/platform/config/v1/tenants/platform/kms/resources/krh_<opaque>/sharing",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "fulfillment": "SHARED_INSTANCE",
+      "tenantIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "suggestedDefault": false,
+      "expectedResourceVersion": 1
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "tenantIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "fulfillment": "SHARED_INSTANCE",
+      "suggestedDefault": false
+    }
+  }
+}

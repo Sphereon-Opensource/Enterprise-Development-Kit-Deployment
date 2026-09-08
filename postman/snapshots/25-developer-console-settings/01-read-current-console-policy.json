@@ -1,0 +1,25 @@
+{
+  "title": "01 Read current console policy",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/developer-console",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "enabled": true,
+      "exposureMode": "AS_PROTECTED",
+      "tools": {},
+      "revision": 0,
+      "displayUrl": "https://rc4customer.example.com/developer-console"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "title": "06 Enable the offered platform KMS",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers/platform-shared-<generated>:enable",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "providerId": "platform-shared-<generated>",
+      "fulfillment": "SHARED_INSTANCE",
+      "kind": "SOFTWARE",
+      "displayName": "Platform shared SOFTWARE <generated>",
+      "enabled": true,
+      "suggestedDefault": false
+    }
+  }
+}

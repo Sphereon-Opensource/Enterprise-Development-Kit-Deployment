@@ -1,0 +1,33 @@
+{
+  "title": "47b Restore the issuer default to the seeded authorization server",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/authorization-server-bindings/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "authorizationServerId": "00000000-0000-4000-8000-000000000000",
+      "enabled": true,
+      "default": true,
+      "expectedRevision": "1"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "issuerId": "00000000-0000-4000-8000-000000000000",
+      "authorizationServerId": "00000000-0000-4000-8000-000000000000",
+      "enabled": true,
+      "default": true,
+      "revision": 2
+    }
+  }
+}

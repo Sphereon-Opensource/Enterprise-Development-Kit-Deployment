@@ -1,0 +1,45 @@
+{
+  "title": "19 Create hosted identity",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/identities",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "displayName": "RC4 Release Verification Authorization Operator",
+      "email": "authorization-operator@rc4customer.example",
+      "givenName": "Authorization",
+      "familyName": "Operator",
+      "roles": [
+        "tenant-admin"
+      ]
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "identity": {
+        "identityId": "00000000-0000-4000-8000-000000000000",
+        "applicationId": "00000000-0000-4000-8000-000000000000",
+        "displayName": "RC4 Release Verification Authorization Operator",
+        "email": "authorization-operator@rc4customer.example",
+        "state": "<state>",
+        "roles": [
+          "tenant-admin"
+        ],
+        "currentUser": false,
+        "invitationId": "00000000-0000-4000-8000-000000000000",
+        "invitationExpiresAt": "2027-01-01T00:00:00Z",
+        "createdAt": "2026-01-01T00:00:00Z"
+      },
+      "manualActivationLink": "https://rc4customer.example.com/as/walkthrough-as/account-action#36:00000000-0000-4000-8000-000000000000A4WmIKYjY9DM2kYM2RrcyTDaoqRdqlonhDGRX5RZWTBrVvghpk6ALhunfss1jutgaqmOa-UBI77c4blZEv53Kw"
+    }
+  }
+}

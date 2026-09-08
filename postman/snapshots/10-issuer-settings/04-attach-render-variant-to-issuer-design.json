@@ -1,0 +1,73 @@
+{
+  "title": "04 Attach render variant to issuer design",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/issuers/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "renderVariantIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ]
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "tenantId": "00000000-0000-4000-8000-000000000000",
+      "alias": "rc4customer-authority",
+      "hostingMode": "LOCAL",
+      "bindings": [
+        {
+          "vct": null,
+          "vctHostingMode": "NONE",
+          "credentialConfigurationId": null,
+          "schemaId": null,
+          "docType": null,
+          "type": null,
+          "@context": null,
+          "issuerId": "00000000-0000-4000-8000-000000000000",
+          "issuerDid": "did:web:rc4customer.example.com",
+          "issuerUri": "https://rc4customer.example.com",
+          "verifierClientId": null,
+          "ocaSaid": null,
+          "credentialType": null,
+          "credentialDesignId": null,
+          "credentialDesignVersion": null,
+          "activeFrom": null,
+          "activeUntil": null
+        }
+      ],
+      "partyId": null,
+      "displays": [
+        {
+          "locale": "en",
+          "displayName": "RC4 Release Verification Authority",
+          "description": "RC4 Release Verification credential issuing authority",
+          "logo": null
+        },
+        {
+          "locale": "nl",
+          "displayName": "RC4 Release Verification Autoriteit",
+          "description": "Uitgevende autoriteit voor verifieerbare credentials van RC4 Release Verification",
+          "logo": null
+        }
+      ],
+      "renderVariantIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "sourceSnapshotIds": [],
+      "contentHash": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

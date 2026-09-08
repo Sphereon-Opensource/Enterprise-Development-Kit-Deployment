@@ -1,0 +1,116 @@
+{
+  "title": "01a Fetch signed verification request object",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/oid4vp/rc4customer/oid4vp/request-uri/e2e-verify-001",
+    "headers": {
+      "Accept": "application/oauth-authz-req+jwt, application/jwt"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/oauth-authz-req+jwt"
+    },
+    "body": {
+      "_raw": "eyJ0eXAiOiJvYXV0aC1hdXRoei1yZXErand0IiwiYWxnIjoiRVMyNTYiLCJraWQiOiJkaWQ6d2ViOnJjNGN1c3RvbWVyLmV4YW1wbGUuY29tI3ZlcmlmaWVyLXJlcXVlc3Qtb2JqZWN0LXJjNGN1c3RvbWVyIn0.eyJpc3MiOiJkaWQ6d2ViOnJjNGN1c3RvbWVyLmV4YW1wbGUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zZWxmLWlzc3VlZC5tZS92MiIsImlhdCI6MTc2NzIyNTYwMCwiZXhwIjoxNzk4NzYxNjAwLCJqdGkiOiI8anRpPiIsImNsaWVudF9pZCI6ImRlY2VudHJhbGl6ZWRfaWRlbnRpZmllcjpkaWQ6d2ViOnJjNGN1c3RvbWVyLmV4YW1wbGUuY29tIiwicmVzcG9uc2VfdHlwZSI6InZwX3Rva2VuIiwic3RhdGUiOiJlMmUtdmVyaWZ5LTAwMSIsIm5vbmNlIjoiPG5vbmNlPiIsInJlc3BvbnNlX21vZGUiOiJkaXJlY3RfcG9zdCIsImRjcWxfcXVlcnkiOnsiY3JlZGVudGlhbHMiOlt7ImlkIjoiZXVwaWQiLCJmb3JtYXQiOiJkYytzZC1qd3QiLCJtZXRhIjp7InZjdF92YWx1ZXMiOlsiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9wdWJsaWMvc2NoZW1hL3ZjdC9FdVBpZCJdfSwiY2xhaW1zIjpbeyJwYXRoIjpbImZhbWlseV9uYW1lIl19LHsicGF0aCI6WyJnaXZlbl9uYW1lIl19XX0seyJpZCI6Im1kbCIsImZvcm1hdCI6Im1zb19tZG9jIiwibWV0YSI6eyJkb2N0eXBlX3ZhbHVlIjoib3JnLmlzby4xODAxMy41LjEubURMIn0sImNsYWltcyI6W3sicGF0aCI6WyJvcmcuaXNvLjE4MDEzLjUuMSIsImZhbWlseV9uYW1lIl19LHsicGF0aCI6WyJvcmcuaXNvLjE4MDEzLjUuMSIsImdpdmVuX25hbWUiXX1dfV19LCJjbGllbnRfbWV0YWRhdGEiOnsidnBfZm9ybWF0c19zdXBwb3J0ZWQiOnsiZGMrc2Qtand0Ijp7InNkLWp3dF9hbGdfdmFsdWVzIjpbIkVTMjU2Il0sImtiLWp3dF9hbGdfdmFsdWVzIjpbIkVTMjU2Il19LCJtc29fbWRvYyI6eyJpc3N1ZXJhdXRoX2FsZ192YWx1ZXMiOlstN10sImRldmljZWF1dGhfYWxnX3ZhbHVlcyI6Wy03XX0sImp3dF92Y19qc29uIjp7ImFsZ192YWx1ZXMiOlsiRVMyNTYiXX0sImp3dF92Y19qc29uLWxkIjp7ImFsZ192YWx1ZXMiOlsiRVMyNTYiXX19fSwicmVzcG9uc2VfdXJpIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9vaWQ0dnAvcmM0Y3VzdG9tZXIvYXV0aC9yZXNwb25zZSJ9.SIGNATURE-REDACTED",
+      "_decoded": {
+        "header": {
+          "typ": "oauth-authz-req+jwt",
+          "alg": "ES256",
+          "kid": "did:web:rc4customer.example.com#verifier-request-object-rc4customer"
+        },
+        "payload": {
+          "iss": "did:web:rc4customer.example.com",
+          "aud": "https://self-issued.me/v2",
+          "iat": 1767225600,
+          "exp": 1798761600,
+          "jti": "<jti>",
+          "client_id": "decentralized_identifier:did:web:rc4customer.example.com",
+          "response_type": "vp_token",
+          "state": "e2e-verify-001",
+          "nonce": "<nonce>",
+          "response_mode": "direct_post",
+          "dcql_query": {
+            "credentials": [
+              {
+                "id": "eupid",
+                "format": "dc+sd-jwt",
+                "meta": {
+                  "vct_values": [
+                    "https://rc4customer.example.com/public/schema/vct/EuPid"
+                  ]
+                },
+                "claims": [
+                  {
+                    "path": [
+                      "family_name"
+                    ]
+                  },
+                  {
+                    "path": [
+                      "given_name"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "mdl",
+                "format": "mso_mdoc",
+                "meta": {
+                  "doctype_value": "org.iso.18013.5.1.mDL"
+                },
+                "claims": [
+                  {
+                    "path": [
+                      "org.iso.18013.5.1",
+                      "family_name"
+                    ]
+                  },
+                  {
+                    "path": [
+                      "org.iso.18013.5.1",
+                      "given_name"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "client_metadata": {
+            "vp_formats_supported": {
+              "dc+sd-jwt": {
+                "sd-jwt_alg_values": [
+                  "ES256"
+                ],
+                "kb-jwt_alg_values": [
+                  "ES256"
+                ]
+              },
+              "mso_mdoc": {
+                "issuerauth_alg_values": [
+                  -7
+                ],
+                "deviceauth_alg_values": [
+                  -7
+                ]
+              },
+              "jwt_vc_json": {
+                "alg_values": [
+                  "ES256"
+                ]
+              },
+              "jwt_vc_json-ld": {
+                "alg_values": [
+                  "ES256"
+                ]
+              }
+            }
+          },
+          "response_uri": "https://rc4customer.example.com/oid4vp/rc4customer/auth/response"
+        }
+      }
+    }
+  }
+}

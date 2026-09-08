@@ -1,0 +1,78 @@
+{
+  "title": "07b Register walkthrough tenant service client",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/clients",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "clientId": "rc4-release-client",
+      "clientName": "RC4 Release Verification walkthrough tenant service",
+      "clientType": "confidential",
+      "enabled": true,
+      "grantTypes": [
+        "client_credentials"
+      ],
+      "responseTypes": [],
+      "redirectUris": [],
+      "defaultAccessTokenAudience": "enterprise-platform",
+      "allowedAccessTokenAudiences": [
+        "enterprise-tenant-kms",
+        "enterprise-tenant-did",
+        "enterprise-issuer",
+        "enterprise-verifier"
+      ],
+      "tokenEndpointAuthMethod": "client_secret_basic",
+      "principalRoles": [
+        "tenant-admin"
+      ],
+      "clientCredential": {
+        "method": "client_secret_basic",
+        "clientId": "rc4-release-client",
+        "secretValue": "<redacted>"
+      }
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "clientId": "rc4-release-client",
+      "clientName": "RC4 Release Verification walkthrough tenant service",
+      "clientType": "confidential",
+      "enabled": true,
+      "grantTypes": [
+        "client_credentials"
+      ],
+      "responseTypes": [],
+      "redirectUris": [],
+      "defaultAccessTokenAudience": "enterprise-platform",
+      "allowedAccessTokenAudiences": [
+        "enterprise-tenant-kms",
+        "enterprise-tenant-did",
+        "enterprise-issuer",
+        "enterprise-verifier"
+      ],
+      "principalRoles": [
+        "tenant-admin"
+      ],
+      "tokenEndpointAuthMethod": "client_secret_basic",
+      "clientCredential": {
+        "method": "client_secret_basic",
+        "clientId": "rc4-release-client",
+        "secretReference": {
+          "resourceHandle": "sec_XeZk3xxogvJ5R3DKzGDg7K-BA9oo9xqB",
+          "purpose": "OAUTH_CLIENT_SECRET"
+        }
+      },
+      "postLogoutRedirectUris": [],
+      "requestUris": []
+    }
+  }
+}

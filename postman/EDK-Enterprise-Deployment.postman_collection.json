@@ -10578,6 +10578,30 @@
           ]
         },
         {
+          "name": "01a Import externally supplied public key",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyInfo\": {\n    \"key\": {\n      \"kty\": \"EC\",\n      \"crv\": \"P-256\",\n      \"x\": \"HFL67WWh6PYWKOy1mzt9Y2ANs-CWFIyVtouR-Jx_mAM\",\n      \"y\": \"9f_1x7fwUuEbEwxSNTYE3jQF-zForWpKkEMpiUp1MNI\"\n    },\n    \"alias\": \"customer-evaluation-imported-key\",\n    \"providerId\": \"{{kmsRuntimeProviderId}}\",\n    \"signatureAlgorithm\": \"ECDSA_SHA256\",\n    \"keyVisibility\": \"PUBLIC\",\n    \"keyEncoding\": \"JOSE\",\n    \"keyType\": \"EC\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{tenantKmsApiBaseUrl}}/keys/import"
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('public key imported', () => pm.response.to.have.status(201));",
+                "const body = pm.response.json();",
+                "pm.test('import response identifies the imported key', () => { pm.expect(body.keyInfo, 'keyInfo').to.be.an('object'); pm.expect(body.keyInfo.alias, 'alias').to.eql('customer-evaluation-imported-key'); });"
+              ]
+            }
+          }]
+        },
+        {
           "name": "02 List keys by providerId",
           "request": {
             "method": "GET",

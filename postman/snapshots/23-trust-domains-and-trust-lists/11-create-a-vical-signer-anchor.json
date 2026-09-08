@@ -1,0 +1,45 @@
+{
+  "title": "11 Create a VICAL signer anchor",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "identityIdentifierId": "00000000-0000-4000-8000-000000000000",
+      "evidenceMechanism": "X509",
+      "origin": "IMPORTED",
+      "status": "ACTIVE",
+      "metadata": {
+        "source": "customer-release-gate",
+        "productRole": "mdoc-vical-signer"
+      }
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "anchorId": "00000000-0000-4000-8000-000000000000",
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "identityIdentifierId": "00000000-0000-4000-8000-000000000000",
+      "evidenceMechanism": "X509",
+      "origin": "IMPORTED",
+      "status": "ACTIVE",
+      "metadata": {
+        "source": "customer-release-gate",
+        "productRole": "mdoc-vical-signer"
+      },
+      "version": 1,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

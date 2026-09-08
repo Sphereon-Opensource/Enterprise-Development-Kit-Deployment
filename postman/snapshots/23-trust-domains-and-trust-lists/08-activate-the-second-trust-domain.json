@@ -1,0 +1,33 @@
+{
+  "title": "08 Activate the second trust domain",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "displayName": "Postman mdoc VICAL domain",
+      "status": "ACTIVE",
+      "version": 1
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "displayName": "Postman mdoc VICAL domain",
+      "status": "ACTIVE",
+      "version": 2,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

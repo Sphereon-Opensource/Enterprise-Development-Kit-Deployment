@@ -1,0 +1,38 @@
+{
+  "title": "36 Create default issuer authorization server binding",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/authorization-server-bindings",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "authorizationServerId": "00000000-0000-4000-8000-000000000000",
+      "enabled": true,
+      "default": true,
+      "allowedGrantTypes": [
+        "authorization_code"
+      ]
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "issuerId": "00000000-0000-4000-8000-000000000000",
+      "authorizationServerId": "00000000-0000-4000-8000-000000000000",
+      "enabled": true,
+      "default": true,
+      "allowedGrantTypes": [
+        "authorization_code"
+      ],
+      "revision": 0
+    }
+  }
+}

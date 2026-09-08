@@ -1,0 +1,50 @@
+{
+  "title": "17c Register a list of trusted entities (LoTE) source",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/lote-sources/customer-lote",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "sourceKind": "REMOTE",
+      "profile": "PUB_EAA_PROVIDER",
+      "url": "https://trust.example.com/lote.jws",
+      "verificationTrustAnchorIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "allowedHosts": [
+        "trust.example.com"
+      ],
+      "maxArtifactBytes": 5242880,
+      "enabled": true
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "sourceId": "customer-lote",
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "revision": 1,
+      "profile": "PUB_EAA_PROVIDER",
+      "url": "https://trust.example.com/lote.jws",
+      "verificationTrustAnchorIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "allowedHosts": [
+        "trust.example.com"
+      ],
+      "maxArtifactBytes": 5242880,
+      "state": "CANDIDATE",
+      "etag": "\"remote-lote-revision-1-candidate-188040643\"",
+      "managedBy": "00000000-0000-4000-8000-000000000000",
+      "managedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

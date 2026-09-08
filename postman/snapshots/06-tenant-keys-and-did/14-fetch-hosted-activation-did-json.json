@@ -1,0 +1,57 @@
+{
+  "title": "14 Fetch hosted activation did.json",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/.well-known/did.json",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/did+json"
+    },
+    "body": {
+      "id": "did:web:rc4customer.example.com",
+      "verificationMethod": [
+        {
+          "id": "did:web:rc4customer.example.com#verifier-request-object-rc4customer",
+          "type": "JsonWebKey2020",
+          "controller": "did:web:rc4customer.example.com",
+          "publicKeyJwk": {
+            "crv": "P-256",
+            "kty": "EC",
+            "x": "<public-key-material>",
+            "x5c": [
+              "<certificate>"
+            ],
+            "y": "<public-key-material>"
+          }
+        },
+        {
+          "id": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
+          "type": "JsonWebKey2020",
+          "controller": "did:web:rc4customer.example.com",
+          "publicKeyJwk": {
+            "crv": "P-256",
+            "kty": "EC",
+            "x": "<public-key-material>",
+            "x5c": [
+              "<certificate>"
+            ],
+            "y": "<public-key-material>"
+          }
+        }
+      ],
+      "authentication": [
+        "did:web:rc4customer.example.com#verifier-request-object-rc4customer"
+      ],
+      "assertionMethod": [
+        "did:web:rc4customer.example.com#verifier-request-object-rc4customer",
+        "did:web:rc4customer.example.com#issuer-assertion-rc4customer"
+      ]
+    }
+  }
+}

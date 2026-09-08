@@ -1,0 +1,18 @@
+{
+  "title": "04 Open tenant owner login page",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/as/rc4customer/login?session_id=<authorization-session>&return_url=https%3A%2F%2Frc4customer.example.com%2Fas%2Frc4customer%2Fauthorize%2Fcallback%3Fsession_id%3D<authorization-session>",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8"
+    },
+    "body": "<hosted-login-page-html omitted>"
+  }
+}

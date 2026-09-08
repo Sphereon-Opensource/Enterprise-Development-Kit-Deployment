@@ -1,0 +1,29 @@
+{
+  "title": "05 Create raw signature with providerId and alias",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/kms/v1/signatures/raw/create",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "keyInfo": {
+        "providerId": "default",
+        "alias": "customer-runtime-signing-key"
+      },
+      "input": "aGVsbG8="
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "signature": "WNhEDEOX9QQf8/fTiaTQmu5mK1RBiQlZngfots2kWDt0zzSNwQRSKZ4/4P35dGhsPsKZha7e2t0pZC8PDSNMQA=="
+    }
+  }
+}

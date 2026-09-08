@@ -1,0 +1,39 @@
+{
+  "title": "11 List activation-created DID identifiers",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/did/v1/identifiers",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "items": [
+        {
+          "did": "did:web:rc4customer.example.com",
+          "method": "web",
+          "alias": "rc4customer",
+          "role": "EXTERNAL",
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "page": {
+        "limit": 100,
+        "offset": 0,
+        "page": 0,
+        "size": 100,
+        "total": 1,
+        "totalPages": 1,
+        "hasMore": false
+      }
+    }
+  }
+}

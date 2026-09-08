@@ -1,0 +1,85 @@
+{
+  "title": "04 Register the Membership configuration (VCDM 2.0)",
+  "request": {
+    "method": "PUT",
+    "url": "https://platform.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuer/instances/00000000-0000-4000-8000-000000000000/credential-config-settings/Membership",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "resourceId": "00000000-0000-4000-8000-000000000000",
+      "credentialConfigurationId": "Membership",
+      "format": "jwt_vc_json-ld",
+      "scope": "membership",
+      "credentialDefinitionTypes": [
+        "VerifiableCredential",
+        "MembershipCredential"
+      ],
+      "cryptographicBindingMethodsSupported": [
+        "jwk"
+      ],
+      "credentialSigningAlgValuesSupported": [
+        "ES256"
+      ],
+      "proofTypesSupported": {
+        "jwt": {
+          "proofSigningAlgValuesSupported": [
+            "ES256"
+          ]
+        }
+      },
+      "kmsResourceHandle": "krh_<opaque>",
+      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "signingKeyMode": "did:web",
+      "signingVerificationMethodId": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
+      "validityPeriod": "P365D",
+      "status": {
+        "statusListId": "status-bitstring",
+        "purpose": "revocation",
+        "revokeAtExpiry": false
+      }
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "resourceId": "00000000-0000-4000-8000-000000000000",
+      "credentialConfigurationId": "Membership",
+      "format": "jwt_vc_json-ld",
+      "scope": "membership",
+      "credentialDefinitionTypes": [
+        "VerifiableCredential",
+        "MembershipCredential"
+      ],
+      "cryptographicBindingMethodsSupported": [
+        "jwk"
+      ],
+      "credentialSigningAlgValuesSupported": [
+        "ES256"
+      ],
+      "proofTypesSupported": {
+        "jwt": {
+          "proofSigningAlgValuesSupported": [
+            "ES256"
+          ]
+        }
+      },
+      "kmsResourceHandle": "krh_<opaque>",
+      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "signingKeyMode": "did:web",
+      "signingVerificationMethodId": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
+      "validityPeriod": "P365D",
+      "status": {
+        "statusListId": "status-bitstring",
+        "purpose": "revocation",
+        "revokeAtExpiry": false
+      }
+    }
+  }
+}

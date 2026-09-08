@@ -1,0 +1,60 @@
+{
+  "title": "08 Resolve issuer instance id",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuer/instances",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "items": [
+        {
+          "partyId": "00000000-0000-4000-8000-000000000000",
+          "tenantId": "00000000-0000-4000-8000-000000000000",
+          "displayName": "Default Issuer",
+          "managementMode": "MANAGED",
+          "capability": {
+            "id": "00000000-0000-4000-8000-000000000000",
+            "tenantId": "00000000-0000-4000-8000-000000000000",
+            "softwarePartyId": "00000000-0000-4000-8000-000000000000",
+            "capabilityType": "OID4VCI_ISSUER",
+            "isEnabled": true,
+            "system": false,
+            "lifecycleStatus": "ACTIVE",
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z"
+          },
+          "instanceId": "00000000-0000-4000-8000-000000000000",
+          "endpoints": [
+            {
+              "id": "00000000-0000-4000-8000-000000000000",
+              "softwarePartyId": "00000000-0000-4000-8000-000000000000",
+              "endpointType": "BASE",
+              "url": "https://rc4customer.example.com/oid4vci/rc4customer",
+              "source": "DECLARED",
+              "status": "ACTIVE",
+              "isPrimary": true
+            }
+          ],
+          "credentials": [],
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "page": {
+        "page": 0,
+        "size": 20,
+        "totalElements": 1,
+        "totalPages": 1
+      }
+    }
+  }
+}

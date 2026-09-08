@@ -1,0 +1,58 @@
+{
+  "title": "17a Register a published trust list as a trust source",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/trust-sources/customer-trust-list",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "url": "https://trust.example.com/trust-list.xml",
+      "format": "application/xml",
+      "schemeIdentity": "https://trust.example.com/trust-list-scheme",
+      "signerAnchorIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "egressPolicy": {
+        "allowedHosts": [
+          "trust.example.com"
+        ],
+        "maxArtifactBytes": 5242880
+      }
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "sourceId": "customer-trust-list",
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "kind": "ETSI_119612_CUSTOM_LOTL",
+      "revision": 1,
+      "state": "DRAFT",
+      "url": "https://trust.example.com/trust-list.xml",
+      "format": "application/xml",
+      "schemeIdentity": "https://trust.example.com/trust-list-scheme",
+      "bootstrap": {
+        "kind": "EXPLICIT_SIGNER_ANCHORS",
+        "identity": "CUSTOM_DOMAIN_SIGNER_ANCHORS"
+      },
+      "signerAnchorIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "egressPolicy": {
+        "allowedHosts": [
+          "trust.example.com"
+        ],
+        "maxArtifactBytes": 5242880
+      },
+      "managedBy": "00000000-0000-4000-8000-000000000000",
+      "managedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

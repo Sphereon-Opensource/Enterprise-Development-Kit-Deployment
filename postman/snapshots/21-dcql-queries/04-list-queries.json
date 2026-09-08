@@ -1,0 +1,292 @@
+{
+  "title": "04 List queries",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/dcql/v1/queries",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": [
+      {
+        "queryId": "eupid-and-mdl",
+        "name": "Identity and driving licence",
+        "description": "Requests the EuPid and the mobile driving licence in one presentation",
+        "dcqlQuery": {
+          "credentials": [
+            {
+              "id": "eupid",
+              "format": "dc+sd-jwt",
+              "meta": {
+                "vct_values": [
+                  "https://rc4customer.example.com/public/schema/vct/EuPid"
+                ]
+              },
+              "claims": [
+                {
+                  "path": [
+                    "family_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "given_name"
+                  ]
+                }
+              ],
+              "require_cryptographic_holder_binding": true,
+              "multiple": false
+            },
+            {
+              "id": "mdl",
+              "format": "mso_mdoc",
+              "meta": {
+                "doctype_value": "org.iso.18013.5.1.mDL"
+              },
+              "claims": [
+                {
+                  "path": [
+                    "org.iso.18013.5.1",
+                    "family_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "org.iso.18013.5.1",
+                    "given_name"
+                  ]
+                }
+              ],
+              "require_cryptographic_holder_binding": true,
+              "multiple": false
+            }
+          ]
+        },
+        "enabled": true,
+        "createdAt": 1767225600000,
+        "updatedAt": 1767225600000,
+        "currentVersion": 1
+      },
+      {
+        "queryId": "eupid-sdjwt",
+        "name": "EuPid identity check",
+        "description": "Requests name and age attestation from the EU Personal ID",
+        "dcqlQuery": {
+          "credentials": [
+            {
+              "id": "eupid",
+              "format": "dc+sd-jwt",
+              "meta": {
+                "vct_values": [
+                  "https://rc4customer.example.com/public/schema/vct/EuPid"
+                ]
+              },
+              "claims": [
+                {
+                  "path": [
+                    "family_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "given_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "age_over_18"
+                  ]
+                }
+              ],
+              "require_cryptographic_holder_binding": true,
+              "multiple": false
+            }
+          ]
+        },
+        "enabled": true,
+        "createdAt": 1767225600000,
+        "updatedAt": 1767225600000,
+        "currentVersion": 1
+      },
+      {
+        "queryId": "mdl-mdoc",
+        "name": "Driving licence check",
+        "description": "Requests the holder name from the mobile driving licence",
+        "dcqlQuery": {
+          "credentials": [
+            {
+              "id": "mdl",
+              "format": "mso_mdoc",
+              "meta": {
+                "doctype_value": "org.iso.18013.5.1.mDL"
+              },
+              "claims": [
+                {
+                  "path": [
+                    "org.iso.18013.5.1",
+                    "family_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "org.iso.18013.5.1",
+                    "given_name"
+                  ]
+                }
+              ],
+              "require_cryptographic_holder_binding": true,
+              "multiple": false
+            }
+          ]
+        },
+        "enabled": true,
+        "createdAt": 1767225600000,
+        "updatedAt": 1767225600000,
+        "currentVersion": 1
+      },
+      {
+        "queryId": "walkthrough-eupid-and-mdl",
+        "name": "Identity and driving licence",
+        "description": "Requests the EuPid and the mobile driving licence in one presentation",
+        "dcqlQuery": {
+          "credentials": [
+            {
+              "id": "eupid",
+              "format": "dc+sd-jwt",
+              "meta": {
+                "vct_values": [
+                  "https://rc4customer.example.com/public/schema/vct/EuPid"
+                ]
+              },
+              "claims": [
+                {
+                  "path": [
+                    "family_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "given_name"
+                  ]
+                }
+              ],
+              "require_cryptographic_holder_binding": true,
+              "multiple": false
+            },
+            {
+              "id": "mdl",
+              "format": "mso_mdoc",
+              "meta": {
+                "doctype_value": "org.iso.18013.5.1.mDL"
+              },
+              "claims": [
+                {
+                  "path": [
+                    "org.iso.18013.5.1",
+                    "family_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "org.iso.18013.5.1",
+                    "given_name"
+                  ]
+                }
+              ],
+              "require_cryptographic_holder_binding": true,
+              "multiple": false
+            }
+          ]
+        },
+        "enabled": true,
+        "createdAt": 1767225600000,
+        "updatedAt": 1767225600000,
+        "currentVersion": 1
+      },
+      {
+        "queryId": "walkthrough-eupid-sdjwt",
+        "name": "EuPid identity check",
+        "description": "Requests name and age attestation from the EU Personal ID",
+        "dcqlQuery": {
+          "credentials": [
+            {
+              "id": "eupid",
+              "format": "dc+sd-jwt",
+              "meta": {
+                "vct_values": [
+                  "https://rc4customer.example.com/public/schema/vct/EuPid"
+                ]
+              },
+              "claims": [
+                {
+                  "path": [
+                    "family_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "given_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "age_over_18"
+                  ]
+                }
+              ],
+              "require_cryptographic_holder_binding": true,
+              "multiple": false
+            }
+          ]
+        },
+        "enabled": true,
+        "createdAt": 1767225600000,
+        "updatedAt": 1767225600000,
+        "currentVersion": 1
+      },
+      {
+        "queryId": "walkthrough-mdl-mdoc",
+        "name": "Driving licence check",
+        "description": "Requests the holder name from the mobile driving licence",
+        "dcqlQuery": {
+          "credentials": [
+            {
+              "id": "mdl",
+              "format": "mso_mdoc",
+              "meta": {
+                "doctype_value": "org.iso.18013.5.1.mDL"
+              },
+              "claims": [
+                {
+                  "path": [
+                    "org.iso.18013.5.1",
+                    "family_name"
+                  ]
+                },
+                {
+                  "path": [
+                    "org.iso.18013.5.1",
+                    "given_name"
+                  ]
+                }
+              ],
+              "require_cryptographic_holder_binding": true,
+              "multiple": false
+            }
+          ]
+        },
+        "enabled": true,
+        "createdAt": 1767225600000,
+        "updatedAt": 1767225600000,
+        "currentVersion": 1
+      }
+    ]
+  }
+}

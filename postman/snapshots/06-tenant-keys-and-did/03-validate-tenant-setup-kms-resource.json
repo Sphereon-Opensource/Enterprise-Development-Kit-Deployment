@@ -1,0 +1,23 @@
+{
+  "title": "03 Validate tenant setup KMS resource",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/resources/krh_<opaque>/validate",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "handle": "krh_<opaque>",
+      "state": "CONFIGURED",
+      "health": "UNKNOWN"
+    }
+  }
+}
