@@ -35,6 +35,10 @@ import {
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const customerRoot = resolve(scriptDir, '..')
+const tenantConsoleCompose = readFileSync(join(customerRoot, 'compose', 'docker-compose.yml'), 'utf8')
+  .split(/^  admin-console-tenant:\s*$/m)[1]?.split(/^  [a-z][a-z0-9-]*:\s*$/m)[0]
+assert.match(tenantConsoleCompose ?? '', /ADMIN_CONSOLE_PLATFORM_BASE_URL: http:\/\/enterprise-platform:18080/,
+  'The tenant BFF must route platform-config calls to the platform, not recursively to its own public API')
 const repoRoot = resolve(customerRoot, '..', '..')
 const wrapperPath = join(scriptDir, 'run-compose-postman-release-gate.ps1')
 const setupPath = join(scriptDir, 'prepare-compose-postman-setup.mjs')

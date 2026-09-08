@@ -524,6 +524,7 @@ services:
     environment:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: TENANT
+      ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1
       ADMIN_CONSOLE_TENANT_CONTEXT_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1/admin-console-context
