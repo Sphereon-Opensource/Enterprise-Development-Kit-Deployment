@@ -1,0 +1,17 @@
+{
+  "title": "04 Resume authorization callback",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/authorize/callback?session_id=<authorization-session>",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "Found",
+    "code": 302,
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

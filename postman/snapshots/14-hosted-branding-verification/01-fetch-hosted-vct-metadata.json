@@ -1,0 +1,182 @@
+{
+  "title": "01 Fetch hosted VCT metadata",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/public/schema/vct/EuPid",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "vct": "https://rc4customer.example.com/public/schema/vct/EuPid",
+      "display": [
+        {
+          "locale": "en",
+          "name": "EU Personal ID",
+          "description": "European personal identity credential",
+          "rendering": {
+            "simple": {
+              "logo": {
+                "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                "uri#integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
+                "alt_text": "EU PID logo"
+              },
+              "background_color": "#0B5FFF",
+              "text_color": "#FFFFFF"
+            }
+          }
+        },
+        {
+          "locale": "nl",
+          "name": "EU Persoonlijke ID",
+          "description": "Europese persoonlijke identiteitscredential",
+          "rendering": {
+            "simple": {
+              "logo": {
+                "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                "uri#integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
+                "alt_text": "EU PID logo"
+              },
+              "background_color": "#0B5FFF",
+              "text_color": "#FFFFFF"
+            }
+          }
+        }
+      ],
+      "claims": [
+        {
+          "path": [
+            "family_name"
+          ],
+          "display": [
+            {
+              "locale": "en",
+              "label": "Family name"
+            },
+            {
+              "locale": "nl",
+              "label": "Achternaam"
+            }
+          ],
+          "sd": "never"
+        },
+        {
+          "path": [
+            "given_name"
+          ],
+          "display": [
+            {
+              "locale": "en",
+              "label": "Given name"
+            },
+            {
+              "locale": "nl",
+              "label": "Voornaam"
+            }
+          ],
+          "sd": "never"
+        },
+        {
+          "path": [
+            "birth_date"
+          ],
+          "display": [
+            {
+              "locale": "en",
+              "label": "Date of birth"
+            },
+            {
+              "locale": "nl",
+              "label": "Geboortedatum"
+            }
+          ],
+          "sd": "never"
+        },
+        {
+          "path": [
+            "age_over_18"
+          ],
+          "display": [
+            {
+              "locale": "en",
+              "label": "Age over 18"
+            },
+            {
+              "locale": "nl",
+              "label": "Ouder dan 18"
+            }
+          ]
+        },
+        {
+          "path": [
+            "nationality"
+          ],
+          "display": [
+            {
+              "locale": "en",
+              "label": "Nationality"
+            },
+            {
+              "locale": "nl",
+              "label": "Nationaliteit"
+            }
+          ],
+          "sd": "never"
+        },
+        {
+          "path": [
+            "issuing_authority"
+          ],
+          "display": [
+            {
+              "locale": "en",
+              "label": "Issuing authority"
+            },
+            {
+              "locale": "nl",
+              "label": "Uitgevende autoriteit"
+            }
+          ],
+          "sd": "never"
+        },
+        {
+          "path": [
+            "issuing_country"
+          ],
+          "display": [
+            {
+              "locale": "en",
+              "label": "Issuing country"
+            },
+            {
+              "locale": "nl",
+              "label": "Land van uitgifte"
+            }
+          ],
+          "sd": "never"
+        },
+        {
+          "path": [
+            "document_number"
+          ],
+          "display": [
+            {
+              "locale": "en",
+              "label": "Document number"
+            },
+            {
+              "locale": "nl",
+              "label": "Documentnummer"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

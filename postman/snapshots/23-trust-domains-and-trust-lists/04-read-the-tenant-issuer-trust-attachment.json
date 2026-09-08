@@ -1,0 +1,41 @@
+{
+  "title": "04 Read the tenant issuer-trust attachment",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/attachments/TENANT/00000000-0000-4000-8000-000000000000/CREDENTIAL_ISSUER_TRUST",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "attachment": {
+        "attachmentId": "trust-attachment-issuer-00000000-0000-4000-8000-000000000000-tenant",
+        "consumerKind": "TENANT",
+        "consumerId": "00000000-0000-4000-8000-000000000000",
+        "usage": "CREDENTIAL_ISSUER_TRUST",
+        "policy": {
+          "type": "IDENTITY_ADMISSION",
+          "mode": "FAIL_CLOSED",
+          "walletEvidencePolicy": "NONE"
+        },
+        "version": 1,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z"
+      },
+      "domains": [
+        {
+          "attachmentId": "trust-attachment-issuer-00000000-0000-4000-8000-000000000000-tenant",
+          "domainId": "trust-domain-issuer-00000000-0000-4000-8000-000000000000",
+          "ordinal": 0
+        }
+      ]
+    }
+  }
+}

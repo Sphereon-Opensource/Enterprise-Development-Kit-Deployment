@@ -1,0 +1,57 @@
+{
+  "title": "01 Create the CWT token status list",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "correlationId": "mdoc-revocation",
+      "spec": "token_status_list",
+      "proofFormat": "cwt",
+      "hostingMode": "hosted",
+      "purposes": [
+        "revocation"
+      ],
+      "issuer": "https://rc4customer.example.com",
+      "signingKeyMode": "x5c",
+      "kmsResourceHandle": "krh_<opaque>",
+      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "statusListUri": "https://rc4customer.example.com/public/statuslists/mdoc-revocation",
+      "length": 131072,
+      "bitsPerStatus": 1,
+      "mdocProfile": "status_list",
+      "validUntil": "2027-01-01T00:00:00Z",
+      "ttlSeconds": 300
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "correlationId": "mdoc-revocation",
+      "spec": "token_status_list",
+      "purposes": [
+        "revocation"
+      ],
+      "proofFormat": "cwt",
+      "hostingMode": "hosted",
+      "bitsPerStatus": 1,
+      "length": 131072,
+      "issuer": "https://rc4customer.example.com",
+      "statusListUri": "https://rc4customer.example.com/public/statuslists/mdoc-revocation",
+      "signedToken": "<base64 payload omitted>",
+      "contentType": "application/statuslist+cwt",
+      "mdocProfile": "status_list",
+      "aggregationUri": null,
+      "validUntil": "2027-01-01T00:00:00Z"
+    }
+  }
+}

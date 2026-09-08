@@ -1,0 +1,36 @@
+{
+  "title": "01 Create offer with authorization code grant",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/credential/offers",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "credential_configuration_ids": [
+        "EuPid"
+      ],
+      "grants": {
+        "authorization_code": {
+          "issuer_state": "e2e-authcode-001"
+        }
+      },
+      "correlation_id": "e2e-authcode-001"
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "correlation_id": "e2e-authcode-001",
+      "session_id": "00000000-0000-4000-8000-000000000000",
+      "offer_uri": "openid-credential-offer://?credential_offer_uri=https%3A%2F%2Frc4customer.example.com%2Foid4vci%2Frc4customer%2Foid4vci%2Fcredentials%2Foffers%2F00000000-0000-4000-8000-000000000000",
+      "status_uri": "https://rc4customer.example.com/api/oid4vci/v1/backend/credential/offers/e2e-authcode-001"
+    }
+  }
+}

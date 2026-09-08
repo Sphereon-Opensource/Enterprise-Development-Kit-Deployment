@@ -1,0 +1,40 @@
+{
+  "title": "08 List combined query verifier bindings",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/dcql/v1/queries/eupid-and-mdl/verifiers",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": [
+      {
+        "id": "00000000-0000-4000-8000-000000000000",
+        "tenantId": "00000000-0000-4000-8000-000000000000",
+        "verifierId": "00000000-0000-4000-8000-000000000000",
+        "queryId": "eupid-and-mdl",
+        "pinnedVersion": 1,
+        "enabled": true,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z"
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000000",
+        "tenantId": "00000000-0000-4000-8000-000000000000",
+        "verifierId": "rc4customer",
+        "queryId": "eupid-and-mdl",
+        "pinnedVersion": 1,
+        "enabled": true,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z"
+      }
+    ]
+  }
+}

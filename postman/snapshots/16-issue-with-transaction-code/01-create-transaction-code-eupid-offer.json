@@ -1,0 +1,51 @@
+{
+  "title": "01 Create transaction-code EuPid offer",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/credential/offers",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "credential_configuration_ids": [
+        "EuPid"
+      ],
+      "grants": {
+        "pre_authorized_code": {
+          "tx_code": {
+            "input_mode": "numeric",
+            "length": 6
+          }
+        }
+      },
+      "ttl_seconds": 120,
+      "credential_subject_data": {
+        "family_name": "Example",
+        "given_name": "Transaction",
+        "birth_date": "1964-08-12",
+        "age_over_18": true,
+        "nationality": "DE",
+        "issuing_authority": "DE",
+        "issuing_country": "DE",
+        "document_number": "TX-EUPID-001"
+      },
+      "correlation_id": "tx-eupid-00000000-0000-4000-8000-000000000000"
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "correlation_id": "tx-eupid-00000000-0000-4000-8000-000000000000",
+      "session_id": "00000000-0000-4000-8000-000000000000",
+      "offer_uri": "openid-credential-offer://?credential_offer_uri=https%3A%2F%2Frc4customer.example.com%2Foid4vci%2Frc4customer%2Foid4vci%2Fcredentials%2Foffers%2F00000000-0000-4000-8000-000000000000",
+      "status_uri": "https://rc4customer.example.com/api/oid4vci/v1/backend/credential/offers/tx-eupid-00000000-0000-4000-8000-000000000000",
+      "tx_code": "501506"
+    }
+  }
+}

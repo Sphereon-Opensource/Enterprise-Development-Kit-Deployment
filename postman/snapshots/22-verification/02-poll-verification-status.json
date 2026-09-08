@@ -1,0 +1,30 @@
+{
+  "title": "02 Poll verification status",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/oid4vp/backend/auth/requests/e2e-verify-001",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "correlation_id": "e2e-verify-001",
+      "query_id": "eupid-and-mdl",
+      "status": "authorization_request_retrieved",
+      "last_updated": 1767225600000,
+      "session_id": "00000000-0000-4000-8000-000000000000",
+      "verifier_id": "00000000-0000-4000-8000-000000000000",
+      "created_at": 1767225600000,
+      "expires_at": 1798761600000,
+      "error": null,
+      "verified_data": null
+    }
+  }
+}

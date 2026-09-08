@@ -1,0 +1,16 @@
+{
+  "title": "47d Delete leftover walkthrough issuer authorization server binding",
+  "request": {
+    "method": "DELETE",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/authorization-server-bindings/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "No Content",
+    "code": 204,
+    "headers": {}
+  }
+}

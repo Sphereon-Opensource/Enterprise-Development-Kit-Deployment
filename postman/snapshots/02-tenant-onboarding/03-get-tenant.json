@@ -1,0 +1,35 @@
+{
+  "title": "03 Get tenant",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/api/platform/admin/v1/tenants/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "tenantType": "organization",
+      "name": "RC4 Release Verification",
+      "description": "RC4 Release Verification issuing and verification tenant",
+      "slug": "rc4customer",
+      "parentTenantId": null,
+      "status": "ACTIVE",
+      "system": false,
+      "ownerPartyId": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "createdById": "00000000-0000-4000-8000-000000000000",
+      "updatedAt": "2026-01-01T00:00:00Z",
+      "updatedById": "00000000-0000-4000-8000-000000000000",
+      "deletedAt": null,
+      "deletedById": null
+    }
+  }
+}

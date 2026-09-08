@@ -1,0 +1,27 @@
+{
+  "title": "17d Read the LoTE source",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/lote-sources/customer-lote",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "sourceId": "customer-lote",
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "profile": "PUB_EAA_PROVIDER",
+      "enabled": true,
+      "managedBy": "00000000-0000-4000-8000-000000000000",
+      "managedAt": "2026-01-01T00:00:00Z",
+      "etag": "\"remote-lote-source-1-true-0\""
+    }
+  }
+}

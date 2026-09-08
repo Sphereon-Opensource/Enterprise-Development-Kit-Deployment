@@ -1,0 +1,60 @@
+{
+  "title": "05 Exchange the Membership pre-authorized code",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/as/rc4customer/token",
+    "headers": {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Accept": "*/*"
+    },
+    "body": "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Apre-authorized_code&pre-authorized_code=%3Credacted%3E"
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "access_token": "eyJ0eXAiOiJhdCtqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1hcy1yYzRjdXN0b21lciJ9.eyJpc3MiOiJodHRwczovL3JjNGN1c3RvbWVyLmV4YW1wbGUuY29tL2FzL3JjNGN1c3RvbWVyIiwic3ViIjoiIiwiY2xpZW50X2lkIjoiIiwiaWF0IjoxNzY3MjI1NjAwLCJleHAiOjE3OTg3NjE2MDAsImp0aSI6IjxqdGk-IiwiYXpwIjoiIiwiYXVkIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9vaWQ0dmNpL3JjNGN1c3RvbWVyIiwiYXV0aG9yaXphdGlvbl9kZXRhaWxzIjpbeyJ0eXBlIjoib3BlbmlkX2NyZWRlbnRpYWwiLCJjcmVkZW50aWFsX2NvbmZpZ3VyYXRpb25faWQiOiJNZW1iZXJzaGlwIiwiY3JlZGVudGlhbF9pZGVudGlmaWVycyI6WyJ1cm46dmR4Om9pZDR2Y2k6Y3JlZGVudGlhbDowMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDA6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIl19XSwidGVuYW50X2lkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIn0.SIGNATURE-REDACTED",
+      "access_token_decoded": {
+        "header": {
+          "typ": "at+jwt",
+          "alg": "ES256",
+          "kid": "oauth2-as-rc4customer"
+        },
+        "payload": {
+          "iss": "https://rc4customer.example.com/as/rc4customer",
+          "sub": "",
+          "client_id": "",
+          "iat": 1767225600,
+          "exp": 1798761600,
+          "jti": "<jti>",
+          "azp": "",
+          "aud": "https://rc4customer.example.com/oid4vci/rc4customer",
+          "authorization_details": [
+            {
+              "type": "openid_credential",
+              "credential_configuration_id": "Membership",
+              "credential_identifiers": [
+                "urn:vdx:oid4vci:credential:00000000-0000-4000-8000-000000000000:00000000-0000-4000-8000-000000000000"
+              ]
+            }
+          ],
+          "tenant_id": "00000000-0000-4000-8000-000000000000"
+        }
+      },
+      "token_type": "Bearer",
+      "expires_in": 3600,
+      "authorization_details": [
+        {
+          "type": "openid_credential",
+          "credential_configuration_id": "Membership",
+          "credential_identifiers": [
+            "urn:vdx:oid4vci:credential:00000000-0000-4000-8000-000000000000:00000000-0000-4000-8000-000000000000"
+          ]
+        }
+      ]
+    }
+  }
+}

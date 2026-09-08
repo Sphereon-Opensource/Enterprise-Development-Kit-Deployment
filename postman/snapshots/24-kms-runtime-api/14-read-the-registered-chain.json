@@ -1,0 +1,23 @@
+{
+  "title": "14 Read the registered chain",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/kms/v1/certificate-chains/customer-tenant-signing-chain?providerId=default",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "certificates": [
+        "<certificate>"
+      ]
+    }
+  }
+}

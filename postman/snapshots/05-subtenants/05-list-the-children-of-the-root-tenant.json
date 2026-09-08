@@ -1,0 +1,48 @@
+{
+  "title": "05 List the children of the root tenant",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/api/platform/admin/v1/tenants/00000000-0000-4000-8000-000000000000/children?page=0&size=50",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "data": [
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "tenantType": "organization",
+          "name": "RC4 Release Verification EU",
+          "description": "RC4 Release Verification EU subtenant",
+          "slug": "rc4customer-eu",
+          "parentTenantId": "00000000-0000-4000-8000-000000000000",
+          "status": "ACTIVE",
+          "system": false,
+          "ownerPartyId": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "createdById": "00000000-0000-4000-8000-000000000000",
+          "updatedAt": "2026-01-01T00:00:00Z",
+          "updatedById": "00000000-0000-4000-8000-000000000000",
+          "deletedAt": null,
+          "deletedById": null
+        }
+      ],
+      "pagination": {
+        "limit": 50,
+        "offset": 0,
+        "page": 0,
+        "size": 50,
+        "total": 1,
+        "totalPages": 1,
+        "hasMore": false
+      }
+    }
+  }
+}

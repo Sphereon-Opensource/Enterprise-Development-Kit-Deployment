@@ -1,0 +1,45 @@
+{
+  "title": "15 Configure the VICAL source",
+  "request": {
+    "method": "PUT",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors/00000000-0000-4000-8000-000000000000/mdoc-vical",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "url": "https://vical.example.com/vical.cbor",
+      "signerAnchorIds": [
+        "00000000-0000-4000-8000-000000000000"
+      ],
+      "issuerAnchorIds": [],
+      "requiredCertificateProfiles": [
+        "iso18013-5-iaca"
+      ],
+      "enabled": true
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "anchorId": "00000000-0000-4000-8000-000000000000",
+      "source": {
+        "url": "https://vical.example.com/vical.cbor",
+        "signerAnchorIds": [
+          "00000000-0000-4000-8000-000000000000"
+        ],
+        "issuerAnchorIds": [],
+        "requiredCertificateProfiles": [
+          "iso18013-5-iaca"
+        ],
+        "enabled": true
+      }
+    }
+  }
+}

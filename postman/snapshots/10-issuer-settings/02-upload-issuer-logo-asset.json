@@ -1,0 +1,32 @@
+{
+  "title": "02 Upload issuer logo asset",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/credentials/00000000-0000-4000-8000-000000000000/assets/en/LOGO",
+    "headers": {
+      "Content-Type": "image/png",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "uri": "/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+      "integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
+      "altText": null,
+      "contentType": "image/png",
+      "localBlob": {
+        "storeId": null,
+        "path": "vc-designs/00000000-0000-4000-8000-000000000000/assets/by-hash/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863",
+        "tenantId": "00000000-0000-4000-8000-000000000000",
+        "contentType": null,
+        "metadata": {}
+      }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "title": "16 Register public hosted client",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/clients",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "clientId": "walkthrough-public-client",
+      "clientName": "RC4 Release Verification public wallet",
+      "clientType": "public",
+      "enabled": true,
+      "grantTypes": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "responseTypes": [
+        "code"
+      ],
+      "redirectUris": [
+        "https://rc4customer.example.com/wallet/oauth/callback"
+      ],
+      "allowedScopes": [
+        "openid",
+        "profile"
+      ],
+      "tokenEndpointAuthMethod": "none",
+      "requirePkce": true
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "clientId": "walkthrough-public-client",
+      "clientName": "RC4 Release Verification public wallet",
+      "clientType": "public",
+      "enabled": true,
+      "grantTypes": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "responseTypes": [
+        "code"
+      ],
+      "redirectUris": [
+        "https://rc4customer.example.com/wallet/oauth/callback"
+      ],
+      "allowedScopes": [
+        "openid",
+        "profile"
+      ],
+      "allowedAccessTokenAudiences": [],
+      "tokenEndpointAuthMethod": "none",
+      "requirePkce": true,
+      "postLogoutRedirectUris": [],
+      "requestUris": []
+    }
+  }
+}

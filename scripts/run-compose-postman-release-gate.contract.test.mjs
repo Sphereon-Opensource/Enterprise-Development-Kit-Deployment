@@ -55,6 +55,7 @@ const helmValuesPath = join(customerRoot, 'helm', 'edk-enterprise', 'values.yaml
 const e2eHelmValuesPath = join(repoRoot, 'deploy', 'edk', 'e2e', 'helm', 'values.yaml')
 
 const wrapper = readFileSync(wrapperPath, 'utf8')
+assert.ok(wrapper.includes("$snapshotDir = Join-Path $customerRoot 'postman\\snapshots'"), 'customer snapshot updates must not remove internal-overlay snapshots')
 const setup = readFileSync(setupPath, 'utf8')
 const compose = readFileSync(composePath, 'utf8')
 const secretAuthorityGenerator = readFileSync(secretAuthorityGeneratorPath, 'utf8')
@@ -66,6 +67,14 @@ const collection = JSON.parse(readFileSync(collectionPath, 'utf8'))
 const powershell = process.platform === 'win32'
   ? join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
   : 'pwsh'
+
+const countFunction = wrapper.match(/function Count-Requests\([\s\S]*?\n}\r?\n/)[0]
+const countProbe = spawnSync(powershell, ['-NoProfile', '-Command', `${countFunction}
+$collection = Get-Content -LiteralPath '${collectionPath.replaceAll("'", "''")}' -Raw | ConvertFrom-Json
+@{ inventory = (Count-Requests @($collection.item)); enabled = (Count-Requests @($collection.item) -EnabledOnly) } | ConvertTo-Json -Compress
+`], {encoding: 'utf8'})
+assert.equal(countProbe.status, 0, countProbe.stderr)
+assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 219, enabled: 199})
 
 function requestCount(items) {
   return (items ?? []).reduce(
@@ -99,7 +108,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 214, 'shipped customer collection must contain the current 214-request customer reference')
+assert.equal(requestCount(collection.item), 219, 'shipped customer collection must contain the current 219-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -375,7 +384,7 @@ for (const sourceInvariant of [
   'verify-enterprise-image-set.mjs',
   'compose-postman-release-gate-support.mjs',
   "'--pull', 'never'",
-  "'E2E finished:\\s+' + [regex]::Escape($requestCount) + ' requests captured,\\s+exit code 0\\.'",
+  "'E2E finished:\\s+' + [regex]::Escape($enabledRequestCount) + ' requests captured,\\s+exit code 0\\.'",
   "'pg_dump --schema-only --no-owner --no-privileges",
   "'scan-producer'",
   'finalize-evidence',
@@ -403,7 +412,7 @@ for (const sourceInvariant of [
   "'-BaselineInstall requires -KeepUp; a torn-down baseline cannot be upgraded.'",
   "'-BaselineInstall cannot be combined with -UpdateSnapshots.'",
   "--evidence-kind $(if ($BaselineInstall) { 'baseline' } else { 'release' })",
-  '--request-count $requestCount',
+  '--request-count $enabledRequestCount',
   // Preflight: the five vendored openapi checkouts must agree before the stack comes up.
   'verify-openapi-checkouts.mjs',
   '& $nodeCommand $openapiCheckoutVerifier --allow-missing',
@@ -899,7 +908,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 214)
+  assert.equal(plan.requestCount, 219)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -938,7 +947,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 214)
+  assert.equal(monolithPlan.requestCount, 219)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))

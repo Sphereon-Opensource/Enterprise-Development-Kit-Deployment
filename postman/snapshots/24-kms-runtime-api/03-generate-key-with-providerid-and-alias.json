@@ -1,0 +1,58 @@
+{
+  "title": "03 Generate key with providerId and alias",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/kms/v1/providers/default/keys",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "alias": "customer-runtime-signing-key",
+      "use": "sig",
+      "alg": "ECDSA_SHA256",
+      "keyOperations": [
+        "sign"
+      ]
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "keyPair": {
+        "providerId": "default",
+        "alias": "customer-runtime-signing-key",
+        "cose": {
+          "publicCoseKey": {
+            "kty": "2",
+            "kid": "<key-id>",
+            "crv": 1,
+            "x": "<public-key-material>",
+            "y": "<public-key-material>",
+            "x5chain": [
+              "<certificate>"
+            ]
+          }
+        },
+        "jose": {
+          "publicJwk": {
+            "kty": "EC",
+            "kid": "<key-id>",
+            "crv": "P-256",
+            "x": "<public-key-material>",
+            "y": "<public-key-material>",
+            "x5c": [
+              "<certificate>"
+            ]
+          }
+        },
+        "kid": "<key-id>"
+      }
+    }
+  }
+}

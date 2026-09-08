@@ -1,0 +1,32 @@
+{
+  "title": "01 List KMS offerings",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/offerings",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "offerings": [
+        {
+          "kind": "SOFTWARE",
+          "label": "Software KMS",
+          "available": true,
+          "defaultSelected": true,
+          "health": "UNKNOWN",
+          "supportedCredentialOwnerships": [
+            "PRODUCT_MANAGED"
+          ]
+        }
+      ]
+    }
+  }
+}

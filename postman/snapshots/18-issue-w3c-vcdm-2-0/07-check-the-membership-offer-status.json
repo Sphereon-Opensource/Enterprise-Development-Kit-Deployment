@@ -1,0 +1,35 @@
+{
+  "title": "07 Check the Membership offer status",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/credential/offers/e2e-membership-001",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "correlation_id": "e2e-membership-001",
+      "status": "credential_issued",
+      "last_updated": 1767225600000,
+      "session_id": "00000000-0000-4000-8000-000000000000",
+      "offer_id": "00000000-0000-4000-8000-000000000000",
+      "issuance_session_id": "00000000-0000-4000-8000-000000000000",
+      "created_at": 1767225600000,
+      "expires_at": 1798761600000,
+      "error": null,
+      "issuance_data": {
+        "credential_configuration_ids": [
+          "Membership"
+        ],
+        "credential_identifiers": null
+      }
+    }
+  }
+}

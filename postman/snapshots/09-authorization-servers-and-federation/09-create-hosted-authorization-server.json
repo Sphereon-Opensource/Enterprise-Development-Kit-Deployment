@@ -1,0 +1,65 @@
+{
+  "title": "09 Create hosted authorization server",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "slug": "walkthrough-as",
+      "displayName": "RC4 Release Verification Hosted Authorization Server",
+      "issuer": "https://rc4customer.example.com/as/walkthrough-as",
+      "deployment": "HOSTED",
+      "authenticationMode": "HYBRID",
+      "purposes": [
+        "GENERAL",
+        "CREDENTIAL_ISSUANCE",
+        "WALLET_LOGIN"
+      ],
+      "allowedGrantTypes": [
+        "authorization_code",
+        "refresh_token"
+      ]
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "tenantId": "00000000-0000-4000-8000-000000000000",
+      "slug": "walkthrough-as",
+      "displayName": "RC4 Release Verification Hosted Authorization Server",
+      "issuer": "https://rc4customer.example.com/as/walkthrough-as",
+      "lifecycle": "ACTIVE",
+      "deployment": "HOSTED",
+      "authenticationMode": "HYBRID",
+      "purposes": [
+        "GENERAL",
+        "CREDENTIAL_ISSUANCE",
+        "WALLET_LOGIN"
+      ],
+      "usages": [],
+      "allowedGrantTypes": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "capabilities": [
+        "OAUTH2",
+        "OIDC"
+      ],
+      "expectedCapabilities": [],
+      "system": false,
+      "defaultForPurposes": [],
+      "revision": 1,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

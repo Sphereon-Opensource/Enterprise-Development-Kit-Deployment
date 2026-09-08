@@ -1,0 +1,59 @@
+{
+  "title": "07a Resolve tenant hosted authorization server",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers?page=0&size=100",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "items": [
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "tenantId": "00000000-0000-4000-8000-000000000000",
+          "slug": "rc4customer",
+          "displayName": "Default authorization server",
+          "issuer": "https://rc4customer.example.com/as/rc4customer",
+          "lifecycle": "ACTIVE",
+          "deployment": "HOSTED",
+          "authenticationMode": "LOCAL_ONLY",
+          "purposes": [
+            "GENERAL",
+            "CREDENTIAL_ISSUANCE",
+            "WALLET_LOGIN"
+          ],
+          "usages": [],
+          "allowedGrantTypes": [
+            "authorization_code",
+            "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+            "client_credentials",
+            "refresh_token"
+          ],
+          "capabilities": [
+            "OAUTH2",
+            "OIDC"
+          ],
+          "expectedCapabilities": [],
+          "system": true,
+          "defaultForPurposes": [
+            "GENERAL"
+          ],
+          "revision": 1,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "total": 1,
+      "page": 0,
+      "size": 100
+    }
+  }
+}

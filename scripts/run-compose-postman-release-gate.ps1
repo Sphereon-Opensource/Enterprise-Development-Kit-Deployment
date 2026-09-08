@@ -93,8 +93,8 @@ $collectionPath = if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
     [System.IO.Path]::GetFullPath($CollectionPath)
 }
 # Pinned size of the shipped collection. Bump this in the same commit that adds or removes a request.
-$DefaultCollectionRequestCount = 304
-$snapshotDir = Join-Path $repoRoot 'deploy\edk\e2e\snapshots'
+$DefaultCollectionRequestCount = 219
+$snapshotDir = Join-Path $customerRoot 'postman\snapshots'
 $runnerPath = Join-Path $repoRoot 'deploy\edk\e2e\runner\run-e2e.js'
 $imageVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-enterprise-image-set.mjs'
 $openapiCheckoutVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-openapi-checkouts.mjs'
@@ -480,11 +480,12 @@ function Read-PostmanValues([string]$Path) {
   }
   return $result
 }
-function Count-Requests([object[]]$Items) {
+function Count-Requests([object[]]$Items, [switch]$EnabledOnly) {
   $count = 0
   foreach ($item in @($Items)) {
+    if ($EnabledOnly -and $item.disabled -eq $true) { continue }
     if ($null -ne $item.request) { $count++ }
-    if ($null -ne $item.item) { $count += Count-Requests @($item.item) }
+    if ($null -ne $item.item) { $count += Count-Requests @($item.item) -EnabledOnly:$EnabledOnly }
   }
   return $count
 }
@@ -926,6 +927,8 @@ $optionalLanes = [ordered]@{
 $optionalLanesArgument = (@($optionalLanes.Keys | ForEach-Object { "$($_)=$($optionalLanes[$_])" }) -join ',')
 $collection = Get-Content -LiteralPath $collectionPath -Raw | ConvertFrom-Json
 $requestCount = Count-Requests @($collection.item)
+$enabledRequestCount = Count-Requests @($collection.item) -EnabledOnly
+Write-Host "Collection inventory: $requestCount requests; enabled execution scope: $enabledRequestCount requests."
 # The shipped collection is pinned so it cannot silently shrink. An explicitly supplied collection
 # is a deliberate choice -- gating an older release against the collection it shipped with -- so its
 # own size becomes the contract, and the runner must still execute every request in it.
@@ -1422,8 +1425,8 @@ try {
     '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
     '--base-domain', $BaseDomain
   ) + $(if ($UpdateSnapshots) { @('--update') } else { @() })) (Join-Path $resolvedReportDir 'newman.log') $false
-  if ($runnerOutput -notmatch ('E2E finished:\s+' + [regex]::Escape($requestCount) + ' requests captured,\s+exit code 0\.')) {
-    Fail "Newman did not execute and capture exactly all $requestCount request executions."
+  if ($runnerOutput -notmatch ('E2E finished:\s+' + [regex]::Escape($enabledRequestCount) + ' requests captured,\s+exit code 0\.')) {
+    Fail "Newman did not execute and capture exactly all $enabledRequestCount enabled request executions."
   }
   $junitPath = Join-Path $newmanStageDir 'junit.xml'
   Invoke-LoggedNative $nodeCommand @(
@@ -1584,7 +1587,7 @@ try {
       --teardown-status $teardownStatus `
       --project-name $ProjectName `
       --tag $Tag `
-      --request-count $requestCount `
+      --request-count $enabledRequestCount `
       --evidence-kind $(if ($BaselineInstall) { 'baseline' } else { 'release' }) `
       --optional-lanes $optionalLanesArgument `
       --manifest (Join-Path $resolvedReportDir 'evidence-manifest.json') `

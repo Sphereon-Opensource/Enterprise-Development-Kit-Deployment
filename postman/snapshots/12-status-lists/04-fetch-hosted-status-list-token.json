@@ -1,0 +1,37 @@
+{
+  "title": "04 Fetch hosted status list token",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/public/statuslists/eupid-revocation",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/statuslist+jwt"
+    },
+    "body": {
+      "_raw": "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCIsImFsZyI6IkVTMjU2Iiwia2lkIjoiZGlkOndlYjpyYzRjdXN0b21lci5leGFtcGxlLmNvbSNpc3N1ZXItYXNzZXJ0aW9uLXJjNGN1c3RvbWVyIn0.eyJpc3MiOiJkaWQ6d2ViOnJjNGN1c3RvbWVyLmV4YW1wbGUuY29tIiwic3ViIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9wdWJsaWMvc3RhdHVzbGlzdHMvZXVwaWQtcmV2b2NhdGlvbiIsImlhdCI6MTc2NzIyNTYwMCwidHRsIjozMDAsInN0YXR1c19saXN0Ijp7ImJpdHMiOjEsImxzdCI6ImVKenR3VEVCQUFBQXdxRDFUMjBNSDZBQUFBQUFBQUFBQUFBQUFBQUFBQUNBdHdGQUFBQUIifX0.SIGNATURE-REDACTED",
+      "_decoded": {
+        "header": {
+          "typ": "statuslist+jwt",
+          "alg": "ES256",
+          "kid": "did:web:rc4customer.example.com#issuer-assertion-rc4customer"
+        },
+        "payload": {
+          "iss": "did:web:rc4customer.example.com",
+          "sub": "https://rc4customer.example.com/public/statuslists/eupid-revocation",
+          "iat": 1767225600,
+          "ttl": 300,
+          "status_list": {
+            "bits": 1,
+            "lst": "eJztwTEBAAAAwqD1T20MH6AAAAAAAAAAAAAAAAAAAACAtwFAAAAB"
+          }
+        }
+      }
+    }
+  }
+}

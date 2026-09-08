@@ -1,0 +1,41 @@
+{
+  "title": "47a Refresh issuer authorization server bindings",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/authorization-server-bindings",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "items": [
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "issuerId": "00000000-0000-4000-8000-000000000000",
+          "authorizationServerId": "00000000-0000-4000-8000-000000000000",
+          "enabled": true,
+          "default": false,
+          "revision": 1
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000000",
+          "issuerId": "00000000-0000-4000-8000-000000000000",
+          "authorizationServerId": "00000000-0000-4000-8000-000000000000",
+          "enabled": true,
+          "default": true,
+          "allowedGrantTypes": [
+            "authorization_code"
+          ],
+          "revision": 0
+        }
+      ]
+    }
+  }
+}

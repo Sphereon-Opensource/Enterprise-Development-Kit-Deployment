@@ -1,0 +1,47 @@
+{
+  "title": "04b Fetch hosted X.509 status list token",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/public/statuslists/x509-revocation",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/statuslist+jwt"
+    },
+    "body": {
+      "_raw": "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCIsImFsZyI6IkVTMjU2IiwiandrIjp7ImNydiI6IlAtMjU2Iiwia3R5IjoiRUMiLCJ4IjoiPHB1YmxpYy1rZXktbWF0ZXJpYWw-IiwieDVjIjpbIjxjZXJ0aWZpY2F0ZT4iXSwieSI6IjxwdWJsaWMta2V5LW1hdGVyaWFsPiJ9LCJ4NWMiOlsiPGNlcnRpZmljYXRlPiJdfQ.eyJpc3MiOiJodHRwczovL3JjNGN1c3RvbWVyLmV4YW1wbGUuY29tIiwic3ViIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9wdWJsaWMvc3RhdHVzbGlzdHMveDUwOS1yZXZvY2F0aW9uIiwiaWF0IjoxNzY3MjI1NjAwLCJzdGF0dXNfbGlzdCI6eyJiaXRzIjoxLCJsc3QiOiJlSnp0d1RFQkFBQUF3cUQxVDIwTUg2QUFBQUFBQUFBQUFBQUFBQUFBQUFDQXR3RkFBQUFCIn19.SIGNATURE-REDACTED",
+      "_decoded": {
+        "header": {
+          "typ": "statuslist+jwt",
+          "alg": "ES256",
+          "jwk": {
+            "crv": "P-256",
+            "kty": "EC",
+            "x": "<public-key-material>",
+            "x5c": [
+              "<certificate>"
+            ],
+            "y": "<public-key-material>"
+          },
+          "x5c": [
+            "<certificate>"
+          ]
+        },
+        "payload": {
+          "iss": "https://rc4customer.example.com",
+          "sub": "https://rc4customer.example.com/public/statuslists/x509-revocation",
+          "iat": 1767225600,
+          "status_list": {
+            "bits": 1,
+            "lst": "eJztwTEBAAAAwqD1T20MH6AAAAAAAAAAAAAAAAAAAACAtwFAAAAB"
+          }
+        }
+      }
+    }
+  }
+}

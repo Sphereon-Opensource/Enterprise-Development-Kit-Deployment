@@ -1,0 +1,44 @@
+{
+  "title": "11 Register the key certificate chain",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/kms/v1/certificates/register",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "providerId": "default",
+      "alias": "customer-tenant-signing-chain",
+      "kind": "key_certificate_chain",
+      "source": "stored_public_material",
+      "linkedKeyAlias": "customer-tenant-signing-key",
+      "certificateChain": [
+        "<certificate>"
+      ]
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "alias": "customer-tenant-signing-chain",
+      "providerId": "default",
+      "kind": "key_certificate_chain",
+      "source": "stored_public_material",
+      "controlMode": "externally_managed",
+      "origin": "external",
+      "linkedKeyReferenceId": "00000000-0000-4000-8000-000000000000",
+      "certificateChain": [
+        "<certificate>"
+      ],
+      "certificateFingerprint": "80X73AfjO60jh2HxNkWnHUFlTwfXoOfxVAePvaRxDGQ=",
+      "publicKeyFingerprint": "uVndr52z65bnUoGXUpQnKMfaRTlAPBOXDE03afJDc78="
+    }
+  }
+}

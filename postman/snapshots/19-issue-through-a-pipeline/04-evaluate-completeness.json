@@ -1,0 +1,27 @@
+{
+  "title": "04 Evaluate completeness",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/completeness",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "verdicts": [
+        {
+          "bindingId": "EuPid",
+          "complete": true,
+          "awaitingApproval": true
+        }
+      ]
+    }
+  }
+}

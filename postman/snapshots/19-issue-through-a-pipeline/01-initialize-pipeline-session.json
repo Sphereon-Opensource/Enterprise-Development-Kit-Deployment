@@ -1,0 +1,41 @@
+{
+  "title": "01 Initialize pipeline session",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/sessions",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "pipeline_configuration": {
+        "pipelineId": "eupid-registration",
+        "claimsBindings": [
+          {
+            "id": "EuPid",
+            "semanticAttributeSetRef": {
+              "bundleId": "credential-config:EuPid"
+            },
+            "deferralPolicy": {
+              "approvalRequired": true
+            }
+          }
+        ]
+      },
+      "correlation_id": "e2e-pipeline-001",
+      "ttl_seconds": 600
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "sessionId": "00000000-0000-4000-8000-000000000000",
+      "correlationId": "e2e-pipeline-001"
+    }
+  }
+}

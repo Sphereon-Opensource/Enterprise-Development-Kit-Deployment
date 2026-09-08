@@ -1,0 +1,16 @@
+{
+  "title": "03 Cancel verification session",
+  "request": {
+    "method": "DELETE",
+    "url": "https://rc4customer.example.com/oid4vp/backend/auth/requests/e2e-verify-001",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "No Content",
+    "code": 204,
+    "headers": {}
+  }
+}

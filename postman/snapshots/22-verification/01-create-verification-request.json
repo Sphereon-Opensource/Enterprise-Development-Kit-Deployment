@@ -1,0 +1,32 @@
+{
+  "title": "01 Create verification request",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/oid4vp/backend/auth/requests",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "query_id": "eupid-and-mdl",
+      "verifier_id": "00000000-0000-4000-8000-000000000000",
+      "client_id": "decentralized_identifier:did:web:rc4customer.example.com",
+      "correlation_id": "e2e-verify-001"
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "session_id": "00000000-0000-4000-8000-000000000000",
+      "correlation_id": "e2e-verify-001",
+      "query_id": "eupid-and-mdl",
+      "request_uri": "openid4vp://?client_id=decentralized_identifier%3Adid%3Aweb%3Arc4customer.example.com&request_uri=https%3A%2F%2Frc4customer.example.com%2Foid4vp%2Frc4customer%2Foid4vp%2Frequest-uri%2Fe2e-verify-001",
+      "status_uri": "https://rc4customer.example.com/oid4vp/rc4customer/backend/auth/requests/e2e-verify-001"
+    }
+  }
+}

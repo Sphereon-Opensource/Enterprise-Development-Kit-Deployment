@@ -1,0 +1,30 @@
+{
+  "title": "09 Get issuer testing-console config",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuer/instances/00000000-0000-4000-8000-000000000000/testing-console",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "enabled": {
+        "value": true,
+        "source": "tenant"
+      },
+      "exposureMode": {
+        "value": "public",
+        "source": "tenant"
+      },
+      "publicBaseUrl": "https://rc4customer.example.com/oid4vci/rc4customer",
+      "displayUrl": "https://rc4customer.example.com/testing-console/issuer/00000000-0000-4000-8000-000000000000?publicBaseUrl=https%3A%2F%2Frc4customer.example.com%2Foid4vci%2Frc4customer"
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "title": "02 Create Mdl query",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/dcql/v1/queries",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "queryId": "walkthrough-mdl-mdoc",
+      "name": "Driving licence check",
+      "description": "Requests the holder name from the mobile driving licence",
+      "enabled": true,
+      "dcqlQuery": {
+        "credentials": [
+          {
+            "id": "mdl",
+            "format": "mso_mdoc",
+            "meta": {
+              "doctype_value": "org.iso.18013.5.1.mDL"
+            },
+            "claims": [
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "family_name"
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "given_name"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "queryId": "walkthrough-mdl-mdoc",
+      "name": "Driving licence check",
+      "description": "Requests the holder name from the mobile driving licence",
+      "dcqlQuery": {
+        "credentials": [
+          {
+            "id": "mdl",
+            "format": "mso_mdoc",
+            "meta": {
+              "doctype_value": "org.iso.18013.5.1.mDL"
+            },
+            "claims": [
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "family_name"
+                ]
+              },
+              {
+                "path": [
+                  "org.iso.18013.5.1",
+                  "given_name"
+                ]
+              }
+            ],
+            "require_cryptographic_holder_binding": true,
+            "multiple": false
+          }
+        ]
+      },
+      "enabled": true,
+      "createdAt": 1767225600000,
+      "updatedAt": 1767225600000,
+      "currentVersion": 1
+    }
+  }
+}

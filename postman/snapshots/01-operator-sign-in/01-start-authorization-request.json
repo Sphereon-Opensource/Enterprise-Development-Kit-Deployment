@@ -1,0 +1,17 @@
+{
+  "title": "01 Start authorization request",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/authorize?response_type=code&client_id=platform-operator-cli&redirect_uri=https://platform.example.com/admin-console/callback&scope=openid&state=qa-operator-state-0001&prompt=login&code_challenge=<code-challenge>&code_challenge_method=S256",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "Found",
+    "code": 302,
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

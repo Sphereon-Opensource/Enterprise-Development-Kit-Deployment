@@ -1,0 +1,46 @@
+{
+  "title": "34 Enable validated federation binding",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/federation-bindings/00000000-0000-4000-8000-000000000000/enable",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "hostedAuthorizationServerId": "00000000-0000-4000-8000-000000000000",
+      "externalAuthorizationServerId": "00000000-0000-4000-8000-000000000000",
+      "order": 0,
+      "enabled": true,
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ],
+      "claimsMapping": {
+        "email": "email",
+        "subject": "sub",
+        "displayName": "name"
+      },
+      "clientAuthentication": {
+        "method": "client_secret_basic",
+        "clientId": "walkthrough-federation-client",
+        "secretReference": {
+          "resourceHandle": "sec_MFBLIEY9_mkIhWvTjO0qTcblnWurwnRz",
+          "purpose": "OAUTH_CLIENT_SECRET"
+        }
+      },
+      "status": "VALID",
+      "lastValidatedAt": "2026-01-01T00:00:00Z",
+      "revision": 2
+    }
+  }
+}

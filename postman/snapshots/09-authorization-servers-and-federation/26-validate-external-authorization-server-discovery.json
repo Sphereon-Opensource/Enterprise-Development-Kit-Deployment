@@ -1,0 +1,61 @@
+{
+  "title": "26 Validate external authorization server discovery",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/validate",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "valid": true,
+      "checkedAt": "2026-01-01T00:00:00Z",
+      "snapshot": {
+        "capabilities": [
+          "OAUTH2",
+          "OIDC"
+        ],
+        "grantTypes": [
+          "authorization_code",
+          "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+          "client_credentials",
+          "refresh_token"
+        ],
+        "tokenEndpointAuthMethodsSupported": [
+          "client_secret_basic",
+          "client_secret_post"
+        ],
+        "issuer": "https://platform.example.com",
+        "authorizationEndpoint": "https://platform.example.com/authorize",
+        "tokenEndpoint": "https://platform.example.com/token",
+        "userinfoEndpoint": "https://platform.example.com/userinfo",
+        "pushedAuthorizationRequestEndpoint": "https://platform.example.com/par",
+        "jwksUri": "https://platform.example.com/.well-known/jwks.json",
+        "scopesSupported": [
+          "openid",
+          "profile",
+          "email",
+          "developer-console.read"
+        ],
+        "idTokenSigningAlgorithms": [
+          "ES256"
+        ],
+        "sourceUrls": [
+          "https://platform.example.com/.well-known/oauth-authorization-server",
+          "https://platform.example.com/.well-known/openid-configuration"
+        ],
+        "digest": "cbfc952f51f68d5b3d8c7923825c4a03838bac7e00ad979b193f807c51facf40",
+        "validatedAt": "2026-01-01T00:00:00Z",
+        "validUntil": "2027-01-01T00:00:00Z",
+        "freshness": "CURRENT"
+      }
+    }
+  }
+}

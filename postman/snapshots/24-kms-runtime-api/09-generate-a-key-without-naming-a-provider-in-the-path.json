@@ -1,0 +1,59 @@
+{
+  "title": "09 Generate a key without naming a provider in the path",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/kms/v1/keys",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "alias": "customer-tenant-signing-key",
+      "use": "sig",
+      "alg": "ECDSA_SHA256",
+      "keyOperations": [
+        "sign"
+      ],
+      "providerId": "default"
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "keyPair": {
+        "providerId": "default",
+        "alias": "customer-tenant-signing-key",
+        "cose": {
+          "publicCoseKey": {
+            "kty": "2",
+            "kid": "<key-id>",
+            "crv": 1,
+            "x": "<public-key-material>",
+            "y": "<public-key-material>",
+            "x5chain": [
+              "<certificate>"
+            ]
+          }
+        },
+        "jose": {
+          "publicJwk": {
+            "kty": "EC",
+            "kid": "<key-id>",
+            "crv": "P-256",
+            "x": "<public-key-material>",
+            "y": "<public-key-material>",
+            "x5c": [
+              "<certificate>"
+            ]
+          }
+        },
+        "kid": "<key-id>"
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "title": "05 Read the verifier eligibility grant",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/eligibility/OID4VP_VERIFIER/CREDENTIAL_ISSUER_TRUST",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "items": [
+        {
+          "grantId": "trust-eligibility-issuer-00000000-0000-4000-8000-000000000000-verifier",
+          "subjectConsumerKind": "OID4VP_VERIFIER",
+          "usage": "CREDENTIAL_ISSUER_TRUST",
+          "eligibleDomainIds": [
+            "trust-domain-issuer-00000000-0000-4000-8000-000000000000"
+          ],
+          "version": 1
+        }
+      ]
+    }
+  }
+}

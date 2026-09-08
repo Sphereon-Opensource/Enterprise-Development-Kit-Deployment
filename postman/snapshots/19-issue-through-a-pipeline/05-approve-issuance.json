@@ -1,0 +1,27 @@
+{
+  "title": "05 Approve issuance",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/approve",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "decision": "APPROVE",
+      "reason": "Registration office data verified"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "correlationId": "e2e-pipeline-001",
+      "status": "READY"
+    }
+  }
+}

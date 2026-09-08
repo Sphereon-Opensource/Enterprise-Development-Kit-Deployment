@@ -1,0 +1,85 @@
+{
+  "title": "02 Get the bitstring status list",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "correlationId": "status-bitstring",
+      "spec": "bitstring_status_list",
+      "purposes": [
+        "revocation",
+        "suspension"
+      ],
+      "proofFormat": "vc+jwt",
+      "hostingMode": "hosted",
+      "bitsPerStatus": 2,
+      "length": 131072,
+      "issuer": "did:web:rc4customer.example.com",
+      "statusListUri": "https://rc4customer.example.com/public/statuslists/status-bitstring",
+      "signedToken": "eyJ0eXAiOiJ2Yytqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6cmM0Y3VzdG9tZXIuZXhhbXBsZS5jb20jaXNzdWVyLWFzc2VydGlvbi1yYzRjdXN0b21lciJ9.eyJAY29udGV4dCI6WyJodHRwczovL3d3dy53My5vcmcvbnMvY3JlZGVudGlhbHMvdjIiLCJodHRwczovL3d3dy53My5vcmcvbnMvY3JlZGVudGlhbHMvc3RhdHVzL3YxIl0sImlkIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9wdWJsaWMvc3RhdHVzbGlzdHMvc3RhdHVzLWJpdHN0cmluZyIsInR5cGUiOlsiVmVyaWZpYWJsZUNyZWRlbnRpYWwiLCJCaXRzdHJpbmdTdGF0dXNMaXN0Q3JlZGVudGlhbCJdLCJpc3N1ZXIiOiJkaWQ6d2ViOnJjNGN1c3RvbWVyLmV4YW1wbGUuY29tIiwidmFsaWRGcm9tIjoiMjAyNi0wMS0wMVQwMDowMDowMFoiLCJjcmVkZW50aWFsU3ViamVjdCI6eyJpZCI6Imh0dHBzOi8vcmM0Y3VzdG9tZXIuZXhhbXBsZS5jb20vcHVibGljL3N0YXR1c2xpc3RzL3N0YXR1cy1iaXRzdHJpbmcjbGlzdCIsInR5cGUiOiJCaXRzdHJpbmdTdGF0dXNMaXN0Iiwic3RhdHVzUHVycG9zZSI6InJldm9jYXRpb24iLCJlbmNvZGVkTGlzdCI6InVINHNJQUFBQUFBQUFfLTNCQVFFQUFBQ0FrUDZ2N2dnS0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQmltX0I4QkFJQUFBQSIsInN0YXR1c1NpemUiOjIsInN0YXR1c01lc3NhZ2UiOlt7InN0YXR1cyI6IjB4MCIsIm1lc3NhZ2UiOiJ2YWxpZCJ9LHsic3RhdHVzIjoiMHgxIiwibWVzc2FnZSI6ImludmFsaWQifSx7InN0YXR1cyI6IjB4MiIsIm1lc3NhZ2UiOiJzdXNwZW5kZWQifSx7InN0YXR1cyI6IjB4MyIsIm1lc3NhZ2UiOiJhcHBsaWNhdGlvbl9zcGVjaWZpYyJ9XSwidHRsIjozMDAwMDB9LCJpc3MiOiJ5akJuVi1nLWRmeEx1TXpmbWRyRmgyOXhkcGxReThNR055aGhWZUczcUhzIn0.SIGNATURE-REDACTED",
+      "signedToken_decoded": {
+        "header": {
+          "typ": "vc+jwt",
+          "alg": "ES256",
+          "kid": "did:web:rc4customer.example.com#issuer-assertion-rc4customer"
+        },
+        "payload": {
+          "@context": [
+            "https://www.w3.org/ns/credentials/v2",
+            "https://www.w3.org/ns/credentials/status/v1"
+          ],
+          "id": "https://rc4customer.example.com/public/statuslists/status-bitstring",
+          "type": [
+            "VerifiableCredential",
+            "BitstringStatusListCredential"
+          ],
+          "issuer": "did:web:rc4customer.example.com",
+          "validFrom": "2026-01-01T00:00:00Z",
+          "credentialSubject": {
+            "id": "https://rc4customer.example.com/public/statuslists/status-bitstring#list",
+            "type": "BitstringStatusList",
+            "statusPurpose": "revocation",
+            "encodedList": "uH4sIAAAAAAAA_-3BAQEAAACAkP6v7ggKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABim_B8BAIAAAA",
+            "statusSize": 2,
+            "statusMessage": [
+              {
+                "status": "0x0",
+                "message": "valid"
+              },
+              {
+                "status": "0x1",
+                "message": "invalid"
+              },
+              {
+                "status": "0x2",
+                "message": "suspended"
+              },
+              {
+                "status": "0x3",
+                "message": "application_specific"
+              }
+            ],
+            "ttl": 300000
+          },
+          "iss": "yjBnV-g-dfxLuMzfmdrFh29xdplQy8MGNyhhVeG3qHs"
+        }
+      },
+      "contentType": "application/vc+jwt",
+      "mdocProfile": null,
+      "aggregationUri": null,
+      "validUntil": null
+    }
+  }
+}

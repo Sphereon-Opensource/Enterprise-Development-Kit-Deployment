@@ -1,0 +1,52 @@
+{
+  "title": "01a Import externally supplied public key",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/kms/v1/keys/import",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "keyInfo": {
+        "key": {
+          "kty": "EC",
+          "crv": "P-256",
+          "x": "<public-key-material>",
+          "y": "<public-key-material>"
+        },
+        "alias": "customer-evaluation-imported-key",
+        "providerId": "default",
+        "signatureAlgorithm": "ECDSA_SHA256",
+        "keyVisibility": "PUBLIC",
+        "keyEncoding": "JOSE",
+        "keyType": "EC"
+      }
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "keyInfo": {
+        "key": {
+          "kty": "EC",
+          "kid": "customer-evaluation-imported-key",
+          "crv": "P-256",
+          "x": "<public-key-material>",
+          "y": "<public-key-material>"
+        },
+        "alias": "customer-evaluation-imported-key",
+        "providerId": "default",
+        "kid": "customer-evaluation-imported-key",
+        "signatureAlgorithm": "ECDSA_SHA256",
+        "keyType": "EC",
+        "keyEncoding": "JOSE"
+      }
+    }
+  }
+}

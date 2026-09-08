@@ -1,0 +1,28 @@
+{
+  "title": "08 Resolve Mdl offer",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/credentials/offers/00000000-0000-4000-8000-000000000000",
+    "headers": {
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "credential_issuer": "https://rc4customer.example.com/oid4vci/rc4customer",
+      "credential_configuration_ids": [
+        "Mdl"
+      ],
+      "grants": {
+        "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
+          "pre-authorized_code": "<code>"
+        }
+      }
+    }
+  }
+}

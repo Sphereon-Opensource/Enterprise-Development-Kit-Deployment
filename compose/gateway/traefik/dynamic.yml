@@ -107,6 +107,12 @@ http:
       service: svc-blob
       priority: 1100
       tls: {}
+    api-connector:
+      rule: "Path(`/api/connector/v1`) || PathPrefix(`/api/connector/v1/`)"
+      entryPoints: ["websecure"]
+      service: svc-blob
+      priority: 1100
+      tls: {}
     public-blob-assets:
       rule: "PathRegexp(`^/public/assets/[^/]+/brand/[^/]+$`)"
       entryPoints: ["websecure"]

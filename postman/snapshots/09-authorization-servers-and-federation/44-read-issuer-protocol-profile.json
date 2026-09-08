@@ -1,0 +1,24 @@
+{
+  "title": "44 Read issuer protocol profile",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/protocol-profile",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "issuerId": "00000000-0000-4000-8000-000000000000",
+      "profile": "OID4VCI_1_0_FINAL",
+      "revision": 0,
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

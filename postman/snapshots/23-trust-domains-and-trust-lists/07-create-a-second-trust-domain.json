@@ -1,0 +1,32 @@
+{
+  "title": "07 Create a second trust domain",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "displayName": "Postman mdoc VICAL domain",
+      "description": "Created by the customer release gate to exercise attachments, eligibility and mdoc VICAL."
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "domainId": "00000000-0000-4000-8000-000000000000",
+      "displayName": "Postman mdoc VICAL domain",
+      "description": "Created by the customer release gate to exercise attachments, eligibility and mdoc VICAL.",
+      "status": "DRAFT",
+      "version": 1,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

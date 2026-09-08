@@ -1,0 +1,31 @@
+{
+  "title": "01 List trust domains",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "items": [
+        {
+          "domainId": "trust-domain-issuer-00000000-0000-4000-8000-000000000000",
+          "displayName": "RC4 Release Verification issuer trust",
+          "description": "Issuer material provisioned for RC4 Release Verification",
+          "status": "ACTIVE",
+          "version": 1,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z"
+        }
+      ]
+    }
+  }
+}

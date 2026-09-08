@@ -1,0 +1,117 @@
+{
+  "title": "02 List keys by providerId",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/kms/v1/providers/default/keys",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "keyInfos": [
+        {
+          "kid": "customer-evaluation-imported-key",
+          "alias": "customer-evaluation-imported-key",
+          "providerId": "default",
+          "origin": "external",
+          "controlMode": "platform_managed",
+          "keyType": "EC",
+          "keyEncoding": "JOSE"
+        },
+        {
+          "kid": "invitation-hmac-kek-00000000-0000-4000-8000-000000000000",
+          "alias": "invitation-hmac-kek-00000000-0000-4000-8000-000000000000",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "OCT"
+        },
+        {
+          "kid": "idfr:enc:00000000-0000-4000-8000-000000000000",
+          "alias": "idfr:enc:00000000-0000-4000-8000-000000000000",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "OCT"
+        },
+        {
+          "kid": "idfr:bi:00000000-0000-4000-8000-000000000000",
+          "signatureAlgorithm": "HMAC_SHA256",
+          "alias": "idfr:bi:00000000-0000-4000-8000-000000000000",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "OCT"
+        },
+        {
+          "kid": "<key-id>",
+          "signatureAlgorithm": "ECDSA_SHA256",
+          "alias": "oid4vp-verifier-signing-rc4customer",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "EC"
+        },
+        {
+          "kid": "issuer-request-decryption-rc4customer",
+          "alias": "issuer-request-decryption-rc4customer",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "OCT"
+        },
+        {
+          "kid": "<key-id>",
+          "signatureAlgorithm": "ECDSA_SHA256",
+          "alias": "issuer-signing-rc4customer",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "EC"
+        },
+        {
+          "kid": "<key-id>",
+          "signatureAlgorithm": "ECDSA_SHA256",
+          "alias": "oauth2-as-rc4customer",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "EC"
+        },
+        {
+          "kid": "<key-id>",
+          "signatureAlgorithm": "ECDSA_SHA256",
+          "alias": "catalog-public-signing-rc4customer",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "EC"
+        },
+        {
+          "kid": "<key-id>",
+          "signatureAlgorithm": "ECDSA_SHA256",
+          "alias": "connector-vault-manifest-rc4customer",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "EC"
+        },
+        {
+          "kid": "connector-vault-content-rc4customer",
+          "alias": "connector-vault-content-rc4customer",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "OCT"
+        }
+      ]
+    }
+  }
+}

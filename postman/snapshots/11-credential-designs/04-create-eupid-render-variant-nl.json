@@ -1,0 +1,57 @@
+{
+  "title": "04 Create EuPid render variant (nl)",
+  "request": {
+    "method": "POST",
+    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/render/variants",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    },
+    "body": {
+      "kind": "SIMPLE_CARD",
+      "alias": "eupid-card-nl",
+      "localeApplicability": [
+        "nl"
+      ],
+      "backgroundColor": "#0B5FFF",
+      "textColor": "#FFFFFF",
+      "logo": {
+        "uri": "/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+        "integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
+        "altText": "EU PID logo"
+      }
+    }
+  },
+  "response": {
+    "status": "Created",
+    "code": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "tenantId": "00000000-0000-4000-8000-000000000000",
+      "kind": "SIMPLE_CARD",
+      "alias": "eupid-card-nl",
+      "localeApplicability": [
+        "nl"
+      ],
+      "sourceSnapshotId": null,
+      "logo": {
+        "uri": "/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+        "integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
+        "altText": "EU PID logo",
+        "contentType": null,
+        "localBlob": null
+      },
+      "backgroundImage": null,
+      "backgroundColor": "#0B5FFF",
+      "textColor": "#FFFFFF",
+      "accentColor": null,
+      "svgTemplate": null,
+      "w3cRenderMethod": null,
+      "pdfTemplate": null
+    }
+  }
+}

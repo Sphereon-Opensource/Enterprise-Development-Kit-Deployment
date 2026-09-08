@@ -1,0 +1,38 @@
+{
+  "title": "01 List runtime providers",
+  "request": {
+    "method": "GET",
+    "url": "https://rc4customer.example.com/api/kms/v1/providers",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "providers": [
+        {
+          "providerId": "default",
+          "type": "SOFTWARE",
+          "displayName": "Software KMS",
+          "ownership": "TENANT",
+          "sharedFromPlatform": false,
+          "isDefault": true
+        },
+        {
+          "providerId": "platform-shared-<generated>",
+          "type": "SOFTWARE",
+          "displayName": "Platform shared SOFTWARE <generated>",
+          "ownership": "PLATFORM",
+          "sharedFromPlatform": true,
+          "isDefault": false
+        }
+      ]
+    }
+  }
+}

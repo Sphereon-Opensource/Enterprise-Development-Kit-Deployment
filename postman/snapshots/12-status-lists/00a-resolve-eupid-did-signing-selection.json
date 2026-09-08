@@ -1,0 +1,48 @@
+{
+  "title": "00a Resolve EuPid DID signing selection",
+  "request": {
+    "method": "GET",
+    "url": "https://platform.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuer/instances/00000000-0000-4000-8000-000000000000/credential-config-settings/EuPid",
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "Accept": "*/*"
+    }
+  },
+  "response": {
+    "status": "OK",
+    "code": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "resourceId": "00000000-0000-4000-8000-000000000000",
+      "credentialConfigurationId": "EuPid",
+      "format": "dc+sd-jwt",
+      "scope": "eu_pid",
+      "vct": "https://rc4customer.example.com/public/schema/vct/EuPid",
+      "cryptographicBindingMethodsSupported": [
+        "jwk",
+        "did:jwk",
+        "did:key"
+      ],
+      "credentialSigningAlgValuesSupported": [
+        "ES256"
+      ],
+      "proofTypesSupported": {
+        "jwt": {
+          "proofSigningAlgValuesSupported": [
+            "ES256"
+          ]
+        }
+      },
+      "kmsResourceHandle": "krh_<opaque>",
+      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "signingKeyMode": "did:web",
+      "signingVerificationMethodId": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
+      "status": {
+        "statusListId": "eupid-revocation",
+        "purpose": "revocation"
+      }
+    }
+  }
+}
