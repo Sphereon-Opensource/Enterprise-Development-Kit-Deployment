@@ -252,11 +252,12 @@ secret-management:
       kms-provider-id: software
       kms-binding-template: isolated-tenant-secret-storage
     tenant-policy:
-      # Cloud offerings are opt-in. A deployment may publish the typed Azure/AWS
-      # tenant offerings only after explicitly enabling this policy; provider
-      # instances and credentials are still registered through platform-config.
-      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false}
-      # Publishes only the self-contained, per-tenant software-KMS offering.
+      # The customer Compose developer stack publishes the typed Azure/AWS
+      # tenant offerings so the Admin Console presents the complete KMS
+      # configuration surface. Provider instances and credentials are still
+      # registered through platform-config.
+      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:true}
+      # Also publishes the self-contained, per-tenant software-KMS offering.
       allow-platform-offerings: true
       retention-days: 30
   internal-resolution:

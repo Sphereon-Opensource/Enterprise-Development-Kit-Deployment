@@ -78,7 +78,7 @@ $collection = Get-Content -LiteralPath '${collectionPath.replaceAll("'", "''")}'
 @{ inventory = (Count-Requests @($collection.item)); enabled = (Count-Requests @($collection.item) -EnabledOnly) } | ConvertTo-Json -Compress
 `], {encoding: 'utf8'})
 assert.equal(countProbe.status, 0, countProbe.stderr)
-assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 217, enabled: 192})
+assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 218, enabled: 193})
 
 function requestCount(items) {
   return (items ?? []).reduce(
@@ -112,7 +112,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 217, 'shipped customer collection must contain the current 217-request customer reference')
+assert.equal(requestCount(collection.item), 218, 'shipped customer collection must contain the current 218-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -130,26 +130,26 @@ assert.ok(operatorTokenRequest, 'operator sign-in must end in an authorization-c
 assert.equal(operatorTokenRequest.request.url, '{{platformUrl}}/token')
 assert.ok(operatorTokenRequest.request.body.urlencoded.some((entry) => entry.key === 'grant_type' && entry.value === 'authorization_code'))
 assert.ok(JSON.stringify(operatorTokenRequest.event).includes("pm.collectionVariables.set('platformAccessToken', j.access_token)"))
-const tenantTokenRequest = requestByName.get('01 Tenant service token (client credentials)')
+const tenantTokenRequest = requestByName.get('02 Tenant service token (client credentials)')
 assert.ok(tenantTokenRequest, 'tenant service token request must exist')
-assert.equal(tenantTokenRequest.request.auth.type, 'basic')
-assert.deepEqual(
-  tenantTokenRequest.request.auth.basic.map((entry) => entry.value),
-  ['{{tenantServiceClientId}}', '{{tenantServiceClientSecret}}'],
-)
+assert.equal(tenantTokenRequest.request.auth.type, 'noauth')
+assert.deepEqual(tenantTokenRequest.request.body.urlencoded.map((entry) => entry.key), ['grant_type'])
+assert.ok(JSON.stringify(tenantTokenRequest.event).includes("tenantServiceClientAuthMethod"), 'tenant token request must use the registered auth method')
+assert.ok(JSON.stringify(tenantTokenRequest.event).includes("client_secret_post"), 'tenant token request must support client_secret_post')
+assert.ok(JSON.stringify(tenantTokenRequest.event).includes("client_secret_basic"), 'tenant token request must support client_secret_basic')
 assert.ok(JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantAccessToken', j.access_token)"))
 const tenantServiceClientRegistration = requestByName.get('07b Register walkthrough tenant service client')
 assert.ok(tenantServiceClientRegistration, 'tenant service client registration must follow tenant authorization-server discovery in folder 04')
 assert.match(tenantServiceClientRegistration.request.body.raw, /"principalRoles": \[\s*"tenant-admin"\s*\]/u)
 assert.match(tenantServiceClientRegistration.request.body.raw, /"grantTypes": \[\s*"client_credentials"\s*\]/u)
+assert.match(tenantServiceClientRegistration.request.body.raw, /"tokenEndpointAuthMethod": "\{\{tenantServiceClientAuthMethod\}\}"/u)
 for (const folderName of ['06 Tenant Keys and DID', '10 Issuer Configuration', '15 Issue SD-JWT VC and mdoc', '22 Verification']) {
   const folder = collection.item.find((item) => item.name === folderName)
   assert.deepEqual(folder.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{tenantAccessToken}}', type: 'string'}]}, `${folderName} must inherit the tenant token`)
 }
-assert.equal(
-  collectionRequests.filter((item) => (item.request.header ?? []).some((header) => /^authorization$/iu.test(header.key))).length,
-  0,
-  'bearer credentials come from collection, folder, or request auth, never from a header',
+assert.ok(
+  collectionRequests.filter((item) => (item.request.header ?? []).some((header) => /^authorization$/iu.test(header.key))).length > 0,
+  'authenticated requests must carry an explicit runtime Authorization header',
 )
 assert.ok(collection.variable.some((entry) => entry.key === 'operatorCodeVerifier'), 'operator sign-in keeps its PKCE helper variable')
 assert.ok(requestByName.has('03 Submit operator credentials'), 'the platform operator signs in through the hosted login form')
@@ -318,8 +318,8 @@ assert.match(helmValues, /allowTenantManagedProviders: false/u, 'customer Helm m
 assert.match(e2eHelmValues, /allowTenantManagedProviders: false/u, 'E2E Helm must preserve the clean customer provider baseline')
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
-  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: \$\{env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false\}\n/u,
-  'customer Compose must not publish cloud-provider fixtures by default',
+  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: \$\{env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:true\}\n/u,
+  'customer developer Compose publishes typed cloud-provider offerings',
 )
 assert.match(
   rootYamlBlock(platformConfig, 'sphereon'),
@@ -910,7 +910,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 217)
+  assert.equal(plan.requestCount, 218)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -949,7 +949,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 217)
+  assert.equal(monolithPlan.requestCount, 218)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))
