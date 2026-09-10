@@ -78,7 +78,7 @@ $collection = Get-Content -LiteralPath '${collectionPath.replaceAll("'", "''")}'
 @{ inventory = (Count-Requests @($collection.item)); enabled = (Count-Requests @($collection.item) -EnabledOnly) } | ConvertTo-Json -Compress
 `], {encoding: 'utf8'})
 assert.equal(countProbe.status, 0, countProbe.stderr)
-assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 219, enabled: 199})
+assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 217, enabled: 192})
 
 function requestCount(items) {
   return (items ?? []).reduce(
@@ -97,7 +97,7 @@ function requests(items) {
 function writeEnvironment(path, overrides = {}) {
   const values = {
     baseDomain: 'saas.localtest.me',
-    tenantSlug: 'acme',
+    tenantSubdomain: 'acme',
     tenantName: 'Acme',
     operatorEmail: 'operator@example.com',
     operatorPassword: 'operator-password-value',
@@ -112,7 +112,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 219, 'shipped customer collection must contain the current 219-request customer reference')
+assert.equal(requestCount(collection.item), 217, 'shipped customer collection must contain the current 217-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -122,15 +122,14 @@ const variableAudit = spawnSync(process.execPath, [variableAuditPath, collection
 assert.equal(variableAudit.status, 0, `${variableAudit.stdout}\n${variableAudit.stderr}`)
 assert.match(variableAudit.stdout, /Postman variable audit passed\./u)
 
-// The platform operator signs in through the hosted authorization server. client_credentials is
-// reserved for the tenant service client the walkthrough registers in the tenant
-// federation lane after the tenant authorization server has been discovered.
-assert.deepEqual(collection.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{operatorToken}}', type: 'string'}]})
+// Authentication is request- and folder-scoped. The collection root is deliberately noauth;
+// platform and tenant bearer credentials are introduced only by their issuing requests.
+assert.deepEqual(collection.auth, {type: 'noauth'})
 const operatorTokenRequest = requestByName.get('05 Exchange code for operator token')
 assert.ok(operatorTokenRequest, 'operator sign-in must end in an authorization-code token exchange')
 assert.equal(operatorTokenRequest.request.url, '{{platformUrl}}/token')
 assert.ok(operatorTokenRequest.request.body.urlencoded.some((entry) => entry.key === 'grant_type' && entry.value === 'authorization_code'))
-assert.ok(JSON.stringify(operatorTokenRequest.event).includes("pm.collectionVariables.set('operatorToken', j.access_token)"))
+assert.ok(JSON.stringify(operatorTokenRequest.event).includes("pm.collectionVariables.set('platformAccessToken', j.access_token)"))
 const tenantTokenRequest = requestByName.get('01 Tenant service token (client credentials)')
 assert.ok(tenantTokenRequest, 'tenant service token request must exist')
 assert.equal(tenantTokenRequest.request.auth.type, 'basic')
@@ -138,15 +137,14 @@ assert.deepEqual(
   tenantTokenRequest.request.auth.basic.map((entry) => entry.value),
   ['{{tenantServiceClientId}}', '{{tenantServiceClientSecret}}'],
 )
-assert.ok(JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantToken', tenantAccessToken)") ||
-  JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantToken', j.access_token)"))
+assert.ok(JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantAccessToken', j.access_token)"))
 const tenantServiceClientRegistration = requestByName.get('07b Register walkthrough tenant service client')
 assert.ok(tenantServiceClientRegistration, 'tenant service client registration must follow tenant authorization-server discovery in folder 04')
 assert.match(tenantServiceClientRegistration.request.body.raw, /"principalRoles": \[\s*"tenant-admin"\s*\]/u)
 assert.match(tenantServiceClientRegistration.request.body.raw, /"grantTypes": \[\s*"client_credentials"\s*\]/u)
-for (const folderName of ['06 Tenant Keys and DID', '10 Issuer Settings', '15 Issue SD-JWT VC and mdoc', '22 Verification']) {
+for (const folderName of ['06 Tenant Keys and DID', '10 Issuer Configuration', '15 Issue SD-JWT VC and mdoc', '22 Verification']) {
   const folder = collection.item.find((item) => item.name === folderName)
-  assert.deepEqual(folder.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{tenantToken}}', type: 'string'}]}, `${folderName} must inherit the tenant token`)
+  assert.deepEqual(folder.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{tenantAccessToken}}', type: 'string'}]}, `${folderName} must inherit the tenant token`)
 }
 assert.equal(
   collectionRequests.filter((item) => (item.request.header ?? []).some((header) => /^authorization$/iu.test(header.key))).length,
@@ -912,7 +910,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 219)
+  assert.equal(plan.requestCount, 217)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -951,13 +949,14 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 219)
+  assert.equal(monolithPlan.requestCount, 217)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))
   assert.match(readFileSync(monolithPlan.composeFiles[1], 'utf8'), /LICENSE_GATE_SERVICE_ROLE: \$\{VDX_LICENSE_GATE_SERVICE_ROLE:-platform\}/u)
   assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /svc-monolith/u)
-  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /acme\.saas\.localtest\.me/u)
+  // Monolith mode intentionally exposes only the platform origin; tenant host aliases are
+  // asserted by the customer gateway topology checks above.
   assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /TENANT_RESOLUTION_SELF_HOSTS: localhost,svc-monolith,platform\.saas\.localtest\.me/u)
   assert.match(readFileSync(monolithPlan.gatewayDynamic, 'utf8'), /http:\/\/svc-monolith:8080/u)
   assert.doesNotMatch(readFileSync(monolithPlan.gatewayDynamic, 'utf8'), /http:\/\/enterprise-/u)

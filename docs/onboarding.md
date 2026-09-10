@@ -203,14 +203,14 @@ API automation.
 
 Both helpers read `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`.
 The supplied file is a post-setup environment with six values: `baseDomain`,
-`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword` and
+`tenantSubdomain`, `tenantName`, `operatorEmail`, `operatorPassword` and
 `tenantOwnerPassword`. These are Postman/provision variables, not Docker Compose
 or Helm startup variables.
 The collection derives the platform origin, the tenant gateway origin, every
 protocol API root, the tenant KMS and trust-domain API bases and the tenant-scoped
-`did:web` values from `baseDomain` and `tenantSlug` before each request, and keeps
+`did:web` values from `baseDomain` and `tenantSubdomain` before each request, and keeps
 them in collection scope. Do not add a platform URL, a DID hostname or a
-service-container URL to the environment; changing `baseDomain` or `tenantSlug`
+service-container URL to the environment; changing `baseDomain` or `tenantSubdomain`
 is enough. The operator OAuth callback is derived from the platform URL and the
 hosted session during sign-in; the PKCE verifiers and the tenant service client
 secret are generated during the run and cleared afterwards. Provider-specific
@@ -276,8 +276,8 @@ folder order:
 | `06 Tenant Keys and DID` | Lists the KMS offerings and resources the tenant holds, validates the setup KMS, and discovers the activation-created `did:web` and its hosted `did.json` |
 | `07 Bring Your Own KMS` | Registers your own Azure Key Vault or AWS KMS as a tenant KMS resource, registers references to existing external keys and certificate chains, and (for operators) the platform tenant's vault. Disabled until you fill in your provider values |
 | `08 KMS Provider Sharing` | How the platform offers one of its KMSes to a tenant, how the tenant enables it and picks its default provider, and the runtime provider list that joins both planes |
-| `09 Authorization Servers and Federation` | A hosted authorization server with clients and identities, an external authorization server from OIDC discovery, the federation binding that lets holders sign in there, and the issuer bindings and protocol profile |
-| `10 Issuer Settings` and `11 Credential Designs` | Issuer branding and the EuPid (SD-JWT VC) and Mdl (mdoc) designs with render variants and logo assets |
+| `09 Authorization Server Configuration` | A hosted authorization server with clients and identities, an external authorization server from OIDC discovery, and federation bindings. Issuer selection is a separate bridge step. |
+| `10 Issuer Configuration` and `11 Credential Designs` | Issuer branding and the EuPid (SD-JWT VC) and Mdl (mdoc) designs with render variants and logo assets |
 | `12 Status Lists` | The did:web-signed JWT list, the x5c-signed list, revoke, reactivate and read, then the `CWT mdoc` list and the two-bit `Bitstring VCDM` list with suspension |
 | `13 Credential Configurations` | How a credential configuration expresses its signing key, trust mechanism, validity, scope and status-list binding: reads of the provisioned EuPid and Mdl configurations, the VCDM 1.1 and 2.0 registrations, and binding the CWT list to Mdl |
 | `14 Hosted Branding Verification` | The hosted VCT metadata, issuer well-known metadata and content-addressed assets |

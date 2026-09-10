@@ -56,11 +56,11 @@ installation is running:
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
 Create a private copy of the environment and fill in its six values: `baseDomain`,
-`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword` and
+`tenantSubdomain`, `tenantName`, `operatorEmail`, `operatorPassword` and
 `tenantOwnerPassword`. Keep that copy out of Git. Every URL, host, API base and
 `did:web` identifier in the collection is derived from `baseDomain` and
-`tenantSlug` before each request (`platform.<baseDomain>` for the operator plane,
-`<tenantSlug>.<baseDomain>` for the tenant), so pointing the collection at another
+`tenantSubdomain` before each request (`platform.<baseDomain>` for the operator plane,
+`<tenantSubdomain>.<baseDomain>` for the tenant), so pointing the collection at another
 installation or another tenant is a two-value change. The collection never writes
 derived values back into the environment.
 
