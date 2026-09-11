@@ -93,18 +93,36 @@ data:
           deferred: *oid4vciTenantDatabaseKv
           notifications: *oid4vciTenantDatabaseKv
           credential-request-identities: *oid4vciTenantDatabaseKv
+    # The monolith overlay replaces the packaged container configuration. Keep
+    # its deployment-source declaration aligned with the manifest mounted below
+    # so an existing shared PostgreSQL bootstrap remains restart-compatible.
+    secret-management:
+      deployment:
+        environment:
+          enabled: {{ ne .Values.portalBff.existingSecret "" }}
+          {{- if .Values.portalBff.existingSecret }}
+          manifest-path: /app/secret-management/deployment/environment.manifest
+          manifest-sha256: "sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e"
+          {{- end }}
+        kubernetes-mount:
+          enabled: false
     oauth2:
       servers:
         default:
           user-provider:
             mode: {{ .Values.platform.bootstrap.userProviderMode | quote }}
 {{ include "edk-enterprise.platformWebAuthnConfig" . | indent 10 }}
-    {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
+        {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
     tenant:
       platform:
         owner:
           initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
     {{- end }}
+  {{ if .Values.portalBff.existingSecret }}
+  environment.manifest: |
+    sec_admin_console_portal_bff_01=ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
+    sec_0_25_0_rc2_to_0_25_0_rc3_software_kms_password_01=EDK_KEYSTORE_PASSWORD
+  {{ end }}
 ---
 apiVersion: v1
 kind: Service
@@ -342,6 +360,12 @@ spec:
             - name: secret-authority
               mountPath: /app/secret-authority
               readOnly: true
+            {{- if .Values.portalBff.existingSecret }}
+            - name: secret-management-environment-manifest
+              mountPath: /app/secret-management/deployment/environment.manifest
+              subPath: environment.manifest
+              readOnly: true
+            {{- end }}
       volumes:
         - name: runtime-config
           configMap:
@@ -366,6 +390,14 @@ spec:
               - key: {{ $key | quote }}
                 path: {{ printf "public/%s-assertion.pub.pem" $workloadId | quote }}
               {{- end }}
+        {{- if .Values.portalBff.existingSecret }}
+        - name: secret-management-environment-manifest
+          configMap:
+            name: {{ include "edk-enterprise.fullname" . }}-monolith-runtime
+            items:
+              - key: environment.manifest
+                path: environment.manifest
+        {{- end }}
 ---
 {{- range $console := list "admin-console" "admin-console-tenant" }}
 {{- $isPlatform := eq $console "admin-console" }}
