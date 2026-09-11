@@ -354,7 +354,7 @@ spec:
         - name: secret-authority
           secret:
             secretName: {{ .Values.secretAuthority.existingSecrets.platform | quote }}
-            defaultMode: 0400
+            defaultMode: 0440
             items:
               - key: {{ .Values.secretAuthority.keys.satelliteAssertionPrivateKey | quote }}
                 path: workload/assertion.pem
@@ -807,3 +807,4 @@ spec:
           port: {{ .Values.monolith.restPort }}
 {{- end }}
 {{- end }}
+
