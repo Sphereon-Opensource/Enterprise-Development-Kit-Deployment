@@ -237,6 +237,30 @@ function Render-MonolithGatewayArtifacts([switch]$BehindEdge) {
   )) {
     $dynamic = $dynamic.Replace("http://$backend", 'http://svc-monolith:8080')
   }
+  # The Inbox API is a tenant-scoped monolith surface. Keep this route out of
+  # the distributed gateway table; in the generated monolith table the
+  # existing platform service definition has already been rewritten to
+  # svc-monolith:8080 by the replacement above.
+  $inboxMarker = '    # --- Tenant hosts: platform-owned tenant-scoped APIs --------------------'
+  if (-not $dynamic.Contains('tenant-inbox-workflow-api:')) {
+    $inboxRoutes = @"
+    # --- Tenant hosts: Inbox workflow API -----------------------------------
+    tenant-inbox-workflow-api:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        PathPrefix(`/api/inbox/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 230
+      tls: {}
+
+"@
+    if ($dynamic.Contains($inboxMarker)) {
+      $dynamic = $dynamic.Replace($inboxMarker, $inboxRoutes + $inboxMarker)
+    } else {
+      Fail 'Monolith gateway routing source has no tenant-router insertion marker.'
+    }
+  }
   if (-not $dynamic.Contains('platform-secret-delegation-hidden:') -or
       -not $dynamic.Contains('Path(`/api/platform/admin/v1/application/secrets/internal/delegated-token`)')) {
     Fail 'Monolith gateway routing must shadow the BFF-only delegated-token issuer at the public edge.'

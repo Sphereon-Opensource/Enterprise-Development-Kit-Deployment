@@ -628,6 +628,16 @@ spec:
   parentRefs: [{ name: {{ $gatewayName | quote }}, sectionName: https }]
   hostnames: [{{ $wildcard | quote }}]
   rules:
+    # The Inbox workflow API is tenant-scoped and must reach the monolith
+    # service explicitly before the tenant UI catch-all.
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: PathPrefix, value: /api/inbox/v1 }
+      backendRefs:
+        - name: {{ $name }}
+          port: {{ .Values.monolith.restPort }}
     - timeouts:
         request: {{ .Values.gateway.requestTimeout | quote }}
         backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
