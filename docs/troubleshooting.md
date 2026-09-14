@@ -40,6 +40,11 @@ is an example Secret name, not a prepackaged artifact. A missing Helm value fail
 `helm install` before a release is created and tells you which value and key are
 required.
 
+The `internal-client-secret` value is the write-only confidential-client secret
+material used by a satellite service; it is not the platform operator password,
+the tenant confidential-client secret, or a public configuration value. Keep it
+in the referenced runtime Secret and never paste it into a values file.
+
 Helm validates names, not live Secret objects. If the value is configured but
 the object does not exist, pods remain in `CreateContainerConfigError` and events
 contain:

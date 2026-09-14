@@ -93,7 +93,7 @@ $collectionPath = if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
     [System.IO.Path]::GetFullPath($CollectionPath)
 }
 # Pinned size of the shipped collection. Bump this in the same commit that adds or removes a request.
-$DefaultCollectionRequestCount = 219
+$DefaultCollectionRequestCount = 218
 $snapshotDir = Join-Path $customerRoot 'postman\snapshots'
 $runnerPath = Join-Path $repoRoot 'deploy\edk\e2e\runner\run-e2e.js'
 $imageVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-enterprise-image-set.mjs'

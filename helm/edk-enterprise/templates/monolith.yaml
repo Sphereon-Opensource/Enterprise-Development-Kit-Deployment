@@ -315,6 +315,10 @@ spec:
               value: {{ .Values.secretManagement.authority.allowPlatformOfferings | quote }}
             - name: EDK_KEYSTORE_PASSWORD
               valueFrom: { secretKeyRef: { name: {{ .Values.keystore.existingSecret | quote }}, key: {{ .Values.keystore.passwordKey | quote }} } }
+            {{- if .Values.portalBff.existingSecret }}
+            - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.portalBff.existingSecret | quote }}, key: {{ .Values.portalBff.clientSecretKey | quote }} } }
+            {{- end }}
             - name: SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY
               valueFrom: { secretKeyRef: { name: {{ .Values.secretAuthority.existingSecrets.platform | quote }}, key: {{ .Values.secretAuthority.keys.centralPermitSigningKey | quote }} } }
             - name: SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS

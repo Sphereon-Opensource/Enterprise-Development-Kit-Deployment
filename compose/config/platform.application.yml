@@ -255,7 +255,7 @@ secret-management:
       # Cloud offerings are opt-in. A deployment may publish the typed Azure/AWS
       # tenant offerings only after explicitly enabling this policy; provider
       # instances and credentials are still registered through platform-config.
-      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false}
+      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:true}
       # Publishes only the self-contained, per-tenant software-KMS offering.
       allow-platform-offerings: true
       retention-days: 30
