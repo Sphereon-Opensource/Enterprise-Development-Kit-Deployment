@@ -7,6 +7,10 @@
 # Public surface: OAuth/OIDC discovery and protocol endpoints plus the operator
 # login UI. The platform admin and setup APIs are internal and require an
 # operator bearer; expose them only through an internal ingress or service mesh.
+edk:
+  tenant:
+    invalidation:
+      database-route: tenant-invalidation
 server:
   rest:
     port: 18080
@@ -203,6 +207,16 @@ database:
       pool:
         dedicated-pool: true
     tenant-migrator:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+    # Shared LISTEN/NOTIFY route for satellite enterprise images. The platform
+    # APP database remains authoritative for platform routing/configuration.
+    tenant-invalidation:
       dialect: postgresql
       isolation: shared
       host: ${env:EDK_TENANT_DB_HOST}
