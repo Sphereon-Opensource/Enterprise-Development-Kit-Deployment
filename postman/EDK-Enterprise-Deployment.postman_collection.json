@@ -1626,7 +1626,7 @@
                   "const tokenName = 'platformAccessToken';",
                   "const token = String(pm.environment.get('platformAccessToken') || pm.collectionVariables.get('platformAccessToken') || '').trim();",
                   "if (!token) throw new Error('Missing or unresolved ' + tokenName + '. Run the preceding token request first or set the active Postman variable.');",
-                  "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });"
+                  "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });\nconst refreshUrl = pm.variables.replaceIn('{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{externalAuthorizationServerId}}/discovery/refresh');\npm.sendRequest({ url: refreshUrl, method: 'POST', header: { Authorization: 'Bearer ' + token, Host: pm.variables.replaceIn('{{tenantPublicAuthority}}') } }, (error, response) => {\n  if (error || !response || response.code !== 200) throw new Error('External discovery refresh failed before federation enablement: ' + (error || response?.code));\n});"
                 ]
               }
             },
