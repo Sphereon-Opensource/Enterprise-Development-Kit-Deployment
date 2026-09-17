@@ -281,9 +281,9 @@ secret-management:
     workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email
   deployment:
     environment:
-      enabled: true
-      manifest-path: /app/secret-management/deployment/environment.manifest
-      manifest-sha256: sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e
+      enabled: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_ENABLED:true}
+      manifest-path: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_PATH:/app/secret-management/deployment/environment.manifest}
+      manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e}
     kubernetes-mount:
       enabled: false
 # Trust-domain anchor -> identifier materialization source. The platform executes the routed trust
