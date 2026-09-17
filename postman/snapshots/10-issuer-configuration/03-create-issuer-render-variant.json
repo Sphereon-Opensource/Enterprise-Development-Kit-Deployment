@@ -2,7 +2,7 @@
   "title": "03 Create issuer render variant",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/render/variants",
+    "url": "https://acme.example.com/api/credential-design/v1/designs/render/variants",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -20,7 +20,7 @@
       "logo": {
         "uri": "/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
         "integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
-        "altText": "RC4 Release Verification authority logo"
+        "altText": "Acme Corporation authority logo"
       }
     }
   },
@@ -43,7 +43,7 @@
       "logo": {
         "uri": "/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
         "integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
-        "altText": "RC4 Release Verification authority logo",
+        "altText": "Acme Corporation authority logo",
         "contentType": null,
         "localBlob": null
       },

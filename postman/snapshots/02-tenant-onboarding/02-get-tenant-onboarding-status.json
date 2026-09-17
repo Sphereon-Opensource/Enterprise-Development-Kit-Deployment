@@ -65,6 +65,14 @@
         },
         {
           "step": {
+            "id": "deployment-kms-offers-applied"
+          },
+          "startedAt": "2026-01-01T00:00:00Z",
+          "completedAt": "2026-01-01T00:00:00Z",
+          "error": null
+        },
+        {
+          "step": {
             "id": "did-provisioned"
           },
           "startedAt": "2026-01-01T00:00:00Z",

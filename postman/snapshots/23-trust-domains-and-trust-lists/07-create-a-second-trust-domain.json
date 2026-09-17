@@ -2,7 +2,7 @@
   "title": "07 Create a second trust domain",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains",
+    "url": "https://acme.example.com/api/trust-domain/v1/domains",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

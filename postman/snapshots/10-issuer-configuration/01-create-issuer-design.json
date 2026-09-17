@@ -1,29 +1,47 @@
 {
-  "title": "04 Attach render variant to issuer design",
+  "title": "01 Create issuer design",
   "request": {
-    "method": "PUT",
-    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/issuers/00000000-0000-4000-8000-000000000000",
+    "method": "POST",
+    "url": "https://acme.example.com/api/credential-design/v1/designs/issuers",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
     },
     "body": {
-      "renderVariantIds": [
-        "00000000-0000-4000-8000-000000000000"
+      "bindings": [
+        {
+          "issuerDid": "did:web:acme.example.com",
+          "issuerId": "00000000-0000-4000-8000-000000000000",
+          "issuerUri": "https://acme.example.com"
+        }
+      ],
+      "alias": "acme-authority",
+      "hostingMode": "LOCAL",
+      "displays": [
+        {
+          "locale": "en",
+          "displayName": "Acme Corporation Authority",
+          "description": "Acme Corporation credential issuing authority"
+        },
+        {
+          "locale": "nl",
+          "displayName": "Acme Corporation Autoriteit",
+          "description": "Uitgevende autoriteit voor verifieerbare credentials van Acme Corporation"
+        }
       ]
     }
   },
   "response": {
-    "status": "OK",
-    "code": 200,
+    "status": "Created",
+    "code": 201,
     "headers": {
       "Content-Type": "application/json"
     },
     "body": {
       "id": "00000000-0000-4000-8000-000000000000",
       "tenantId": "00000000-0000-4000-8000-000000000000",
-      "alias": "rc4customer-authority",
+      "alias": "acme-authority",
       "hostingMode": "LOCAL",
       "bindings": [
         {
@@ -35,8 +53,8 @@
           "type": null,
           "@context": null,
           "issuerId": "00000000-0000-4000-8000-000000000000",
-          "issuerDid": "did:web:rc4customer.example.com",
-          "issuerUri": "https://rc4customer.example.com",
+          "issuerDid": "did:web:acme.example.com",
+          "issuerUri": "https://acme.example.com",
           "verifierClientId": null,
           "ocaSaid": null,
           "credentialType": null,
@@ -50,20 +68,18 @@
       "displays": [
         {
           "locale": "en",
-          "displayName": "RC4 Release Verification Authority",
-          "description": "RC4 Release Verification credential issuing authority",
+          "displayName": "Acme Corporation Authority",
+          "description": "Acme Corporation credential issuing authority",
           "logo": null
         },
         {
           "locale": "nl",
-          "displayName": "RC4 Release Verification Autoriteit",
-          "description": "Uitgevende autoriteit voor verifieerbare credentials van RC4 Release Verification",
+          "displayName": "Acme Corporation Autoriteit",
+          "description": "Uitgevende autoriteit voor verifieerbare credentials van Acme Corporation",
           "logo": null
         }
       ],
-      "renderVariantIds": [
-        "00000000-0000-4000-8000-000000000000"
-      ],
+      "renderVariantIds": [],
       "sourceSnapshotIds": [],
       "contentHash": null,
       "createdAt": "2026-01-01T00:00:00Z",

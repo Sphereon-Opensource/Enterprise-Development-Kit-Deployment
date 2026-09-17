@@ -2,7 +2,7 @@
   "title": "06 Resolve tenant runtime service discovery",
   "request": {
     "method": "GET",
-    "url": "https://platform.example.com/api/platform/bootstrap/v1/runtime-config/admin-console?tenantId=00000000-0000-4000-8000-000000000000&tenantSlug=rc4customer",
+    "url": "https://platform.example.com/api/platform/bootstrap/v1/runtime-config/admin-console?tenantId=00000000-0000-4000-8000-000000000000&tenantSlug=acme",
     "headers": {
       "Accept": "application/json"
     }
@@ -17,7 +17,7 @@
       "metadata": {
         "applicationId": "admin-console",
         "tenantId": "00000000-0000-4000-8000-000000000000",
-        "tenantSlug": "rc4customer",
+        "tenantSlug": "acme",
         "revision": "<revision>",
         "generatedAtEpochMs": 1767225600000,
         "ttlSeconds": 300,
@@ -123,7 +123,7 @@
           },
           "theme": {
             "serviceId": "platform",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-platform",
             "scopes": [],
             "endpoints": {
@@ -147,7 +147,7 @@
           },
           "tenantKms": {
             "serviceId": "service-crypto",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-tenant-kms",
             "scopes": [],
             "endpoints": {
@@ -159,7 +159,7 @@
           },
           "tenantDid": {
             "serviceId": "service-data",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-tenant-did",
             "scopes": [],
             "endpoints": {
@@ -183,7 +183,7 @@
           },
           "trustDomain": {
             "serviceId": "platform",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-platform",
             "scopes": [],
             "endpoints": {
@@ -203,7 +203,7 @@
           },
           "walletEntitlement": {
             "serviceId": "service-wallet-onboarding",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-wallet-onboarding",
             "scopes": [],
             "endpoints": {
@@ -219,7 +219,7 @@
           },
           "catalogs": {
             "serviceId": "issuer",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-issuer",
             "scopes": [],
             "endpoints": {
@@ -235,7 +235,7 @@
           },
           "identityManager": {
             "serviceId": "service-tenant-as",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-tenant-as",
             "scopes": [],
             "endpoints": {
@@ -251,7 +251,7 @@
           },
           "issuer": {
             "serviceId": "issuer",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-issuer",
             "scopes": [],
             "endpoints": {
@@ -283,7 +283,7 @@
           },
           "verifier": {
             "serviceId": "verifier",
-            "baseUrl": "https://rc4customer.example.com",
+            "baseUrl": "https://acme.example.com",
             "audience": "enterprise-verifier",
             "scopes": [],
             "endpoints": {
@@ -337,7 +337,7 @@
           }
         },
         "capabilities": {
-          "deploymentMode": "prod",
+          "deploymentMode": "dev",
           "setupRequired": "false",
           "licensePortalEnabled": "<redacted>"
         },

@@ -2,7 +2,7 @@
   "title": "17a Register a published trust list as a trust source",
   "request": {
     "method": "PUT",
-    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/trust-sources/customer-trust-list",
+    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/trust-sources/customer-trust-list",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -51,7 +51,7 @@
         ],
         "maxArtifactBytes": 5242880
       },
-      "managedBy": "00000000-0000-4000-8000-000000000000",
+      "managedBy": "edk-walkthrough-tenant-service",
       "managedAt": "2026-01-01T00:00:00Z"
     }
   }

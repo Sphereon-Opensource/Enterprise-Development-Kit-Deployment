@@ -2,7 +2,7 @@
   "title": "11 Register the key certificate chain",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/kms/v1/certificates/register",
+    "url": "https://acme.example.com/api/kms/v1/certificates/register",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -37,8 +37,8 @@
       "certificateChain": [
         "<certificate>"
       ],
-      "certificateFingerprint": "x+66lBZJb9Kc1odPwb4YFZisWKktbB7Npu4BT+i/s4Q=",
-      "publicKeyFingerprint": "nDgBJwfbYI2Yp6j3tT7j/EwXTXF2pUOxH73ev9/ALic="
+      "certificateFingerprint": "<certificate-thumbprint>",
+      "publicKeyFingerprint": "<certificate-thumbprint>"
     }
   }
 }

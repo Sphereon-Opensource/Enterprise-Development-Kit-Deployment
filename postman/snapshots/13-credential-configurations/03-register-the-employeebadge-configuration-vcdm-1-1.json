@@ -31,12 +31,12 @@
         }
       },
       "kmsResourceHandle": "krh_<opaque>",
-      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "kmsKeyAlias": "issuer-signing-acme",
       "signingKeyMode": "did:web",
-      "signingVerificationMethodId": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
+      "signingVerificationMethodId": "did:web:acme.example.com#issuer-assertion-acme",
       "validityPeriod": "P365D",
       "status": {
-        "statusListId": "status-bitstring",
+        "statusListId": "00000000-0000-4000-8000-000000000000",
         "purpose": "revocation",
         "revokeAtExpiry": false
       }
@@ -71,12 +71,12 @@
         }
       },
       "kmsResourceHandle": "krh_<opaque>",
-      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "kmsKeyAlias": "issuer-signing-acme",
       "signingKeyMode": "did:web",
-      "signingVerificationMethodId": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
+      "signingVerificationMethodId": "did:web:acme.example.com#issuer-assertion-acme",
       "validityPeriod": "P365D",
       "status": {
-        "statusListId": "status-bitstring",
+        "statusListId": "00000000-0000-4000-8000-000000000000",
         "purpose": "revocation",
         "revokeAtExpiry": false
       }

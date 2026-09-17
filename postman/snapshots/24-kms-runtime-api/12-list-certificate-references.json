@@ -2,7 +2,7 @@
   "title": "12 List certificate references",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/kms/v1/certificate-references",
+    "url": "https://acme.example.com/api/kms/v1/certificate-references",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -27,8 +27,8 @@
           "linkedKeyReferenceId": "00000000-0000-4000-8000-000000000000",
           "linkedKeyAlias": "customer-tenant-signing-key",
           "linkedKeyKid": "<key-id>",
-          "certificateFingerprint": "x+66lBZJb9Kc1odPwb4YFZisWKktbB7Npu4BT+i/s4Q=",
-          "publicKeyFingerprint": "nDgBJwfbYI2Yp6j3tT7j/EwXTXF2pUOxH73ev9/ALic="
+          "certificateFingerprint": "<certificate-thumbprint>",
+          "publicKeyFingerprint": "<certificate-thumbprint>"
         }
       ]
     }

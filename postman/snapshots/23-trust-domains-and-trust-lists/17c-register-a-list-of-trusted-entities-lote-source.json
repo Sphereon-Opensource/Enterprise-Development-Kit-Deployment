@@ -2,7 +2,7 @@
   "title": "17c Register a list of trusted entities (LoTE) source",
   "request": {
     "method": "PUT",
-    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/lote-sources/customer-lote",
+    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/lote-sources/customer-lote",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -43,7 +43,7 @@
       "maxArtifactBytes": 5242880,
       "state": "CANDIDATE",
       "etag": "\"remote-lote-revision-1-candidate-188040643\"",
-      "managedBy": "00000000-0000-4000-8000-000000000000",
+      "managedBy": "edk-walkthrough-tenant-service",
       "managedAt": "2026-01-01T00:00:00Z"
     }
   }

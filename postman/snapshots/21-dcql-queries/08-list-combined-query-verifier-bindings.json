@@ -2,7 +2,7 @@
   "title": "08 List combined query verifier bindings",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/dcql/v1/queries/eupid-and-mdl/verifiers",
+    "url": "https://acme.example.com/api/dcql/v1/queries/eupid-and-mdl/verifiers",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -28,7 +28,7 @@
       {
         "id": "00000000-0000-4000-8000-000000000000",
         "tenantId": "00000000-0000-4000-8000-000000000000",
-        "verifierId": "rc4customer",
+        "verifierId": "acme",
         "queryId": "eupid-and-mdl",
         "pinnedVersion": 1,
         "enabled": true,

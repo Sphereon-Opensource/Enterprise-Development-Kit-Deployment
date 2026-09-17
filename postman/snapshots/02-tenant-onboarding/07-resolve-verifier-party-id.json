@@ -32,13 +32,13 @@
             "createdAt": "2026-01-01T00:00:00Z",
             "updatedAt": "2026-01-01T00:00:00Z"
           },
-          "instanceId": "rc4customer",
+          "instanceId": "acme",
           "endpoints": [
             {
               "id": "00000000-0000-4000-8000-000000000000",
               "softwarePartyId": "00000000-0000-4000-8000-000000000000",
               "endpointType": "BASE",
-              "url": "https://rc4customer.example.com/oid4vp/rc4customer",
+              "url": "https://acme.example.com/oid4vp/acme",
               "source": "DECLARED",
               "status": "ACTIVE",
               "isPrimary": true

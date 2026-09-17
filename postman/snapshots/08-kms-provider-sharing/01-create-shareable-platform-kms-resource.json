@@ -9,9 +9,9 @@
       "Accept": "*/*"
     },
     "body": {
-      "providerId": "platform-shared-<generated>",
+      "providerId": "walkthrough-platform-00000000-0000-4000-8000-000000000000",
       "kind": "SOFTWARE",
-      "displayName": "Platform shared SOFTWARE <generated>",
+      "displayName": "Developer journey platform software KMS",
       "configuration": {
         "storageMode": "MEMORY"
       }
@@ -25,9 +25,9 @@
     },
     "body": {
       "handle": "krh_<opaque>",
-      "providerId": "platform-shared-<generated>",
+      "providerId": "walkthrough-platform-00000000-0000-4000-8000-000000000000",
       "kind": "SOFTWARE",
-      "displayName": "Platform shared SOFTWARE <generated>",
+      "displayName": "Developer journey platform software KMS",
       "state": "DEGRADED",
       "resourceVersion": 1,
       "credentialConfigured": false,
@@ -41,7 +41,9 @@
         "VALIDATE",
         "UPDATE_CREDENTIAL",
         "DETACH"
-      ]
+      ],
+      "declaredByDeployment": false,
+      "credentialFromDeployment": false
     }
   }
 }

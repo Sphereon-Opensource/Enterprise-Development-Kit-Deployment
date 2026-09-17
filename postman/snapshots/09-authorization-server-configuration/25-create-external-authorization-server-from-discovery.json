@@ -2,7 +2,7 @@
   "title": "25 Create external authorization server from discovery",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -93,7 +93,8 @@
         "scopesSupported": [
           "openid",
           "profile",
-          "email"
+          "email",
+          "developer-console.read"
         ],
         "idTokenSigningAlgorithms": [
           "ES256"
@@ -102,7 +103,7 @@
           "https://platform.example.com/.well-known/oauth-authorization-server",
           "https://platform.example.com/.well-known/openid-configuration"
         ],
-        "digest": "70f62cb421ccdf24103a3250f5273fea740061718936b8c5fb1b349117bc3422",
+        "digest": "<digest>",
         "validatedAt": "2026-01-01T00:00:00Z",
         "validUntil": "2027-01-01T00:00:00Z",
         "freshness": "CURRENT"

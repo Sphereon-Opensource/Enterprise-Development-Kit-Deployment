@@ -2,7 +2,7 @@
   "title": "04 Exchange pre-authorized code for token",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/as/rc4customer/token",
+    "url": "https://acme.example.com/as/acme/token",
     "headers": {
       "Content-Type": "application/x-www-form-urlencoded",
       "Accept": "*/*"
@@ -16,22 +16,22 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "access_token": "eyJ0eXAiOiJhdCtqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1hcy1yYzRjdXN0b21lciJ9.eyJpc3MiOiJodHRwczovL3JjNGN1c3RvbWVyLmV4YW1wbGUuY29tL2FzL3JjNGN1c3RvbWVyIiwic3ViIjoiIiwiY2xpZW50X2lkIjoiIiwiaWF0IjoxNzY3MjI1NjAwLCJleHAiOjE3OTg3NjE2MDAsImp0aSI6IjxqdGk-IiwiYXpwIjoiIiwiYXVkIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9vaWQ0dmNpL3JjNGN1c3RvbWVyIiwiYXV0aG9yaXphdGlvbl9kZXRhaWxzIjpbeyJ0eXBlIjoib3BlbmlkX2NyZWRlbnRpYWwiLCJjcmVkZW50aWFsX2NvbmZpZ3VyYXRpb25faWQiOiJFdVBpZCIsImNyZWRlbnRpYWxfaWRlbnRpZmllcnMiOlsidXJuOnZkeDpvaWQ0dmNpOmNyZWRlbnRpYWw6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwOjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMCJdfV0sInRlbmFudF9pZCI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMCJ9.SIGNATURE-REDACTED",
+      "access_token": "eyJ0eXAiOiJhdCtqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1hcy1hY21lIn0.eyJpc3MiOiJodHRwczovL2FjbWUuZXhhbXBsZS5jb20vYXMvYWNtZSIsInN1YiI6IiIsImNsaWVudF9pZCI6IiIsImlhdCI6MTc2NzIyNTYwMCwiZXhwIjoxNzk4NzYxNjAwLCJqdGkiOiI8anRpPiIsImF6cCI6IiIsImF1ZCI6Imh0dHBzOi8vYWNtZS5leGFtcGxlLmNvbS9vaWQ0dmNpL2FjbWUiLCJhdXRob3JpemF0aW9uX2RldGFpbHMiOlt7InR5cGUiOiJvcGVuaWRfY3JlZGVudGlhbCIsImNyZWRlbnRpYWxfY29uZmlndXJhdGlvbl9pZCI6IkV1UGlkIiwiY3JlZGVudGlhbF9pZGVudGlmaWVycyI6WyJ1cm46dmR4Om9pZDR2Y2k6Y3JlZGVudGlhbDowMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDA6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIl19XSwidGVuYW50X2lkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIn0.SIGNATURE-REDACTED",
       "access_token_decoded": {
         "header": {
           "typ": "at+jwt",
           "alg": "ES256",
-          "kid": "oauth2-as-rc4customer"
+          "kid": "oauth2-as-acme"
         },
         "payload": {
-          "iss": "https://rc4customer.example.com/as/rc4customer",
+          "iss": "https://acme.example.com/as/acme",
           "sub": "",
           "client_id": "",
           "iat": 1767225600,
           "exp": 1798761600,
           "jti": "<jti>",
           "azp": "",
-          "aud": "https://rc4customer.example.com/oid4vci/rc4customer",
+          "aud": "https://acme.example.com/oid4vci/acme",
           "authorization_details": [
             {
               "type": "openid_credential",

@@ -2,7 +2,7 @@
   "title": "15 Delete the certificate reference",
   "request": {
     "method": "DELETE",
-    "url": "https://rc4customer.example.com/api/kms/v1/certificate-chains/customer-tenant-signing-chain?providerId=default",
+    "url": "https://acme.example.com/api/kms/v1/certificate-chains/customer-tenant-signing-chain?providerId=default",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

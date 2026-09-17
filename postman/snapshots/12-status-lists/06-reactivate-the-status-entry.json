@@ -2,7 +2,7 @@
   "title": "06 Reactivate the status entry",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/status",
+    "url": "https://acme.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/status",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

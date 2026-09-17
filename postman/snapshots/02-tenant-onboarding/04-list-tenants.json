@@ -19,9 +19,9 @@
         {
           "id": "00000000-0000-4000-8000-000000000000",
           "tenantType": "organization",
-          "name": "RC4 Release Verification",
-          "description": "RC4 Release Verification issuing and verification tenant",
-          "slug": "rc4customer",
+          "name": "Acme Corporation",
+          "description": "Acme Corporation issuing and verification tenant",
+          "slug": "acme",
           "parentTenantId": null,
           "status": "ACTIVE",
           "system": false,

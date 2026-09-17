@@ -2,7 +2,7 @@
   "title": "08 Activate the second trust domain",
   "request": {
     "method": "PUT",
-    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000",
+    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

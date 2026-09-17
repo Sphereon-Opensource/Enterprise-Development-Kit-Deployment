@@ -2,7 +2,7 @@
   "title": "01 Create verification request",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/oid4vp/backend/auth/requests",
+    "url": "https://acme.example.com/oid4vp/backend/auth/requests",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -11,7 +11,7 @@
     "body": {
       "query_id": "eupid-and-mdl",
       "verifier_id": "00000000-0000-4000-8000-000000000000",
-      "client_id": "decentralized_identifier:did:web:rc4customer.example.com",
+      "client_id": "decentralized_identifier:did:web:acme.example.com",
       "correlation_id": "e2e-verify-001"
     }
   },
@@ -25,8 +25,17 @@
       "session_id": "00000000-0000-4000-8000-000000000000",
       "correlation_id": "e2e-verify-001",
       "query_id": "eupid-and-mdl",
-      "request_uri": "openid4vp://?client_id=decentralized_identifier%3Adid%3Aweb%3Arc4customer.example.com&request_uri=https%3A%2F%2Frc4customer.example.com%2Foid4vp%2Frc4customer%2Foid4vp%2Frequest-uri%2Fe2e-verify-001",
-      "status_uri": "https://rc4customer.example.com/oid4vp/rc4customer/backend/auth/requests/e2e-verify-001"
+      "request_uri": "openid4vp://?client_id=decentralized_identifier%3Adid%3Aweb%3Aacme.example.com&request_uri=https%3A%2F%2Facme.example.com%2Foid4vp%2Facme%2Foid4vp%2Frequest-uri%2Fe2e-verify-001",
+      "status_uri": "https://acme.example.com/oid4vp/acme/backend/auth/requests/e2e-verify-001",
+      "verification_binding": {
+        "instanceId": "acme",
+        "templateId": null,
+        "templateRevision": null,
+        "queryId": "eupid-and-mdl",
+        "queryVersion": 1,
+        "createdAtEpochMillis": 1767225600000,
+        "expiresAtEpochMillis": 1798761600000
+      }
     }
   }
 }

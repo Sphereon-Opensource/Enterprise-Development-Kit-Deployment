@@ -2,7 +2,7 @@
   "title": "02 Upload issuer logo asset",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/credentials/00000000-0000-4000-8000-000000000000/assets/en/LOGO",
+    "url": "https://acme.example.com/api/credential-design/v1/designs/credentials/00000000-0000-4000-8000-000000000000/assets/en/LOGO",
     "headers": {
       "Content-Type": "image/png",
       "Authorization": "Bearer <token>",

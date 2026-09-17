@@ -2,7 +2,7 @@
   "title": "08 Resolve Mdl offer",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/credentials/offers/00000000-0000-4000-8000-000000000000",
+    "url": "https://acme.example.com/oid4vci/acme/oid4vci/credentials/offers/00000000-0000-4000-8000-000000000000",
     "headers": {
       "Accept": "*/*"
     }
@@ -14,7 +14,7 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "credential_issuer": "https://rc4customer.example.com/oid4vci/rc4customer",
+      "credential_issuer": "https://acme.example.com/oid4vci/acme",
       "credential_configuration_ids": [
         "Mdl"
       ],

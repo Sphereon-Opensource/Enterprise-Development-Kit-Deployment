@@ -2,7 +2,7 @@
   "title": "11 Create a VICAL signer anchor",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors",
+    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

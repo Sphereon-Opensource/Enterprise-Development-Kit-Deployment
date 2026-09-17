@@ -2,7 +2,7 @@
   "title": "10 Get hosted authorization server by UUID",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -18,8 +18,8 @@
       "id": "00000000-0000-4000-8000-000000000000",
       "tenantId": "00000000-0000-4000-8000-000000000000",
       "slug": "walkthrough-as",
-      "displayName": "RC4 Release Verification Hosted Authorization Server",
-      "issuer": "https://rc4customer.example.com/as/walkthrough-as",
+      "displayName": "Acme Corporation Hosted Authorization Server",
+      "issuer": "https://acme.example.com/as/walkthrough-as",
       "lifecycle": "ACTIVE",
       "deployment": "HOSTED",
       "authenticationMode": "HYBRID",

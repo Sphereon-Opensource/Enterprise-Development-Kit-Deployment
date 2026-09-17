@@ -2,7 +2,7 @@
   "title": "14 Fetch hosted activation did.json",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/.well-known/did.json",
+    "url": "https://acme.example.com/.well-known/did.json",
     "headers": {
       "Accept": "*/*"
     }
@@ -14,12 +14,12 @@
       "Content-Type": "application/did+json"
     },
     "body": {
-      "id": "did:web:rc4customer.example.com",
+      "id": "did:web:acme.example.com",
       "verificationMethod": [
         {
-          "id": "did:web:rc4customer.example.com#verifier-request-object-rc4customer",
+          "id": "did:web:acme.example.com#verifier-request-object-acme",
           "type": "JsonWebKey2020",
-          "controller": "did:web:rc4customer.example.com",
+          "controller": "did:web:acme.example.com",
           "publicKeyJwk": {
             "crv": "P-256",
             "kty": "EC",
@@ -31,9 +31,9 @@
           }
         },
         {
-          "id": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
+          "id": "did:web:acme.example.com#issuer-assertion-acme",
           "type": "JsonWebKey2020",
-          "controller": "did:web:rc4customer.example.com",
+          "controller": "did:web:acme.example.com",
           "publicKeyJwk": {
             "crv": "P-256",
             "kty": "EC",
@@ -46,11 +46,11 @@
         }
       ],
       "authentication": [
-        "did:web:rc4customer.example.com#verifier-request-object-rc4customer"
+        "did:web:acme.example.com#verifier-request-object-acme"
       ],
       "assertionMethod": [
-        "did:web:rc4customer.example.com#verifier-request-object-rc4customer",
-        "did:web:rc4customer.example.com#issuer-assertion-rc4customer"
+        "did:web:acme.example.com#verifier-request-object-acme",
+        "did:web:acme.example.com#issuer-assertion-acme"
       ]
     }
   }

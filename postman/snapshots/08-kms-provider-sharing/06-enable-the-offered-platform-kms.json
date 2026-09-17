@@ -2,7 +2,7 @@
   "title": "06 Enable the offered platform KMS",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers/platform-shared-<generated>:enable",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers/walkthrough-platform-00000000-0000-4000-8000-000000000000:enable",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -15,12 +15,14 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "providerId": "platform-shared-<generated>",
+      "providerId": "walkthrough-platform-00000000-0000-4000-8000-000000000000",
       "fulfillment": "SHARED_INSTANCE",
       "kind": "SOFTWARE",
-      "displayName": "Platform shared SOFTWARE <generated>",
+      "displayName": "Developer journey platform software KMS",
       "enabled": true,
-      "suggestedDefault": false
+      "suggestedDefault": false,
+      "declaredByDeployment": false,
+      "credentialFromDeployment": false
     }
   }
 }

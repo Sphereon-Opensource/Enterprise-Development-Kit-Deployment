@@ -11,16 +11,16 @@
     "body": {
       "tenant": {
         "tenantType": "organization",
-        "name": "RC4 Release Verification EU",
-        "description": "RC4 Release Verification EU subtenant",
-        "slug": "rc4customer-eu",
+        "name": "Acme Corporation EU",
+        "description": "Acme Corporation EU subtenant",
+        "slug": "acme-eu",
         "parentTenantId": "00000000-0000-4000-8000-000000000000",
         "initialPlatformSubdomain": true
       },
       "contacts": {
         "technical": {
-          "email": "admin@rc4customer-eu.example",
-          "displayName": "RC4 Release Verification EU Technical Contact"
+          "email": "admin@acme-eu.example",
+          "displayName": "Acme Corporation EU Technical Contact"
         },
         "administrativeSameAsTechnical": true,
         "ownerAdmin": {
@@ -49,9 +49,9 @@
       "tenant": {
         "id": "00000000-0000-4000-8000-000000000000",
         "tenantType": "organization",
-        "name": "RC4 Release Verification EU",
-        "description": "RC4 Release Verification EU subtenant",
-        "slug": "rc4customer-eu",
+        "name": "Acme Corporation EU",
+        "description": "Acme Corporation EU subtenant",
+        "slug": "acme-eu",
         "parentTenantId": "00000000-0000-4000-8000-000000000000",
         "status": "ACTIVE",
         "system": false,
@@ -63,12 +63,12 @@
         "deletedAt": null,
         "deletedById": null
       },
-      "tenantUrl": "https://rc4customer-eu.rc4.nk.sphereon.com",
+      "tenantUrl": "https://acme-eu.example.com",
       "serviceUrls": {
-        "authorizationServerUrl": "https://rc4customer-eu.rc4.nk.sphereon.com/as/rc4customer-eu",
-        "issuerUrl": "https://rc4customer-eu.rc4.nk.sphereon.com/as/rc4customer-eu",
-        "oid4vciIssuerUrl": "https://rc4customer-eu.rc4.nk.sphereon.com/oid4vci/rc4customer-eu",
-        "oid4vpVerifierUrl": "https://rc4customer-eu.rc4.nk.sphereon.com/oid4vp/rc4customer-eu"
+        "authorizationServerUrl": "https://acme-eu.example.com/as/acme-eu",
+        "issuerUrl": "https://acme-eu.example.com/as/acme-eu",
+        "oid4vciIssuerUrl": "https://acme-eu.example.com/oid4vci/acme-eu",
+        "oid4vpVerifierUrl": "https://acme-eu.example.com/oid4vp/acme-eu"
       },
       "correlationId": "00000000-0000-4000-8000-000000000000",
       "created": {
@@ -89,7 +89,7 @@
         "status": "MANUAL_READY",
         "invitationId": "00000000-0000-4000-8000-000000000000",
         "expiresAt": "2027-01-01T00:00:00Z",
-        "manualActivationLink": "https://rc4customer-eu.rc4.nk.sphereon.com/as/rc4customer-eu/account-action#<activation-token>",
+        "manualActivationLink": "https://acme-eu.example.com/as/acme-eu/account-action#<activation-token>",
         "reason": null
       }
     }

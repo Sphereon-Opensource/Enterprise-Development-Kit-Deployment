@@ -2,7 +2,7 @@
   "title": "05 List platform KMSes offered to the tenant",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -17,12 +17,14 @@
     "body": {
       "providers": [
         {
-          "providerId": "platform-shared-<generated>",
+          "providerId": "walkthrough-platform-00000000-0000-4000-8000-000000000000",
           "fulfillment": "SHARED_INSTANCE",
           "kind": "SOFTWARE",
-          "displayName": "Platform shared SOFTWARE <generated>",
+          "displayName": "Developer journey platform software KMS",
           "enabled": false,
-          "suggestedDefault": false
+          "suggestedDefault": false,
+          "declaredByDeployment": false,
+          "credentialFromDeployment": false
         }
       ]
     }

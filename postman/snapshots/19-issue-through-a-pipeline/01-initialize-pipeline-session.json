@@ -2,7 +2,7 @@
   "title": "01 Initialize pipeline session",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/sessions",
+    "url": "https://acme.example.com/api/oid4vci/v1/backend/sessions",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

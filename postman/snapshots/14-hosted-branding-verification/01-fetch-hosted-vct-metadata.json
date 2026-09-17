@@ -2,7 +2,7 @@
   "title": "01 Fetch hosted VCT metadata",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/public/schema/vct/EuPid",
+    "url": "https://acme.example.com/public/schema/vct/EuPid",
     "headers": {
       "Accept": "*/*"
     }
@@ -14,7 +14,7 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "vct": "https://rc4customer.example.com/public/schema/vct/EuPid",
+      "vct": "https://acme.example.com/public/schema/vct/EuPid",
       "display": [
         {
           "locale": "en",
@@ -23,7 +23,7 @@
           "rendering": {
             "simple": {
               "logo": {
-                "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                "uri": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
                 "uri#integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
                 "alt_text": "EU PID logo"
               },
@@ -39,7 +39,7 @@
           "rendering": {
             "simple": {
               "logo": {
-                "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                "uri": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
                 "uri#integrity": "sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=",
                 "alt_text": "EU PID logo"
               },

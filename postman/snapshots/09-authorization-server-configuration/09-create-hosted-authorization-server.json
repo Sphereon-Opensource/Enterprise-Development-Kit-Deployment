@@ -2,7 +2,7 @@
   "title": "09 Create hosted authorization server",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -10,8 +10,8 @@
     },
     "body": {
       "slug": "walkthrough-as",
-      "displayName": "RC4 Release Verification Hosted Authorization Server",
-      "issuer": "https://rc4customer.example.com/as/walkthrough-as",
+      "displayName": "Acme Corporation Hosted Authorization Server",
+      "issuer": "https://acme.example.com/as/walkthrough-as",
       "deployment": "HOSTED",
       "authenticationMode": "HYBRID",
       "purposes": [
@@ -35,8 +35,8 @@
       "id": "00000000-0000-4000-8000-000000000000",
       "tenantId": "00000000-0000-4000-8000-000000000000",
       "slug": "walkthrough-as",
-      "displayName": "RC4 Release Verification Hosted Authorization Server",
-      "issuer": "https://rc4customer.example.com/as/walkthrough-as",
+      "displayName": "Acme Corporation Hosted Authorization Server",
+      "issuer": "https://acme.example.com/as/walkthrough-as",
       "lifecycle": "ACTIVE",
       "deployment": "HOSTED",
       "authenticationMode": "HYBRID",
