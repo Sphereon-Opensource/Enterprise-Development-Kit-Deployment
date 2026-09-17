@@ -220,7 +220,7 @@ database:
       dialect: postgresql
       isolation: shared
       host: ${env:EDK_TENANT_DB_HOST}
-      port: 5432
+      port: ${env:EDK_TENANT_DB_PORT:5432}
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
@@ -557,6 +557,10 @@ oauth2:
       # policy surface for the platform AS endpoints.
       signing-key:
         auto-generate: true
+# Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
+# Holder protocols and testing/catalog wrappers are excluded by the backend projection.
+developer-console:
+  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/v1/tabular-mapping-templates"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/v1","/public/schema","/public/statuslists"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
 application:
   bff:
     oauth-client:

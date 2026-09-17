@@ -342,7 +342,7 @@
     },
     {
       "key": "tenantAzureApplicationId",
-      "value": "edk-signing",
+      "value": "",
       "description": "Label EDK stamps on keys it generates in your vault."
     },
     {
@@ -763,7 +763,7 @@
     },
     {
       "key": "platformAzureApplicationId",
-      "value": "edk-signing",
+      "value": "",
       "description": "Label the platform stamps on keys it generates in that vault (operators only)."
     },
     {
@@ -790,6 +790,11 @@
       "key": "platformAzureProviderId",
       "value": "azure-shared-signing",
       "description": "Provider id of the platform tenant's Azure Key Vault resource (operators only)."
+    },
+    {
+      "key": "platformAzureProvisionEnabled",
+      "value": "false",
+      "description": "Set to true to run the platform Azure Key Vault folder against the vault named by platformAzure* variables."
     },
     {
       "key": "platformAzureResourceHandle",
@@ -3562,7 +3567,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"providerId\": \"{{tenantAzureProviderId}}\",\n  \"kind\": \"AZURE_KEY_VAULT\",\n  \"displayName\": \"{{tenantAzureDisplayName}}\",\n  \"configuration\": {\n    \"vaultUri\": \"{{tenantAzureVaultUri}}\",\n    \"applicationId\": \"{{tenantAzureApplicationId}}\",\n    \"tenantId\": \"{{tenantAzureTenantId}}\",\n    \"clientId\": \"{{tenantAzureClientId}}\",\n    \"hsmType\": \"KEYVAULT\"\n  }\n}",
+                  "raw": "{\n  \"providerId\": \"{{tenantAzureProviderId}}\",\n  \"kind\": \"AZURE_KEY_VAULT\",\n  \"displayName\": \"{{tenantAzureDisplayName}}\",\n  \"configuration\": {\n    \"vaultUri\": \"{{tenantAzureVaultUri}}\",\n    \"tenantId\": \"{{tenantAzureTenantId}}\",\n    \"clientId\": \"{{tenantAzureClientId}}\",\n    \"hsmType\": \"KEYVAULT\"\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -3596,7 +3601,8 @@
                       "  const value = String(pm.variables.get(name) || '').trim();",
                       "  if (!value || /^replace-with-/i.test(value)) { pm.test('Azure Key Vault example skipped: fill in ' + name + ' before enabling it', () => {}); pm.execution.skipRequest(); }",
                       "}",
-                      "['tenantAzureResourceHandle', 'tenantAzureResourceVersion', 'tenantAzureCredentialSecretRef'].forEach((key) => pm.collectionVariables.unset(key));"
+                      "['tenantAzureResourceHandle', 'tenantAzureResourceVersion', 'tenantAzureCredentialSecretRef'].forEach((key) => pm.collectionVariables.unset(key));",
+                      "if (String(pm.variables.get('tenantAzureApplicationId')||'').trim()) { const b = JSON.parse(pm.request.body.raw); b.configuration.applicationId = pm.variables.get('tenantAzureApplicationId').trim(); pm.request.body.update(JSON.stringify(b, null, 2)); }"
                     ]
                   }
                 },
@@ -4667,7 +4673,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{tenantAccessToken}}"
+                    "value": "Bearer {{platformAccessToken}}"
                   }
                 ],
                 "auth": {
@@ -4675,7 +4681,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{tenantAccessToken}}",
+                      "value": "{{platformAccessToken}}",
                       "type": "string"
                     }
                   ]
@@ -4688,16 +4694,15 @@
                     "type": "text/javascript",
                     "exec": [
                       "// Runtime auth resolver:",
-                      "const tokenName = 'tenantAccessToken';",
-                      "const token = String(pm.environment.get('tenantAccessToken') || pm.collectionVariables.get('tenantAccessToken') || '').trim();",
+                      "const tokenName = 'platformAccessToken';",
+                      "const token = String(pm.environment.get('platformAccessToken') || pm.collectionVariables.get('platformAccessToken') || '').trim();",
                       "if (!token) throw new Error('Missing or unresolved ' + tokenName + '. Run the preceding token request first or set the active Postman variable.');",
                       "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
                       "if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
-                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
-                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
                       "const token=String(pm.variables.get('platformAccessToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('platformAccessToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('platformAccessToken payload is invalid');}",
                       "const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('platformAccessToken is not bound to the platform-admin tenant');}",
-                      "if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
                       "['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureResourceState','platformAzureCredentialSecretRef','platformAzureAlreadyConfigured','platformAzureLookupValidated','platformAzureConfigurationValidated'].forEach(name=>pm.collectionVariables.unset(name));"
                     ]
                   }
@@ -4734,19 +4739,19 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{tenantAccessToken}}"
+                    "value": "Bearer {{platformAccessToken}}"
                   }
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"providerId\": \"{{platformAzureProviderId}}\",\n  \"kind\": \"AZURE_KEY_VAULT\",\n  \"displayName\": \"{{platformAzureDisplayName}}\",\n  \"configuration\": {\n    \"vaultUri\": \"{{platformAzureVaultUri}}\",\n    \"applicationId\": \"{{platformAzureApplicationId}}\",\n    \"tenantId\": \"{{platformAzureTenantId}}\",\n    \"clientId\": \"{{platformAzureClientId}}\",\n    \"hsmType\": \"KEYVAULT\"\n  }\n}"
+                  "raw": "{\n  \"providerId\": \"{{platformAzureProviderId}}\",\n  \"kind\": \"AZURE_KEY_VAULT\",\n  \"displayName\": \"{{platformAzureDisplayName}}\",\n  \"configuration\": {\n    \"vaultUri\": \"{{platformAzureVaultUri}}\",\n    \"tenantId\": \"{{platformAzureTenantId}}\",\n    \"clientId\": \"{{platformAzureClientId}}\",\n    \"hsmType\": \"KEYVAULT\"\n  }\n}"
                 },
                 "auth": {
                   "type": "bearer",
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{tenantAccessToken}}",
+                      "value": "{{platformAccessToken}}",
                       "type": "string"
                     }
                   ]
@@ -4759,18 +4764,18 @@
                     "type": "text/javascript",
                     "exec": [
                       "// Runtime auth resolver:",
-                      "const tokenName = 'tenantAccessToken';",
-                      "const token = String(pm.environment.get('tenantAccessToken') || pm.collectionVariables.get('tenantAccessToken') || '').trim();",
+                      "const tokenName = 'platformAccessToken';",
+                      "const token = String(pm.environment.get('platformAccessToken') || pm.collectionVariables.get('platformAccessToken') || '').trim();",
                       "if (!token) throw new Error('Missing or unresolved ' + tokenName + '. Run the preceding token request first or set the active Postman variable.');",
                       "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
                       "if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
-                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
-                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
                       "const token=String(pm.variables.get('platformAccessToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('platformAccessToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('platformAccessToken payload is invalid');}",
                       "const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('platformAccessToken is not bound to the platform-admin tenant');}",
-                      "if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
                       "if(pm.collectionVariables.get('platformAzureLookupValidated')!=='true'){pm.test('06c lookup must validate before creation',()=>{throw new Error('Platform Azure lookup did not validate');});pm.execution.skipRequest();}",
-                      "if(pm.collectionVariables.get('platformAzureResourceHandle'))pm.execution.skipRequest();"
+                      "if(pm.collectionVariables.get('platformAzureResourceHandle'))pm.execution.skipRequest();",
+                      "if (String(pm.variables.get('platformAzureApplicationId')||'').trim()) { const b = JSON.parse(pm.request.body.raw); b.configuration.applicationId = pm.variables.get('platformAzureApplicationId').trim(); pm.request.body.update(JSON.stringify(b, null, 2)); }"
                     ]
                   }
                 },
@@ -4801,7 +4806,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{tenantAccessToken}}"
+                    "value": "Bearer {{platformAccessToken}}"
                   }
                 ],
                 "auth": {
@@ -4809,7 +4814,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{tenantAccessToken}}",
+                      "value": "{{platformAccessToken}}",
                       "type": "string"
                     }
                   ]
@@ -4822,16 +4827,15 @@
                     "type": "text/javascript",
                     "exec": [
                       "// Runtime auth resolver:",
-                      "const tokenName = 'tenantAccessToken';",
-                      "const token = String(pm.environment.get('tenantAccessToken') || pm.collectionVariables.get('tenantAccessToken') || '').trim();",
+                      "const tokenName = 'platformAccessToken';",
+                      "const token = String(pm.environment.get('platformAccessToken') || pm.collectionVariables.get('platformAccessToken') || '').trim();",
                       "if (!token) throw new Error('Missing or unresolved ' + tokenName + '. Run the preceding token request first or set the active Postman variable.');",
                       "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
                       "if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
-                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
-                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
                       "const token=String(pm.variables.get('platformAccessToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('platformAccessToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('platformAccessToken payload is invalid');}",
                       "const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('platformAccessToken is not bound to the platform-admin tenant');}",
-                      "if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
                       "if(pm.collectionVariables.get('platformAzureLookupValidated')!=='true'){pm.test('06c lookup must validate before creation',()=>{throw new Error('Platform Azure lookup did not validate');});pm.execution.skipRequest();}",
                       "for(const name of ['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureCredentialSecretRef'])if(!String(pm.collectionVariables.get(name)||'').trim()){pm.test('06c requires response-derived resource identity',()=>{throw new Error('Required response-derived Azure resource value is unresolved: '+name);});pm.execution.skipRequest();}",
                       "pm.collectionVariables.unset('platformAzureConfigurationValidated');"
@@ -4845,7 +4849,7 @@
                     "exec": [
                       "pm.expect(pm.response.code,'Azure detail status').to.eql(200);",
                       "const resource=pm.response.json();pm.expect(resource.handle).to.eql(pm.collectionVariables.get('platformAzureResourceHandle'));pm.expect(resource.providerId).to.eql(pm.variables.get('platformAzureProviderId'));pm.expect(resource.kind).to.eql('AZURE_KEY_VAULT');pm.expect(resource.credentialOwnership).to.eql('PRODUCT_MANAGED');pm.expect(['CONFIGURED','DEGRADED']).to.include(resource.state);pm.expect(['UNKNOWN','HEALTHY','STALE','DEGRADED','FAILED']).to.include(resource.health);pm.expect(resource.resourceVersion).to.eql(Number(pm.collectionVariables.get('platformAzureResourceVersion')));pm.expect(resource.credentialConfigured).to.eql(pm.collectionVariables.get('platformAzureAlreadyConfigured')==='true');pm.expect(resource.credentialSecretRef).to.be.oneOf([null,undefined]);",
-                      "pm.expect(resource.configuration).to.deep.eql({vaultUri:pm.variables.get('platformAzureVaultUri'),applicationId:pm.variables.get('platformAzureApplicationId'),tenantId:pm.variables.get('platformAzureTenantId'),clientId:pm.variables.get('platformAzureClientId'),hsmType:'KEYVAULT'});",
+                      "const expectedApplicationId=String(pm.variables.get('platformAzureApplicationId')||'').trim()?pm.variables.get('platformAzureApplicationId'):pm.variables.get('platformAzureProviderId');pm.expect(resource.configuration).to.deep.eql({vaultUri:pm.variables.get('platformAzureVaultUri'),applicationId:expectedApplicationId,tenantId:pm.variables.get('platformAzureTenantId'),clientId:pm.variables.get('platformAzureClientId'),hsmType:'KEYVAULT'});",
                       "const responseText=pm.response.text();pm.expect(responseText,'response omits supplied credential').to.not.include(pm.variables.get('platformAzureClientSecret'));pm.expect(responseText,'response has no secret value field').to.not.match(/\"(?:clientSecret|password|secretValue)\"\\s*:/i);",
                       "pm.expect(resource.state).to.eql(pm.collectionVariables.get('platformAzureResourceState'));pm.collectionVariables.set('platformAzureConfigurationValidated','true');"
                     ]
@@ -4869,7 +4873,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{tenantAccessToken}}"
+                    "value": "Bearer {{platformAccessToken}}"
                   }
                 ],
                 "body": {
@@ -4881,7 +4885,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{tenantAccessToken}}",
+                      "value": "{{platformAccessToken}}",
                       "type": "string"
                     }
                   ]
@@ -4894,16 +4898,15 @@
                     "type": "text/javascript",
                     "exec": [
                       "// Runtime auth resolver:",
-                      "const tokenName = 'tenantAccessToken';",
-                      "const token = String(pm.environment.get('tenantAccessToken') || pm.collectionVariables.get('tenantAccessToken') || '').trim();",
+                      "const tokenName = 'platformAccessToken';",
+                      "const token = String(pm.environment.get('platformAccessToken') || pm.collectionVariables.get('platformAccessToken') || '').trim();",
                       "if (!token) throw new Error('Missing or unresolved ' + tokenName + '. Run the preceding token request first or set the active Postman variable.');",
                       "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
                       "if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
-                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
-                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
                       "const token=String(pm.variables.get('platformAccessToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('platformAccessToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('platformAccessToken payload is invalid');}",
                       "const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('platformAccessToken is not bound to the platform-admin tenant');}",
-                      "if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
                       "for(const name of ['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureCredentialSecretRef'])if(!String(pm.collectionVariables.get(name)||'').trim()){pm.test('06c requires response-derived resource identity',()=>{throw new Error('Required response-derived Azure resource value is unresolved: '+name);});pm.execution.skipRequest();}",
                       "if(pm.collectionVariables.get('platformAzureConfigurationValidated')!=='true'){pm.test('06c configuration must validate before credential mutation',()=>{throw new Error('Platform Azure configuration did not validate');});pm.execution.skipRequest();}",
                       "pm.collectionVariables.unset('platformAzureCredentialWriteValidated');if(pm.collectionVariables.get('platformAzureAlreadyConfigured')==='true')pm.execution.skipRequest();"
@@ -4936,7 +4939,7 @@
                   },
                   {
                     "key": "Authorization",
-                    "value": "Bearer {{tenantAccessToken}}"
+                    "value": "Bearer {{platformAccessToken}}"
                   }
                 ],
                 "auth": {
@@ -4944,7 +4947,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{tenantAccessToken}}",
+                      "value": "{{platformAccessToken}}",
                       "type": "string"
                     }
                   ]
@@ -4957,16 +4960,15 @@
                     "type": "text/javascript",
                     "exec": [
                       "// Runtime auth resolver:",
-                      "const tokenName = 'tenantAccessToken';",
-                      "const token = String(pm.environment.get('tenantAccessToken') || pm.collectionVariables.get('tenantAccessToken') || '').trim();",
+                      "const tokenName = 'platformAccessToken';",
+                      "const token = String(pm.environment.get('platformAccessToken') || pm.collectionVariables.get('platformAccessToken') || '').trim();",
                       "if (!token) throw new Error('Missing or unresolved ' + tokenName + '. Run the preceding token request first or set the active Postman variable.');",
                       "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
                       "if(String(pm.variables.get('platformAzureProvisionEnabled')||'').toLowerCase()!=='true'){pm.execution.skipRequest();}",
-                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureApplicationId:'edk-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
-                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureApplicationId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
+                      "const defaults={platformAzureProviderId:'azure-shared-signing',platformAzureDisplayName:'Platform Azure Key Vault signing'}; for(const [name,value] of Object.entries(defaults)) if(!String(pm.variables.get(name)||'').trim()) pm.collectionVariables.set(name,value);",
+                      "const required=['platformAccessToken','platformTenantId','platformAzureVaultUri','platformAzureTenantId','platformAzureClientId','platformAzureClientSecret','platformAzureProviderId','platformAzureDisplayName']; for(const name of required){const value=String(pm.variables.get(name)||'').trim();if(!value||/^PASTE-/i.test(value)){pm.test('06c preflight rejects unresolved input',()=>{throw new Error('Required platform Azure input is unresolved: '+name);});pm.execution.skipRequest();}}",
                       "const token=String(pm.variables.get('platformAccessToken'));const parts=token.split('.');if(parts.length!==3){pm.execution.skipRequest();throw new Error('platformAccessToken must be a JWT');}let payload;try{const s=parts[1].replace(/-/g,'+').replace(/_/g,'/');payload=JSON.parse(CryptoJS.enc.Base64.parse(s+'='.repeat((4-s.length%4)%4)).toString(CryptoJS.enc.Utf8));}catch(_){pm.execution.skipRequest();throw new Error('platformAccessToken payload is invalid');}",
                       "const roles=payload.roles||(payload.realm_access&&payload.realm_access.roles)||[];const binding=payload.tenant_id||payload.tenantId||payload.tenant;if(!Array.isArray(roles)||!roles.includes('platform-admin')||binding!==pm.variables.get('platformTenantId')||binding!=='platform'){pm.execution.skipRequest();throw new Error('platformAccessToken is not bound to the platform-admin tenant');}",
-                      "if(pm.variables.get('platformAzureApplicationId')===pm.variables.get('platformAzureClientId')){pm.execution.skipRequest();throw new Error('Azure applicationId must be distinct from OAuth clientId');}",
                       "if(!(pm.collectionVariables.get('platformAzureConfigurationValidated')==='true'&&(pm.collectionVariables.get('platformAzureAlreadyConfigured')==='true'||pm.collectionVariables.get('platformAzureCredentialWriteValidated')==='true'))){pm.test('06c credential path must complete before final read',()=>{throw new Error('Platform Azure credential path did not complete');});pm.execution.skipRequest();}",
                       "for(const name of ['platformAzureResourceHandle','platformAzureResourceVersion','platformAzureCredentialSecretRef'])if(!String(pm.collectionVariables.get(name)||'').trim()){pm.test('06c requires response-derived resource identity',()=>{throw new Error('Required response-derived Azure resource value is unresolved: '+name);});pm.execution.skipRequest();}"
                     ]
@@ -4979,7 +4981,7 @@
                     "exec": [
                       "pm.expect(pm.response.code,'configured Azure detail status').to.eql(200);",
                       "const resource=pm.response.json();pm.expect(resource.handle).to.eql(pm.collectionVariables.get('platformAzureResourceHandle'));pm.expect(resource.providerId).to.eql(pm.variables.get('platformAzureProviderId'));pm.expect(resource.kind).to.eql('AZURE_KEY_VAULT');pm.expect(resource.credentialOwnership).to.eql('PRODUCT_MANAGED');pm.expect(['CONFIGURED','DEGRADED']).to.include(resource.state);pm.expect(['UNKNOWN','HEALTHY','STALE','DEGRADED','FAILED']).to.include(resource.health);pm.expect(resource.resourceVersion).to.eql(Number(pm.collectionVariables.get('platformAzureResourceVersion')));pm.expect(resource.credentialConfigured).to.eql(pm.collectionVariables.get('platformAzureAlreadyConfigured')==='true');pm.expect(resource.credentialSecretRef).to.be.oneOf([null,undefined]);",
-                      "pm.expect(resource.configuration).to.deep.eql({vaultUri:pm.variables.get('platformAzureVaultUri'),applicationId:pm.variables.get('platformAzureApplicationId'),tenantId:pm.variables.get('platformAzureTenantId'),clientId:pm.variables.get('platformAzureClientId'),hsmType:'KEYVAULT'});",
+                      "const expectedApplicationId=String(pm.variables.get('platformAzureApplicationId')||'').trim()?pm.variables.get('platformAzureApplicationId'):pm.variables.get('platformAzureProviderId');pm.expect(resource.configuration).to.deep.eql({vaultUri:pm.variables.get('platformAzureVaultUri'),applicationId:expectedApplicationId,tenantId:pm.variables.get('platformAzureTenantId'),clientId:pm.variables.get('platformAzureClientId'),hsmType:'KEYVAULT'});",
                       "const responseText=pm.response.text();pm.expect(responseText,'response omits supplied credential').to.not.include(pm.variables.get('platformAzureClientSecret'));pm.expect(responseText,'response has no secret value field').to.not.match(/\"(?:clientSecret|password|secretValue)\"\\s*:/i);",
                       "pm.expect(resource.credentialConfigured).to.eql(true);"
                     ]
@@ -5068,7 +5070,7 @@
             "const token = String(pm.environment.get('platformAccessToken') || pm.collectionVariables.get('platformAccessToken') || '').trim();",
             "if (!token) throw new Error('Missing or unresolved platformAccessToken. Run the preceding platform token request first or set the active Postman variable.');",
             "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
-            "if (!String(pm.collectionVariables.get('platformKmsProviderId') || '').trim()) pm.collectionVariables.set('platformKmsProviderId', 'walkthrough-platform-software');",
+            "if (!String(pm.collectionVariables.get('platformKmsProviderId') || '').trim()) pm.collectionVariables.set('platformKmsProviderId', 'walkthrough-platform-' + pm.variables.replaceIn('{{$randomUUID}}'));",
             "if (!String(pm.collectionVariables.get('platformKmsDisplayName') || '').trim()) pm.collectionVariables.set('platformKmsDisplayName', 'Developer journey platform software KMS');"
                 ]
               }
@@ -5839,7 +5841,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantAccessToken}}"
+                "value": "Bearer {{tenantBootstrapAccessToken}}"
               }
             ],
             "body": {
@@ -5851,7 +5853,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{tenantAccessToken}}",
+                  "value": "{{tenantBootstrapAccessToken}}",
                   "type": "string"
                 }
               ]
@@ -5864,8 +5866,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "// Runtime auth resolver:",
-                  "const tokenName = 'tenantAccessToken';",
-                  "const token = String(pm.environment.get('tenantAccessToken') || pm.collectionVariables.get('tenantAccessToken') || '').trim();",
+                  "const tokenName = 'tenantBootstrapAccessToken';",
+                  "const token = String(pm.environment.get('tenantBootstrapAccessToken') || pm.collectionVariables.get('tenantBootstrapAccessToken') || '').trim();",
                   "if (!token) throw new Error('Missing or unresolved ' + tokenName + '. Run the preceding token request first or set the active Postman variable.');",
                   "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
                   "if (!pm.collectionVariables.get('hostedClientSecret')) pm.collectionVariables.set('hostedClientSecret', pm.variables.replaceIn('{{$randomUUID}}') + pm.variables.replaceIn('{{$randomUUID}}'));"
@@ -6315,7 +6317,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{tenantAccessToken}}"
+                "value": "Bearer {{tenantBootstrapAccessToken}}"
               }
             ],
             "body": {
@@ -6327,7 +6329,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{tenantAccessToken}}",
+                  "value": "{{tenantBootstrapAccessToken}}",
                   "type": "string"
                 }
               ]
@@ -6340,8 +6342,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "// Runtime auth resolver:",
-                  "const tokenName = 'tenantAccessToken';",
-                  "const token = String(pm.environment.get('tenantAccessToken') || pm.collectionVariables.get('tenantAccessToken') || '').trim();",
+                  "const tokenName = 'tenantBootstrapAccessToken';",
+                  "const token = String(pm.environment.get('tenantBootstrapAccessToken') || pm.collectionVariables.get('tenantBootstrapAccessToken') || '').trim();",
                   "if (!token) throw new Error('Missing or unresolved ' + tokenName + '. Run the preceding token request first or set the active Postman variable.');",
                   "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
                   "if (!pm.collectionVariables.get('federationClientSecret')) pm.collectionVariables.set('federationClientSecret', pm.variables.replaceIn('{{$randomUUID}}') + pm.variables.replaceIn('{{$randomUUID}}'));"

@@ -50,6 +50,8 @@ applications:
   admin-console:
     public-base-path: ${env:EDK_ADMIN_CONSOLE_PUBLIC_BASE_PATH:/admin-console}
 oid4vci:
+  business-authorization:
+    mode: ordinary
   issuer:
     protocol:
       base-path: /oid4vci

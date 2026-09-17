@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
-import {createHash} from 'node:crypto'
+import {createHash, randomUUID} from 'node:crypto'
+import {runInNewContext} from 'node:vm'
 import {
   mkdirSync,
   mkdtempSync,
@@ -147,7 +148,23 @@ assert.ok(collectionRequests.every((item) => !(item.request.auth?.bearer ?? []).
 const platformKmsCreate = requestByName.get('01 Create shareable platform KMS resource')
 assert.ok(platformKmsCreate, 'platform KMS sharing must create a typed resource')
 assert.ok(platformKmsCreate.request.body.raw.includes('"providerId": "{{platformKmsProviderId}}"'))
-assert.match(JSON.stringify(platformKmsCreate.event ?? []), /platformKmsProviderId.*walkthrough-platform-software/u)
+function resolvePlatformProviderId(initial = '') {
+  const values = new Map([['platformKmsProviderId', initial]])
+  const pm = {
+    environment: {get: name => name === 'platformAccessToken' ? 'test-token' : undefined},
+    collectionVariables: {get: name => values.get(name), set: (name, value) => values.set(name, value)},
+    variables: {replaceIn: text => text.replaceAll('{{$randomUUID}}', randomUUID())},
+    request: {headers: {upsert() {}}},
+  }
+  for (const event of platformKmsCreate.event.filter(event => event.listen === 'prerequest')) {
+    runInNewContext(event.script.exec.join('\n'), {pm})
+  }
+  return values.get('platformKmsProviderId')
+}
+const firstPlatformProviderId = resolvePlatformProviderId()
+assert.match(firstPlatformProviderId, /^walkthrough-platform-[0-9a-f-]{36}$/u)
+assert.notEqual(resolvePlatformProviderId(), firstPlatformProviderId, 'independent walkthroughs must not reuse retired provider identities')
+assert.equal(resolvePlatformProviderId('operator-selected-provider'), 'operator-selected-provider', 'explicit provider selection must be retained')
 const employeeBadgeCredential = requestByName.get('06 Request the EmployeeBadge credential')
 const membershipCredential = requestByName.get('06 Request the Membership credential')
 const employeeBadgeFolder = collection.item.find((item) => item.name === '17 Issue W3C VCDM 1.1')

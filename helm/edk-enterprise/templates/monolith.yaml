@@ -37,6 +37,8 @@ metadata:
     app.kubernetes.io/component: monolith
 data:
   application-container.yml: |
+    developer-console:
+      gateway-services: {{ include "edk-enterprise.developerConsoleGatewayServices" . | quote }}
     # The platform operator client is intentionally application-agnostic. Keep
     # this security boundary explicit in the mounted overlay because monolith
     # deployments replace, rather than merge, the packaged container config.
@@ -520,6 +522,16 @@ spec:
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             {{- else }}
+            - name: ADMIN_CONSOLE_PUBLIC_ORIGIN
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_ISSUER
+              value: {{ $.Values.platform.bootstrap.issuer | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_TOKEN_URL
+              value: {{ printf "http://%s:%v/token" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL
@@ -731,7 +743,7 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
-    {{- range $authEndpoint := list "session" "login" "callback" }}
+    {{- range $authEndpoint := list "session" "login" "callback" "token" "logout" }}
     - timeouts:
         request: {{ $.Values.gateway.requestTimeout | quote }}
         backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}

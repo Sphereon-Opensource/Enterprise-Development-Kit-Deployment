@@ -528,6 +528,11 @@ services:
     environment:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: TENANT
+      # Platform actor login retains the registry-resolved target tenant for STS.
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: *edk-platform-public-url
+      ADMIN_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL: *edk-platform-public-url
+      ADMIN_CONSOLE_PLATFORM_ISSUER: *edk-platform-public-url
+      ADMIN_CONSOLE_PLATFORM_TOKEN_URL: http://enterprise-platform:18080/token
       ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1

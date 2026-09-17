@@ -63,6 +63,8 @@ data:
   # environment variable name cannot express (the platform tenant datasource
   # and the hyphenated control-plane bootstrap keys).
   application.yml: |
+    developer-console:
+      gateway-services: {{ include "edk-enterprise.developerConsoleGatewayServices" . | quote }}
 {{ include "edk-enterprise.secretAuthorityPlatformConfig" . | indent 4 }}
     server:
       rest:
