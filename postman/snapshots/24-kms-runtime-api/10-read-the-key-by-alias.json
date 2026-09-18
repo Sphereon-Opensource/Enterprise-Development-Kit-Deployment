@@ -2,7 +2,7 @@
   "title": "10 Read the key by alias",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/kms/v1/keys/customer-tenant-signing-key?providerId=default",
+    "url": "https://acme.example.com/api/kms/v1/keys/customer-tenant-signing-key?providerId=default",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

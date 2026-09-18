@@ -7,6 +7,10 @@
 # Public surface: OAuth/OIDC discovery and protocol endpoints plus the operator
 # login UI. The platform admin and setup APIs are internal and require an
 # operator bearer; expose them only through an internal ingress or service mesh.
+edk:
+  tenant:
+    invalidation:
+      database-route: tenant-invalidation
 server:
   rest:
     port: 18080
@@ -210,6 +214,16 @@ database:
       database: ${env:EDK_TENANT_DB_NAME}
       username: ${env:EDK_TENANT_DB_USERNAME}
       password: ${env:EDK_TENANT_DB_PASSWORD}
+    # Shared LISTEN/NOTIFY route for satellite enterprise images. The platform
+    # APP database remains authoritative for platform routing/configuration.
+    tenant-invalidation:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: ${env:EDK_TENANT_DB_PORT:5432}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
   tenants:
     # The platform owns customer-tenant schema creation and migration.
     default:
@@ -255,7 +269,7 @@ secret-management:
       # Cloud offerings are opt-in. A deployment may publish the typed Azure/AWS
       # tenant offerings only after explicitly enabling this policy; provider
       # instances and credentials are still registered through platform-config.
-      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false}
+      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:true}
       # Publishes only the self-contained, per-tenant software-KMS offering.
       allow-platform-offerings: true
       retention-days: 30
@@ -267,9 +281,9 @@ secret-management:
     workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email
   deployment:
     environment:
-      enabled: true
-      manifest-path: /app/secret-management/deployment/environment.manifest
-      manifest-sha256: sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e
+      enabled: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_ENABLED:true}
+      manifest-path: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_PATH:/app/secret-management/deployment/environment.manifest}
+      manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e}
     kubernetes-mount:
       enabled: false
 # Trust-domain anchor -> identifier materialization source. The platform executes the routed trust
@@ -543,6 +557,10 @@ oauth2:
       # policy surface for the platform AS endpoints.
       signing-key:
         auto-generate: true
+# Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
+# Holder protocols and testing/catalog wrappers are excluded by the backend projection.
+developer-console:
+  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/v1/tabular-mapping-templates"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/v1","/public/schema","/public/statuslists"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
 application:
   bff:
     oauth-client:

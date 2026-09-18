@@ -2,7 +2,7 @@
   "title": "04 Read the suspended entry",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/entries/11",
+    "url": "https://acme.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/entries/11",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

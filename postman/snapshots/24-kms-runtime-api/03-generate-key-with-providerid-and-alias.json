@@ -2,7 +2,7 @@
   "title": "03 Generate key with providerId and alias",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/kms/v1/providers/default/keys",
+    "url": "https://acme.example.com/api/kms/v1/providers/default/keys",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

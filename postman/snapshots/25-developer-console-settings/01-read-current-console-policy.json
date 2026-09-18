@@ -2,7 +2,7 @@
   "title": "01 Read current console policy",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/developer-console",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/developer-console",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -19,7 +19,7 @@
       "exposureMode": "AS_PROTECTED",
       "tools": {},
       "revision": 0,
-      "displayUrl": "https://rc4customer.example.com/developer-console"
+      "displayUrl": "https://acme.example.com/developer-console"
     }
   }
 }

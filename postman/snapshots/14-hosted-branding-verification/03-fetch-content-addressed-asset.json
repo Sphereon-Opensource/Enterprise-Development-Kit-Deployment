@@ -2,7 +2,7 @@
   "title": "03 Fetch content-addressed asset",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+    "url": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
     "headers": {
       "Accept": "*/*"
     }

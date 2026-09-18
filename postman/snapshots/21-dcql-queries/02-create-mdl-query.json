@@ -2,7 +2,7 @@
   "title": "02 Create Mdl query",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/dcql/v1/queries",
+    "url": "https://acme.example.com/api/dcql/v1/queries",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

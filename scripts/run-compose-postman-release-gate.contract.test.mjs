@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
-import {createHash} from 'node:crypto'
+import {createHash, randomUUID} from 'node:crypto'
+import {runInNewContext} from 'node:vm'
 import {
   mkdirSync,
   mkdtempSync,
@@ -78,7 +79,7 @@ $collection = Get-Content -LiteralPath '${collectionPath.replaceAll("'", "''")}'
 @{ inventory = (Count-Requests @($collection.item)); enabled = (Count-Requests @($collection.item) -EnabledOnly) } | ConvertTo-Json -Compress
 `], {encoding: 'utf8'})
 assert.equal(countProbe.status, 0, countProbe.stderr)
-assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 219, enabled: 199})
+assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 218, enabled: 193})
 
 function requestCount(items) {
   return (items ?? []).reduce(
@@ -112,7 +113,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 219, 'shipped customer collection must contain the current 219-request customer reference')
+assert.equal(requestCount(collection.item), 218, 'shipped customer collection must contain the current 218-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -122,37 +123,65 @@ const variableAudit = spawnSync(process.execPath, [variableAuditPath, collection
 assert.equal(variableAudit.status, 0, `${variableAudit.stdout}\n${variableAudit.stderr}`)
 assert.match(variableAudit.stdout, /Postman variable audit passed\./u)
 
-// The platform operator signs in through the hosted authorization server. client_credentials is
-// reserved for the tenant service client the walkthrough registers in the tenant
-// federation lane after the tenant authorization server has been discovered.
-assert.deepEqual(collection.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{operatorToken}}', type: 'string'}]})
+// The platform operator signs in through the hosted authorization server. Every request then
+// declares its own boundary; no collection-level bearer token may leak into tenant or public calls.
+assert.deepEqual(collection.auth, {type: 'noauth'})
 const operatorTokenRequest = requestByName.get('05 Exchange code for operator token')
 assert.ok(operatorTokenRequest, 'operator sign-in must end in an authorization-code token exchange')
 assert.equal(operatorTokenRequest.request.url, '{{platformUrl}}/token')
 assert.ok(operatorTokenRequest.request.body.urlencoded.some((entry) => entry.key === 'grant_type' && entry.value === 'authorization_code'))
-assert.ok(JSON.stringify(operatorTokenRequest.event).includes("pm.collectionVariables.set('operatorToken', j.access_token)"))
-const tenantTokenRequest = requestByName.get('01 Tenant service token (client credentials)')
+assert.ok(JSON.stringify(operatorTokenRequest.event).includes("pm.collectionVariables.set('platformAccessToken', j.access_token)"))
+const tenantTokenRequest = requestByName.get('02 Tenant service token (client credentials)')
 assert.ok(tenantTokenRequest, 'tenant service token request must exist')
-assert.equal(tenantTokenRequest.request.auth.type, 'basic')
-assert.deepEqual(
-  tenantTokenRequest.request.auth.basic.map((entry) => entry.value),
-  ['{{tenantServiceClientId}}', '{{tenantServiceClientSecret}}'],
-)
-assert.ok(JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantToken', tenantAccessToken)") ||
-  JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantToken', j.access_token)"))
+assert.equal(tenantTokenRequest.request.auth.type, 'noauth')
+assert.ok(JSON.stringify(tenantTokenRequest.event).includes("pm.collectionVariables.set('tenantAccessToken', j.access_token)"))
+assert.ok(JSON.stringify(tenantTokenRequest.event).includes('client_secret_post'))
+assert.ok(JSON.stringify(tenantTokenRequest.event).includes('client_secret_basic'))
 const tenantServiceClientRegistration = requestByName.get('07b Register walkthrough tenant service client')
 assert.ok(tenantServiceClientRegistration, 'tenant service client registration must follow tenant authorization-server discovery in folder 04')
 assert.match(tenantServiceClientRegistration.request.body.raw, /"principalRoles": \[\s*"tenant-admin"\s*\]/u)
 assert.match(tenantServiceClientRegistration.request.body.raw, /"grantTypes": \[\s*"client_credentials"\s*\]/u)
-for (const folderName of ['06 Tenant Keys and DID', '10 Issuer Settings', '15 Issue SD-JWT VC and mdoc', '22 Verification']) {
-  const folder = collection.item.find((item) => item.name === folderName)
-  assert.deepEqual(folder.auth, {type: 'bearer', bearer: [{key: 'token', value: '{{tenantToken}}', type: 'string'}]}, `${folderName} must inherit the tenant token`)
+assert.ok(collectionRequests.some((item) => item.request.auth?.bearer?.some((entry) => entry.value === '{{platformAccessToken}}')))
+assert.ok(collectionRequests.some((item) => item.request.auth?.bearer?.some((entry) => entry.value === '{{tenantAccessToken}}')))
+assert.ok(collectionRequests.some((item) => item.request.auth?.bearer?.some((entry) => entry.value === '{{walletAccessToken}}')))
+assert.ok(collectionRequests.every((item) => !(item.request.auth?.bearer ?? []).some((entry) => /operatorToken|tenantToken/u.test(entry.value))))
+const platformKmsCreate = requestByName.get('01 Create shareable platform KMS resource')
+assert.ok(platformKmsCreate, 'platform KMS sharing must create a typed resource')
+assert.ok(platformKmsCreate.request.body.raw.includes('"providerId": "{{platformKmsProviderId}}"'))
+function resolvePlatformProviderId(initial = '') {
+  const values = new Map([['platformKmsProviderId', initial]])
+  const pm = {
+    environment: {get: name => name === 'platformAccessToken' ? 'test-token' : undefined},
+    collectionVariables: {get: name => values.get(name), set: (name, value) => values.set(name, value)},
+    variables: {replaceIn: text => text.replaceAll('{{$randomUUID}}', randomUUID())},
+    request: {headers: {upsert() {}}},
+  }
+  for (const event of platformKmsCreate.event.filter(event => event.listen === 'prerequest')) {
+    runInNewContext(event.script.exec.join('\n'), {pm})
+  }
+  return values.get('platformKmsProviderId')
 }
-assert.equal(
-  collectionRequests.filter((item) => (item.request.header ?? []).some((header) => /^authorization$/iu.test(header.key))).length,
-  0,
-  'bearer credentials come from collection, folder, or request auth, never from a header',
-)
+const firstPlatformProviderId = resolvePlatformProviderId()
+assert.match(firstPlatformProviderId, /^walkthrough-platform-[0-9a-f-]{36}$/u)
+assert.notEqual(resolvePlatformProviderId(), firstPlatformProviderId, 'independent walkthroughs must not reuse retired provider identities')
+assert.equal(resolvePlatformProviderId('operator-selected-provider'), 'operator-selected-provider', 'explicit provider selection must be retained')
+const employeeBadgeCredential = requestByName.get('06 Request the EmployeeBadge credential')
+const membershipCredential = requestByName.get('06 Request the Membership credential')
+const employeeBadgeFolder = collection.item.find((item) => item.name === '17 Issue W3C VCDM 1.1')
+const membershipFolder = collection.item.find((item) => item.name === '18 Issue W3C VCDM 2.0')
+assert.match(JSON.stringify(employeeBadgeFolder?.event ?? []), /employeeBadgeNonce/u)
+assert.match(JSON.stringify(membershipFolder?.event ?? []), /membershipNonce/u)
+assert.ok(!/get\('cNonce'\)/u.test(JSON.stringify([employeeBadgeFolder?.event ?? [], membershipFolder?.event ?? []])))
+assert.ok(!JSON.stringify(collection).includes("'cNonce'"), 'credential proof helpers must not use a shared generic cNonce')
+assert.ok(JSON.stringify(collection).includes("nonceEndpoint"), 'issuance must use the singular protocol nonce endpoint')
+const authPreflight = requestByName.get('01 Validate platform and tenant token scopes')
+assert.ok(authPreflight, 'authentication preflight must exist')
+assert.ok(JSON.stringify(authPreflight.event ?? []).includes('pm.variables.get(name)'), 'preflight must resolve the active Postman variable scope so environment-pasted tokens are usable')
+assert.ok(!JSON.stringify(collection).includes("euPidNonceEndpoint"), 'EuPid must not invent a second nonce endpoint')
+assert.ok(!JSON.stringify(collection).includes("mdlNonceEndpoint"), 'mDL must not invent a second nonce endpoint')
+assert.ok(!JSON.stringify(collection).includes("employeeBadgeNonceEndpoint"), 'EmployeeBadge must use the discovered nonce endpoint')
+assert.ok(!JSON.stringify(collection).includes("membershipNonceEndpoint"), 'Membership must use the discovered nonce endpoint')
+assert.ok(!JSON.stringify(collection).includes("transactionNonceEndpoint"), 'transaction-code issuance must use the discovered nonce endpoint')
 assert.ok(collection.variable.some((entry) => entry.key === 'operatorCodeVerifier'), 'operator sign-in keeps its PKCE helper variable')
 assert.ok(requestByName.has('03 Submit operator credentials'), 'the platform operator signs in through the hosted login form')
 assert.ok(requestByName.has('05 Submit tenant owner credentials'), 'tenant owner activation keeps its forms login')
@@ -320,8 +349,8 @@ assert.match(helmValues, /allowTenantManagedProviders: false/u, 'customer Helm m
 assert.match(e2eHelmValues, /allowTenantManagedProviders: false/u, 'E2E Helm must preserve the clean customer provider baseline')
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
-  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: \$\{env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:false\}\n/u,
-  'customer Compose must not publish cloud-provider fixtures by default',
+  /\n {4}tenant-policy:\n(?: {6}#[^\n]*\n)* {6}allow-tenant-managed-providers: \$\{env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:true\}\n/u,
+  'customer Compose publishes the typed cloud-provider offerings for the developer surface',
 )
 assert.match(
   rootYamlBlock(platformConfig, 'sphereon'),
@@ -912,7 +941,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 219)
+  assert.equal(plan.requestCount, 218)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -951,13 +980,13 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 219)
+  assert.equal(monolithPlan.requestCount, 218)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))
   assert.match(readFileSync(monolithPlan.composeFiles[1], 'utf8'), /LICENSE_GATE_SERVICE_ROLE: \$\{VDX_LICENSE_GATE_SERVICE_ROLE:-platform\}/u)
   assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /svc-monolith/u)
-  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /acme\.saas\.localtest\.me/u)
+  assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /platform\.saas\.localtest\.me/u)
   assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /TENANT_RESOLUTION_SELF_HOSTS: localhost,svc-monolith,platform\.saas\.localtest\.me/u)
   assert.match(readFileSync(monolithPlan.gatewayDynamic, 'utf8'), /http:\/\/svc-monolith:8080/u)
   assert.doesNotMatch(readFileSync(monolithPlan.gatewayDynamic, 'utf8'), /http:\/\/enterprise-/u)

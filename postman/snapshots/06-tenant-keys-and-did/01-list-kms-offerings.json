@@ -2,7 +2,7 @@
   "title": "01 List KMS offerings",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/offerings",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/offerings",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -24,6 +24,28 @@
           "health": "UNKNOWN",
           "supportedCredentialOwnerships": [
             "PRODUCT_MANAGED"
+          ]
+        },
+        {
+          "kind": "AWS_KMS",
+          "label": "AWS KMS",
+          "available": true,
+          "defaultSelected": false,
+          "health": "UNKNOWN",
+          "supportedCredentialOwnerships": [
+            "PRODUCT_MANAGED",
+            "TENANT_SUPPLIED"
+          ]
+        },
+        {
+          "kind": "AZURE_KEY_VAULT",
+          "label": "Azure Key Vault",
+          "available": true,
+          "defaultSelected": false,
+          "health": "UNKNOWN",
+          "supportedCredentialOwnerships": [
+            "PRODUCT_MANAGED",
+            "TENANT_SUPPLIED"
           ]
         }
       ]

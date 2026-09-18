@@ -238,6 +238,21 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
+    {{- range $authEndpoint := list "token" "logout" }}
+    - matches:
+        - path:
+            type: Exact
+            value: {{ printf "/developer-console/api/auth/%s" $authEndpoint | quote }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: {{ printf "/admin-console/api/developer-console-auth/%s" $authEndpoint | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    {{- end }}
     # Only the browser-safe admin-console runtime projection is exposed from
     # the platform service on tenant hosts.
     - matches:
@@ -441,6 +456,9 @@ spec:
             type: PathPrefix
             value: /api/assets/v1
         - path:
+            type: PathPrefix
+            value: /api/connector/v1
+        - path:
             type: RegularExpression
             value: "^/public/assets/[^/]+/brand/[^/]+$"
       backendRefs:
@@ -628,6 +646,11 @@ spec:
         - path:
             type: PathPrefix
             value: /api/trust-domain/v1
+        {{- range $path := list "/api/audit/v1" "/api/forms/v1" "/api/workflow/v1" "/api/lifecycle/v1" "/api/services/v1" "/api/v1/config" "/api/invitation/v1/invitations" }}
+        - path:
+            type: PathPrefix
+            value: {{ $path | quote }}
+        {{- end }}
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
           port: {{ .Values.services.platform.restPort }}
@@ -668,7 +691,7 @@ spec:
           port: {{ include "edk-enterprise.walletOnboardingBackendRestPort" . | int }}
 ---
 {{- end }}
-{{- range $name := list "did" }}
+{{- range $name := list "did" "tenant-kms" }}
 {{- $svc := index $.Values.services $name }}
 {{- if $svc.enabled }}
 # Operator-host DID management projection. Typed KMS resources are platform
@@ -694,7 +717,7 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: "/api/did/v1"
+            value: {{ ternary "/api/kms/v1" "/api/did/v1" (eq $name "tenant-kms") | quote }}
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}

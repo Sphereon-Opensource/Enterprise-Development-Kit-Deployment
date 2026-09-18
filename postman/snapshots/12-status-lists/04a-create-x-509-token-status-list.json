@@ -2,7 +2,7 @@
   "title": "04a Create X.509 token status list",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists",
+    "url": "https://acme.example.com/api/statuslist/v1/statuslists",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -12,11 +12,11 @@
       "correlationId": "x509-revocation",
       "spec": "token_status_list",
       "proofFormat": "jwt",
-      "issuer": "https://rc4customer.example.com",
+      "issuer": "https://acme.example.com",
       "signingKeyMode": "x5c",
       "kmsResourceHandle": "krh_<opaque>",
-      "kmsKeyAlias": "issuer-signing-rc4customer",
-      "statusListUri": "https://rc4customer.example.com/public/statuslists/x509-revocation",
+      "kmsKeyAlias": "issuer-signing-acme",
+      "statusListUri": "https://acme.example.com/public/statuslists/x509-revocation",
       "purposes": [
         "revocation"
       ],
@@ -41,9 +41,9 @@
       "hostingMode": "hosted",
       "bitsPerStatus": 1,
       "length": 131072,
-      "issuer": "https://rc4customer.example.com",
-      "statusListUri": "https://rc4customer.example.com/public/statuslists/x509-revocation",
-      "signedToken": "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCIsImFsZyI6IkVTMjU2IiwiandrIjp7ImNydiI6IlAtMjU2Iiwia3R5IjoiRUMiLCJ4IjoiPHB1YmxpYy1rZXktbWF0ZXJpYWw-IiwieDVjIjpbIjxjZXJ0aWZpY2F0ZT4iXSwieSI6IjxwdWJsaWMta2V5LW1hdGVyaWFsPiJ9LCJ4NWMiOlsiPGNlcnRpZmljYXRlPiJdfQ.eyJpc3MiOiJodHRwczovL3JjNGN1c3RvbWVyLmV4YW1wbGUuY29tIiwic3ViIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9wdWJsaWMvc3RhdHVzbGlzdHMveDUwOS1yZXZvY2F0aW9uIiwiaWF0IjoxNzY3MjI1NjAwLCJzdGF0dXNfbGlzdCI6eyJiaXRzIjoxLCJsc3QiOiJlSnp0d1RFQkFBQUF3cUQxVDIwTUg2QUFBQUFBQUFBQUFBQUFBQUFBQUFDQXR3RkFBQUFCIn19.SIGNATURE-REDACTED",
+      "issuer": "https://acme.example.com",
+      "statusListUri": "https://acme.example.com/public/statuslists/x509-revocation",
+      "signedToken": "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCIsImFsZyI6IkVTMjU2IiwiandrIjp7ImNydiI6IlAtMjU2Iiwia3R5IjoiRUMiLCJ4IjoiPHB1YmxpYy1rZXktbWF0ZXJpYWw-IiwieDVjIjpbIjxjZXJ0aWZpY2F0ZT4iXSwieSI6IjxwdWJsaWMta2V5LW1hdGVyaWFsPiJ9LCJ4NWMiOlsiPGNlcnRpZmljYXRlPiJdfQ.eyJpc3MiOiJodHRwczovL2FjbWUuZXhhbXBsZS5jb20iLCJzdWIiOiJodHRwczovL2FjbWUuZXhhbXBsZS5jb20vcHVibGljL3N0YXR1c2xpc3RzL3g1MDktcmV2b2NhdGlvbiIsImlhdCI6MTc2NzIyNTYwMCwic3RhdHVzX2xpc3QiOnsiYml0cyI6MSwibHN0IjoiPGNvbXByZXNzZWQtc3RhdHVzLWxpc3Q-In19.SIGNATURE-REDACTED",
       "signedToken_decoded": {
         "header": {
           "typ": "statuslist+jwt",
@@ -62,12 +62,12 @@
           ]
         },
         "payload": {
-          "iss": "https://rc4customer.example.com",
-          "sub": "https://rc4customer.example.com/public/statuslists/x509-revocation",
+          "iss": "https://acme.example.com",
+          "sub": "https://acme.example.com/public/statuslists/x509-revocation",
           "iat": 1767225600,
           "status_list": {
             "bits": 1,
-            "lst": "eJztwTEBAAAAwqD1T20MH6AAAAAAAAAAAAAAAAAAAACAtwFAAAAB"
+            "lst": "<compressed-status-list>"
           }
         }
       },

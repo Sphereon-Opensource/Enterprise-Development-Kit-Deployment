@@ -37,6 +37,8 @@ metadata:
     app.kubernetes.io/component: monolith
 data:
   application-container.yml: |
+    developer-console:
+      gateway-services: {{ include "edk-enterprise.developerConsoleGatewayServices" . | quote }}
     # The platform operator client is intentionally application-agnostic. Keep
     # this security boundary explicit in the mounted overlay because monolith
     # deployments replace, rather than merge, the packaged container config.
@@ -93,18 +95,36 @@ data:
           deferred: *oid4vciTenantDatabaseKv
           notifications: *oid4vciTenantDatabaseKv
           credential-request-identities: *oid4vciTenantDatabaseKv
+    # The monolith overlay replaces the packaged container configuration. Keep
+    # its deployment-source declaration aligned with the manifest mounted below
+    # so an existing shared PostgreSQL bootstrap remains restart-compatible.
+    secret-management:
+      deployment:
+        environment:
+          enabled: {{ ne .Values.portalBff.existingSecret "" }}
+          {{- if .Values.portalBff.existingSecret }}
+          manifest-path: /app/secret-management/deployment/environment.manifest
+          manifest-sha256: "sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e"
+          {{- end }}
+        kubernetes-mount:
+          enabled: false
     oauth2:
       servers:
         default:
           user-provider:
             mode: {{ .Values.platform.bootstrap.userProviderMode | quote }}
 {{ include "edk-enterprise.platformWebAuthnConfig" . | indent 10 }}
-    {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
+        {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
     tenant:
       platform:
         owner:
           initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
     {{- end }}
+  {{ if .Values.portalBff.existingSecret }}
+  environment.manifest: |
+    sec_admin_console_portal_bff_01=ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
+    sec_0_25_0_rc2_to_0_25_0_rc3_software_kms_password_01=EDK_KEYSTORE_PASSWORD
+  {{ end }}
 ---
 apiVersion: v1
 kind: Service
@@ -297,6 +317,10 @@ spec:
               value: {{ .Values.secretManagement.authority.allowPlatformOfferings | quote }}
             - name: EDK_KEYSTORE_PASSWORD
               valueFrom: { secretKeyRef: { name: {{ .Values.keystore.existingSecret | quote }}, key: {{ .Values.keystore.passwordKey | quote }} } }
+            {{- if .Values.portalBff.existingSecret }}
+            - name: ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.portalBff.existingSecret | quote }}, key: {{ .Values.portalBff.clientSecretKey | quote }} } }
+            {{- end }}
             - name: SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY
               valueFrom: { secretKeyRef: { name: {{ .Values.secretAuthority.existingSecrets.platform | quote }}, key: {{ .Values.secretAuthority.keys.centralPermitSigningKey | quote }} } }
             - name: SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS
@@ -342,6 +366,12 @@ spec:
             - name: secret-authority
               mountPath: /app/secret-authority
               readOnly: true
+            {{- if .Values.portalBff.existingSecret }}
+            - name: secret-management-environment-manifest
+              mountPath: /app/secret-management/deployment/environment.manifest
+              subPath: environment.manifest
+              readOnly: true
+            {{- end }}
       volumes:
         - name: runtime-config
           configMap:
@@ -354,7 +384,7 @@ spec:
         - name: secret-authority
           secret:
             secretName: {{ .Values.secretAuthority.existingSecrets.platform | quote }}
-            defaultMode: 0400
+            defaultMode: 0440
             items:
               - key: {{ .Values.secretAuthority.keys.satelliteAssertionPrivateKey | quote }}
                 path: workload/assertion.pem
@@ -366,6 +396,14 @@ spec:
               - key: {{ $key | quote }}
                 path: {{ printf "public/%s-assertion.pub.pem" $workloadId | quote }}
               {{- end }}
+        {{- if .Values.portalBff.existingSecret }}
+        - name: secret-management-environment-manifest
+          configMap:
+            name: {{ include "edk-enterprise.fullname" . }}-monolith-runtime
+            items:
+              - key: environment.manifest
+                path: environment.manifest
+        {{- end }}
 ---
 {{- range $console := list "admin-console" "admin-console-tenant" }}
 {{- $isPlatform := eq $console "admin-console" }}
@@ -484,6 +522,16 @@ spec:
             - name: NEXT_PUBLIC_PLATFORM_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
             {{- else }}
+            - name: ADMIN_CONSOLE_PUBLIC_ORIGIN
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_BASE_URL
+              value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_ISSUER
+              value: {{ $.Values.platform.bootstrap.issuer | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_TOKEN_URL
+              value: {{ printf "http://%s:%v/token" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.monolith.restPort | quote }}
             - name: ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL
@@ -628,6 +676,16 @@ spec:
   parentRefs: [{ name: {{ $gatewayName | quote }}, sectionName: https }]
   hostnames: [{{ $wildcard | quote }}]
   rules:
+    # The Inbox workflow API is tenant-scoped and must reach the monolith
+    # service explicitly before the tenant UI catch-all.
+    - timeouts:
+        request: {{ .Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path: { type: PathPrefix, value: /api/inbox/v1 }
+      backendRefs:
+        - name: {{ $name }}
+          port: {{ .Values.monolith.restPort }}
     - timeouts:
         request: {{ .Values.gateway.requestTimeout | quote }}
         backendRequest: {{ .Values.gateway.backendRequestTimeout | quote }}
@@ -685,7 +743,7 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
-    {{- range $authEndpoint := list "session" "login" "callback" }}
+    {{- range $authEndpoint := list "session" "login" "callback" "token" "logout" }}
     - timeouts:
         request: {{ $.Values.gateway.requestTimeout | quote }}
         backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}
@@ -735,6 +793,18 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-tenant-console
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monolith
+spec:
+  parentRefs: [{ name: {{ $gatewayName | quote }}, sectionName: https }]
+  hostnames: [{{ $wildcard | quote }}]
+  rules:
     # Testing-console API requests use the same neutral public path.  Each
     # rewrite stays explicit so Gateway longest-prefix matching selects it over
     # the page projection above.
@@ -785,3 +855,4 @@ spec:
           port: {{ .Values.monolith.restPort }}
 {{- end }}
 {{- end }}
+

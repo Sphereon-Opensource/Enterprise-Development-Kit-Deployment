@@ -2,7 +2,7 @@
   "title": "06 Create Mdl mdoc design",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/credentials",
+    "url": "https://acme.example.com/api/credential-design/v1/designs/credentials",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -13,7 +13,7 @@
         {
           "docType": "org.iso.18013.5.1.mDL",
           "credentialConfigurationId": "Mdl",
-          "issuerUri": "https://rc4customer.example.com",
+          "issuerUri": "https://acme.example.com",
           "issuerId": "00000000-0000-4000-8000-000000000000"
         }
       ],
@@ -325,7 +325,7 @@
           "@context": null,
           "issuerId": "00000000-0000-4000-8000-000000000000",
           "issuerDid": null,
-          "issuerUri": "https://rc4customer.example.com",
+          "issuerUri": "https://acme.example.com",
           "verifierClientId": null,
           "ocaSaid": null,
           "credentialType": null,

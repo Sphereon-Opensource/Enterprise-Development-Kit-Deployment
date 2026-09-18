@@ -2,7 +2,7 @@
   "title": "07 Check the Membership offer status",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/credential/offers/e2e-membership-001",
+    "url": "https://acme.example.com/api/oid4vci/v1/backend/credential/offers/e2e-membership-001",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

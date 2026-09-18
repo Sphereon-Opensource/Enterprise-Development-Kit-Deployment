@@ -166,6 +166,9 @@ services:
       appnet: {}
     environment:
       ADMIN_CONSOLE_MODE: TENANT
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: *edk-gateway-platform-public-url
+      ADMIN_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL: *edk-gateway-platform-public-url
+      ADMIN_CONSOLE_PLATFORM_ISSUER: *edk-gateway-platform-public-url
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "false"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
       ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS: "1"

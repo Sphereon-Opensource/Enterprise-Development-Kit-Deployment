@@ -2,7 +2,7 @@
   "title": "07a Resolve tenant hosted authorization server",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers?page=0&size=100",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers?page=0&size=100",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -19,9 +19,9 @@
         {
           "id": "00000000-0000-4000-8000-000000000000",
           "tenantId": "00000000-0000-4000-8000-000000000000",
-          "slug": "rc4customer",
+          "slug": "acme",
           "displayName": "Default authorization server",
-          "issuer": "https://rc4customer.example.com/as/rc4customer",
+          "issuer": "https://acme.example.com/as/acme",
           "lifecycle": "ACTIVE",
           "deployment": "HOSTED",
           "authenticationMode": "LOCAL_ONLY",

@@ -2,7 +2,7 @@
   "title": "04 Read the tenant issuer-trust attachment",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/trust-domain/v1/attachments/TENANT/00000000-0000-4000-8000-000000000000/CREDENTIAL_ISSUER_TRUST",
+    "url": "https://acme.example.com/api/trust-domain/v1/attachments/TENANT/00000000-0000-4000-8000-000000000000/CREDENTIAL_ISSUER_TRUST",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

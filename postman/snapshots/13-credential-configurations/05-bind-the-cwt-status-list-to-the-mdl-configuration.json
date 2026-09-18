@@ -28,7 +28,7 @@
         }
       },
       "kmsResourceHandle": "krh_<opaque>",
-      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "kmsKeyAlias": "issuer-signing-acme",
       "signingKeyMode": "x5c",
       "validityPeriod": "P365D",
       "status": {
@@ -64,7 +64,7 @@
         }
       },
       "kmsResourceHandle": "krh_<opaque>",
-      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "kmsKeyAlias": "issuer-signing-acme",
       "signingKeyMode": "x5c",
       "validityPeriod": "P365D",
       "status": {

@@ -2,7 +2,7 @@
   "title": "01 Create token status list",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists",
+    "url": "https://acme.example.com/api/statuslist/v1/statuslists",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -12,12 +12,12 @@
       "correlationId": "walkthrough-revocation",
       "spec": "token_status_list",
       "proofFormat": "jwt",
-      "issuer": "did:web:rc4customer.example.com",
+      "issuer": "did:web:acme.example.com",
       "signingKeyMode": "did:web",
       "kmsResourceHandle": "krh_<opaque>",
-      "kmsKeyAlias": "issuer-signing-rc4customer",
-      "signingVerificationMethodId": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
-      "statusListUri": "https://rc4customer.example.com/public/statuslists/walkthrough-revocation",
+      "kmsKeyAlias": "issuer-signing-acme",
+      "signingVerificationMethodId": "did:web:acme.example.com#issuer-assertion-acme",
+      "statusListUri": "https://acme.example.com/public/statuslists/walkthrough-revocation",
       "purposes": [
         "revocation"
       ],
@@ -42,22 +42,22 @@
       "hostingMode": "hosted",
       "bitsPerStatus": 1,
       "length": 131072,
-      "issuer": "did:web:rc4customer.example.com",
-      "statusListUri": "https://rc4customer.example.com/public/statuslists/walkthrough-revocation",
-      "signedToken": "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCIsImFsZyI6IkVTMjU2Iiwia2lkIjoiZGlkOndlYjpyYzRjdXN0b21lci5leGFtcGxlLmNvbSNpc3N1ZXItYXNzZXJ0aW9uLXJjNGN1c3RvbWVyIn0.eyJpc3MiOiJkaWQ6d2ViOnJjNGN1c3RvbWVyLmV4YW1wbGUuY29tIiwic3ViIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9wdWJsaWMvc3RhdHVzbGlzdHMvd2Fsa3Rocm91Z2gtcmV2b2NhdGlvbiIsImlhdCI6MTc2NzIyNTYwMCwic3RhdHVzX2xpc3QiOnsiYml0cyI6MSwibHN0IjoiZUp6dHdURUJBQUFBd3FEMVQyME1INkFBQUFBQUFBQUFBQUFBQUFBQUFBQ0F0d0ZBQUFBQiJ9fQ.SIGNATURE-REDACTED",
+      "issuer": "did:web:acme.example.com",
+      "statusListUri": "https://acme.example.com/public/statuslists/walkthrough-revocation",
+      "signedToken": "eyJ0eXAiOiJzdGF0dXNsaXN0K2p3dCIsImFsZyI6IkVTMjU2Iiwia2lkIjoiZGlkOndlYjphY21lLmV4YW1wbGUuY29tI2lzc3Vlci1hc3NlcnRpb24tYWNtZSJ9.eyJpc3MiOiJkaWQ6d2ViOmFjbWUuZXhhbXBsZS5jb20iLCJzdWIiOiJodHRwczovL2FjbWUuZXhhbXBsZS5jb20vcHVibGljL3N0YXR1c2xpc3RzL3dhbGt0aHJvdWdoLXJldm9jYXRpb24iLCJpYXQiOjE3NjcyMjU2MDAsInN0YXR1c19saXN0Ijp7ImJpdHMiOjEsImxzdCI6Ijxjb21wcmVzc2VkLXN0YXR1cy1saXN0PiJ9fQ.SIGNATURE-REDACTED",
       "signedToken_decoded": {
         "header": {
           "typ": "statuslist+jwt",
           "alg": "ES256",
-          "kid": "did:web:rc4customer.example.com#issuer-assertion-rc4customer"
+          "kid": "did:web:acme.example.com#issuer-assertion-acme"
         },
         "payload": {
-          "iss": "did:web:rc4customer.example.com",
-          "sub": "https://rc4customer.example.com/public/statuslists/walkthrough-revocation",
+          "iss": "did:web:acme.example.com",
+          "sub": "https://acme.example.com/public/statuslists/walkthrough-revocation",
           "iat": 1767225600,
           "status_list": {
             "bits": 1,
-            "lst": "eJztwTEBAAAAwqD1T20MH6AAAAAAAAAAAAAAAAAAAACAtwFAAAAB"
+            "lst": "<compressed-status-list>"
           }
         }
       },

@@ -2,7 +2,7 @@
   "title": "13 List activation-created DID verification methods",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/did/v1/identifiers/did%3Aweb%3Arc4customer.example.com/verification-methods",
+    "url": "https://acme.example.com/api/did/v1/identifiers/did%3Aweb%3Aacme.example.com/verification-methods",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -17,9 +17,9 @@
     "body": {
       "items": [
         {
-          "id": "did:web:rc4customer.example.com#verifier-request-object-rc4customer",
+          "id": "did:web:acme.example.com#verifier-request-object-acme",
           "type": "JsonWebKey2020",
-          "controller": "did:web:rc4customer.example.com",
+          "controller": "did:web:acme.example.com",
           "referenceVerificationRelations": [
             "assertionMethod",
             "authentication"
@@ -27,9 +27,9 @@
           "ordinal": 0
         },
         {
-          "id": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
+          "id": "did:web:acme.example.com#issuer-assertion-acme",
           "type": "JsonWebKey2020",
-          "controller": "did:web:rc4customer.example.com",
+          "controller": "did:web:acme.example.com",
           "referenceVerificationRelations": [
             "assertionMethod"
           ],

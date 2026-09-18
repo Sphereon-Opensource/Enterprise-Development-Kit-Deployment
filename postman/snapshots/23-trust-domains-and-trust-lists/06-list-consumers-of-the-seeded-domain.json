@@ -2,7 +2,7 @@
   "title": "06 List consumers of the seeded domain",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/trust-domain/v1/domains/trust-domain-issuer-00000000-0000-4000-8000-000000000000/consumers",
+    "url": "https://acme.example.com/api/trust-domain/v1/domains/trust-domain-issuer-00000000-0000-4000-8000-000000000000/consumers",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -18,7 +18,7 @@
       "items": [
         {
           "consumerKind": "OID4VP_VERIFIER",
-          "consumerId": "rc4customer",
+          "consumerId": "acme",
           "usage": "CREDENTIAL_ISSUER_TRUST",
           "attachmentId": "trust-attachment-issuer-00000000-0000-4000-8000-000000000000-verifier"
         },

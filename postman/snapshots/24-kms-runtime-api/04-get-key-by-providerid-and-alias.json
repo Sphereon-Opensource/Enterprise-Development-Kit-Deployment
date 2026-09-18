@@ -2,7 +2,7 @@
   "title": "04 Get key by providerId and alias",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/kms/v1/providers/default/keys/customer-runtime-signing-key",
+    "url": "https://acme.example.com/api/kms/v1/providers/default/keys/customer-runtime-signing-key",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

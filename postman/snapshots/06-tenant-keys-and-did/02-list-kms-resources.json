@@ -2,7 +2,7 @@
   "title": "02 List KMS resources",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/resources",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/resources",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -35,7 +35,9 @@
             "UPDATE_CREDENTIAL",
             "ROTATE_CREDENTIAL",
             "DETACH"
-          ]
+          ],
+          "declaredByDeployment": false,
+          "credentialFromDeployment": false
         }
       ]
     }

@@ -2,7 +2,7 @@
   "title": "02 Contribute attributes",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
+    "url": "https://acme.example.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

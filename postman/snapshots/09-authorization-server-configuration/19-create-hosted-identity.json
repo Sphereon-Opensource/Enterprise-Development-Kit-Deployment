@@ -2,15 +2,15 @@
   "title": "19 Create hosted identity",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/identities",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/identities",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
     },
     "body": {
-      "displayName": "RC4 Release Verification Authorization Operator",
-      "email": "authorization-operator@rc4customer.example",
+      "displayName": "Acme Corporation Authorization Operator",
+      "email": "authorization-operator@acme.example",
       "givenName": "Authorization",
       "familyName": "Operator",
       "roles": [
@@ -28,8 +28,8 @@
       "identity": {
         "identityId": "00000000-0000-4000-8000-000000000000",
         "applicationId": "00000000-0000-4000-8000-000000000000",
-        "displayName": "RC4 Release Verification Authorization Operator",
-        "email": "authorization-operator@rc4customer.example",
+        "displayName": "Acme Corporation Authorization Operator",
+        "email": "authorization-operator@acme.example",
         "state": "<state>",
         "roles": [
           "tenant-admin"
@@ -39,7 +39,7 @@
         "invitationExpiresAt": "2027-01-01T00:00:00Z",
         "createdAt": "2026-01-01T00:00:00Z"
       },
-      "manualActivationLink": "https://rc4customer.example.com/as/walkthrough-as/account-action#<activation-token>"
+      "manualActivationLink": "https://acme.example.com/as/walkthrough-as/account-action#<activation-token>"
     }
   }
 }

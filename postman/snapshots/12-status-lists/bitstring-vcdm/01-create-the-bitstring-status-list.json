@@ -2,7 +2,7 @@
   "title": "01 Create the bitstring status list",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists",
+    "url": "https://acme.example.com/api/statuslist/v1/statuslists",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -17,12 +17,12 @@
         "revocation",
         "suspension"
       ],
-      "issuer": "did:web:rc4customer.example.com",
+      "issuer": "did:web:acme.example.com",
       "signingKeyMode": "did:web",
       "kmsResourceHandle": "krh_<opaque>",
-      "kmsKeyAlias": "issuer-signing-rc4customer",
-      "signingVerificationMethodId": "did:web:rc4customer.example.com#issuer-assertion-rc4customer",
-      "statusListUri": "https://rc4customer.example.com/public/statuslists/status-bitstring",
+      "kmsKeyAlias": "issuer-signing-acme",
+      "signingVerificationMethodId": "did:web:acme.example.com#issuer-assertion-acme",
+      "statusListUri": "https://acme.example.com/public/statuslists/status-bitstring",
       "length": 131072,
       "bitsPerStatus": 2,
       "ttlSeconds": 300
@@ -46,29 +46,29 @@
       "hostingMode": "hosted",
       "bitsPerStatus": 2,
       "length": 131072,
-      "issuer": "did:web:rc4customer.example.com",
-      "statusListUri": "https://rc4customer.example.com/public/statuslists/status-bitstring",
-      "signedToken": "eyJ0eXAiOiJ2Yytqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6cmM0Y3VzdG9tZXIuZXhhbXBsZS5jb20jaXNzdWVyLWFzc2VydGlvbi1yYzRjdXN0b21lciJ9.eyJAY29udGV4dCI6WyJodHRwczovL3d3dy53My5vcmcvbnMvY3JlZGVudGlhbHMvdjIiLCJodHRwczovL3d3dy53My5vcmcvbnMvY3JlZGVudGlhbHMvc3RhdHVzL3YxIl0sImlkIjoiaHR0cHM6Ly9yYzRjdXN0b21lci5leGFtcGxlLmNvbS9wdWJsaWMvc3RhdHVzbGlzdHMvc3RhdHVzLWJpdHN0cmluZyIsInR5cGUiOlsiVmVyaWZpYWJsZUNyZWRlbnRpYWwiLCJCaXRzdHJpbmdTdGF0dXNMaXN0Q3JlZGVudGlhbCJdLCJpc3N1ZXIiOiJkaWQ6d2ViOnJjNGN1c3RvbWVyLmV4YW1wbGUuY29tIiwidmFsaWRGcm9tIjoiMjAyNi0wMS0wMVQwMDowMDowMFoiLCJjcmVkZW50aWFsU3ViamVjdCI6eyJpZCI6Imh0dHBzOi8vcmM0Y3VzdG9tZXIuZXhhbXBsZS5jb20vcHVibGljL3N0YXR1c2xpc3RzL3N0YXR1cy1iaXRzdHJpbmcjbGlzdCIsInR5cGUiOiJCaXRzdHJpbmdTdGF0dXNMaXN0Iiwic3RhdHVzUHVycG9zZSI6InJldm9jYXRpb24iLCJlbmNvZGVkTGlzdCI6InVINHNJQUFBQUFBQUFfLTNCQVFFQUFBQ0FrUDZ2N2dnS0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQmltX0I4QkFJQUFBQSIsInN0YXR1c1NpemUiOjIsInN0YXR1c01lc3NhZ2UiOlt7InN0YXR1cyI6IjB4MCIsIm1lc3NhZ2UiOiJ2YWxpZCJ9LHsic3RhdHVzIjoiMHgxIiwibWVzc2FnZSI6ImludmFsaWQifSx7InN0YXR1cyI6IjB4MiIsIm1lc3NhZ2UiOiJzdXNwZW5kZWQifSx7InN0YXR1cyI6IjB4MyIsIm1lc3NhZ2UiOiJhcHBsaWNhdGlvbl9zcGVjaWZpYyJ9XSwidHRsIjozMDAwMDB9LCJpc3MiOiJPWEVTS3BaSnQ1QnBYeGoxQ2lsT0ZlVDFpRmNTc0ptbktzMEpFeHVoaGIwIn0.SIGNATURE-REDACTED",
+      "issuer": "did:web:acme.example.com",
+      "statusListUri": "https://acme.example.com/public/statuslists/status-bitstring",
+      "signedToken": "eyJ0eXAiOiJ2Yytqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5leGFtcGxlLmNvbSNpc3N1ZXItYXNzZXJ0aW9uLWFjbWUifQ.eyJAY29udGV4dCI6WyJodHRwczovL3d3dy53My5vcmcvbnMvY3JlZGVudGlhbHMvdjIiLCJodHRwczovL3d3dy53My5vcmcvbnMvY3JlZGVudGlhbHMvc3RhdHVzL3YxIl0sImlkIjoiaHR0cHM6Ly9hY21lLmV4YW1wbGUuY29tL3B1YmxpYy9zdGF0dXNsaXN0cy9zdGF0dXMtYml0c3RyaW5nIiwidHlwZSI6WyJWZXJpZmlhYmxlQ3JlZGVudGlhbCIsIkJpdHN0cmluZ1N0YXR1c0xpc3RDcmVkZW50aWFsIl0sImlzc3VlciI6ImRpZDp3ZWI6YWNtZS5leGFtcGxlLmNvbSIsInZhbGlkRnJvbSI6IjIwMjYtMDEtMDFUMDA6MDA6MDBaIiwiY3JlZGVudGlhbFN1YmplY3QiOnsiaWQiOiJodHRwczovL2FjbWUuZXhhbXBsZS5jb20vcHVibGljL3N0YXR1c2xpc3RzL3N0YXR1cy1iaXRzdHJpbmcjbGlzdCIsInR5cGUiOiJCaXRzdHJpbmdTdGF0dXNMaXN0Iiwic3RhdHVzUHVycG9zZSI6InJldm9jYXRpb24iLCJlbmNvZGVkTGlzdCI6InVINHNJQUFBQUFBQUFfLTNCQVFFQUFBQ0FrUDZ2N2dnS0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQmltX0I4QkFJQUFBQSIsInN0YXR1c1NpemUiOjIsInN0YXR1c01lc3NhZ2UiOlt7InN0YXR1cyI6IjB4MCIsIm1lc3NhZ2UiOiJ2YWxpZCJ9LHsic3RhdHVzIjoiMHgxIiwibWVzc2FnZSI6ImludmFsaWQifSx7InN0YXR1cyI6IjB4MiIsIm1lc3NhZ2UiOiJzdXNwZW5kZWQifSx7InN0YXR1cyI6IjB4MyIsIm1lc3NhZ2UiOiJhcHBsaWNhdGlvbl9zcGVjaWZpYyJ9XSwidHRsIjozMDAwMDB9fQ.SIGNATURE-REDACTED",
       "signedToken_decoded": {
         "header": {
           "typ": "vc+jwt",
           "alg": "ES256",
-          "kid": "did:web:rc4customer.example.com#issuer-assertion-rc4customer"
+          "kid": "did:web:acme.example.com#issuer-assertion-acme"
         },
         "payload": {
           "@context": [
             "https://www.w3.org/ns/credentials/v2",
             "https://www.w3.org/ns/credentials/status/v1"
           ],
-          "id": "https://rc4customer.example.com/public/statuslists/status-bitstring",
+          "id": "https://acme.example.com/public/statuslists/status-bitstring",
           "type": [
             "VerifiableCredential",
             "BitstringStatusListCredential"
           ],
-          "issuer": "did:web:rc4customer.example.com",
+          "issuer": "did:web:acme.example.com",
           "validFrom": "2026-01-01T00:00:00Z",
           "credentialSubject": {
-            "id": "https://rc4customer.example.com/public/statuslists/status-bitstring#list",
+            "id": "https://acme.example.com/public/statuslists/status-bitstring#list",
             "type": "BitstringStatusList",
             "statusPurpose": "revocation",
             "encodedList": "uH4sIAAAAAAAA_-3BAQEAAACAkP6v7ggKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABim_B8BAIAAAA",
@@ -92,8 +92,7 @@
               }
             ],
             "ttl": 300000
-          },
-          "iss": "OXESKpZJt5BpXxj1CilOFeT1iFcSsJmnKs0JExuhhb0"
+          }
         }
       },
       "contentType": "application/vc+jwt",

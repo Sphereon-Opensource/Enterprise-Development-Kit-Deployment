@@ -2,7 +2,7 @@
   "title": "07 Read status entry",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/entries/42",
+    "url": "https://acme.example.com/api/statuslist/v1/statuslists/00000000-0000-4000-8000-000000000000/entries/42",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

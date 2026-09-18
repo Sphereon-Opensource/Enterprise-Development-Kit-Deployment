@@ -2,7 +2,7 @@
   "title": "08 List keys across every provider",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/kms/v1/keys",
+    "url": "https://acme.example.com/api/kms/v1/keys",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -17,6 +17,32 @@
     "body": {
       "keyInfos": [
         {
+          "kid": "<key-id>",
+          "signatureAlgorithm": "ECDSA_SHA256",
+          "alias": "catalog-public-signing-acme",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "EC"
+        },
+        {
+          "kid": "connector-vault-content-acme",
+          "alias": "connector-vault-content-acme",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "OCT"
+        },
+        {
+          "kid": "<key-id>",
+          "signatureAlgorithm": "ECDSA_SHA256",
+          "alias": "connector-vault-manifest-acme",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "EC"
+        },
+        {
           "kid": "customer-evaluation-imported-key",
           "alias": "customer-evaluation-imported-key",
           "providerId": "default",
@@ -26,8 +52,9 @@
           "keyEncoding": "JOSE"
         },
         {
-          "kid": "invitation-hmac-kek-00000000-0000-4000-8000-000000000000",
-          "alias": "invitation-hmac-kek-00000000-0000-4000-8000-000000000000",
+          "kid": "idfr:bi:00000000-0000-4000-8000-000000000000",
+          "signatureAlgorithm": "HMAC_SHA256",
+          "alias": "idfr:bi:00000000-0000-4000-8000-000000000000",
           "providerId": "default",
           "origin": "managed",
           "controlMode": "platform_managed",
@@ -42,9 +69,16 @@
           "keyType": "OCT"
         },
         {
-          "kid": "idfr:bi:00000000-0000-4000-8000-000000000000",
-          "signatureAlgorithm": "HMAC_SHA256",
-          "alias": "idfr:bi:00000000-0000-4000-8000-000000000000",
+          "kid": "invitation-hmac-kek-00000000-0000-4000-8000-000000000000",
+          "alias": "invitation-hmac-kek-00000000-0000-4000-8000-000000000000",
+          "providerId": "default",
+          "origin": "managed",
+          "controlMode": "platform_managed",
+          "keyType": "OCT"
+        },
+        {
+          "kid": "issuer-request-decryption-acme",
+          "alias": "issuer-request-decryption-acme",
           "providerId": "default",
           "origin": "managed",
           "controlMode": "platform_managed",
@@ -53,24 +87,7 @@
         {
           "kid": "<key-id>",
           "signatureAlgorithm": "ECDSA_SHA256",
-          "alias": "oid4vp-verifier-signing-rc4customer",
-          "providerId": "default",
-          "origin": "managed",
-          "controlMode": "platform_managed",
-          "keyType": "EC"
-        },
-        {
-          "kid": "issuer-request-decryption-rc4customer",
-          "alias": "issuer-request-decryption-rc4customer",
-          "providerId": "default",
-          "origin": "managed",
-          "controlMode": "platform_managed",
-          "keyType": "OCT"
-        },
-        {
-          "kid": "<key-id>",
-          "signatureAlgorithm": "ECDSA_SHA256",
-          "alias": "issuer-signing-rc4customer",
+          "alias": "issuer-signing-acme",
           "providerId": "default",
           "origin": "managed",
           "controlMode": "platform_managed",
@@ -79,7 +96,7 @@
         {
           "kid": "<key-id>",
           "signatureAlgorithm": "ECDSA_SHA256",
-          "alias": "oauth2-as-rc4customer",
+          "alias": "oauth2-as-acme",
           "providerId": "default",
           "origin": "managed",
           "controlMode": "platform_managed",
@@ -88,28 +105,11 @@
         {
           "kid": "<key-id>",
           "signatureAlgorithm": "ECDSA_SHA256",
-          "alias": "catalog-public-signing-rc4customer",
+          "alias": "oid4vp-verifier-signing-acme",
           "providerId": "default",
           "origin": "managed",
           "controlMode": "platform_managed",
           "keyType": "EC"
-        },
-        {
-          "kid": "<key-id>",
-          "signatureAlgorithm": "ECDSA_SHA256",
-          "alias": "connector-vault-manifest-rc4customer",
-          "providerId": "default",
-          "origin": "managed",
-          "controlMode": "platform_managed",
-          "keyType": "EC"
-        },
-        {
-          "kid": "connector-vault-content-rc4customer",
-          "alias": "connector-vault-content-rc4customer",
-          "providerId": "default",
-          "origin": "managed",
-          "controlMode": "platform_managed",
-          "keyType": "OCT"
         }
       ]
     }

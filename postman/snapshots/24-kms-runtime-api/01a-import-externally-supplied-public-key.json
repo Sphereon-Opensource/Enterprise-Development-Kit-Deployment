@@ -2,7 +2,7 @@
   "title": "01a Import externally supplied public key",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/kms/v1/keys/import",
+    "url": "https://acme.example.com/api/kms/v1/keys/import",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

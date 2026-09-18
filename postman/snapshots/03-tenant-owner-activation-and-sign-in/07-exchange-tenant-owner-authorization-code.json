@@ -2,7 +2,7 @@
   "title": "07 Exchange tenant owner authorization code",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/as/rc4customer/token",
+    "url": "https://acme.example.com/as/acme/token",
     "headers": {
       "Content-Type": "application/x-www-form-urlencoded",
       "Accept": "*/*"
@@ -16,15 +16,15 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "access_token": "eyJ0eXAiOiJhdCtqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1hcy1yYzRjdXN0b21lciJ9.eyJpc3MiOiJodHRwczovL3JjNGN1c3RvbWVyLmV4YW1wbGUuY29tL2FzL3JjNGN1c3RvbWVyIiwic3ViIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiY2xpZW50X2lkIjoicGxhdGZvcm0tb3BlcmF0b3ItY2xpIiwiaWF0IjoxNzY3MjI1NjAwLCJleHAiOjE3OTg3NjE2MDAsImp0aSI6IjxqdGk-IiwiYXV0aF90aW1lIjoxNzY3MjI1NjAwLCJhY3IiOiJ1cm46bmlzdDpzcDo4MDAtNjM6YWFsMSIsImFtciI6WyJwd2QiXSwiYXVkIjoiZW50ZXJwcmlzZS10ZW5hbnQtYXMiLCJzY29wZSI6Im9wZW5pZCIsInJvbGVzIjpbInRlbmFudC1hZG1pbiJdLCJ0ZW5hbnRfaWQiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDAifQ.SIGNATURE-REDACTED",
+      "access_token": "eyJ0eXAiOiJhdCtqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1hcy1hY21lIn0.eyJpc3MiOiJodHRwczovL2FjbWUuZXhhbXBsZS5jb20vYXMvYWNtZSIsInN1YiI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMCIsImNsaWVudF9pZCI6InBsYXRmb3JtLW9wZXJhdG9yLWNsaSIsImlhdCI6MTc2NzIyNTYwMCwiZXhwIjoxNzk4NzYxNjAwLCJqdGkiOiI8anRpPiIsImF1dGhfdGltZSI6MTc2NzIyNTYwMCwiYWNyIjoidXJuOm5pc3Q6c3A6ODAwLTYzOmFhbDEiLCJhbXIiOlsicHdkIl0sImF1ZCI6ImVudGVycHJpc2UtdGVuYW50LWFzIiwic2NvcGUiOiJvcGVuaWQiLCJyb2xlcyI6WyJ0ZW5hbnQtYWRtaW4iXSwidGVuYW50X2lkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIn0.SIGNATURE-REDACTED",
       "access_token_decoded": {
         "header": {
           "typ": "at+jwt",
           "alg": "ES256",
-          "kid": "oauth2-as-rc4customer"
+          "kid": "oauth2-as-acme"
         },
         "payload": {
-          "iss": "https://rc4customer.example.com/as/rc4customer",
+          "iss": "https://acme.example.com/as/acme",
           "sub": "00000000-0000-4000-8000-000000000000",
           "client_id": "platform-operator-cli",
           "iat": 1767225600,
@@ -47,15 +47,15 @@
       "expires_in": 3600,
       "refresh_token": "<refresh-token>",
       "scope": "openid",
-      "id_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1hcy1yYzRjdXN0b21lciJ9.eyJpc3MiOiJodHRwczovL3JjNGN1c3RvbWVyLmV4YW1wbGUuY29tL2FzL3JjNGN1c3RvbWVyIiwic3ViIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAwIiwiYXVkIjoicGxhdGZvcm0tb3BlcmF0b3ItY2xpIiwiZXhwIjoxNzk4NzYxNjAwLCJpYXQiOjE3NjcyMjU2MDAsInNpZCI6IjxzZXNzaW9uLWlkPiIsImF1dGhfdGltZSI6MTc2NzIyNTYwMCwiYWNyIjoidXJuOm5pc3Q6c3A6ODAwLTYzOmFhbDEiLCJhbXIiOlsicHdkIl0sImF0X2hhc2giOiI8ZGlnZXN0PiIsImNfaGFzaCI6IjxkaWdlc3Q-In0.SIGNATURE-REDACTED",
+      "id_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1hcy1hY21lIn0.eyJpc3MiOiJodHRwczovL2FjbWUuZXhhbXBsZS5jb20vYXMvYWNtZSIsInN1YiI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMCIsImF1ZCI6InBsYXRmb3JtLW9wZXJhdG9yLWNsaSIsImV4cCI6MTc5ODc2MTYwMCwiaWF0IjoxNzY3MjI1NjAwLCJzaWQiOiI8c2Vzc2lvbi1pZD4iLCJhdXRoX3RpbWUiOjE3NjcyMjU2MDAsImFjciI6InVybjpuaXN0OnNwOjgwMC02MzphYWwxIiwiYW1yIjpbInB3ZCJdLCJhdF9oYXNoIjoiPGRpZ2VzdD4iLCJjX2hhc2giOiI8ZGlnZXN0PiJ9.SIGNATURE-REDACTED",
       "id_token_decoded": {
         "header": {
           "typ": "JWT",
           "alg": "ES256",
-          "kid": "oauth2-as-rc4customer"
+          "kid": "oauth2-as-acme"
         },
         "payload": {
-          "iss": "https://rc4customer.example.com/as/rc4customer",
+          "iss": "https://acme.example.com/as/acme",
           "sub": "00000000-0000-4000-8000-000000000000",
           "aud": "platform-operator-cli",
           "exp": 1798761600,

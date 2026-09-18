@@ -2,7 +2,7 @@
   "title": "02 Fetch authorization server metadata",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/.well-known/oauth-authorization-server",
+    "url": "https://acme.example.com/.well-known/oauth-authorization-server",
     "headers": {
       "Accept": "*/*"
     }
@@ -14,10 +14,10 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "issuer": "https://rc4customer.example.com/as/rc4customer",
-      "token_endpoint": "https://rc4customer.example.com/as/rc4customer/token",
-      "authorization_endpoint": "https://rc4customer.example.com/as/rc4customer/authorize",
-      "jwks_uri": "https://rc4customer.example.com/as/rc4customer/.well-known/jwks.json",
+      "issuer": "https://acme.example.com/as/acme",
+      "token_endpoint": "https://acme.example.com/as/acme/token",
+      "authorization_endpoint": "https://acme.example.com/as/acme/authorize",
+      "jwks_uri": "https://acme.example.com/as/acme/.well-known/jwks.json",
       "grant_types_supported": [
         "authorization_code",
         "urn:ietf:params:oauth:grant-type:pre-authorized_code",
@@ -45,13 +45,13 @@
         "EdDSA"
       ],
       "require_pushed_authorization_requests": false,
-      "pushed_authorization_request_endpoint": "https://rc4customer.example.com/as/rc4customer/par",
-      "introspection_endpoint": "https://rc4customer.example.com/as/rc4customer/introspect",
+      "pushed_authorization_request_endpoint": "https://acme.example.com/as/acme/par",
+      "introspection_endpoint": "https://acme.example.com/as/acme/introspect",
       "introspection_endpoint_auth_methods_supported": [
         "client_secret_basic"
       ],
       "pre-authorized_grant_anonymous_access_supported": true,
-      "revocation_endpoint": "https://rc4customer.example.com/as/rc4customer/revoke",
+      "revocation_endpoint": "https://acme.example.com/as/acme/revoke",
       "revocation_endpoint_auth_methods_supported": [
         "client_secret_basic",
         "client_secret_post"
@@ -70,7 +70,7 @@
         "fragment",
         "form_post"
       ],
-      "userinfo_endpoint": "https://rc4customer.example.com/as/rc4customer/userinfo",
+      "userinfo_endpoint": "https://acme.example.com/as/acme/userinfo",
       "subject_types_supported": [
         "public"
       ],
@@ -114,7 +114,7 @@
         "PS512",
         "EdDSA"
       ],
-      "end_session_endpoint": "https://rc4customer.example.com/as/rc4customer/logout",
+      "end_session_endpoint": "https://acme.example.com/as/acme/logout",
       "frontchannel_logout_supported": true,
       "frontchannel_logout_session_supported": true,
       "backchannel_logout_supported": true,

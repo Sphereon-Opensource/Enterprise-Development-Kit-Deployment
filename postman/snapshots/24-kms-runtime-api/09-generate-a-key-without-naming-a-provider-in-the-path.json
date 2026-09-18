@@ -2,7 +2,7 @@
   "title": "09 Generate a key without naming a provider in the path",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/kms/v1/keys",
+    "url": "https://acme.example.com/api/kms/v1/keys",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

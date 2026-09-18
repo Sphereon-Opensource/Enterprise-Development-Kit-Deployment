@@ -34,7 +34,7 @@
         }
       },
       "kmsResourceHandle": "krh_<opaque>",
-      "kmsKeyAlias": "issuer-signing-rc4customer",
+      "kmsKeyAlias": "issuer-signing-acme",
       "signingKeyMode": "x5c",
       "status": {
         "statusListId": "mdoc-revocation",

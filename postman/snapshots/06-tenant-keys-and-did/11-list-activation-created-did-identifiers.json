@@ -2,7 +2,7 @@
   "title": "11 List activation-created DID identifiers",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/did/v1/identifiers",
+    "url": "https://acme.example.com/api/did/v1/identifiers",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -17,9 +17,9 @@
     "body": {
       "items": [
         {
-          "did": "did:web:rc4customer.example.com",
+          "did": "did:web:acme.example.com",
           "method": "web",
-          "alias": "rc4customer",
+          "alias": "acme",
           "role": "EXTERNAL",
           "createdAt": "2026-01-01T00:00:00Z",
           "updatedAt": "2026-01-01T00:00:00Z"

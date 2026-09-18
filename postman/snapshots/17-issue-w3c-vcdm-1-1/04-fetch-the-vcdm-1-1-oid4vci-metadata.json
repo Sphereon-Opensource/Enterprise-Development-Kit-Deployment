@@ -2,7 +2,7 @@
   "title": "04 Fetch the VCDM 1.1 OID4VCI metadata",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/.well-known/openid-credential-issuer/oid4vci/rc4customer",
+    "url": "https://acme.example.com/.well-known/openid-credential-issuer/oid4vci/acme",
     "headers": {
       "Accept": "*/*"
     }
@@ -14,14 +14,14 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "credential_issuer": "https://rc4customer.example.com/oid4vci/rc4customer",
+      "credential_issuer": "https://acme.example.com/oid4vci/acme",
       "authorization_servers": [
-        "https://rc4customer.example.com/as/rc4customer"
+        "https://acme.example.com/as/acme"
       ],
-      "credential_endpoint": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/credential",
-      "deferred_credential_endpoint": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/deferredCredential",
-      "notification_endpoint": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/notification",
-      "nonce_endpoint": "https://rc4customer.example.com/oid4vci/rc4customer/oid4vci/nonce",
+      "credential_endpoint": "https://acme.example.com/oid4vci/acme/oid4vci/credential",
+      "deferred_credential_endpoint": "https://acme.example.com/oid4vci/acme/oid4vci/deferredCredential",
+      "notification_endpoint": "https://acme.example.com/oid4vci/acme/oid4vci/notification",
+      "nonce_endpoint": "https://acme.example.com/oid4vci/acme/oid4vci/nonce",
       "credential_configurations_supported": {
         "EuPid": {
           "format": "dc+sd-jwt",
@@ -41,14 +41,14 @@
               ]
             }
           },
-          "vct": "https://rc4customer.example.com/public/schema/vct/EuPid",
+          "vct": "https://acme.example.com/public/schema/vct/EuPid",
           "credential_metadata": {
             "display": [
               {
                 "name": "EU Personal ID",
                 "locale": "en",
                 "logo": {
-                  "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                  "uri": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
                   "alt_text": "EU PID logo"
                 },
                 "description": "European personal identity credential",
@@ -59,7 +59,7 @@
                 "name": "EU Persoonlijke ID",
                 "locale": "nl",
                 "logo": {
-                  "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                  "uri": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
                   "alt_text": "EU PID logo"
                 },
                 "description": "Europese persoonlijke identiteitscredential",
@@ -220,7 +220,7 @@
                 "name": "Mobile Driving Licence",
                 "locale": "en",
                 "logo": {
-                  "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                  "uri": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
                   "alt_text": "Mobile driving licence logo"
                 },
                 "description": "ISO 18013-5 mobile driving licence",
@@ -231,7 +231,7 @@
                 "name": "Mobiel Rijbewijs",
                 "locale": "nl",
                 "logo": {
-                  "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+                  "uri": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
                   "alt_text": "Mobile driving licence logo"
                 },
                 "description": "ISO 18013-5 mobiel rijbewijs",
@@ -479,19 +479,19 @@
       },
       "display": [
         {
-          "name": "RC4 Release Verification Authority",
+          "name": "Acme Corporation Authority",
           "locale": "en",
           "logo": {
-            "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
-            "alt_text": "RC4 Release Verification authority logo"
+            "uri": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+            "alt_text": "Acme Corporation authority logo"
           }
         },
         {
-          "name": "RC4 Release Verification Autoriteit",
+          "name": "Acme Corporation Autoriteit",
           "locale": "nl",
           "logo": {
-            "uri": "https://rc4customer.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
-            "alt_text": "RC4 Release Verification authority logo"
+            "uri": "https://acme.example.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png",
+            "alt_text": "Acme Corporation authority logo"
           }
         }
       ]

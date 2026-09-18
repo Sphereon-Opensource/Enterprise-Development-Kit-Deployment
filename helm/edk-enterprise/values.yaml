@@ -548,7 +548,7 @@ issuerPipeline:
 federationSessionEncryption:
   existingSecret: ""
   key: federation-session-encryption-key
-  activeKeyId: federation-session-v1
+  activeKeyId: federation.session.v1
 
 license:
   # Optional explicit installation pin for the license gate. Leave empty during

@@ -1,8 +1,8 @@
 {
-  "title": "47b Restore the issuer default to the seeded authorization server",
+  "title": "36 Create default issuer authorization server binding",
   "request": {
-    "method": "PUT",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/authorization-server-bindings/00000000-0000-4000-8000-000000000000",
+    "method": "POST",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/authorization-server-bindings",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -12,12 +12,14 @@
       "authorizationServerId": "00000000-0000-4000-8000-000000000000",
       "enabled": true,
       "default": true,
-      "expectedRevision": "1"
+      "allowedGrantTypes": [
+        "authorization_code"
+      ]
     }
   },
   "response": {
-    "status": "OK",
-    "code": 200,
+    "status": "Created",
+    "code": 201,
     "headers": {
       "Content-Type": "application/json"
     },
@@ -27,7 +29,10 @@
       "authorizationServerId": "00000000-0000-4000-8000-000000000000",
       "enabled": true,
       "default": true,
-      "revision": 2
+      "allowedGrantTypes": [
+        "authorization_code"
+      ],
+      "revision": 0
     }
   }
 }

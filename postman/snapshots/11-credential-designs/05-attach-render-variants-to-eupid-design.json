@@ -2,7 +2,7 @@
   "title": "05 Attach render variants to EuPid design",
   "request": {
     "method": "PUT",
-    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/credentials/00000000-0000-4000-8000-000000000000",
+    "url": "https://acme.example.com/api/credential-design/v1/designs/credentials/00000000-0000-4000-8000-000000000000",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -55,7 +55,7 @@
           "@context": null,
           "issuerId": "00000000-0000-4000-8000-000000000000",
           "issuerDid": null,
-          "issuerUri": "https://rc4customer.example.com",
+          "issuerUri": "https://acme.example.com",
           "verifierClientId": null,
           "ocaSaid": null,
           "credentialType": null,

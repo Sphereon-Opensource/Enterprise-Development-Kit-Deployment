@@ -789,6 +789,17 @@ spec:
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             {{- end }}
             {{- if ne $name "admin-console" }}
+            # Public platform AS coordinates for an actor logging into a target tenant.
+            - name: ADMIN_CONSOLE_PUBLIC_ORIGIN
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_ISSUER
+              value: {{ $.Values.platform.bootstrap.issuer | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
+            - name: ADMIN_CONSOLE_PLATFORM_TOKEN_URL
+              value: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             - name: ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort | quote }}
             - name: ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL

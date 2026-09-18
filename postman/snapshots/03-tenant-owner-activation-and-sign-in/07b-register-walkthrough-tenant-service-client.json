@@ -2,15 +2,15 @@
   "title": "07b Register walkthrough tenant service client",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/clients",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/clients",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
     },
     "body": {
-      "clientId": "rc4-release-client",
-      "clientName": "RC4 Release Verification walkthrough tenant service",
+      "clientId": "edk-walkthrough-tenant-service",
+      "clientName": "Acme Corporation walkthrough tenant service",
       "clientType": "confidential",
       "enabled": true,
       "grantTypes": [
@@ -25,13 +25,13 @@
         "enterprise-issuer",
         "enterprise-verifier"
       ],
-      "tokenEndpointAuthMethod": "client_secret_basic",
+      "tokenEndpointAuthMethod": "client_secret_post",
       "principalRoles": [
         "tenant-admin"
       ],
       "clientCredential": {
-        "method": "client_secret_basic",
-        "clientId": "rc4-release-client",
+        "method": "client_secret_post",
+        "clientId": "edk-walkthrough-tenant-service",
         "secretValue": "<redacted>"
       }
     }
@@ -43,8 +43,8 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "clientId": "rc4-release-client",
-      "clientName": "RC4 Release Verification walkthrough tenant service",
+      "clientId": "edk-walkthrough-tenant-service",
+      "clientName": "Acme Corporation walkthrough tenant service",
       "clientType": "confidential",
       "enabled": true,
       "grantTypes": [
@@ -62,12 +62,12 @@
       "principalRoles": [
         "tenant-admin"
       ],
-      "tokenEndpointAuthMethod": "client_secret_basic",
+      "tokenEndpointAuthMethod": "client_secret_post",
       "clientCredential": {
-        "method": "client_secret_basic",
-        "clientId": "rc4-release-client",
+        "method": "client_secret_post",
+        "clientId": "edk-walkthrough-tenant-service",
         "secretReference": {
-          "resourceHandle": "sec_3mACyOne3LaUYajaImIYmKhvyIwrWMmT",
+          "resourceHandle": "sec_<opaque>",
           "purpose": "OAUTH_CLIENT_SECRET"
         }
       },

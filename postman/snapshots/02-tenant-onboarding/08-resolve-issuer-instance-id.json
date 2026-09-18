@@ -38,7 +38,7 @@
               "id": "00000000-0000-4000-8000-000000000000",
               "softwarePartyId": "00000000-0000-4000-8000-000000000000",
               "endpointType": "BASE",
-              "url": "https://rc4customer.example.com/oid4vci/rc4customer",
+              "url": "https://acme.example.com/oid4vci/acme",
               "source": "DECLARED",
               "status": "ACTIVE",
               "isPrimary": true

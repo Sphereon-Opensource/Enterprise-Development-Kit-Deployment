@@ -137,6 +137,44 @@ http:
     # /api/platform/config/v1/tenants prefix. A narrower rule leaves the
     # authorization-server, issuer-instance and verifier-instance slices unrouted on the
     # tenant host, where the admin console and the release gate address them.
+    tenant-account-actions:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/account-actions/v1`)
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 310
+      tls: {}
+
+    tenant-backend-platform:
+
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/api/audit/v1`) ||
+         PathPrefix(`/api/forms/v1`) ||
+         PathPrefix(`/api/workflow/v1`) ||
+         PathPrefix(`/api/lifecycle/v1`) ||
+         PathPrefix(`/api/services/v1`) ||
+         PathPrefix(`/api/v1/config`) ||
+         PathPrefix(`/api/invitation/v1/invitations`))
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 310
+      tls: {}
+
+    tenant-backend-blob:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/api/connector/v1`) ||
+         PathPrefix(`/api/blob-store/v1`) ||
+         PathPrefix(`/api/users/v1`) ||
+         PathPrefix(`/api/v1/schemas`) ||
+         PathPrefix(`/api/v1/tabular-mapping-templates`))
+      entryPoints: ["websecure"]
+      service: svc-blob
+      priority: 310
+      tls: {}
+
     tenant-platform-config:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
@@ -221,6 +259,8 @@ http:
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         (Path(`/developer-console/api/auth/session`) ||
          Path(`/developer-console/api/auth/login`) ||
+         Path(`/developer-console/api/auth/token`) ||
+         Path(`/developer-console/api/auth/logout`) ||
          Path(`/developer-console/api/auth/callback`))
       entryPoints: ["websecure"]
       service: svc-admin-console-tenant
@@ -342,7 +382,7 @@ http:
         replacement: "/admin-console/$1"
     developer-console-auth-rewrite:
       replacePathRegex:
-        regex: "^/developer-console/api/auth/(session|login|callback)$"
+        regex: "^/developer-console/api/auth/(session|login|callback|token|logout)$"
         replacement: "/admin-console/api/developer-console-auth/$1"
 
   services:

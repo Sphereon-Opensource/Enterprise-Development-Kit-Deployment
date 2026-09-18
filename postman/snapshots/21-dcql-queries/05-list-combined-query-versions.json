@@ -2,7 +2,7 @@
   "title": "05 List combined query versions",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/dcql/v1/queries/eupid-and-mdl/versions",
+    "url": "https://acme.example.com/api/dcql/v1/queries/eupid-and-mdl/versions",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

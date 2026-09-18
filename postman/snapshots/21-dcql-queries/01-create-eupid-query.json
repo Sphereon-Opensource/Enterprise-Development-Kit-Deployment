@@ -2,7 +2,7 @@
   "title": "01 Create EuPid query",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/dcql/v1/queries",
+    "url": "https://acme.example.com/api/dcql/v1/queries",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -20,7 +20,7 @@
             "format": "dc+sd-jwt",
             "meta": {
               "vct_values": [
-                "https://rc4customer.example.com/public/schema/vct/EuPid"
+                "https://acme.example.com/public/schema/vct/EuPid"
               ]
             },
             "claims": [
@@ -62,7 +62,7 @@
             "format": "dc+sd-jwt",
             "meta": {
               "vct_values": [
-                "https://rc4customer.example.com/public/schema/vct/EuPid"
+                "https://acme.example.com/public/schema/vct/EuPid"
               ]
             },
             "claims": [

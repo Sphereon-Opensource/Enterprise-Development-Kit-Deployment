@@ -2,7 +2,7 @@
   "title": "04 Create EuPid render variant (nl)",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/credential-design/v1/designs/render/variants",
+    "url": "https://acme.example.com/api/credential-design/v1/designs/render/variants",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

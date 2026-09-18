@@ -2,7 +2,7 @@
   "title": "04 List queries",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/dcql/v1/queries",
+    "url": "https://acme.example.com/api/dcql/v1/queries",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -26,7 +26,7 @@
               "format": "dc+sd-jwt",
               "meta": {
                 "vct_values": [
-                  "https://rc4customer.example.com/public/schema/vct/EuPid"
+                  "https://acme.example.com/public/schema/vct/EuPid"
                 ]
               },
               "claims": [
@@ -85,7 +85,7 @@
               "format": "dc+sd-jwt",
               "meta": {
                 "vct_values": [
-                  "https://rc4customer.example.com/public/schema/vct/EuPid"
+                  "https://acme.example.com/public/schema/vct/EuPid"
                 ]
               },
               "claims": [
@@ -162,7 +162,7 @@
               "format": "dc+sd-jwt",
               "meta": {
                 "vct_values": [
-                  "https://rc4customer.example.com/public/schema/vct/EuPid"
+                  "https://acme.example.com/public/schema/vct/EuPid"
                 ]
               },
               "claims": [
@@ -221,7 +221,7 @@
               "format": "dc+sd-jwt",
               "meta": {
                 "vct_values": [
-                  "https://rc4customer.example.com/public/schema/vct/EuPid"
+                  "https://acme.example.com/public/schema/vct/EuPid"
                 ]
               },
               "claims": [

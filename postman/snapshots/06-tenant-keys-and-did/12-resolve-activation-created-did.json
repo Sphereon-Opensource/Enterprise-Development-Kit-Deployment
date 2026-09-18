@@ -2,7 +2,7 @@
   "title": "12 Resolve activation-created DID",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/did/v1/identifiers/did%3Aweb%3Arc4customer.example.com",
+    "url": "https://acme.example.com/api/did/v1/identifiers/did%3Aweb%3Aacme.example.com",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
@@ -15,9 +15,9 @@
       "Content-Type": "application/json"
     },
     "body": {
-      "did": "did:web:rc4customer.example.com",
+      "did": "did:web:acme.example.com",
       "method": "web",
-      "alias": "rc4customer",
+      "alias": "acme",
       "role": "EXTERNAL",
       "createdAt": "2026-01-01T00:00:00Z",
       "updatedAt": "2026-01-01T00:00:00Z"

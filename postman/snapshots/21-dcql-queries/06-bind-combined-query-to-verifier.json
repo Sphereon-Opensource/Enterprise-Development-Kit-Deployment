@@ -2,7 +2,7 @@
   "title": "06 Bind combined query to verifier",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/dcql/v1/verifiers/00000000-0000-4000-8000-000000000000/bindings",
+    "url": "https://acme.example.com/api/dcql/v1/verifiers/00000000-0000-4000-8000-000000000000/bindings",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",

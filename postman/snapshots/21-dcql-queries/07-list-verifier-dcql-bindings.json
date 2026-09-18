@@ -2,7 +2,7 @@
   "title": "07 List verifier DCQL bindings",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/dcql/v1/verifiers/00000000-0000-4000-8000-000000000000/bindings",
+    "url": "https://acme.example.com/api/dcql/v1/verifiers/00000000-0000-4000-8000-000000000000/bindings",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"

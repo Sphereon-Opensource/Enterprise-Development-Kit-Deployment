@@ -2,7 +2,7 @@
   "title": "16 Register public hosted client",
   "request": {
     "method": "POST",
-    "url": "https://rc4customer.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/clients",
+    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/clients",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer <token>",
@@ -10,7 +10,7 @@
     },
     "body": {
       "clientId": "walkthrough-public-client",
-      "clientName": "RC4 Release Verification public wallet",
+      "clientName": "Acme Corporation public wallet",
       "clientType": "public",
       "enabled": true,
       "grantTypes": [
@@ -21,7 +21,7 @@
         "code"
       ],
       "redirectUris": [
-        "https://rc4customer.example.com/wallet/oauth/callback"
+        "https://acme.example.com/wallet/oauth/callback"
       ],
       "allowedScopes": [
         "openid",
@@ -39,7 +39,7 @@
     },
     "body": {
       "clientId": "walkthrough-public-client",
-      "clientName": "RC4 Release Verification public wallet",
+      "clientName": "Acme Corporation public wallet",
       "clientType": "public",
       "enabled": true,
       "grantTypes": [
@@ -50,7 +50,7 @@
         "code"
       ],
       "redirectUris": [
-        "https://rc4customer.example.com/wallet/oauth/callback"
+        "https://acme.example.com/wallet/oauth/callback"
       ],
       "allowedScopes": [
         "openid",

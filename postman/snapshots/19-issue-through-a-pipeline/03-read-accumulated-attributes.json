@@ -2,7 +2,7 @@
   "title": "03 Read accumulated attributes",
   "request": {
     "method": "GET",
-    "url": "https://rc4customer.example.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
+    "url": "https://acme.example.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes",
     "headers": {
       "Authorization": "Bearer <token>",
       "Accept": "*/*"
