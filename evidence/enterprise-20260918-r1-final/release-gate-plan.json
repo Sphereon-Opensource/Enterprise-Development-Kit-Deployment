@@ -1,0 +1,52 @@
+{
+  "mode": "execute",
+  "topology": "Distributed",
+  "accessMode": "BehindEdge",
+  "projectName": "edk-customer-r1-final",
+  "reportDir": "D:\\git\\VDX-infra\\customer\\edk\\evidence\\enterprise-20260918-r1-final",
+  "baseDomain": "e2e.nk.sphereon.com",
+  "publicOrigin": "https://platform.e2e.nk.sphereon.com",
+  "composeFiles": [
+    "D:\\git\\VDX-infra\\customer\\edk\\compose\\docker-compose.yml",
+    "D:\\git\\VDX-infra\\customer\\edk\\evidence\\enterprise-20260918-r1-final\\behind-edge\\docker-compose.behind-edge.yml"
+  ],
+  "optionalLanes": {
+    "keycloak": "skipped",
+    "webhookSink": "skipped",
+    "azureKms": "skipped",
+    "eudi": "skipped"
+  },
+  "gatewayDynamic": "D:\\git\\VDX-infra\\customer\\edk\\evidence\\enterprise-20260918-r1-final\\behind-edge\\dynamic.behind-edge.generated.yml",
+  "requiresLocalCa": false,
+  "edgeEnvironment": "e2e",
+  "edgeAlias": "gw-e2e",
+  "edgeNetwork": "edge",
+  "edgeRouterCandidate": "D:\\git\\VDX-infra\\customer\\edk\\evidence\\enterprise-20260918-r1-final\\behind-edge\\edge-router.e2e.yml",
+  "edgeRouterTarget": "D:\\git\\VDX-infra\\deploy\\edge\\dynamic\\e2e.yml",
+  "composeEnvFile": "D:\\git\\VDX-infra\\customer\\edk\\compose\\.env",
+  "collection": "D:\\git\\VDX-infra\\customer\\edk\\postman\\EDK-Enterprise-Deployment.postman_collection.json",
+  "environment": "D:\\git\\VDX-infra\\customer\\edk\\postman\\.tmp-release-gate-environment-license.json",
+  "requestCount": 218,
+  "immutableTag": "0.25.0-enterprise-20260918-r1",
+  "sourceState": "D:\\git\\VDX-infra\\deploy\\edk\\build\\reports\\release-source-state-0.25.0-enterprise-20260918-r1.json",
+  "expectedSource": "https://github.com/Sphereon-Opensource/VDX-infra",
+  "releaseImages": [
+    "nexus.sphereon.com/edk-docker/enterprise-platform:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-tenant-kms:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-did:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/service-data:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-tenant-as:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-issuer:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-verifier:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/admin-console:0.25.0-enterprise-20260918-r1"
+  ],
+  "monolithImage": null,
+  "baselineInstall": false,
+  "resetVolumes": false,
+  "useExistingProject": false,
+  "setupMode": "protected-license-bundle",
+  "keepUp": false,
+  "removeVolumesOnTeardown": false,
+  "runner": "D:\\git\\VDX-infra\\deploy\\edk\\e2e\\runner\\run-e2e.js",
+  "snapshotDir": "D:\\git\\VDX-infra\\customer\\edk\\postman\\snapshots"
+}

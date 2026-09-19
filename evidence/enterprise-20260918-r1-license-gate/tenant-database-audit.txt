@@ -1,0 +1,169 @@
+Pager usage is off.
+=== connection ===
+ database_name | runtime_role 
+---------------+--------------
+ tenant        | edk_tenant
+(1 row)
+
+=== release roles ===
+             rolname              | rolsuper | rolcreaterole | rolcreatedb | rolcanlogin | rolinherit | rolbypassrls 
+----------------------------------+----------+---------------+-------------+-------------+------------+--------------
+ edk_tenant                       | t        | t             | t           | t           | t          | t
+ secret_management_admin          | f        | f             | f           | t           | f          | f
+ secret_management_tenant_serving | f        | f             | f           | t           | f          | f
+(3 rows)
+
+=== application schemas ===
+                 schema_name                 |       owner       | runtime_can_use | runtime_can_create 
+---------------------------------------------+-------------------+-----------------+--------------------
+ public                                      | pg_database_owner | t               | t
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | edk_tenant        | t               | t
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | edk_tenant        | t               | t
+(3 rows)
+
+=== schema version ownership and readability ===
+                 schema_name                 |   table_name    |   owner    |                                grants                                | runtime_can_read | runtime_can_write 
+---------------------------------------------+-----------------+------------+----------------------------------------------------------------------+------------------+-------------------
+ public                                      | _schema_version | edk_tenant | {edk_tenant=arwdDxt/edk_tenant,secret_management_admin=r/edk_tenant} | t                | t
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | _schema_version | edk_tenant |                                                                      | t                | t
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | _schema_version | edk_tenant |                                                                      | t                | t
+(3 rows)
+
+=== schema version rows ===
+ tenant_schema |             schema_name              | version 
+---------------+--------------------------------------+---------
+ public        | attestation_catalog                  |       1
+ public        | audit                                |       1
+ public        | auth_credential                      |       1
+ public        | auth_rate_limit                      |       1
+ public        | auth_session                         |       1
+ public        | channel                              |       1
+ public        | config_version                       |       1
+ public        | credential_branding                  |       1
+ public        | credential_design                    |       7
+ public        | data_domain                          |       1
+ public        | data_product                         |       2
+ public        | dcql_query                           |       1
+ public        | did                                  |       1
+ public        | enterprise_managed_wallet_activation |      11
+ public        | enterprise_modeling_journey          |       1
+ public        | enterprise_organization              |       3
+ public        | enterprise_wallet_business_conduit   |       1
+ public        | enterprise_wallet_content_protection |       5
+ public        | events                               |       3
+ public        | federation_session                   |       2
+ public        | holder_wallet_session_binding        |       2
+ public        | identity                             |       1
+ public        | invitation                           |       2
+ public        | key_reference                        |       4
+ public        | kv                                   |       2
+ public        | llm_metadata                         |       3
+ public        | oauth2_authorization                 |       2
+ public        | oauth2_authorization_app             |       2
+ public        | object_model                         |       2
+ public        | party                                |       7
+ public        | scheduler                            |       1
+ public        | schema_registry                      |       1
+ public        | secret_management                    |      13
+ public        | semantic_attribute_usage             |       1
+ public        | session                              |       3
+ public        | settings                             |       2
+ public        | status_list                          |       3
+ public        | tenant_registry                      |       4
+ public        | theme                                |       1
+ public        | vault                                |       1
+ public        | verifier_dcql_binding                |       1
+ public        | wallet_entitlement                   |       1
+ public        | wallet_onboarding                    |       2
+ public        | wallet_unit                          |       9
+(44 rows)
+
+                tenant_schema                |             schema_name              | version 
+---------------------------------------------+--------------------------------------+---------
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | attestation_catalog                  |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | audit                                |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | auth_credential                      |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | auth_rate_limit                      |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | auth_session                         |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | channel                              |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | config_version                       |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | credential_branding                  |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | credential_design                    |       7
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | data_domain                          |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | data_product                         |       2
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | dcql_query                           |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | did                                  |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | enterprise_managed_wallet_activation |      11
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | enterprise_modeling_journey          |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | enterprise_organization              |       3
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | enterprise_wallet_business_conduit   |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | enterprise_wallet_content_protection |       5
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | events                               |       3
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | holder_wallet_session_binding        |       2
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | identity                             |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | invitation                           |       2
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | key_reference                        |       4
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | kv                                   |       2
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | llm_metadata                         |       3
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | lote                                 |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | oauth2_authorization                 |       2
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | object_model                         |       2
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | party                                |       7
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | scheduler                            |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | schema_registry                      |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | semantic_attribute_usage             |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | session                              |       3
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | status_list                          |       3
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | trust_domain                         |      10
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | vault                                |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | verifier_dcql_binding                |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | wallet_entitlement                   |       1
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | wallet_onboarding                    |       2
+ tenant_39ef0815_afa7_4e82_bd4f_310e4c91781c | wallet_unit                          |       9
+(40 rows)
+
+                tenant_schema                |             schema_name              | version 
+---------------------------------------------+--------------------------------------+---------
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | attestation_catalog                  |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | audit                                |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | auth_credential                      |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | auth_rate_limit                      |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | auth_session                         |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | certificate_reference                |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | channel                              |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | config_version                       |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | credential_branding                  |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | credential_design                    |       7
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | data_domain                          |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | data_product                         |       2
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | dcql_query                           |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | did                                  |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | enterprise_managed_wallet_activation |      11
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | enterprise_modeling_journey          |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | enterprise_organization              |       3
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | enterprise_wallet_business_conduit   |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | enterprise_wallet_content_protection |       5
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | events                               |       3
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | holder_wallet_session_binding        |       2
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | identity                             |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | invitation                           |       2
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | key_reference                        |       4
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | kv                                   |       2
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | llm_metadata                         |       3
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | lote                                 |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | oauth2_authorization                 |       2
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | object_model                         |       2
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | party                                |       7
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | scheduler                            |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | schema_registry                      |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | semantic_attribute_usage             |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | session                              |       3
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | status_list                          |       3
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | trust_domain                         |      10
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | vault                                |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | verifier_dcql_binding                |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | wallet_entitlement                   |       1
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | wallet_onboarding                    |       2
+ tenant_fdd9b8d6_a1c4_431c_a378_b172d25a5952 | wallet_unit                          |       9
+(41 rows)
+

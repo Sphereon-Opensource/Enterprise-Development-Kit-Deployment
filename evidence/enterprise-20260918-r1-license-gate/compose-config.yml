@@ -1,0 +1,961 @@
+name: edk-customer-r1-license
+networks:
+  appnet:
+    name: edk-customer-r1-license_appnet
+  edge:
+    external: true
+    name: edge
+  platform-db-net:
+    name: edk-customer-r1-license_platform-db-net
+  tenant-db-net:
+    name: edk-customer-r1-license_tenant-db-net
+services:
+  admin-console:
+    depends_on:
+      enterprise-blob:
+        condition: service_healthy
+        required: true
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+    environment:
+      - ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT=false
+      - ADMIN_CONSOLE_AUDIT_BASE_URL=http://enterprise-platform:18080
+      - ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS=http://enterprise-platform:18080,http://enterprise-blob:8080
+      - ADMIN_CONSOLE_IDENTITY_BASE_URL=http://enterprise-tenant-as:18083
+      - ADMIN_CONSOLE_ISSUER_BASE_URL=http://enterprise-issuer:8080
+      - ADMIN_CONSOLE_MODE=PLATFORM
+      - ADMIN_CONSOLE_PLATFORM_BASE_URL=http://enterprise-platform:18080
+      - ADMIN_CONSOLE_PUBLIC_ORIGIN=https://platform.e2e.nk.sphereon.com
+      - ADMIN_CONSOLE_TENANT_AS_BASE_URL=http://enterprise-tenant-as:18083
+      - ADMIN_CONSOLE_TENANT_DID_BASE_URL=http://enterprise-did:8080
+      - ADMIN_CONSOLE_TENANT_KMS_BASE_URL=http://enterprise-tenant-kms:8080
+      - ADMIN_CONSOLE_THEME_BASE_URL=http://enterprise-blob:8080
+      - ADMIN_CONSOLE_TRUSTED_INGRESS_MODE=X_FORWARDED
+      - ADMIN_CONSOLE_TRUST_DOMAIN_BASE_URL=http://enterprise-platform:18080
+      - ADMIN_CONSOLE_VERIFIER_BASE_URL=http://enterprise-verifier:8080
+      - ADMIN_CONSOLE_WORKLOAD_CLIENT_ID=admin-console-portal-bff
+      - ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET=${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set
+        EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
+      - NEXT_PUBLIC_BASE_PATH=/admin-console
+      - NEXT_PUBLIC_PLATFORM_AUDIENCE=enterprise-platform
+      - NEXT_PUBLIC_TENANT_DID_AUDIENCE=enterprise-tenant-did
+      - NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE=enterprise-issuer
+      - NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE=enterprise-verifier
+      - NEXT_PUBLIC_THEME_AUDIENCE=enterprise-blob
+      - PORT=3000
+      - ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS=1
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --tries=1
+        - --spider
+        - http://127.0.0.1:3000/admin-console/health
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: {}
+  admin-console-tenant:
+    depends_on:
+      enterprise-blob:
+        condition: service_healthy
+        required: true
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+      enterprise-tenant-as:
+        condition: service_healthy
+        required: true
+    environment:
+      - ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT=false
+      - ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS=http://enterprise-platform:18080,http://enterprise-tenant-as:18083,http://enterprise-blob:8080
+      - ADMIN_CONSOLE_DEVELOPER_CONSOLE_BASE_URL=http://enterprise-platform:18080
+      - ADMIN_CONSOLE_IDENTITY_BASE_URL=http://enterprise-tenant-as:18083
+      - ADMIN_CONSOLE_ISSUER_BASE_URL=http://enterprise-issuer:8080
+      - ADMIN_CONSOLE_MODE=TENANT
+      - ADMIN_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL=https://platform.e2e.nk.sphereon.com
+      - ADMIN_CONSOLE_PLATFORM_BASE_URL=http://enterprise-platform:18080
+      - ADMIN_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL=http://enterprise-platform:18080/api/platform/bootstrap/v1
+      - ADMIN_CONSOLE_PLATFORM_ISSUER=https://platform.e2e.nk.sphereon.com
+      - ADMIN_CONSOLE_PLATFORM_TOKEN_URL=http://enterprise-platform:18080/token
+      - ADMIN_CONSOLE_PUBLIC_ORIGIN=https://platform.e2e.nk.sphereon.com
+      - ADMIN_CONSOLE_TENANT_AS_BASE_URL=http://enterprise-tenant-as:18083
+      - ADMIN_CONSOLE_TENANT_CONTEXT_URL=http://enterprise-platform:18080/api/platform/bootstrap/v1/admin-console-context
+      - ADMIN_CONSOLE_TENANT_DID_BASE_URL=http://enterprise-did:8080
+      - ADMIN_CONSOLE_TENANT_KMS_BASE_URL=http://enterprise-tenant-kms:8080
+      - ADMIN_CONSOLE_THEME_BASE_URL=http://enterprise-blob:8080
+      - ADMIN_CONSOLE_TRUSTED_INGRESS_HOPS=1
+      - ADMIN_CONSOLE_TRUSTED_INGRESS_MODE=X_FORWARDED
+      - ADMIN_CONSOLE_TRUST_DOMAIN_BASE_URL=http://enterprise-platform:18080
+      - ADMIN_CONSOLE_VERIFIER_BASE_URL=http://enterprise-verifier:8080
+      - NEXT_PUBLIC_BASE_PATH=/admin-console
+      - NEXT_PUBLIC_TENANT_DID_AUDIENCE=enterprise-tenant-did
+      - NEXT_PUBLIC_TENANT_ISSUER_AUDIENCE=enterprise-issuer
+      - NEXT_PUBLIC_TENANT_VERIFIER_AUDIENCE=enterprise-verifier
+      - NEXT_PUBLIC_THEME_AUDIENCE=enterprise-blob
+      - PORT=3000
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --tries=1
+        - --spider
+        - http://127.0.0.1:3000/admin-console/health
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: null
+  enterprise-blob:
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+      enterprise-tenant-as:
+        condition: service_healthy
+        required: true
+      otel-collector:
+        condition: service_started
+        required: true
+      tenant-postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      - APP_PROFILE=container
+      - EDK_DEPLOYMENT_MODE=${EDK_DEPLOYMENT_MODE:-prod}
+      - EDK_INTERNAL_CLIENT_SECRET=${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
+      - EDK_KEYSTORE_PASSWORD=${EDK_KEYSTORE_PASSWORD}
+      - EDK_OWNER_INITIAL_CREDENTIAL=${EDK_OWNER_INITIAL_CREDENTIAL}
+      - EDK_PLATFORM_BASE_DOMAIN=e2e.nk.sphereon.com
+      - EDK_PLATFORM_PUBLIC_URL=https://platform.e2e.nk.sphereon.com
+      - EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      - EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_HOST=tenant-postgres
+      - EDK_TENANT_DB_NAME=${EDK_TENANT_DB_NAME:-tenant}
+      - EDK_TENANT_DB_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - EDK_TRUST_TENANT_REGISTRY_ISSUERS=true
+      - EXTERNAL_BASE_URL=
+      - GRPC_AUTH_MODE=service-jwt
+      - GRPC_ENABLED=false
+      - PORT=8080
+      - REST_ENABLED=true
+      - REST_PORT=8080
+      - SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY=${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS=${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate
+        the secret-authority key window before starting the stack}
+      - SPHEREON_CONFIG_LOCATION=/app/config
+    expose:
+      - "8080"
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /health HTTP/1.0\r\nHost:
+          platform.e2e.nk.sphereon.com\r\n\r\n'' >&3 && head -n1 <&3 | grep -Eq ''
+          (200|503) '''
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/service-data:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: null
+      tenant-db-net: null
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\blob.application.yml
+        target: /app/config/application.yml
+        type: bind
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem
+        target: /app/secret-authority/public/central-permit.pub.pem
+        type: volume
+        volume: {}
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-blob
+        target: /app/secret-authority/workload
+        type: volume
+        volume: {}
+      - source: blob-store-data
+        target: /app/blobs
+        type: volume
+        volume: {}
+  enterprise-did:
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+      enterprise-tenant-kms:
+        condition: service_healthy
+        required: true
+      otel-collector:
+        condition: service_started
+        required: true
+      tenant-postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      - APP_PROFILE=container
+      - EDK_DEPLOYMENT_MODE=${EDK_DEPLOYMENT_MODE:-prod}
+      - EDK_INTERNAL_CLIENT_SECRET=${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
+      - EDK_KEYSTORE_PASSWORD=${EDK_KEYSTORE_PASSWORD}
+      - EDK_OWNER_INITIAL_CREDENTIAL=${EDK_OWNER_INITIAL_CREDENTIAL}
+      - EDK_PLATFORM_BASE_DOMAIN=e2e.nk.sphereon.com
+      - EDK_PLATFORM_PUBLIC_URL=https://platform.e2e.nk.sphereon.com
+      - EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      - EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_HOST=tenant-postgres
+      - EDK_TENANT_DB_NAME=${EDK_TENANT_DB_NAME:-tenant}
+      - EDK_TENANT_DB_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - EDK_TRUST_TENANT_REGISTRY_ISSUERS=true
+      - EXTERNAL_BASE_URL=
+      - GRPC_AUTH_MODE=service-jwt
+      - PORT=8080
+      - REST_PORT=8080
+      - SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY=${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS=${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate
+        the secret-authority key window before starting the stack}
+      - SPHEREON_CONFIG_LOCATION=/app/config
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /health HTTP/1.0\r\n\r\n''
+          >&3 && line=$$(head -n1 <&3) && echo "$$line" | grep -Eq '' (200|204) ''
+          && exit 0; echo "$$line" | grep -q '' 503 '' || exit 1; exec 4<>/dev/tcp/enterprise-platform/18080
+          && printf ''GET /api/platform/setup/v1/status HTTP/1.0\r\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN
+          must be set explicitly}\r\n\r\n'' >&4 && head -n1 <&4 | grep -q '' 200 '''
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/enterprise-did:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: null
+      tenant-db-net: null
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\did.application.yml
+        target: /app/config/application.yml
+        type: bind
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem
+        target: /app/secret-authority/public/central-permit.pub.pem
+        type: volume
+        volume: {}
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-data
+        target: /app/secret-authority/workload
+        type: volume
+        volume: {}
+  enterprise-issuer:
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+      enterprise-tenant-as:
+        condition: service_healthy
+        required: true
+      enterprise-tenant-kms:
+        condition: service_healthy
+        required: true
+      otel-collector:
+        condition: service_started
+        required: true
+      tenant-postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      - APP_PROFILE=container
+      - EDK_DEPLOYMENT_MODE=${EDK_DEPLOYMENT_MODE:-prod}
+      - EDK_INTERNAL_CLIENT_SECRET=${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+      - EDK_KEYSTORE_PASSWORD=${EDK_KEYSTORE_PASSWORD}
+      - EDK_OWNER_INITIAL_CREDENTIAL=${EDK_OWNER_INITIAL_CREDENTIAL}
+      - EDK_PIPELINE_BLIND_INDEX_KEY=${EDK_PIPELINE_BLIND_INDEX_KEY}
+      - EDK_PIPELINE_MASTER_KEK=${EDK_PIPELINE_MASTER_KEK}
+      - EDK_PLATFORM_BASE_DOMAIN=e2e.nk.sphereon.com
+      - EDK_PLATFORM_PUBLIC_URL=https://platform.e2e.nk.sphereon.com
+      - EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      - EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_HOST=tenant-postgres
+      - EDK_TENANT_DB_NAME=${EDK_TENANT_DB_NAME:-tenant}
+      - EDK_TENANT_DB_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - EDK_TRUST_TENANT_REGISTRY_ISSUERS=true
+      - EXTERNAL_BASE_URL=
+      - GRPC_AUTH_MODE=service-jwt
+      - PORT=8080
+      - REST_PORT=8080
+      - SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY=${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS=${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate
+        the secret-authority key window before starting the stack}
+      - SPHEREON_CONFIG_LOCATION=/app/config
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /health HTTP/1.0\r\nHost:
+          platform.e2e.nk.sphereon.com\r\n\r\n'' >&3 && head -n1 <&3 | grep -Eq ''
+          (200|503) '''
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/enterprise-issuer:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: null
+      tenant-db-net: null
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\issuer.application.yml
+        target: /app/config/application.yml
+        type: bind
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem
+        target: /app/secret-authority/public/central-permit.pub.pem
+        type: volume
+        volume: {}
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-oid4vci
+        target: /app/secret-authority/workload
+        type: volume
+        volume: {}
+  enterprise-platform:
+    depends_on:
+      otel-collector:
+        condition: service_started
+        required: true
+      platform-postgres:
+        condition: service_healthy
+        required: true
+      tenant-postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      - ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET=${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set
+        EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
+      - APP_PROFILE=container
+      - AUTHORIZATION_SERVER_MIGRATION_RESUME_FAILED=${AUTHORIZATION_SERVER_MIGRATION_RESUME_FAILED:-false}
+      - DATABASE_APP_DEFAULT_DATABASE=${EDK_PLATFORM_DB_NAME:-platform}
+      - DATABASE_APP_DEFAULT_DIALECT=postgresql
+      - DATABASE_APP_DEFAULT_HOST=platform-postgres
+      - DATABASE_APP_DEFAULT_ISOLATION=shared
+      - DATABASE_APP_DEFAULT_PASSWORD=${EDK_PLATFORM_DB_PASSWORD}
+      - DATABASE_APP_DEFAULT_PORT=5432
+      - DATABASE_APP_DEFAULT_USERNAME=${EDK_PLATFORM_DB_USERNAME:-edk_platform}
+      - DATABASE_APP_TENANT_MIGRATOR_DATABASE=${EDK_TENANT_DB_NAME:-tenant}
+      - DATABASE_APP_TENANT_MIGRATOR_DIALECT=postgresql
+      - DATABASE_APP_TENANT_MIGRATOR_HOST=tenant-postgres
+      - DATABASE_APP_TENANT_MIGRATOR_ISOLATION=shared
+      - DATABASE_APP_TENANT_MIGRATOR_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - DATABASE_APP_TENANT_MIGRATOR_PORT=5432
+      - DATABASE_APP_TENANT_MIGRATOR_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - DATABASE_TENANTS_DEFAULT_DATABASE=${EDK_TENANT_DB_NAME:-tenant}
+      - DATABASE_TENANTS_DEFAULT_DIALECT=postgresql
+      - DATABASE_TENANTS_DEFAULT_HOST=tenant-postgres
+      - DATABASE_TENANTS_DEFAULT_ISOLATION=schema
+      - DATABASE_TENANTS_DEFAULT_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - DATABASE_TENANTS_DEFAULT_PORT=5432
+      - DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN=tenant_{id}
+      - DATABASE_TENANTS_DEFAULT_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - EDK_DEPLOYMENT_MODE=${EDK_DEPLOYMENT_MODE:-prod}
+      - EDK_INTERNAL_CLIENT_SECRET_BLOB=${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
+      - EDK_INTERNAL_CLIENT_SECRET_DID=${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
+      - EDK_INTERNAL_CLIENT_SECRET_EMAIL=${EDK_INTERNAL_CLIENT_SECRET_EMAIL:?Set EDK_INTERNAL_CLIENT_SECRET_EMAIL}
+      - EDK_INTERNAL_CLIENT_SECRET_ISSUER=${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set
+        EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+      - EDK_INTERNAL_CLIENT_SECRET_TENANT_AS=${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set
+        EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
+      - EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS=${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set
+        EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
+      - EDK_INTERNAL_CLIENT_SECRET_VERIFIER=${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set
+        EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
+      - EDK_KEYSTORE_PASSWORD=${EDK_KEYSTORE_PASSWORD}
+      - EDK_OWNER_INITIAL_CREDENTIAL=${EDK_OWNER_INITIAL_CREDENTIAL}
+      - EDK_PLATFORM_BASE_DOMAIN=e2e.nk.sphereon.com
+      - EDK_PLATFORM_DB_HOST=platform-postgres
+      - EDK_PLATFORM_DB_NAME=${EDK_PLATFORM_DB_NAME:-platform}
+      - EDK_PLATFORM_DB_PASSWORD=${EDK_PLATFORM_DB_PASSWORD}
+      - EDK_PLATFORM_DB_USERNAME=${EDK_PLATFORM_DB_USERNAME:-edk_platform}
+      - EDK_PLATFORM_PUBLIC_URL=https://platform.e2e.nk.sphereon.com
+      - EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      - EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      - EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_HOST=tenant-postgres
+      - EDK_TENANT_DB_NAME=${EDK_TENANT_DB_NAME:-tenant}
+      - EDK_TENANT_DB_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - EDK_TRUST_TENANT_REGISTRY_ISSUERS=true
+      - EXTERNAL_BASE_URL=https://platform.e2e.nk.sphereon.com
+      - GRPC_AUTH_MODE=service-jwt
+      - GRPC_ENABLED=true
+      - GRPC_PORT=9090
+      - ONBOARDING_UI_BASE_URL=https://platform.e2e.nk.sphereon.com
+      - PORT=18080
+      - REST_ENABLED=false
+      - REST_PORT=18080
+      - SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS=${SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY=${SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY=${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS=${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS=${SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:-true}
+      - SPHEREON_APP_TRANSPORT_AUTH_EXPECTED_AUDIENCE=enterprise-platform
+      - SPHEREON_CONFIG_LOCATION=/app/config
+      - TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST=enterprise-tenant-kms
+      - TENANT_KMS_AUTHORITY_BOOTSTRAP_PORT=9090
+      - TRANSPORT_AUTH_EXPECTED_AUDIENCE=enterprise-platform
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - bash
+        - -c
+        - '(exec 3<>/dev/tcp/127.0.0.1/18080 && printf ''GET /health HTTP/1.0\r\nHost:
+          platform.e2e.nk.sphereon.com\r\n\r\n'' >&3 && head -n1 <&3 | grep -Eq ''
+          (200|503) '') || (exec 4<>/dev/tcp/127.0.0.1/18080 && printf ''GET /api/platform/setup/v1/status
+          HTTP/1.0\r\nHost: platform.e2e.nk.sphereon.com\r\n\r\n'' >&4 && head -n1
+          <&4 | grep -Eq '' (200|404) '')'
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/enterprise-platform:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: null
+      platform-db-net: null
+      tenant-db-net: null
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\platform.application.yml
+        target: /app/config/application.yml
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config
+        target: /app/config/external
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\secret-management-environment.manifest
+        target: /app/secret-management/deployment/environment.manifest
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\secret-provider-private-endpoints.manifest
+        target: /app/secret-management/egress/private-endpoints.manifest
+        type: bind
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/central
+        target: /app/secret-authority/central
+        type: volume
+        volume: {}
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public
+        target: /app/secret-authority/public
+        type: volume
+        volume: {}
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-platform
+        target: /app/secret-authority/workload
+        type: volume
+        volume: {}
+      - source: platform-keystore
+        target: /keystore
+        type: volume
+        volume: {}
+  enterprise-tenant-as:
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+      otel-collector:
+        condition: service_started
+        required: true
+      tenant-postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      - APP_PROFILE=container
+      - EDK_DEPLOYMENT_MODE=${EDK_DEPLOYMENT_MODE:-prod}
+      - EDK_INTERNAL_CLIENT_SECRET=${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
+      - EDK_INTERNAL_CLIENT_SECRET_ISSUER=${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set
+        EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+      - EDK_KEYSTORE_PASSWORD=${EDK_KEYSTORE_PASSWORD}
+      - EDK_OWNER_INITIAL_CREDENTIAL=${EDK_OWNER_INITIAL_CREDENTIAL}
+      - EDK_PLATFORM_BASE_DOMAIN=e2e.nk.sphereon.com
+      - EDK_PLATFORM_PUBLIC_URL=https://platform.e2e.nk.sphereon.com
+      - EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      - EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_HOST=tenant-postgres
+      - EDK_TENANT_DB_NAME=${EDK_TENANT_DB_NAME:-tenant}
+      - EDK_TENANT_DB_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - EDK_TRUST_TENANT_REGISTRY_ISSUERS=true
+      - GRPC_AUTH_MODE=service-jwt
+      - PORT=18083
+      - REST_PORT=18083
+      - SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY=${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS=${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate
+        the secret-authority key window before starting the stack}
+      - SERVER_REST_AUTH_TRUST_TENANT_REGISTRY_ISSUERS=true
+      - SPHEREON_CONFIG_LOCATION=/app/config
+      - THEME_CLIENT_BASE_URL=http://enterprise-blob:8080
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/18083 && printf ''GET /health HTTP/1.0\r\nHost:
+          platform.e2e.nk.sphereon.com\r\n\r\n'' >&3 && head -n1 <&3 | grep -Eq ''
+          (200|503) '''
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/enterprise-tenant-as:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: null
+      tenant-db-net: null
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\tenant-as.application.yml
+        target: /app/config/application.yml
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config
+        target: /app/config/external
+        type: bind
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem
+        target: /app/secret-authority/public/central-permit.pub.pem
+        type: volume
+        volume: {}
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-tenant-as
+        target: /app/secret-authority/workload
+        type: volume
+        volume: {}
+  enterprise-tenant-kms:
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+      enterprise-tenant-as:
+        condition: service_healthy
+        required: true
+      otel-collector:
+        condition: service_started
+        required: true
+      tenant-postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      - APP_PROFILE=container
+      - EDK_DEPLOYMENT_MODE=${EDK_DEPLOYMENT_MODE:-prod}
+      - EDK_INTERNAL_CLIENT_SECRET=${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
+      - EDK_KEYSTORE_PASSWORD=${EDK_KEYSTORE_PASSWORD}
+      - EDK_OWNER_INITIAL_CREDENTIAL=${EDK_OWNER_INITIAL_CREDENTIAL}
+      - EDK_PLATFORM_BASE_DOMAIN=e2e.nk.sphereon.com
+      - EDK_PLATFORM_PUBLIC_URL=https://platform.e2e.nk.sphereon.com
+      - EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      - EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_HOST=tenant-postgres
+      - EDK_TENANT_DB_NAME=${EDK_TENANT_DB_NAME:-tenant}
+      - EDK_TENANT_DB_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - EDK_TRUST_TENANT_REGISTRY_ISSUERS=true
+      - EXTERNAL_BASE_URL=${EDK_KMS_INTERNAL_BASE_URL:-http://enterprise-tenant-kms:8080}
+      - GRPC_AUTH_MODE=service-jwt
+      - GRPC_ENABLED=true
+      - GRPC_PORT=9090
+      - PORT=8080
+      - REST_ENABLED=false
+      - REST_PORT=8080
+      - SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY=${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS=${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate
+        the secret-authority key window before starting the stack}
+      - SPHEREON_CONFIG_LOCATION=/app/config
+    expose:
+      - "8080"
+      - "9090"
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /health HTTP/1.0\r\nHost:
+          platform.e2e.nk.sphereon.com\r\n\r\n'' >&3 && head -n1 <&3 | grep -Eq ''
+          (200|503) '''
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/enterprise-tenant-kms:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: null
+      tenant-db-net: null
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\tenant-kms.application.yml
+        target: /app/config/application.yml
+        type: bind
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem
+        target: /app/secret-authority/public/central-permit.pub.pem
+        type: volume
+        volume: {}
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-crypto
+        target: /app/secret-authority/workload
+        type: volume
+        volume: {}
+      - source: tenant-kms-keystore
+        target: /keystore
+        type: volume
+        volume: {}
+  enterprise-verifier:
+    depends_on:
+      enterprise-did:
+        condition: service_healthy
+        required: true
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+      enterprise-tenant-as:
+        condition: service_healthy
+        required: true
+      enterprise-tenant-kms:
+        condition: service_healthy
+        required: true
+      otel-collector:
+        condition: service_started
+        required: true
+      tenant-postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      - APP_PROFILE=container
+      - EDK_DEPLOYMENT_MODE=${EDK_DEPLOYMENT_MODE:-prod}
+      - EDK_INTERNAL_CLIENT_SECRET=${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
+      - EDK_KEYSTORE_PASSWORD=${EDK_KEYSTORE_PASSWORD}
+      - EDK_OWNER_INITIAL_CREDENTIAL=${EDK_OWNER_INITIAL_CREDENTIAL}
+      - EDK_PLATFORM_BASE_DOMAIN=e2e.nk.sphereon.com
+      - EDK_PLATFORM_PUBLIC_URL=https://platform.e2e.nk.sphereon.com
+      - EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      - EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD=${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_HOST=tenant-postgres
+      - EDK_TENANT_DB_NAME=${EDK_TENANT_DB_NAME:-tenant}
+      - EDK_TENANT_DB_PASSWORD=${EDK_TENANT_DB_PASSWORD}
+      - EDK_TENANT_DB_USERNAME=${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      - EDK_TRUST_TENANT_REGISTRY_ISSUERS=true
+      - EXTERNAL_BASE_URL=
+      - GRPC_AUTH_MODE=service-jwt
+      - PORT=8080
+      - REST_PORT=8080
+      - SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY=${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate
+        the secret-authority key window before starting the stack}
+      - SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS=${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate
+        the secret-authority key window before starting the stack}
+      - SPHEREON_CONFIG_LOCATION=/app/config
+    healthcheck:
+      interval: 5s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /health HTTP/1.0\r\nHost:
+          platform.e2e.nk.sphereon.com\r\n\r\n'' >&3 && head -n1 <&3 | grep -Eq ''
+          (200|503) '''
+      timeout: 5s
+    image: nexus.sphereon.com/edk-docker/enterprise-verifier:${EDK_TAG:-0.25.0-SNAPSHOT}
+    networks:
+      appnet: null
+      tenant-db-net: null
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\config\verifier.application.yml
+        target: /app/config/application.yml
+        type: bind
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem
+        target: /app/secret-authority/public/central-permit.pub.pem
+        type: volume
+        volume: {}
+      - read_only: true
+        source: ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-oid4vp
+        target: /app/secret-authority/workload
+        type: volume
+        volume: {}
+  jaeger:
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    image: jaegertracing/all-in-one:1.54
+    networks:
+      appnet: null
+    ports:
+      - 127.0.0.1:${EDK_JAEGER_UI_HOST_PORT:-16686}:16686
+  otel-collector:
+    command:
+      - --config=/etc/otelcol/config.yaml
+    depends_on:
+      jaeger:
+        condition: service_started
+        required: true
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    networks:
+      appnet: null
+    ports:
+      - 127.0.0.1:${EDK_OTEL_COLLECTOR_GRPC_HOST_PORT:-4317}:4317
+      - 127.0.0.1:${EDK_OTEL_COLLECTOR_HTTP_HOST_PORT:-4318}:4318
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\otel-collector-config.yaml
+        target: /etc/otelcol/config.yaml
+        type: bind
+  platform-postgres:
+    environment:
+      POSTGRES_DB: ${EDK_PLATFORM_DB_NAME:-platform}
+      POSTGRES_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
+      POSTGRES_USER: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
+      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+    healthcheck:
+      interval: 3s
+      retries: 20
+      start_period: 20s
+      test:
+        - CMD-SHELL
+        - /docker-entrypoint-initdb.d/10-secret-management-roles.sh
+      timeout: 3s
+    image: postgres:16-alpine
+    networks:
+      platform-db-net: null
+    ports:
+      - 127.0.0.1:${EDK_PLATFORM_POSTGRES_HOST_PORT:-15432}:5432
+    volumes:
+      - source: platform-postgres-data
+        target: /var/lib/postgresql/data
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\postgres-init\10-secret-management-roles.sh
+        target: /docker-entrypoint-initdb.d/10-secret-management-roles.sh
+        type: bind
+  tenant-postgres:
+    environment:
+      POSTGRES_DB: ${EDK_TENANT_DB_NAME:-tenant}
+      POSTGRES_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
+      POSTGRES_USER: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+        EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+    healthcheck:
+      interval: 3s
+      retries: 20
+      start_period: 20s
+      test:
+        - CMD-SHELL
+        - POSTGRES_USER=${EDK_TENANT_DB_USERNAME:-edk_tenant} POSTGRES_DB=${EDK_TENANT_DB_NAME:-tenant}
+          SECRET_MANAGEMENT_ADMIN_DB_PASSWORD=$${SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+          SECRET_MANAGEMENT_TENANT_DB_PASSWORD=$${SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+          SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD=$${SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+          sh /docker-entrypoint-initdb.d/10-secret-management-roles.sh
+      timeout: 3s
+    image: postgres:16-alpine
+    networks:
+      tenant-db-net: null
+    ports:
+      - 127.0.0.1:${EDK_TENANT_POSTGRES_HOST_PORT:-15433}:5432
+    volumes:
+      - source: tenant-postgres-data
+        target: /var/lib/postgresql/data
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:\git\VDX-infra\customer\edk\compose\postgres-init\10-secret-management-roles.sh
+        target: /docker-entrypoint-initdb.d/10-secret-management-roles.sh
+        type: bind
+  traefik:
+    command: []
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+        required: true
+    image: traefik:v3.3
+    networks:
+      appnet: {}
+      edge:
+        aliases:
+          - gw-e2e
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:/git/VDX-infra/customer/edk/evidence/enterprise-20260918-r1-license-gate/behind-edge/traefik.behind-edge.generated.yml
+        target: /etc/traefik/traefik.yml
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: D:/git/VDX-infra/customer/edk/evidence/enterprise-20260918-r1-license-gate/behind-edge/dynamic.behind-edge.generated.yml
+        target: /etc/traefik/dynamic/dynamic.yml
+        type: bind
+volumes:
+  blob-store-data:
+    name: edk-customer-r1-license_blob-store-data
+  platform-keystore:
+    name: edk-customer-r1-license_platform-keystore
+  platform-postgres-data:
+    name: edk-customer-r1-license_platform-postgres-data
+  tenant-kms-keystore:
+    name: edk-customer-r1-license_tenant-kms-keystore
+  tenant-postgres-data:
+    name: edk-customer-r1-license_tenant-postgres-data
+x-edk-common-env:
+  APP_PROFILE: container
+  EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
+  EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD}
+  EDK_OWNER_INITIAL_CREDENTIAL: ${EDK_OWNER_INITIAL_CREDENTIAL}
+  EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must
+    be set explicitly}
+  EDK_PLATFORM_PUBLIC_URL: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
+  EDK_TRUST_TENANT_REGISTRY_ISSUERS: ${EDK_TRUST_TENANT_REGISTRY_ISSUERS:-true}
+  GRPC_AUTH_MODE: service-jwt
+  PORT: "8080"
+  REST_PORT: "8080"
+  SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY: ${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate
+    the secret-authority key window before starting the stack}
+  SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS: ${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate
+    the secret-authority key window before starting the stack}
+  SPHEREON_CONFIG_LOCATION: /app/config
+x-edk-platform-sts-secrets:
+  EDK_INTERNAL_CLIENT_SECRET_BLOB: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
+  EDK_INTERNAL_CLIENT_SECRET_DID: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
+  EDK_INTERNAL_CLIENT_SECRET_EMAIL: ${EDK_INTERNAL_CLIENT_SECRET_EMAIL:?Set EDK_INTERNAL_CLIENT_SECRET_EMAIL}
+  EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+  EDK_INTERNAL_CLIENT_SECRET_TENANT_AS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set
+    EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
+  EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set
+    EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
+  EDK_INTERNAL_CLIENT_SECRET_VERIFIER: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set
+    EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
+x-edk-public-urls:
+  onboarding: ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}}
+  platform: ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
+x-edk-runtime-healthcheck-8080:
+  interval: 5s
+  retries: 30
+  start_period: 20s
+  test:
+    - CMD
+    - bash
+    - -c
+    - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /health HTTP/1.0\r\n\r\n''
+      >&3 && line=$$(head -n1 <&3) && echo "$$line" | grep -Eq '' (200|204) '' &&
+      exit 0; echo "$$line" | grep -q '' 503 '' || exit 1; exec 4<>/dev/tcp/enterprise-platform/18080
+      && printf ''GET /api/platform/setup/v1/status HTTP/1.0\r\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN
+      must be set explicitly}\r\n\r\n'' >&4 && head -n1 <&4 | grep -q '' 200 '''
+  timeout: 5s
+x-edk-runtime-healthcheck-9090:
+  interval: 5s
+  retries: 30
+  start_period: 20s
+  test:
+    - CMD
+    - bash
+    - -c
+    - exec 3<>/dev/tcp/127.0.0.1/9090
+  timeout: 5s
+x-edk-runtime-healthcheck-18083:
+  interval: 5s
+  retries: 30
+  start_period: 20s
+  test:
+    - CMD
+    - bash
+    - -c
+    - 'exec 3<>/dev/tcp/127.0.0.1/18083 && printf ''GET /health HTTP/1.0\r\n\r\n''
+      >&3 && line=$$(head -n1 <&3) && echo "$$line" | grep -Eq '' (200|204) '' &&
+      exit 0; echo "$$line" | grep -q '' 503 '' || exit 1; exec 4<>/dev/tcp/enterprise-platform/18080
+      && printf ''GET /api/platform/setup/v1/status HTTP/1.0\r\nHost: platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN
+      must be set explicitly}\r\n\r\n'' >&4 && head -n1 <&4 | grep -q '' 200 '''
+  timeout: 5s
+x-edk-tenant-db-env:
+  EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set
+    EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+  EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set
+    EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+  EDK_TENANT_DB_HOST: tenant-postgres
+  EDK_TENANT_DB_NAME: ${EDK_TENANT_DB_NAME:-tenant}
+  EDK_TENANT_DB_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
+  EDK_TENANT_DB_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}

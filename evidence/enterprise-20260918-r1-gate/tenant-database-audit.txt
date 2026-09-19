@@ -1,0 +1,74 @@
+Pager usage is off.
+=== connection ===
+ database_name | runtime_role 
+---------------+--------------
+ tenant        | edk_tenant
+(1 row)
+
+=== release roles ===
+             rolname              | rolsuper | rolcreaterole | rolcreatedb | rolcanlogin | rolinherit | rolbypassrls 
+----------------------------------+----------+---------------+-------------+-------------+------------+--------------
+ edk_tenant                       | t        | t             | t           | t           | t          | t
+ secret_management_admin          | f        | f             | f           | t           | f          | f
+ secret_management_tenant_serving | f        | f             | f           | t           | f          | f
+(3 rows)
+
+=== application schemas ===
+ schema_name |       owner       | runtime_can_use | runtime_can_create 
+-------------+-------------------+-----------------+--------------------
+ public      | pg_database_owner | t               | t
+(1 row)
+
+=== schema version ownership and readability ===
+ schema_name |   table_name    |   owner    |                                grants                                | runtime_can_read | runtime_can_write 
+-------------+-----------------+------------+----------------------------------------------------------------------+------------------+-------------------
+ public      | _schema_version | edk_tenant | {edk_tenant=arwdDxt/edk_tenant,secret_management_admin=r/edk_tenant} | t                | t
+(1 row)
+
+=== schema version rows ===
+ tenant_schema |             schema_name              | version 
+---------------+--------------------------------------+---------
+ public        | attestation_catalog                  |       1
+ public        | audit                                |       1
+ public        | auth_credential                      |       1
+ public        | auth_rate_limit                      |       1
+ public        | auth_session                         |       1
+ public        | channel                              |       1
+ public        | config_version                       |       1
+ public        | credential_branding                  |       1
+ public        | credential_design                    |       7
+ public        | data_domain                          |       1
+ public        | data_product                         |       2
+ public        | dcql_query                           |       1
+ public        | did                                  |       1
+ public        | enterprise_managed_wallet_activation |      11
+ public        | enterprise_modeling_journey          |       1
+ public        | enterprise_organization              |       3
+ public        | enterprise_wallet_business_conduit   |       1
+ public        | enterprise_wallet_content_protection |       5
+ public        | events                               |       3
+ public        | holder_wallet_session_binding        |       2
+ public        | identity                             |       1
+ public        | invitation                           |       2
+ public        | key_reference                        |       4
+ public        | kv                                   |       2
+ public        | llm_metadata                         |       3
+ public        | oauth2_authorization                 |       2
+ public        | oauth2_authorization_app             |       2
+ public        | object_model                         |       2
+ public        | scheduler                            |       1
+ public        | schema_registry                      |       1
+ public        | secret_management                    |      13
+ public        | semantic_attribute_usage             |       1
+ public        | session                              |       3
+ public        | settings                             |       2
+ public        | status_list                          |       3
+ public        | tenant_registry                      |       4
+ public        | theme                                |       1
+ public        | vault                                |       1
+ public        | verifier_dcql_binding                |       1
+ public        | wallet_entitlement                   |       1
+ public        | wallet_onboarding                    |       2
+ public        | wallet_unit                          |       9
+(42 rows)
+

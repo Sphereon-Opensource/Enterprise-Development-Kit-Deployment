@@ -92,6 +92,13 @@ if [[ -z "$INSTALLED_IMAGE_TAG" ]]; then
   INSTALLED_IMAGE_TAG="$(detect_installed_tag)"
 fi
 
+# Render the exact target configuration before creating a backup or pulling
+# anything. Missing required secrets, invalid overlays, and malformed mounts
+# must fail before this script changes the host. The release-step check below
+# remains because intermediate releases can introduce their own requirements.
+printf 'Preflight-validating target Docker Compose configuration for %s.\n' "$IMAGE_TAG"
+EDK_TAG="$IMAGE_TAG" "${COMPOSE[@]}" config --quiet
+
 INTERMEDIATE_IMAGE_TAG=""
 if [[ -n "$INSTALLED_IMAGE_TAG" ]]; then
   if ! edk_plan_known_upgrade_path \
@@ -99,7 +106,8 @@ if [[ -n "$INSTALLED_IMAGE_TAG" ]]; then
     "$IMAGE_TAG" \
     "0.25.0-rc1-to-0.25.0-rc2" \
     "0.25.0-rc2-to-0.25.0-rc3" \
-    "0.25.0-rc3-to-0.25.0-rc4"; then
+    "0.25.0-rc3-to-0.25.0-rc4" \
+    "0.25.0-rc4-to-0.25.0-rc5"; then
     die "Refusing unsupported release downgrade: $INSTALLED_IMAGE_TAG -> $IMAGE_TAG"
   fi
   INTERMEDIATE_IMAGE_TAG="$EDK_INTERMEDIATE_IMAGE_TAG"

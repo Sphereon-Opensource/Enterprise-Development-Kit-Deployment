@@ -1,0 +1,14 @@
+nexus.sphereon.com/edk-docker/enterprise-verifier:0.25.0-enterprise-20260918-r1
+nexus.sphereon.com/edk-docker/enterprise-tenant-kms:0.25.0-enterprise-20260918-r1
+nexus.sphereon.com/edk-docker/admin-console:0.25.0-enterprise-20260918-r1
+traefik:v3.3
+jaegertracing/all-in-one:1.54
+nexus.sphereon.com/edk-docker/service-data:0.25.0-enterprise-20260918-r1
+nexus.sphereon.com/edk-docker/enterprise-did:0.25.0-enterprise-20260918-r1
+nexus.sphereon.com/edk-docker/admin-console:0.25.0-enterprise-20260918-r1
+postgres:16-alpine
+otel/opentelemetry-collector-contrib:0.96.0
+nexus.sphereon.com/edk-docker/enterprise-platform:0.25.0-enterprise-20260918-r1
+postgres:16-alpine
+nexus.sphereon.com/edk-docker/enterprise-issuer:0.25.0-enterprise-20260918-r1
+nexus.sphereon.com/edk-docker/enterprise-tenant-as:0.25.0-enterprise-20260918-r1

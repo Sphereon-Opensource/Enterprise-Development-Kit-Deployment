@@ -1,0 +1,1099 @@
+Disabled collection entries excluded: 07 Bring Your Own KMS > 01 Tenant Cloud KMS Resource (optional); 07 Bring Your Own KMS > 02 External Key and Certificate Registration (optional) > 01 Register existing external key with optional kid; 07 Bring Your Own KMS > 02 External Key and Certificate Registration (optional) > 02 Register existing external key by alias only; 07 Bring Your Own KMS > 02 External Key and Certificate Registration (optional) > 02a Read external key public metadata; 07 Bring Your Own KMS > 02 External Key and Certificate Registration (optional) > 03 Register AWS-linked stored public certificate; 07 Bring Your Own KMS > 02 External Key and Certificate Registration (optional) > 04 Register Azure provider-native leaf certificate; 07 Bring Your Own KMS > 02 External Key and Certificate Registration (optional) > 05 Read Azure provider-native leaf certificate; 07 Bring Your Own KMS > 02 External Key and Certificate Registration (optional) > 06 Delete external key reference only; 07 Bring Your Own KMS > 02 External Key and Certificate Registration (optional) > 07 Delete external certificate reference only; 07 Bring Your Own KMS > 03 Platform Azure Key Vault (operators, optional); 09 Authorization Server Configuration > 17 Register confidential hosted client with write-only secret; 09 Authorization Server Configuration > 30 Create disabled federation binding; 09 Authorization Server Configuration > 31 Validate federation binding; 09 Authorization Server Configuration > 34 Enable validated federation binding; 09 Authorization Server Configuration > 47 Apply OID4VCI protocol profile upgrade
+newman
+
+EDK-Enterprise-Deployment
+
+□ 01 Operator Sign-in
+└ 01 Start authorization request
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  GET https://platform.e2e.nk.sphereon.com/authorize?response_type=code&client_id=platform-operator-cli&redirect_uri=https://platform.e2e.nk.sphereon.com/admin-console/callback&scope=openid&state=qa-operator-state-0001&prompt=login&code_challenge=kjoM4etmVbblrEozRqh9mtaF-T8wd2iG15QRSnLTZ1E&code_challenge_method=S256 [302 Found, 539B, 303ms]
+  √  authorize redirects to the hosted login page
+
+└ 02 Open login page
+  GET https://platform.e2e.nk.sphereon.com/login?session_id=authz_0MPheLNtVaQsuI9IkwOGDxGB6HRcEwrgGEvIsKV1Nk4&return_url=https%3A%2F%2Fplatform.e2e.nk.sphereon.com%2Fauthorize%2Fcallback%3Fsession_id%3Dauthz_0MPheLNtVaQsuI9IkwOGDxGB6HRcEwrgGEvIsKV1Nk4 [200 OK, 130.18kB, 65ms]
+  √  login page rendered
+
+└ 03 Submit operator credentials
+  POST https://platform.e2e.nk.sphereon.com/login [302 Found, 522B, 234ms]
+  √  credentials accepted
+
+└ 04 Resume authorization callback
+  GET https://platform.e2e.nk.sphereon.com/authorize/callback?session_id=authz_0MPheLNtVaQsuI9IkwOGDxGB6HRcEwrgGEvIsKV1Nk4 [302 Found, 478B, 336ms]
+  √  authorization code issued
+
+└ 05 Exchange code for operator token
+  POST https://platform.e2e.nk.sphereon.com/token [200 OK, 1.75kB, 321ms]
+  √  token issued
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  √  operator token carries platform-admin role
+  √  operator token binds the platform tenant
+
+□ 02 Tenant Onboarding
+└ 01 Register tenant
+  POST https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/tenants [201 Created, 1.9kB, 24.4s]
+  √  tenant registered
+  √  registration returned tenant gateway protocol URLs
+
+└ 02 Get tenant onboarding status
+  GET https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/tenant-onboarding/a3596b5a-6e90-4a70-9ebf-9570131c5f4e [200 OK, 4.15kB, 18ms]
+  √  tenant onboarding status returned
+
+└ 03 Get tenant
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers//discovery/refresh [404 Not Found, 132B, 20ms]
+  GET https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3 [200 OK, 602B, 19ms]
+  √  tenant returned
+
+└ 04 List tenants
+  GET https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/tenants [200 OK, 710B, 18ms]
+  √  tenants listed
+
+└ 05 List tenant gateway endpoint bindings
+  GET https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/public-endpoints [200 OK, 1.49kB, 18ms]
+  √  endpoints listed
+  √  registration created gateway bindings for AS, issuer, and verifier protocol routes
+  √  tenant public endpoint bindings use the exact HTTPS tenant gateway origin
+
+└ 06 Resolve tenant runtime service discovery
+  GET https://platform.e2e.nk.sphereon.com/api/platform/bootstrap/v1/runtime-config/admin-console?tenantId=e1d8e0f7-cacc-40e6-bd08-18c14de51eb3&tenantSlug=acme [200 OK, 39.78kB, 63ms]
+  √  tenant runtime config returned
+  √  runtime config exposes tenant workload services
+  √  runtime config matches the bases derived from baseDomain and tenantSubdomain
+
+└ 07 Resolve verifier party id
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vp/verifier/instances [200 OK, 1.07kB, 18ms]
+  √  verifier instances listed
+  √  verifier party id resolved from platform config
+  √  verifier runtime instance id resolved from platform config
+
+└ 08 Resolve issuer instance id
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances [200 OK, 1.1kB, 15ms]
+  √  issuer instances listed
+  √  issuer instance id resolved from platform config
+
+└ 09 Get issuer testing-console config
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances/7ce03f56-6497-4888-acfc-b411b98bda8f/testing-console [200 OK, 461B, 20ms]
+  √  issuer testing-console config returned
+  √  issuer testing-console config is enabled PUBLIC on the tenant host
+
+└ 10 Get verifier testing-console config
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vp/verifier/instances/acme/testing-console [200 OK, 550B, 21ms]
+  √  verifier testing-console config returned
+  √  verifier testing-console config is enabled PUBLIC on the tenant host
+
+□ 03 Tenant Owner Activation and Sign-in
+└ 01 Resolve tenant owner activation
+  POST https://platform.e2e.nk.sphereon.com/api/account-actions/v1/resolve [200 OK, 284B, 65ms]
+  √  tenant owner activation resolves
+
+└ 02 Complete tenant owner activation
+  POST https://platform.e2e.nk.sphereon.com/api/account-actions/v1/complete [200 OK, 293B, 160ms]
+  √  tenant owner activation completed
+
+└ 03 Start tenant owner authorization
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  GET https://acme.e2e.nk.sphereon.com/.well-known/openid-configuration [200 OK, 2.61kB, 115ms]
+  GET https://acme.e2e.nk.sphereon.com/as/acme/authorize?response_type=code&client_id=platform-operator-cli&redirect_uri=https://platform.e2e.nk.sphereon.com/admin-console/callback&scope=openid&state=qa-tenant-owner-state-0001&prompt=login&code_challenge=EEOiqKAwMOaTxIw9sfvGRxsyPFa3mE5dbBJgXi6UiWY&code_challenge_method=S256 [302 Found, 551B, 304ms]
+  √  tenant authorize redirects to hosted login
+
+└ 04 Open tenant owner login page
+  GET https://acme.e2e.nk.sphereon.com/as/acme/login?session_id=authz_hJc6VI3p-qPPsvti2TUDpktDYkxWctlHHfsG4191_hE&return_url=https%3A%2F%2Facme.e2e.nk.sphereon.com%2Fas%2Facme%2Fauthorize%2Fcallback%3Fsession_id%3Dauthz_hJc6VI3p-qPPsvti2TUDpktDYkxWctlHHfsG4191_hE [200 OK, 131.54kB, 414ms]
+  √  tenant owner login page rendered
+
+└ 05 Submit tenant owner credentials
+  POST https://acme.e2e.nk.sphereon.com/as/acme/login [302 Found, 526B, 726ms]
+  √  tenant owner credentials accepted
+
+└ 06 Resume tenant owner authorization
+  GET https://acme.e2e.nk.sphereon.com/as/acme/authorize/callback?session_id=authz_hJc6VI3p-qPPsvti2TUDpktDYkxWctlHHfsG4191_hE [302 Found, 490B, 471ms]
+  √  tenant owner authorization code issued
+
+└ 07 Exchange tenant owner authorization code
+  POST https://acme.e2e.nk.sphereon.com/as/acme/token [200 OK, 1.78kB, 691ms]
+  √  tenant owner token issued
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+
+└ 07a Resolve tenant hosted authorization server
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers?page=0&size=100 [200 OK, 858B, 335ms]
+  √  tenant authorization servers listed
+  √  tenant registration created an active hosted authorization server
+  √  exactly one hosted authorization server is the tenant default
+
+└ 07b Register walkthrough tenant service client
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/e9927a08-eefa-4a03-a37c-7fd13288287b/clients [201 Created, 850B, 277ms]
+  √  tenant service client registered
+
+□ 04 Tenant Service Token
+└ 01 Resolve tenant token endpoint
+  GET https://acme.e2e.nk.sphereon.com/.well-known/openid-configuration [200 OK, 2.61kB, 81ms]
+  √  tenant authorization-server discovery returned
+  √  discovery exposes a token endpoint
+  √  token endpoint belongs to the tenant gateway
+
+└ 02 Tenant service token (client credentials)
+  POST https://acme.e2e.nk.sphereon.com/as/acme/token [200 OK, 1.12kB, 365ms]
+  √  tenant service token issued
+  √  access token returned
+  √  access token is a compact JWT
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  √  tenant service token has issuer
+  √  tenant service token binds the registered tenant
+  √  tenant service token is a workload token of the registered client
+  √  tenant service token carries the tenant-admin role
+  √  tenant service token is scoped to runtime audiences
+
+□ 04a Authentication Preflight
+└ 01 Validate platform and tenant token scopes
+  GET https://acme.e2e.nk.sphereon.com/.well-known/openid-configuration [200 OK, 2.61kB, 81ms]
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  √  platform token has platform-admin role
+  √  platform token binds the platform tenant
+  √  platform token audience is enterprise-platform
+  √  tenant token has tenant-admin role
+  √  tenant token binds the registered tenant
+  √  tenant token has the required runtime audiences
+
+□ 05 Subtenants
+└ 01 Register the acme-eu subtenant
+  POST https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/tenants [201 Created, 1.95kB, 19.6s]
+  √  acme-eu registered
+  √  acme-eu is a child of the expected parent
+
+└ 02 Wait for the acme-eu onboarding to complete
+  GET https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/tenant-onboarding/925d48e0-1cb6-4436-b294-d1d92081925d [200 OK, 4.15kB, 17ms]
+  √  acme-eu onboarding status returned
+  √  acme-eu onboarding completed
+  √  acme-eu onboarding provisioned every step without error
+
+└ 05 List the children of the root tenant
+  GET https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/children?page=0&size=50 [200 OK, 731B, 19ms]
+  √  root tenant children listed
+  √  the root tenant lists acme-eu as its immediate child
+  √  the children listing is immediate, not transitive
+
+□ 06 Tenant Keys and DID
+└ 01 List KMS offerings
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/kms/offerings [200 OK, 642B, 107ms]
+  √  kms offerings listed
+
+└ 02 List KMS resources
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/kms/resources [200 OK, 698B, 121ms]
+  √  kms resources listed
+  √  every resource publishes the provider id the runtime KMS plane uses
+
+└ 03 Validate tenant setup KMS resource
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/kms/resources/krh_cee342760b72493890904d4f5fc6a19f/validate [200 OK, 211B, 110ms]
+  √  tenant setup KMS resource validates
+  √  tenant setup KMS validation returns the required public shape
+
+└ 11 List activation-created DID identifiers
+  GET https://acme.e2e.nk.sphereon.com/api/did/v1/identifiers [200 OK, 388B, 346ms]
+  √  did identifiers listed
+
+└ 12 Resolve activation-created DID
+  GET https://acme.e2e.nk.sphereon.com/api/did/v1/identifiers/did%3Aweb%3Aacme.e2e.nk.sphereon.com [200 OK, 283B, 83ms]
+  √  did resolved
+
+└ 13 List activation-created DID verification methods
+  GET https://acme.e2e.nk.sphereon.com/api/did/v1/identifiers/did%3Aweb%3Aacme.e2e.nk.sphereon.com/verification-methods [200 OK, 546B, 72ms]
+  √  verification methods listed
+
+└ 14 Fetch hosted activation did.json
+  GET https://acme.e2e.nk.sphereon.com/.well-known/did.json [200 OK, 1.95kB, 13ms]
+  √  did.json returned
+
+□ 08 KMS Provider Sharing
+└ 01 Create shareable platform KMS resource
+  POST https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/platform/kms/resources [201 Created, 735B, 84ms]
+  √  platform-owned KMS resource created or managed KMS is unavailable
+  √  the platform KMS is addressable on both planes
+
+└ 03 Offer the platform KMS as a shared instance
+  PUT https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/platform/kms/resources/krh_b2d3ee81610948a0b2ccaeea418b64df/sharing [200 OK, 234B, 24ms]
+  √  shared-instance offer accepted
+  √  the stored offer names shared-instance fulfillment and the offered tenant
+
+└ 05 List platform KMSes offered to the tenant
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/kms/shared-providers [200 OK, 422B, 100ms]
+  √  offered platform KMSes listed
+  √  the platform offer reaches the tenant unenabled
+
+└ 06 Enable the offered platform KMS
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/kms/shared-providers/walkthrough-platform-d2c29172-0b2a-45cb-b150-99a25daf0ecf:enable [200 OK, 405B, 105ms]
+  √  offered platform KMS enabled
+  √  the provider comes back enabled under the same provider id
+
+└ 07 Read the tenant default KMS provider
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/kms/default-provider [200 OK, 123B, 102ms]
+  √  default KMS provider readable
+  √  a tenant with no default reads as an absent value, not an error
+
+└ 08 Set the tenant default KMS provider
+  PUT https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/kms/default-provider [200 OK, 164B, 104ms]
+  √  tenant default KMS provider set
+  √  the tenant selection is recorded as the tenant's own
+
+└ 09 List runtime KMS providers
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/providers [200 OK, 261B, 362ms]
+  √  runtime KMS providers listed
+  √  every runtime provider carries the operator-facing projection
+  √  the runtime plane addresses the tenant setup KMS by its management-plane provider id
+  √  the provider selected as default reports itself as the default
+
+□ 09 Authorization Server Configuration
+└ 09 Create hosted authorization server
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers [201 Created, 769B, 216ms]
+  √  hosted authorization server created
+
+└ 10 Get hosted authorization server by UUID
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/6645bb11-c5cc-46e0-a97f-3fe3ec69e726 [200 OK, 764B, 120ms]
+  √  hosted authorization server read
+
+└ 11 Replace hosted authorization server metadata
+  PUT https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/6645bb11-c5cc-46e0-a97f-3fe3ec69e726 [200 OK, 772B, 100ms]
+  √  hosted authorization server replaced
+
+└ 15 Activate hosted authorization server
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/6645bb11-c5cc-46e0-a97f-3fe3ec69e726/activate [200 OK, 772B, 97ms]
+  √  hosted authorization server activated
+
+└ 16 Register public hosted client
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/6645bb11-c5cc-46e0-a97f-3fe3ec69e726/clients [201 Created, 569B, 104ms]
+  √  public client registered
+
+└ 19 Create hosted identity
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/6645bb11-c5cc-46e0-a97f-3fe3ec69e726/identities [201 Created, 790B, 766ms]
+  √  hosted identity created
+
+└ 20a Resolve hosted identity activation
+  POST https://platform.e2e.nk.sphereon.com/api/account-actions/v1/resolve [200 OK, 286B, 70ms]
+  √  hosted identity activation resolves
+
+└ 20b Complete hosted identity activation
+  POST https://platform.e2e.nk.sphereon.com/api/account-actions/v1/complete [200 OK, 378B, 146ms]
+  √  hosted identity activation completed
+
+└ 25 Create external authorization server from discovery
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers [201 Created, 1.91kB, 420ms]
+  √  external authorization server created
+
+└ 26 Validate external authorization server discovery
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/16f40c9d-ef8f-4b34-9cda-3192d73f96b6/validate [200 OK, 1.29kB, 379ms]
+  √  external discovery validated
+
+└ 27 Refresh external authorization server discovery
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/16f40c9d-ef8f-4b34-9cda-3192d73f96b6/discovery/refresh [200 OK, 1.9kB, 427ms]
+  √  external discovery refreshed
+
+└ 29 Activate external authorization server
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/authorization-servers/16f40c9d-ef8f-4b34-9cda-3192d73f96b6/activate [200 OK, 1.9kB, 93ms]
+  √  external authorization server activated
+
+└ 36 Create default issuer authorization server binding
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuers/7ce03f56-6497-4888-acfc-b411b98bda8f/authorization-server-bindings [201 Created, 372B, 102ms]
+  √  default issuer AS binding created
+
+└ 39 Apply credential authorization server override
+  PUT https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuers/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-configurations/EuPid/authorization-server [200 OK, 243B, 182ms]
+  √  credential AS override stored
+
+└ 44 Read issuer protocol profile
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuers/7ce03f56-6497-4888-acfc-b411b98bda8f/protocol-profile [200 OK, 259B, 109ms]
+  √  issuer protocol profile read
+
+└ 45 Dry-run compatible OID4VCI protocol profile upgrade
+  POST https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuers/7ce03f56-6497-4888-acfc-b411b98bda8f/protocol-profile/upgrade/dry-run [200 OK, 341B, 172ms]
+  √  profile upgrade dry-run completed
+
+└ 47a Refresh issuer authorization server bindings
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuers/7ce03f56-6497-4888-acfc-b411b98bda8f/authorization-server-bindings [200 OK, 582B, 98ms]
+  √  issuer AS bindings refreshed
+
+└ 47b Restore the issuer default to the seeded authorization server
+  PUT https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuers/7ce03f56-6497-4888-acfc-b411b98bda8f/authorization-server-bindings/74672c62-fbf6-4b4e-a4d2-65f6e34e0e35 [200 OK, 324B, 102ms]
+  √  issuer default restored to the seeded AS
+
+└ 42 Delete credential authorization server override under revision CAS
+  DELETE https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuers/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-configurations/EuPid/authorization-server [204 No Content, 78B, 194ms]
+  √  credential AS override deleted under revision CAS
+
+└ 47d Delete leftover walkthrough issuer authorization server binding
+  DELETE https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuers/7ce03f56-6497-4888-acfc-b411b98bda8f/authorization-server-bindings/694f2bda-9f8a-416a-ad13-d9898900328e [204 No Content, 78B, 123ms]
+  √  leftover walkthrough binding deleted
+
+□ 10 Issuer Configuration
+└ 01 Create issuer design
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/issuers [201 Created, 1.17kB, 353ms]
+  √  issuer design created
+
+└ 02 Upload issuer logo asset
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/credentials/f5baa9b8-044f-45cc-8a5b-8cd02695dcc1/assets/en/LOGO [201 Created, 570B, 98ms]
+  √  02 Upload issuer logo asset succeeded
+  √  asset uri is content-addressed
+  √  asset carries sha256 integrity
+
+└ 03 Create issuer render variant
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/render/variants [201 Created, 717B, 90ms]
+  √  issuer render variant created
+
+└ 04 Attach render variant to issuer design
+  PUT https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/issuers/f5baa9b8-044f-45cc-8a5b-8cd02695dcc1 [200 OK, 1.2kB, 91ms]
+  √  issuer design updated with render variant
+
+□ 11 Credential Designs
+└ 01 Create EuPid SD-JWT design
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/credentials [201 Created, 4.93kB, 185ms]
+  √  eupid design created
+
+└ 02 Upload EuPid logo asset
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/credentials/03cffc3c-fb4c-4096-90b1-b3f9532dc45f/assets/en/LOGO [201 Created, 570B, 79ms]
+  √  02 Upload EuPid logo asset succeeded
+  √  asset uri is content-addressed
+  √  asset carries sha256 integrity
+
+└ 03 Create EuPid render variant (en)
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/render/variants [201 Created, 694B, 72ms]
+  √  eupid en render variant created
+
+└ 04 Create EuPid render variant (nl)
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/render/variants [201 Created, 694B, 73ms]
+  √  eupid nl render variant created
+
+└ 05 Attach render variants to EuPid design
+  PUT https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/credentials/03cffc3c-fb4c-4096-90b1-b3f9532dc45f [200 OK, 5.08kB, 179ms]
+  √  eupid design updated with render variants
+
+└ 06 Create Mdl mdoc design
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/credentials [201 Created, 6.77kB, 187ms]
+  √  mdl design created
+
+└ 07 Upload Mdl logo asset
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/credentials/5c3ce0b7-e3e9-4ae6-b38d-d04d96326a52/assets/en/LOGO [201 Created, 570B, 77ms]
+  √  07 Upload Mdl logo asset succeeded
+  √  asset uri is content-addressed
+  √  asset carries sha256 integrity
+
+└ 08 Create Mdl render variant (en)
+  POST https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/render/variants [201 Created, 708B, 82ms]
+  √  mdl en render variant created
+
+└ 09 Attach render variant to Mdl design
+  PUT https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/credentials/5c3ce0b7-e3e9-4ae6-b38d-d04d96326a52 [200 OK, 6.87kB, 199ms]
+  √  mdl design updated with render variant
+
+└ 10 List credential designs
+  GET https://acme.e2e.nk.sphereon.com/api/credential-design/v1/designs/credentials [200 OK, 23.97kB, 90ms]
+  √  designs listed
+
+□ 12 Status Lists
+└ 00a Resolve EuPid DID signing selection
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-config-settings/EuPid [200 OK, 782B, 100ms]
+  √  EuPid signing configuration returned
+  √  EuPid carries an exact DID signing selection
+  √  the DID signing selection belongs to the tenant did:web
+
+└ 00b Resolve mDL X.509 signing selection
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-config-settings/Mdl [200 OK, 638B, 103ms]
+  √  mDL signing configuration returned
+  √  mDL carries an exact X.509 signing selection
+
+└ 01 Create token status list
+  POST https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists [201 Created, 1.11kB, 547ms]
+  √  status list created
+  √  status list response matches EuPid revocation contract
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+  √  status list signed token claims match hosted list
+
+└ 02 List status lists
+  GET https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists [200 OK, 980B, 103ms]
+  √  status lists returned
+  √  EuPid revocation status list visible
+
+└ 03 Get token status list
+  GET https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/c41ec87d-f9f1-4240-aa5d-7aac633a65c6 [200 OK, 1.1kB, 103ms]
+  √  status list returned
+
+└ 04 Fetch hosted status list token
+  GET https://acme.e2e.nk.sphereon.com/public/statuslists/eupid-revocation [200 OK, 688B, 42ms]
+  √  status list hosted
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+  √  hosted status list has statuslist JWT media type and claims
+
+└ 04a Create X.509 token status list
+  POST https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists [201 Created, 2.41kB, 496ms]
+  √  X.509 status list created or already provisioned
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+  √  X.509 status list response uses x5c without kid
+
+└ 04b Fetch hosted X.509 status list token
+  GET https://acme.e2e.nk.sphereon.com/public/statuslists/x509-revocation [200 OK, 1.99kB, 38ms]
+  √  X.509 status list hosted
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+  √  hosted X.509 status list uses x5c without kid
+
+└ 05 Revoke a status entry
+  POST https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/c41ec87d-f9f1-4240-aa5d-7aac633a65c6/status [200 OK, 304B, 492ms]
+  √  entry revoked
+
+└ 06 Reactivate the status entry
+  POST https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/c41ec87d-f9f1-4240-aa5d-7aac633a65c6/status [200 OK, 304B, 524ms]
+  √  entry reactivated
+
+└ 07 Read status entry
+  GET https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/c41ec87d-f9f1-4240-aa5d-7aac633a65c6/entries/42 [200 OK, 304B, 126ms]
+  √  status entry returned
+  √  reactivated status entry is readable without allocation leak
+
+□ 12 Status Lists / CWT mdoc
+└ 01 Create the CWT token status list
+  POST https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists [201 Created, 23.69kB, 437ms]
+  √  CWT status list created or already provisioned
+  √  the CWT status list matches the mdoc revocation contract
+  √  the list declares the ISO 18013-5 mdoc status_list profile
+
+└ 02 Fetch the hosted CWT status list
+  GET https://acme.e2e.nk.sphereon.com/public/statuslists/mdoc-revocation [200 OK, 17.47kB, 41ms]
+  √  CWT status list hosted
+  √  the hosted CWT list is an untagged COSE_Sign1 with the statuslist CWT media type
+
+□ 12 Status Lists / Bitstring VCDM
+└ 01 Create the bitstring status list
+  POST https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists [201 Created, 1.85kB, 587ms]
+  √  bitstring status list created or already provisioned
+  √  the bitstring list serves revocation and suspension with two bits per status
+
+└ 02 Get the bitstring status list
+  GET https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/11312b9c-70fc-4a57-8663-a8c0748d041e [200 OK, 1.85kB, 109ms]
+  √  bitstring status list returned
+  √  the persisted list keeps both purposes and two bits per status
+
+└ 03 Suspend a bitstring status entry
+  POST https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/11312b9c-70fc-4a57-8663-a8c0748d041e/status [200 OK, 304B, 502ms]
+  √  entry suspended
+
+└ 04 Read the suspended entry
+  GET https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/11312b9c-70fc-4a57-8663-a8c0748d041e/entries/11 [200 OK, 304B, 97ms]
+  √  bitstring status entry returned
+  √  the entry reads back as suspended
+
+□ 13 Credential Configurations
+└ 01 Read the EuPid credential configuration
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-config-settings/EuPid [200 OK, 782B, 103ms]
+  √  EuPid credential configuration returned
+  √  EuPid already references the shared list
+
+└ 02 Read the Mdl credential configuration
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-config-settings/Mdl [200 OK, 638B, 98ms]
+  √  Mdl credential configuration returned
+
+└ 03 Register the EmployeeBadge configuration (VCDM 1.1)
+  PUT https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-config-settings/EmployeeBadge [200 OK, 861B, 187ms]
+  √  EmployeeBadge credential configuration registered
+  √  EmployeeBadge is a VCDM 1.1 configuration bound to the bitstring list
+
+└ 04 Register the Membership configuration (VCDM 2.0)
+  PUT https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-config-settings/Membership [200 OK, 855B, 162ms]
+  √  Membership credential configuration registered
+  √  Membership is a VCDM 2.0 configuration bound to the bitstring list
+
+└ 05 Bind the CWT status list to the Mdl configuration
+  PUT https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/oid4vci/issuer/instances/7ce03f56-6497-4888-acfc-b411b98bda8f/credential-config-settings/Mdl [200 OK, 686B, 180ms]
+  √  CWT status list bound to Mdl
+  √  the mDL configuration references the CWT list by correlation id
+
+□ 14 Hosted Branding Verification
+└ 01 Fetch hosted VCT metadata
+  GET https://acme.e2e.nk.sphereon.com/public/schema/vct/EuPid [200 OK, 2.05kB, 142ms]
+  √  vct metadata served
+  √  vct present
+  √  display has en and nl entries
+  √  display entries use locale (not legacy lang)
+  √  display has rendering.simple
+  √  rendering.simple has logo with uri under asset base
+  √  hosted logo uri is content-addressed
+  √  hosted logo carries uri#integrity sha256
+  √  en and nl displays share the same content-addressed logo uri
+  √  rendering.simple has background_color and text_color
+  √  claims carry localized display labels (en and nl)
+  √  claims[].sd is lowercase
+
+└ 02 Fetch issuer well-known metadata
+  GET https://acme.e2e.nk.sphereon.com/.well-known/openid-credential-issuer [200 OK, 5.85kB, 225ms]
+  √  issuer metadata served
+  √  top-level display has issuer name and logo (en and nl)
+  √  issuer metadata uses locale key (not lang)
+  √  EuPid configuration present with branding metadata
+
+└ 03 Fetch content-addressed asset
+  GET https://acme.e2e.nk.sphereon.com/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png [200 OK, 1.85kB, 17ms]
+  √  content-addressed asset served
+  √  asset has an image content-type
+
+□ 15 Issue SD-JWT VC and mdoc
+└ 01 Create EuPid offer
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers [201 Created, 518B, 300ms]
+  ┌
+  │ 'DBG-offer-create', '201', '{"correlation_id":"e2e-eup
+  │ id-001","session_id":"8bfe50b5-8a1a-42ae-a3a1-15462ddd
+  │ e9ee","offer_uri":"openid-credential-offer://?credenti
+  │ al_offer_uri=https%3A%2F%2Facme.e2e.nk.sphereon.com%2F
+  │ oid4vci%2Facme%2Foid4vci%2Fcredentials%2Foffers%2Fac5c
+  │ 4e41-a8ca-460b-8ee3-eafc12b28bbc","status_uri":"https:
+  │ //acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/cred
+  │ ential/offers/e2e-eupid-001"}'
+  └
+  √  offer created
+
+└ 02 Resolve credential offer
+  GET https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credentials/offers/ac5c4e41-a8ca-460b-8ee3-eafc12b28bbc [200 OK, 355B, 137ms]
+  ┌
+  │ 'DBG-offer-resolve', '200', '{"credential_issuer":"htt
+  │ ps://acme.e2e.nk.sphereon.com/oid4vci/acme","credentia
+  │ l_configuration_ids":["EuPid"],"grants":{"urn:ietf:par
+  │ ams:oauth:grant-type:pre-authorized_code":{"pre-author
+  │ ized_code":"n2_SYw2PEZ-UtqKod_MoJtQPYdMWb8SjCZu4kp8aUU
+  │ U"}}}'
+  └
+  √  offer resolved
+  √  resolved EuPid offer carries exact credential configuration id
+
+└ 03 Fetch OID4VCI metadata
+  GET https://acme.e2e.nk.sphereon.com/.well-known/openid-credential-issuer/oid4vci/acme [200 OK, 5.85kB, 187ms]
+  √  OID4VCI metadata served
+  √  sample credential metadata separates PID and mdoc contracts
+
+└ 04 Exchange pre-authorized code for token
+  POST https://acme.e2e.nk.sphereon.com/as/acme/token [200 OK, 1.4kB, 436ms]
+  ┌
+  │ 'DBG-token-exchange', '200', '{"access_token":"eyJ0eXA
+  │ iOiJhdCtqd3QiLCJraWQiOiJvYXV0aDItYXMtYWNtZSIsImFsZyI6I
+  │ kVTMjU2In0.eyJpc3MiOiJodHRwczovL2FjbWUuZTJlLm5rLnNwaGV
+  │ yZW9uLmNvbS9hcy9hY21lIiwic3ViIjoiIiwiY2xpZW50X2lkIjoiI
+  │ iwiaWF0IjoxNzg5Njg5MTc4LCJleHAiOjE3ODk2OTI3NzgsImp0aSI
+  │ 6InFhRHZnbjdNTFBTWHRtaDVxV0RKb2ROQkJhRDFHRVVFWXlTZ0F5V
+  │ FZ3THMiLCJhenAiOiIiLCJhdWQiOiJodHRwczovL2FjbWUuZTJlLm5
+  │ rLnNwaGVyZW9uLmNvbS9vaWQ0dmNpL2FjbWUiLCJhdXRob3JpemF0a
+  │ W9uX2RldGFpbHMiOlt7InR5cGUiOiJvcGVuaWRfY3JlZGVudGlhbCI
+  │ sImNyZWRlbnRpYWxfY29uZmlndXJhdGlvbl9pZCI6IkV1UGlkIiwiY
+  │ 3JlZGVudGlhbF9pZGVudGlmaWVycyI6WyJ1cm46dmR4Om9pZDR2Y2k
+  │ 6Y3JlZGVudGlhbDo4YmZlNTBiNS04YTFhLTQyYWUtYTNhMS0xNTQ2M
+  │ mRkZGU5ZWU6ZWQ3ZGFiODgtNGZlYi00NDEwLWE2ODEtYmJmMzk3ZGY
+  │ yM2VhIl19XSwidGVuYW50X2lkIjoiZTFkOGUwZjctY2FjYy00MGU2L
+  │ WJkMDgtMThjMTRkZTUxZWIzIn0.o4pUJg4TlFdtf6RaKhEkpfxptE-
+  │ peYdNnHLKHNSKOYyS0g4JanLfe5wOexRJ5K2wj-E1C26EQLeQqKDrM
+  │ fQR_w","token_type":"Bearer","expires_in":3600,"author
+  │ ization_deta'
+  └
+  √  token issued
+  √  pre-authorized token returns an opaque EuPid credential identifier distinct from its configuration id
+
+└ 05 Request EuPid credential
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/nonce [200 OK, 215B, 54ms]
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credential [200 OK, 2.02kB, 1725ms]
+  √  eupid credential issued
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+  √  EuPid credential carries expected VCT and status-list reference
+  √  EuPid credential and status list use the same did:web signer identity
+
+└ 06 Check EuPid offer status
+  GET https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers/e2e-eupid-001 [200 OK, 545B, 83ms]
+  √  session tracked
+
+└ 07 Create Mdl offer
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers [201 Created, 514B, 304ms]
+  √  mdl offer created
+
+└ 08 Resolve Mdl offer
+  GET https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credentials/offers/9fa1db1c-77da-473d-b6ef-726a38e02fce [200 OK, 353B, 71ms]
+  √  mdl offer resolved
+  √  resolved mDL offer carries exact credential configuration id
+
+└ 09 Exchange Mdl code for token
+  POST https://acme.e2e.nk.sphereon.com/as/acme/token [200 OK, 1.4kB, 409ms]
+  √  mdl token issued
+  √  pre-authorized token returns an opaque Mdl credential identifier distinct from its configuration id
+
+└ 10 Request Mdl credential
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/nonce [200 OK, 215B, 20ms]
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credential [200 OK, 3.56kB, 1361ms]
+  √  mdl credential issued
+  √  mDL credential response contains an opaque mdoc payload
+
+□ 16 Issue with Transaction Code
+└ 01 Create transaction-code EuPid offer
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers [201 Created, 601B, 337ms]
+  ┌
+  │ 'DBG-tx-offer-create', '201', '{"correlation_id":"tx-e
+  │ upid-99012a5b-e6aa-463f-b8ef-c359166f6cc5","session_id
+  │ ":"fc98ce54-aa09-4c2e-b7c5-06f87cd51fa8","offer_uri":"
+  │ openid-credential-offer://?credential_offer_uri=https%
+  │ 3A%2F%2Facme.e2e.nk.sphereon.com%2Foid4vci%2Facme%2Foi
+  │ d4vci%2Fcredentials%2Foffers%2Fb5f34daf-9f70-4e07-9b9e
+  │ -fed3edd0f88a","status_uri":"https://acme.e2e.nk.spher
+  │ eon.com/api/oid4vci/v1/backend/credential/offers/tx-eu
+  │ pid-99012a5b-e6aa-463f-b8ef-c359166f6cc5","tx_code":"8
+  │ 41693"}'
+  └
+  √  transaction-code offer created
+
+└ 02 Resolve transaction-code EuPid offer
+  GET https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credentials/offers/b5f34daf-9f70-4e07-9b9e-fed3edd0f88a [200 OK, 378B, 123ms]
+  ┌
+  │ 'DBG-tx-offer-resolve', '200', '{"credential_issuer":"
+  │ https://acme.e2e.nk.sphereon.com/oid4vci/acme","creden
+  │ tial_configuration_ids":["EuPid"],"grants":{"urn:ietf:
+  │ params:oauth:grant-type:pre-authorized_code":{"pre-aut
+  │ horized_code":"1QmTNn6Q5QRpGpo6fASDFD_KsgqhcWAoVI-Yyau
+  │ UZ1U","tx_code":{"length":6}}}}'
+  └
+  √  transaction-code offer resolved
+
+└ 03 Fetch transaction-code OID4VCI metadata
+  GET https://acme.e2e.nk.sphereon.com/oid4vci/acme/.well-known/openid-credential-issuer [200 OK, 6.51kB, 198ms]
+  √  transaction-code metadata served
+
+└ 05 Exchange transaction code for token
+  POST https://acme.e2e.nk.sphereon.com/as/acme/token [200 OK, 1.4kB, 453ms]
+  √  correct transaction code succeeds after wrong attempt
+
+└ 05a Fetch credential nonce
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/nonce [200 OK, 215B, 55ms]
+  √  credential nonce issued
+
+└ 06 Issue transaction-code EuPid credential
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credential [200 OK, 2.03kB, 1365ms]
+  √  transaction-code credential issued
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+
+└ 07 Assert transaction-code offer status correlation
+  GET https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers/tx-eupid-99012a5b-e6aa-463f-b8ef-c359166f6cc5 [200 OK, 577B, 101ms]
+  √  transaction-code offer status is readable
+
+└ 09 Dereference transaction-code credential status
+  GET https://acme.e2e.nk.sphereon.com/public/statuslists/eupid-revocation [200 OK, 688B, 41ms]
+  √  credential status reference dereferenced
+
+□ 17 Issue W3C VCDM 1.1
+└ 02 Create the EmployeeBadge offer
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers [201 Created, 534B, 306ms]
+  √  EmployeeBadge offer created
+
+└ 03 Resolve the EmployeeBadge offer
+  GET https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credentials/offers/f9625764-569b-4a28-a197-cf82b0e87029 [200 OK, 363B, 62ms]
+  √  EmployeeBadge offer resolved
+
+└ 04 Fetch the VCDM 1.1 OID4VCI metadata
+  GET https://acme.e2e.nk.sphereon.com/.well-known/openid-credential-issuer/oid4vci/acme [200 OK, 6.51kB, 175ms]
+  √  VCDM 1.1 metadata served
+  √  the issuer advertises EmployeeBadge as jwt_vc_json
+
+└ 05 Exchange the EmployeeBadge pre-authorized code
+  POST https://acme.e2e.nk.sphereon.com/as/acme/token [200 OK, 1.42kB, 373ms]
+  √  EmployeeBadge token issued
+  √  the token returns an opaque EmployeeBadge credential identifier
+
+└ 06 Request the EmployeeBadge credential
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/nonce [200 OK, 215B, 22ms]
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credential [200 OK, 1.85kB, 1248ms]
+  √  EmployeeBadge credential issued
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+  √  the credential is a VCDM 1.1 verifiable credential of type EmployeeBadgeCredential
+  √  the credential status entry is a BitstringStatusListEntry on the bitstring list
+
+└ 07 Check the EmployeeBadge offer status
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  GET https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers/e2e-employeebadge-001 [200 OK, 561B, 87ms]
+  √  EmployeeBadge session tracked
+
+└ 08 Read the EmployeeBadge status entry
+  GET https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/11312b9c-70fc-4a57-8663-a8c0748d041e/entries/75334 [200 OK, 348B, 101ms]
+  √  EmployeeBadge status entry returned
+  √  the freshly issued VCDM 1.1 credential is valid
+
+□ 18 Issue W3C VCDM 2.0
+└ 02 Create the Membership offer
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers [201 Created, 528B, 304ms]
+  √  Membership offer created
+
+└ 03 Resolve the Membership offer
+  GET https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credentials/offers/823b8f07-5aad-4e18-94d8-20bf39c4501a [200 OK, 360B, 133ms]
+  √  Membership offer resolved
+
+└ 04 Fetch the VCDM 2.0 OID4VCI metadata
+  GET https://acme.e2e.nk.sphereon.com/.well-known/openid-credential-issuer/oid4vci/acme [200 OK, 6.51kB, 173ms]
+  √  VCDM 2.0 metadata served
+  √  the issuer advertises Membership as jwt_vc_json-ld
+
+└ 05 Exchange the Membership pre-authorized code
+  POST https://acme.e2e.nk.sphereon.com/as/acme/token [200 OK, 1.42kB, 449ms]
+  √  Membership token issued
+  √  the token returns an opaque Membership credential identifier
+
+└ 06 Request the Membership credential
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/nonce [200 OK, 215B, 18ms]
+  POST https://acme.e2e.nk.sphereon.com/oid4vci/acme/oid4vci/credential [200 OK, 1.79kB, 1145ms]
+  √  Membership credential issued
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+  √  the credential is a VCDM 2.0 verifiable credential of type MembershipCredential
+  √  the credential status entry is a BitstringStatusListEntry on the bitstring list
+
+└ 07 Check the Membership offer status
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  GET https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers/e2e-membership-001 [200 OK, 555B, 83ms]
+  √  Membership session tracked
+
+└ 08 Read the Membership status entry
+  GET https://acme.e2e.nk.sphereon.com/api/statuslist/v1/statuslists/11312b9c-70fc-4a57-8663-a8c0748d041e/entries/98138 [200 OK, 348B, 111ms]
+  √  Membership status entry returned
+  √  the freshly issued VCDM 2.0 credential is valid
+
+□ 19 Issue Through a Pipeline
+└ 01 Initialize pipeline session
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/sessions [200 OK, 195B, 87ms]
+  √  pipeline session opened
+
+└ 02 Contribute attributes
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes [200 OK, 370B, 92ms]
+  √  attributes contributed
+
+└ 03 Read accumulated attributes
+  GET https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/attributes [200 OK, 224B, 79ms]
+  √  attributes returned
+
+└ 04 Evaluate completeness
+  GET https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/completeness [200 OK, 184B, 80ms]
+  √  completeness evaluated
+
+└ 05 Approve issuance
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/sessions/e2e-pipeline-001/approve [200 OK, 161B, 103ms]
+  √  issuance approved
+
+□ 20 Authorization Code Issuance
+└ 01 Create offer with authorization code grant
+  POST https://acme.e2e.nk.sphereon.com/api/oid4vci/v1/backend/credential/offers [201 Created, 524B, 232ms]
+  √  auth-code offer created
+
+└ 02 Fetch authorization server metadata
+  GET https://acme.e2e.nk.sphereon.com/.well-known/oauth-authorization-server [200 OK, 2.61kB, 178ms]
+  √  as metadata served
+
+□ 21 DCQL Queries
+└ 01 Create EuPid query
+  POST https://acme.e2e.nk.sphereon.com/api/dcql/v1/queries [201 Created, 661B, 372ms]
+  √  eupid query stored
+  √  EuPid DCQL query content is versioned and enabled
+
+└ 02 Create Mdl query
+  POST https://acme.e2e.nk.sphereon.com/api/dcql/v1/queries [201 Created, 636B, 83ms]
+  √  mdl query stored
+  √  mDL DCQL query content is versioned and enabled
+
+└ 03 Create combined query
+  POST https://acme.e2e.nk.sphereon.com/api/dcql/v1/queries [201 Created, 901B, 78ms]
+  √  combined query stored
+  √  combined DCQL query contains EuPid and mDL credentials
+
+└ 04 List queries
+  GET https://acme.e2e.nk.sphereon.com/api/dcql/v1/queries [200 OK, 3.67kB, 74ms]
+  √  queries listed
+  √  query list includes exact enabled EuPid, mDL, and combined definitions
+
+└ 05 List combined query versions
+  GET https://acme.e2e.nk.sphereon.com/api/dcql/v1/queries/eupid-and-mdl/versions [200 OK, 225B, 72ms]
+  √  query versions listed
+  √  combined query version history starts at version 1
+
+└ 06 Bind combined query to verifier
+  POST https://acme.e2e.nk.sphereon.com/api/dcql/v1/verifiers/96e820e9-2ea8-4a83-9c48-2a381e3cc34c/bindings [201 Created, 429B, 73ms]
+  √  combined query bound or already provisioned
+  √  combined query binding pins version 1 on the tenant verifier
+
+└ 07 List verifier DCQL bindings
+  GET https://acme.e2e.nk.sphereon.com/api/dcql/v1/verifiers/96e820e9-2ea8-4a83-9c48-2a381e3cc34c/bindings [200 OK, 420B, 109ms]
+  √  verifier bindings listed
+  √  verifier binding list includes the combined query
+
+└ 08 List combined query verifier bindings
+  GET https://acme.e2e.nk.sphereon.com/api/dcql/v1/queries/eupid-and-mdl/verifiers [200 OK, 673B, 77ms]
+  √  combined query verifier bindings listed
+  √  combined query is bound to the tenant verifier
+
+□ 22 Verification
+└ 01 Create verification request
+  POST https://acme.e2e.nk.sphereon.com/oid4vp/backend/auth/requests [201 Created, 764B, 978ms]
+  √  verification session created
+
+└ 01a Fetch signed verification request object
+  GET https://acme.e2e.nk.sphereon.com/oid4vp/acme/oid4vp/request-uri/e2e-verify-001 [200 OK, 1.84kB, 484ms]
+  √  signed verification request object returned
+  ┌
+  │ `Using "atob" is deprecated. Use "require('atob')" ins
+  │ tead.`
+  └
+  √  verifier request object issuer and kid use the same DID
+
+└ 02 Poll verification status
+  GET https://acme.e2e.nk.sphereon.com/oid4vp/backend/auth/requests/e2e-verify-001 [200 OK, 665B, 88ms]
+  √  status returned
+
+└ 03 Cancel verification session
+  DELETE https://acme.e2e.nk.sphereon.com/oid4vp/backend/auth/requests/e2e-verify-001 [204 No Content, 89B, 82ms]
+  √  session removed
+
+□ 23 Trust Domains and Trust Lists
+└ 01 List trust domains
+  GET https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains [200 OK, 425B, 102ms]
+  √  trust domains listed
+  √  the onboarding-seeded issuer trust domain exists
+  √  seeded domain is active
+
+└ 02 List anchors of the seeded domain
+  GET https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/trust-domain-issuer-e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/anchors [200 OK, 2.05kB, 98ms]
+  √  anchors listed
+  √  seeded anchors present
+  √  issuer DID anchor seeded
+  √  seeded anchors are tenant-produced material
+  √  issuer X.509 anchor seeded
+
+└ 03 List admissions of the issuer anchor
+  GET https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/trust-domain-issuer-e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/anchors/trust-anchor-issuer-e1d8e0f7-cacc-40e6-bd08-18c14de51eb3-issuer-did/admissions [200 OK, 254B, 133ms]
+  √  admissions listed
+  √  issuer anchor is admitted as CREDENTIAL_ISSUER
+
+└ 04 Read the tenant issuer-trust attachment
+  GET https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/attachments/TENANT/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/CREDENTIAL_ISSUER_TRUST [200 OK, 706B, 105ms]
+  √  tenant attachment returned
+  √  tenant issuer trust is fail closed
+  √  tenant attachment selects the seeded domain
+  √  domain ordinals are contiguous from zero
+
+└ 05 Read the verifier eligibility grant
+  GET https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/eligibility/OID4VP_VERIFIER/CREDENTIAL_ISSUER_TRUST [200 OK, 386B, 102ms]
+  √  eligibility grant returned
+  √  seeded domain is eligible for verifiers
+
+└ 06 List consumers of the seeded domain
+  GET https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/trust-domain-issuer-e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/consumers [200 OK, 507B, 100ms]
+  √  consumers listed
+  √  the tenant consumes the seeded domain
+
+└ 07 Create a second trust domain
+  POST https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains [201 Created, 451B, 99ms]
+  √  domain created
+  √  new domains start as DRAFT
+
+└ 08 Activate the second trust domain
+  PUT https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381 [200 OK, 335B, 103ms]
+  √  domain activated
+  √  status is ACTIVE
+
+└ 11 Create a VICAL signer anchor
+  POST https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/anchors [201 Created, 543B, 102ms]
+  √  anchor created
+
+└ 12 Refuse a VICAL whose signer anchor is not admitted
+  PUT https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/anchors/90e678a7-8804-4370-82ac-509915a4ba75/mdoc-vical [400 Bad Request, 283B, 104ms]
+  √  an unadmitted VICAL signer is refused
+  √  the refusal names the missing admission
+
+└ 13 Admit the anchor as MDOC_VICAL_SIGNER
+  PUT https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/anchors/90e678a7-8804-4370-82ac-509915a4ba75/admissions/MDOC_VICAL_SIGNER [200 OK, 221B, 103ms]
+  √  admission granted
+  √  admission class echoed
+
+└ 15 Configure the VICAL source
+  PUT https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/anchors/90e678a7-8804-4370-82ac-509915a4ba75/mdoc-vical [200 OK, 425B, 115ms]
+  √  VICAL configured
+  √  the source round-trips
+
+└ 17 Remove the VICAL configuration
+  DELETE https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/anchors/90e678a7-8804-4370-82ac-509915a4ba75/mdoc-vical [200 OK, 224B, 106ms]
+  √  VICAL removed
+  √  the anchor reads as unconfigured again
+
+└ 17a Register a published trust list as a trust source
+  PUT https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/trust-sources/customer-trust-list [200 OK, 801B, 115ms]
+  √  trust list source registered
+  √  the source belongs to the domain and is a custom TS 119 612 list
+
+└ 17b Read the trust list source
+  GET https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/trust-sources/customer-trust-list [200 OK, 486B, 108ms]
+  √  trust list source read
+  √  the source reads back as registered
+
+└ 17c Register a list of trusted entities (LoTE) source
+  PUT https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/lote-sources/customer-lote [201 Created, 640B, 149ms]
+  √  LoTE source registered
+  √  the registration returns the first candidate revision of the source
+
+└ 17d Read the LoTE source
+  GET https://acme.e2e.nk.sphereon.com/api/trust-domain/v1/domains/3d09be00-d364-4cc4-a5c6-818504809381/lote-sources/customer-lote [200 OK, 407B, 153ms]
+  √  LoTE source read
+  √  the source carries the registered profile and an etag for the next mutation
+
+□ 24 KMS Runtime API
+└ 00 List platform secret offerings
+  GET https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/application/secrets/offerings [200 OK, 1.04kB, 20ms]
+  √  platform secret offerings returned
+
+└ 00 Get platform secret storage
+  GET https://platform.e2e.nk.sphereon.com/api/platform/admin/v1/application/secrets/storage [200 OK, 305B, 14ms]
+  √  platform secret storage returned
+
+└ 00 Get tenant secret options
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/secrets/options [200 OK, 1.29kB, 127ms]
+  √  tenant secret options returned
+
+└ 00 Get tenant secret assignment
+  GET https://platform.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/secrets/assignment [200 OK, 329B, 103ms]
+  √  tenant secret assignment returned
+
+└ 01 List runtime providers
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/providers [200 OK, 261B, 120ms]
+  √  runtime providers listed
+
+└ 01a Import externally supplied public key
+  POST https://acme.e2e.nk.sphereon.com/api/kms/v1/keys/import [201 Created, 530B, 389ms]
+  √  public key imported
+  √  import response identifies the imported key
+
+└ 02 List keys by providerId
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/providers/default/keys [200 OK, 2.4kB, 116ms]
+  √  keys listed for the provider
+
+└ 03 Generate key with providerId and alias
+  POST https://acme.e2e.nk.sphereon.com/api/kms/v1/providers/default/keys [201 Created, 1.68kB, 547ms]
+  √  key generated
+
+└ 04 Get key by providerId and alias
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/providers/default/keys/customer-runtime-signing-key [200 OK, 1.47kB, 97ms]
+  √  key read by alias
+
+└ 05 Create raw signature with providerId and alias
+  POST https://acme.e2e.nk.sphereon.com/api/kms/v1/signatures/raw/create [201 Created, 218B, 330ms]
+  √  raw signature created
+
+└ 06 Verify raw signature with providerId and alias
+  POST https://acme.e2e.nk.sphereon.com/api/kms/v1/signatures/raw/verify [200 OK, 124B, 77ms]
+  √  raw signature verified
+
+└ 07 Delete generated key by providerId and alias
+  DELETE https://acme.e2e.nk.sphereon.com/api/kms/v1/providers/default/keys/customer-runtime-signing-key [204 No Content, 96B, 353ms]
+  √  generated key deleted
+
+└ 08 List keys across every provider
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/keys [200 OK, 2.4kB, 113ms]
+  √  tenant-wide key list returned
+
+└ 09 Generate a key without naming a provider in the path
+  POST https://acme.e2e.nk.sphereon.com/api/kms/v1/keys [201 Created, 1.65kB, 564ms]
+  √  key generated through the tenant-wide route
+
+└ 10 Read the key by alias
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/keys/customer-tenant-signing-key?providerId=default [200 OK, 1.45kB, 91ms]
+  √  key read by alias
+
+└ 11 Register the key certificate chain
+  POST https://acme.e2e.nk.sphereon.com/api/kms/v1/certificates/register [201 Created, 1.09kB, 485ms]
+  √  certificate reference registered
+
+└ 12 List certificate references
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/certificate-references [200 OK, 666B, 65ms]
+  √  certificate references listed
+
+└ 13 Read one certificate reference
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/certificate-references/41817677-f4c9-4512-9c25-d38bc50fb9de [200 OK, 649B, 64ms]
+  √  certificate reference read
+
+└ 14 Read the registered chain
+  GET https://acme.e2e.nk.sphereon.com/api/kms/v1/certificate-chains/customer-tenant-signing-chain?providerId=default [200 OK, 598B, 419ms]
+  √  registered chain read
+
+└ 15 Delete the certificate reference
+  DELETE https://acme.e2e.nk.sphereon.com/api/kms/v1/certificate-chains/customer-tenant-signing-chain?providerId=default [204 No Content, 96B, 64ms]
+  √  certificate reference deleted
+
+└ 16 Delete the tenant-wide key
+  DELETE https://acme.e2e.nk.sphereon.com/api/kms/v1/keys/customer-tenant-signing-key?providerId=default [204 No Content, 96B, 314ms]
+  √  tenant-wide key deleted
+
+□ 25 Developer Console Settings
+└ 01 Read current console policy
+  GET https://acme.e2e.nk.sphereon.com/api/platform/config/v1/tenants/e1d8e0f7-cacc-40e6-bd08-18c14de51eb3/developer-console [200 OK, 259B, 111ms]
+  √  developer console policy read
+
+┌─────────────────────────┬────────────────────┬───────────────────┐
+│                         │           executed │            failed │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│              iterations │                  1 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│                requests │                199 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│            test-scripts │                194 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│      prerequest-scripts │                382 │                 0 │
+├─────────────────────────┼────────────────────┼───────────────────┤
+│              assertions │                328 │                 0 │
+├─────────────────────────┴────────────────────┴───────────────────┤
+│ total run duration: 1m 43.6s                                     │
+├──────────────────────────────────────────────────────────────────┤
+│ total data received: 549.51kB (approx)                           │
+├──────────────────────────────────────────────────────────────────┤
+│ average response time: 428ms [min: 13ms, max: 24.4s, s.d.: 2.2s] │
+└──────────────────────────────────────────────────────────────────┘
+E2E finished: 193 requests captured, exit code 0.

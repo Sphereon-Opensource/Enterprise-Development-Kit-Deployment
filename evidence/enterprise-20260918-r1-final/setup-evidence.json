@@ -1,0 +1,24 @@
+{
+  "checkedAt": "2026-09-17T23:51:41.320Z",
+  "platformUrl": "https://platform.e2e.nk.sphereon.com",
+  "mode": "license-bundle",
+  "setupStatus": "closed",
+  "setupPerformed": true,
+  "productStateVerified": true,
+  "operatorAuthenticated": true,
+  "activationDeliveryState": "MANUAL",
+  "activationSource": "api-manual",
+  "licenseBundle": {
+    "provided": true,
+    "consumed": true,
+    "bytes": 10534,
+    "sha256": "3f610e90dd5815333b6208255984e17089e15435ffb788b270f4e4646d13d654"
+  },
+  "operatorIdentity": {
+    "operatorEmailSha256": "5da87e12d60dd043031d0cddabe2311aaeaa53da77260be215b51cdc194cce0e",
+    "subject": "31205867-cd76-4fda-8185-2a9746e3b6a0",
+    "roles": [
+      "platform-admin"
+    ]
+  }
+}

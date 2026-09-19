@@ -1,0 +1,385 @@
+# Generated customer EDK routing for shared-edge mode.
+# TLS is terminated by the shared edge; this stack gateway receives plain HTTP.
+http:
+  routers:
+    # --- Operator / platform host -------------------------------------------
+    # Keep the one-request Secrets delegation issuer east-west/BFF-only. The
+    # public exact path is shadowed to the absent platform console route (404);
+    # the BFF calls the platform service directly.
+    platform-secret-delegation-hidden:
+      rule: "Host(`platform.e2e.nk.sphereon.com`) && Path(`/api/platform/admin/v1/application/secrets/internal/delegated-token`)"
+      entryPoints: ["web"]
+      service: svc-admin-console
+      priority: 1200
+
+    # No path constraint: the platform plane owns this host entirely (setup,
+    # admin, operator login AS, onboarding + admin UI). Higher priority than the
+    # tenant wildcard so platform.e2e.nk.sphereon.com never falls through to it.
+    platform:
+      rule: "Host(`platform.e2e.nk.sphereon.com`)"
+      entryPoints: ["web"]
+      service: svc-platform
+      priority: 1000
+
+    # --- Platform admin console (operator-authenticated) --------------------
+    # Path-prefix only (no StripPrefix): Next.js serves under /admin-console and emits
+    # /admin-console/_next/* asset URLs, which break if the prefix is stripped. Priority
+    # above the platform catch-all (1000) so /admin-console reaches the console, not the
+    # platform plane. The canonical platform origin is server configuration;
+    # instance origins come only from the exact trusted gateway hop.
+    platform-admin-console:
+      rule: "Host(`platform.e2e.nk.sphereon.com`) && (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))"
+      entryPoints: ["web"]
+      service: svc-admin-console
+      priority: 1100   # above platform catch-all (1000)
+
+    # Exact browser-safe platform bootstrap projection for tenant administration.
+    tenant-admin-console-runtime-config:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        Path(`/api/platform/bootstrap/v1/runtime-config/admin-console`)
+      entryPoints: ["web"]
+      service: svc-platform
+      priority: 280
+
+    # Registered tenant hosts use the same path but a separate runtime without
+    # platform-management credentials.
+    tenant-admin-console:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))
+      entryPoints: ["web"]
+      service: svc-admin-console-tenant
+      priority: 270
+
+    # --- DID management API: host-agnostic, routed by path -------------------
+    # Tenant-KMS command traffic is internal gRPC only. The browser-visible KMS
+    # administration surface is the typed platform-config route below.
+    api-kms:
+      rule: "PathPrefix(`/api/kms/v1`)"
+      entryPoints: ["web"]
+      service: svc-kms
+      priority: 1100
+    api-did:
+      rule: "PathPrefix(`/api/did/v1`)"
+      entryPoints: ["web"]
+      service: svc-did
+      priority: 1100
+    api-blob:
+      rule: "PathPrefix(`/api/theme/v1`) || PathPrefix(`/api/assets/v1`)"
+      entryPoints: ["web"]
+      service: svc-blob
+      priority: 1100
+    api-connector:
+      rule: "Path(`/api/connector/v1`) || PathPrefix(`/api/connector/v1/`)"
+      entryPoints: ["web"]
+      service: svc-blob
+      priority: 1100
+    public-blob-assets:
+      rule: "PathRegexp(`^/public/assets/[^/]+/brand/[^/]+$`)"
+      entryPoints: ["web"]
+      service: svc-blob
+      priority: 1100
+    public-design-assets:
+      rule: "PathRegexp(`^/public/assets/design/[^/]+$`)"
+      entryPoints: ["web"]
+      service: svc-issuer
+      priority: 1100
+
+    # --- Tenant hosts: platform-owned tenant-scoped APIs --------------------
+    tenant-platform-theme:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        PathPrefix(`/api/theme/v1`)
+      entryPoints: ["web"]
+      service: svc-blob
+      priority: 300
+    tenant-platform-wallet-entitlement:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        PathPrefix(`/api/wallet-entitlement/v1`)
+      entryPoints: ["web"]
+      service: svc-platform
+      priority: 300
+    # The platform configuration API is served by the platform, which owns the
+    # configuration and secret-authority state; the tenant host supplies the
+    # tenant-routing context. This mirrors the Helm HTTPRoute, which routes the whole
+    # /api/platform/config/v1/tenants prefix. A narrower rule leaves the
+    # authorization-server, issuer-instance and verifier-instance slices unrouted on the
+    # tenant host, where the admin console and the release gate address them.
+    tenant-account-actions:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        PathPrefix(`/api/account-actions/v1`)
+      entryPoints: ["web"]
+      service: svc-as
+      priority: 310
+
+    tenant-backend-platform:
+
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/api/audit/v1`) ||
+         PathPrefix(`/api/forms/v1`) ||
+         PathPrefix(`/api/workflow/v1`) ||
+         PathPrefix(`/api/lifecycle/v1`) ||
+         PathPrefix(`/api/services/v1`) ||
+         PathPrefix(`/api/v1/config`) ||
+         PathPrefix(`/api/invitation/v1/invitations`))
+      entryPoints: ["web"]
+      service: svc-platform
+      priority: 310
+
+    tenant-backend-blob:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/api/connector/v1`) ||
+         PathPrefix(`/api/blob-store/v1`) ||
+         PathPrefix(`/api/users/v1`) ||
+         PathPrefix(`/api/v1/schemas`) ||
+         PathPrefix(`/api/v1/tabular-mapping-templates`))
+      entryPoints: ["web"]
+      service: svc-blob
+      priority: 310
+
+    tenant-platform-config:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        PathPrefix(`/api/platform/config/v1/tenants`)
+      entryPoints: ["web"]
+      service: svc-platform
+      priority: 300
+
+    # --- Public instance testing-console page -------------------------------
+    # Rewrite only the canonical public page URL to Next's internal basePath.
+    # Application/bootstrap policy remains fail-closed for disabled instances.
+    instance-testing-console-page:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        PathRegexp(`^/testing-console/(issuer|verifier)/[^/]+/?$`)
+      entryPoints: ["web"]
+      service: svc-admin-console-tenant
+      middlewares: ["instance-testing-console-add-admin-prefix"]
+      priority: 260
+
+    # Browser-facing testing API under the neutral /testing-console prefix, so
+    # the customer-facing surface never exposes admin-console URLs. Rewritten to
+    # the Next base path before hitting the app.
+    instance-testing-console-api:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/testing-console/api/oid4vci/v1/testing`) ||
+         PathPrefix(`/testing-console/api/oid4vp/v1/testing`) ||
+         Path(`/testing-console/api/portal-oauth/login`) ||
+         Path(`/testing-console/api/portal-oauth/callback`) ||
+         Path(`/testing-console/api/portal-oauth/grant`) ||
+         Path(`/testing-console/api/portal-oauth/revoke`))
+      entryPoints: ["web"]
+      service: svc-admin-console-tenant
+      middlewares: ["instance-testing-console-api-rewrite"]
+      priority: 265
+
+    # --- Tenant hosts: OID4VCI issuer ---------------------------------------
+
+    # Direct Next/BFF support paths; no public-page rewrite applies here.
+    instance-testing-console-support:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/admin-console/api/oid4vci/v1/testing`) ||
+         PathPrefix(`/admin-console/api/oid4vp/v1/testing`) ||
+         Path(`/admin-console/api/portal-oauth/login`) ||
+         Path(`/admin-console/api/portal-oauth/callback`) ||
+         Path(`/admin-console/api/portal-oauth/grant`) ||
+         Path(`/admin-console/api/portal-oauth/revoke`) ||
+         PathPrefix(`/admin-console/_next`) ||
+         PathPrefix(`/admin-console/public/assets`) ||
+         Path(`/admin-console/health`))
+      entryPoints: ["web"]
+      service: svc-admin-console-tenant
+      priority: 250
+
+    # Public Developer Console projection with finite page, API, and auth routes.
+    developer-console-page:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (Path(`/developer-console`) || Path(`/developer-console/oauth/callback`))
+      entryPoints: ["web"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-page-rewrite"]
+      priority: 280
+    developer-console-api:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        PathPrefix(`/developer-console/api/developer-console/v1`)
+      entryPoints: ["web"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-api-rewrite"]
+      priority: 285
+    developer-console-auth:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (Path(`/developer-console/api/auth/session`) ||
+         Path(`/developer-console/api/auth/login`) ||
+         Path(`/developer-console/api/auth/token`) ||
+         Path(`/developer-console/api/auth/logout`) ||
+         Path(`/developer-console/api/auth/callback`))
+      entryPoints: ["web"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-console-auth-rewrite"]
+      priority: 290
+
+    # --- Tenant hosts: OID4VCI issuer ---------------------------------------
+    tenant-issuer:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/oid4vci`) || PathPrefix(`/credential`) ||
+         PathPrefix(`/deferredCredential`) || PathPrefix(`/nonce`) ||
+         PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
+         PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
+         PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
+         PathPrefix(`/api/statuslist/v1`))
+      entryPoints: ["web"]
+      service: svc-issuer
+      priority: 200
+
+    # --- Tenant hosts: OID4VP verifier --------------------------------------
+    tenant-verifier:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/oid4vp`) || PathPrefix(`/api/oid4vp/v1`) ||
+         PathPrefix(`/api/dcql/v1`))
+      entryPoints: ["web"]
+      service: svc-verifier
+      priority: 200
+
+    # --- Tenant hosts: DID --------------------------------------------------
+    tenant-did:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/1.0/identifiers`) || PathPrefix(`/.well-known/did.json`) ||
+         PathPrefix(`/api/did/v1`))
+      entryPoints: ["web"]
+      service: svc-did
+      priority: 200
+
+    # Customer identities and credentials belong to the workload AS database.
+    tenant-as-identity-admin:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        PathRegexp(`^/api/(identity/v1|identity-auth/v1/admin|party/v1)(/.*)?$`)
+      entryPoints: ["web"]
+      service: svc-as
+      priority: 220
+
+    # Trust-domain policy is platform-owned; the tenant host still supplies
+    # the tenant-routing context to the platform process.
+    tenant-trust-domain:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        PathPrefix(`/api/trust-domain/v1`)
+      entryPoints: ["web"]
+      service: svc-platform
+      priority: 220
+
+    # A catalog slug is unique within its tenant, not across the install, so the
+    # platform host cannot resolve which tenant owns one and must never guess.
+    # Catalog paths that reach the platform host go to the issuer anyway, so the
+    # caller gets the catalog service's own not-found answer for the platform
+    # tenant instead of a platform error for a route it does not serve. The
+    # canonical public catalog URL is on the tenant host.
+    platform-host-catalogs:
+      rule: >-
+        Host(`platform.e2e.nk.sphereon.com`) &&
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+      entryPoints: ["web"]
+      service: svc-issuer
+      priority: 1050
+
+    tenant-catalogs:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+      entryPoints: ["web"]
+      service: svc-issuer
+      priority: 220
+
+    # --- Tenant hosts: authorization server (lowest tenant priority so the
+    # protocol-specific routers above win their paths first) -----------------
+    tenant-as:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`) &&
+        (PathPrefix(`/as`) || PathPrefix(`/par`) || PathPrefix(`/logout`) ||
+         PathPrefix(`/.well-known/oauth-authorization-server`) ||
+         PathPrefix(`/.well-known/openid-configuration`) ||
+         PathPrefix(`/.well-known/jwks.json`))
+      entryPoints: ["web"]
+      service: svc-as
+      priority: 100
+
+  middlewares:
+    instance-testing-console-add-admin-prefix:
+      addPrefix:
+        prefix: /admin-console
+    instance-testing-console-api-rewrite:
+      replacePathRegex:
+        regex: "^/testing-console/(.*)"
+        replacement: "/admin-console/$1"
+    developer-console-page-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console(?:/(.*))?$"
+        replacement: "/admin-console/developer-console/$1"
+    developer-console-api-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console/(.*)"
+        replacement: "/admin-console/$1"
+    developer-console-auth-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console/api/auth/(session|login|callback|token|logout)$"
+        replacement: "/admin-console/api/developer-console-auth/$1"
+
+  services:
+    svc-platform:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-platform:18080"
+    svc-as:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-as:18083"
+    svc-issuer:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-issuer:8080"
+    svc-verifier:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-verifier:8080"
+    svc-did:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-did:8080"
+    svc-blob:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-blob:8080"
+    svc-kms:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-kms:8080"
+    svc-admin-console:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://admin-console:3000"
+    svc-admin-console-tenant:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://admin-console-tenant:3000"

@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-09-17T23:49:51.125Z",
+  "configuredSecretCount": 3,
+  "replacements": 6,
+  "changedFiles": [
+    "compose-logs.txt",
+    "newman/snapshot-drift.patch"
+  ],
+  "canaryExposureFiles": []
+}

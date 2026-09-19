@@ -1,0 +1,8 @@
+{
+  "accessMode": "BehindEdge",
+  "environment": "e2e",
+  "alias": "gw-e2e",
+  "target": "D:\\git\\VDX-infra\\deploy\\edge\\dynamic\\e2e.yml",
+  "installedByRun": true,
+  "status": "removed"
+}

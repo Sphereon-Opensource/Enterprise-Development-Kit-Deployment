@@ -1,0 +1,14 @@
+===================================================================
+--- committed/01-operator-sign-in/03-submit-operator-credentials.json
++++ captured/01-operator-sign-in/03-submit-operator-credentials.json
+@@ -6,9 +6,9 @@
+     "headers": {
+       "Content-Type": "application/x-www-form-urlencoded",
+       "Accept": "*/*"
+     },
+-    "body": "username=operator%40example.com&password=[REDACTED_SECRET_PARAMETER]&session_id=%3Cauthorization-session%3E&tab_id=%3Clogin-session%3E&session_code=%3Credacted%3E&return_url=https%3A%2F%2Fplatform.example.com%2Fauthorize%2Fcallback%3Fsession_id%3D%3Cauthorization-session%3E"
++    "body": "username=operator%40acme.example&password=[REDACTED_SECRET_PARAMETER]&session_id=%3Cauthorization-session%3E&tab_id=%3Clogin-session%3E&session_code=%3Credacted%3E&return_url=https%3A%2F%2Fplatform.example.com%2Fauthorize%2Fcallback%3Fsession_id%3D%3Cauthorization-session%3E"
+   },
+   "response": {
+     "status": "Found",
+     "code": 302,

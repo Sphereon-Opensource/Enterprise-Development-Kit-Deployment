@@ -290,6 +290,7 @@ derived from the one customer-facing platform origin.
 webauthn:
   enabled: true
   rp-id: {{ printf "%s.%s" .Values.gateway.operatorHost (include "edk-enterprise.gateway.baseDomain" .) | quote }}
+  rp-id-policy: "${env:EDK_PLATFORM_WEBAUTHN_RP_ID_POLICY:exact-host}"
   allowed-origins: {{ .Values.platform.externalBaseUrl | quote }}
   attestation-policy: none
   user-verification: required
