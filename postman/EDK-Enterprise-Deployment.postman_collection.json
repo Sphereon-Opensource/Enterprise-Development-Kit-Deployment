@@ -5045,7 +5045,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"credential_configuration_ids\": [\"EuPid\"],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"family_name\": \"Mustermann\",\n    \"given_name\": \"Erika\",\n    \"birth_date\": \"1964-08-12\",\n    \"age_over_18\": true,\n    \"nationality\": \"DE\",\n    \"issuing_authority\": \"DE\",\n    \"issuing_country\": \"DE\",\n    \"document_number\": \"1234567890\"\n  },\n  \"correlation_id\": \"e2e-eupid-001\"\n}"
+                  "raw": "{\n  \"credential_configuration_ids\": [\n    \"EuPid\"\n  ],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"family_name\": \"Mustermann\",\n    \"given_name\": \"Erika\",\n    \"birth_date\": \"1964-08-12\",\n    \"age_over_18\": true,\n    \"nationality\": \"DE\",\n    \"issuing_authority\": \"DE\",\n    \"issuing_country\": \"DE\",\n    \"document_number\": \"1234567890\"\n  },\n  \"correlation_id\": \"customer-eupid-{{$guid}}\"\n}"
                 },
                 "description": "Creates a pre-authorized credential offer with the subject data supplied inline. The response carries the offer URI a wallet would scan."
               },
@@ -5070,7 +5070,10 @@
                       "  pm.collectionVariables.set('offerUri', j.offer_uri);",
                       "  const m = j.offer_uri.match(/credential_offer_uri=([^&]+)/);",
                       "  if (m) pm.collectionVariables.set('credentialOfferUri', rewritePublicUrl(decodeURIComponent(m[1]), pm.variables.get('tenantGatewayUrl')));",
-                      "}"
+                      "}",
+                      "const actualCorrelationId = j.correlation_id || j.correlationId;",
+                      "pm.expect(actualCorrelationId, 'actual correlation id').to.be.a('string').and.not.empty;",
+                      "pm.collectionVariables.set('eupidCorrelationId', actualCorrelationId);"
                     ]
                   }
                 }
@@ -5446,7 +5449,7 @@
               "name": "06 Check EuPid offer status",
               "request": {
                 "method": "GET",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers/e2e-eupid-001",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers/{{eupidCorrelationId}}",
                 "description": "Backend session status after issuance: the lifecycle ends in credential_issued.",
                 "header": []
               },
@@ -5504,7 +5507,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"credential_configuration_ids\": [\"Mdl\"],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"org.iso.18013.5.1.family_name\": \"Mustermann\",\n    \"org.iso.18013.5.1.given_name\": \"Erika\",\n    \"org.iso.18013.5.1.birth_date\": \"1964-08-12\",\n    \"org.iso.18013.5.1.issue_date\": \"2026-01-15\",\n    \"org.iso.18013.5.1.expiry_date\": \"2031-01-15\",\n    \"org.iso.18013.5.1.issuing_country\": \"DE\",\n    \"org.iso.18013.5.1.issuing_authority\": \"DE\",\n    \"org.iso.18013.5.1.document_number\": \"D123456789\",\n    \"org.iso.18013.5.1.portrait\": \"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\",\n    \"org.iso.18013.5.1.driving_privileges\": [\n      {\n        \"vehicle_category_code\": \"B\",\n        \"issue_date\": \"2010-03-01\",\n        \"expiry_date\": \"2031-01-15\"\n      }\n    ],\n    \"org.iso.18013.5.1.un_distinguishing_sign\": \"D\"\n  },\n  \"correlation_id\": \"e2e-mdl-001\"\n}"
+                  "raw": "{\n  \"credential_configuration_ids\": [\n    \"Mdl\"\n  ],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"org.iso.18013.5.1.family_name\": \"Mustermann\",\n    \"org.iso.18013.5.1.given_name\": \"Erika\",\n    \"org.iso.18013.5.1.birth_date\": \"1964-08-12\",\n    \"org.iso.18013.5.1.issue_date\": \"2026-01-15\",\n    \"org.iso.18013.5.1.expiry_date\": \"2031-01-15\",\n    \"org.iso.18013.5.1.issuing_country\": \"DE\",\n    \"org.iso.18013.5.1.issuing_authority\": \"DE\",\n    \"org.iso.18013.5.1.document_number\": \"D123456789\",\n    \"org.iso.18013.5.1.portrait\": \"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\",\n    \"org.iso.18013.5.1.driving_privileges\": [\n      {\n        \"vehicle_category_code\": \"B\",\n        \"issue_date\": \"2010-03-01\",\n        \"expiry_date\": \"2031-01-15\"\n      }\n    ],\n    \"org.iso.18013.5.1.un_distinguishing_sign\": \"D\"\n  },\n  \"correlation_id\": \"customer-mdl-{{$guid}}\"\n}"
                 },
                 "description": "Pre-authorized offer for the mdoc credential with namespace-qualified subject data."
               },
@@ -5527,7 +5530,10 @@
                       "if (j.offer_uri) {",
                       "  const m = j.offer_uri.match(/credential_offer_uri=([^&]+)/);",
                       "  if (m) pm.collectionVariables.set('mdlCredentialOfferUri', rewritePublicUrl(decodeURIComponent(m[1]), pm.variables.get('tenantGatewayUrl')));",
-                      "}"
+                      "}",
+                      "const actualCorrelationId = j.correlation_id || j.correlationId;",
+                      "pm.expect(actualCorrelationId, 'actual correlation id').to.be.a('string').and.not.empty;",
+                      "pm.collectionVariables.set('mdlCorrelationId', actualCorrelationId);"
                     ]
                   }
                 }
@@ -6376,7 +6382,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"credential_configuration_ids\": [\n    \"EmployeeBadge\"\n  ],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"id\": \"did:example:employee-0001\",\n    \"type\": \"EmployeeBadgeCredential\",\n    \"name\": \"Erika Mustermann\",\n    \"employeeId\": \"ACME-4711\",\n    \"jobTitle\": \"Field Engineer\",\n    \"department\": \"Operations\"\n  },\n  \"correlation_id\": \"e2e-employeebadge-001\"\n}"
+                  "raw": "{\n  \"credential_configuration_ids\": [\n    \"EmployeeBadge\"\n  ],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"id\": \"did:example:employee-0001\",\n    \"type\": \"EmployeeBadgeCredential\",\n    \"name\": \"Erika Mustermann\",\n    \"employeeId\": \"ACME-4711\",\n    \"jobTitle\": \"Field Engineer\",\n    \"department\": \"Operations\"\n  },\n  \"correlation_id\": \"customer-employeebadge-{{$guid}}\"\n}"
                 },
                 "description": "Creates a pre-authorized offer for the VCDM 1.1 credential with the subject data supplied inline."
               },
@@ -6399,7 +6405,10 @@
                       "pm.expect(j.offer_uri, 'offer uri').to.be.a('string').and.not.empty;",
                       "const m = String(j.offer_uri).match(/credential_offer_uri=([^&]+)/);",
                       "pm.expect(m, 'offer uri carries credential_offer_uri').to.not.eql(null);",
-                      "pm.collectionVariables.set('employeeBadgeOfferUri', rewritePublicUrl(decodeURIComponent(m[1])));"
+                      "pm.collectionVariables.set('employeeBadgeOfferUri', rewritePublicUrl(decodeURIComponent(m[1])));",
+                      "const actualCorrelationId = j.correlation_id || j.correlationId;",
+                      "pm.expect(actualCorrelationId, 'actual correlation id').to.be.a('string').and.not.empty;",
+                      "pm.collectionVariables.set('employeeBadgeCorrelationId', actualCorrelationId);"
                     ]
                   }
                 }
@@ -6759,7 +6768,7 @@
               "name": "07 Check the EmployeeBadge offer status",
               "request": {
                 "method": "GET",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers/e2e-employeebadge-001",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers/{{employeeBadgeCorrelationId}}",
                 "header": [],
                 "description": "Reads the backend session by its business key. The lifecycle ends in credential_issued."
               },
@@ -7008,7 +7017,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"credential_configuration_ids\": [\n    \"Membership\"\n  ],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"id\": \"did:example:member-0001\",\n    \"type\": \"MembershipCredential\",\n    \"name\": \"Erika Mustermann\",\n    \"membershipNumber\": \"ACME-M-2026-0042\",\n    \"membershipLevel\": \"gold\",\n    \"validFrom\": \"2026-01-01\"\n  },\n  \"correlation_id\": \"e2e-membership-001\"\n}"
+                  "raw": "{\n  \"credential_configuration_ids\": [\n    \"Membership\"\n  ],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"id\": \"did:example:member-0001\",\n    \"type\": \"MembershipCredential\",\n    \"name\": \"Erika Mustermann\",\n    \"membershipNumber\": \"ACME-M-2026-0042\",\n    \"membershipLevel\": \"gold\",\n    \"validFrom\": \"2026-01-01\"\n  },\n  \"correlation_id\": \"customer-membership-{{$guid}}\"\n}"
                 },
                 "description": "Creates a pre-authorized offer for the VCDM 2.0 credential with the subject data supplied inline."
               },
@@ -7031,7 +7040,10 @@
                       "pm.expect(j.offer_uri, 'offer uri').to.be.a('string').and.not.empty;",
                       "const m = String(j.offer_uri).match(/credential_offer_uri=([^&]+)/);",
                       "pm.expect(m, 'offer uri carries credential_offer_uri').to.not.eql(null);",
-                      "pm.collectionVariables.set('membershipOfferUri', rewritePublicUrl(decodeURIComponent(m[1])));"
+                      "pm.collectionVariables.set('membershipOfferUri', rewritePublicUrl(decodeURIComponent(m[1])));",
+                      "const actualCorrelationId = j.correlation_id || j.correlationId;",
+                      "pm.expect(actualCorrelationId, 'actual correlation id').to.be.a('string').and.not.empty;",
+                      "pm.collectionVariables.set('membershipCorrelationId', actualCorrelationId);"
                     ]
                   }
                 }
@@ -7391,7 +7403,7 @@
               "name": "07 Check the Membership offer status",
               "request": {
                 "method": "GET",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers/e2e-membership-001",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/credential/offers/{{membershipCorrelationId}}",
                 "header": [],
                 "description": "Reads the backend session by its business key. The lifecycle ends in credential_issued."
               },
@@ -7640,7 +7652,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"pipeline_configuration\": {\n    \"pipelineId\": \"eupid-registration\",\n    \"claimsBindings\": [\n      {\n        \"id\": \"EuPid\",\n        \"semanticAttributeSetRef\": {\n          \"bundleId\": \"credential-config:EuPid\"\n        },\n        \"deferralPolicy\": {\n          \"approvalRequired\": true\n        }\n      }\n    ]\n  },\n  \"correlation_id\": \"e2e-pipeline-001\",\n  \"ttl_seconds\": 600\n}"
+                  "raw": "{\n  \"pipeline_configuration\": {\n    \"pipelineId\": \"eupid-registration\",\n    \"claimsBindings\": [\n      {\n        \"id\": \"EuPid\",\n        \"semanticAttributeSetRef\": {\n          \"bundleId\": \"credential-config:EuPid\"\n        },\n        \"deferralPolicy\": {\n          \"approvalRequired\": true\n        }\n      }\n    ]\n  },\n  \"correlation_id\": \"customer-pipeline-{{$guid}}\",\n  \"ttl_seconds\": 600\n}"
                 },
                 "description": "Opens an attribute pipeline session keyed by correlation id, seeded with the lookup keys that attribute sources use to find the subject."
               },
@@ -7650,7 +7662,11 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test('pipeline session opened', () => pm.expect([200, 201]).to.include(pm.response.code));"
+                      "pm.test('pipeline session opened', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                      "const pipeline = pm.response.json();",
+                      "const actualPipelineSessionId = pipeline.sessionId || pipeline.session_id || pipeline.id;",
+                      "pm.expect(actualPipelineSessionId, 'actual pipeline session id').to.be.a('string').and.not.empty;",
+                      "pm.collectionVariables.set('pipelineSessionId', actualPipelineSessionId);"
                     ]
                   }
                 }
@@ -7697,7 +7713,7 @@
               "name": "02 Contribute attributes",
               "request": {
                 "method": "POST",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/e2e-pipeline-001/attributes",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineSessionId}}/attributes",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -7763,7 +7779,7 @@
               "name": "03 Read accumulated attributes",
               "request": {
                 "method": "GET",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/e2e-pipeline-001/attributes",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineSessionId}}/attributes",
                 "description": "Reads the attributes accumulated so far across all sources.",
                 "header": []
               },
@@ -7812,7 +7828,7 @@
               "name": "04 Evaluate completeness",
               "request": {
                 "method": "GET",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/e2e-pipeline-001/completeness",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineSessionId}}/completeness",
                 "description": "Evaluates whether the accumulated attributes satisfy each credential binding's mandatory claims, and whether deferral or approval is recommended.",
                 "header": []
               },
@@ -7861,7 +7877,7 @@
               "name": "05 Approve issuance",
               "request": {
                 "method": "POST",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/e2e-pipeline-001/approve",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineSessionId}}/approve",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -8490,7 +8506,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"query_id\": \"eupid-and-mdl\",\n  \"verifier_id\": \"{{verifierId}}\",\n  \"client_id\": \"decentralized_identifier:{{did}}\",\n  \"correlation_id\": \"e2e-verify-001\"\n}"
+                  "raw": "{\n  \"query_id\": \"eupid-and-mdl\",\n  \"verifier_id\": \"{{verifierId}}\",\n  \"client_id\": \"decentralized_identifier:{{did}}\",\n  \"correlation_id\": \"customer-verify-{{$guid}}\"\n}"
                 },
                 "description": "Creates a verifier session for the combined DCQL query. The response includes the authorization request URI a wallet would open."
               },
@@ -8506,7 +8522,9 @@
                       "const requestObjectMatch = j.request_uri.match(/[?&]request_uri=([^&]+)/);",
                       "pm.expect(requestObjectMatch, 'authorization request contains request_uri').to.not.eql(null);",
                       "pm.collectionVariables.set('requestObjectUri', decodeURIComponent(requestObjectMatch[1]));",
-                      "pm.collectionVariables.set('verifyCorrelationId', j.correlation_id || 'e2e-verify-001');"
+                      "const actualVerifyCorrelationId = j.correlation_id || j.correlationId;",
+                      "pm.expect(actualVerifyCorrelationId, 'actual verification correlation id').to.be.a('string').and.not.empty;",
+                      "pm.collectionVariables.set('verifyCorrelationId', actualVerifyCorrelationId);"
                     ]
                   }
                 }
