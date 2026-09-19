@@ -1488,15 +1488,15 @@
           ]
         },
         {
-          "name": "08 Enable shared Azure provider (optional)",
-          "description": "Run after the platform operator offers the vault in folder 04. Use the tenant application OAuth token. Copy the offered providerId to tenantAzureProviderId before registering external references. Sharing does not grant authority over other tenants or platform keys.",
+          "name": "08 Trust Domains V2 (optional)",
+          "description": "Tenant application view of the trust graph. The credential-issuer attachment is explicit and fail-closed; a missing or empty attachment is a deliberate denial state. Use the internal collection for trust-domain mutations and verifier eligibility exercises.",
           "item": [
             {
-              "name": "05 List platform KMSes offered to the tenant",
+              "name": "01 Read the tenant credential-issuer trust attachment",
               "request": {
                 "method": "GET",
-                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/shared-providers",
-                "description": "Lists the platform KMSes this tenant may enable. The offer carries presentation and fulfillment only; the platform KMS configuration and credentials are never part of it.",
+                "url": "{{tenantTrustDomainApiBaseUrl}}/attachments/TENANT/{{tenantId}}/CREDENTIAL_ISSUER_TRUST",
+                "description": "The tenant fallback is an ordinary attachment. A tenant with none fails closed on every credential-issuer decision, which is the state a brand-new tenant starts in.",
                 "header": []
               },
               "event": [
@@ -1505,7 +1505,12 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test('Request succeeded', () => pm.response.to.have.status(200));"
+                      "pm.test('Request succeeded', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.expect(body.attachment.policy.type).to.eql('IDENTITY_ADMISSION');",
+                      "pm.expect(body.attachment.policy.mode).to.eql('FAIL_CLOSED');",
+                      "pm.expect(body.domains).to.be.an('array').and.not.empty;",
+                      "pm.expect(body.domains.map((d) => d.ordinal ?? d.order)).to.eql(body.domains.map((_, i) => i));"
                     ]
                   }
                 }
@@ -1515,7 +1520,7 @@
                   "name": "Previously captured response (sanitized)",
                   "originalRequest": {
                     "method": "GET",
-                    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers",
+                    "url": "https://acme.example.com/api/trust-domain/v1/attachments/TENANT/00000000-0000-4000-8000-000000000000/CREDENTIAL_ISSUER_TRUST",
                     "header": [
                       {
                         "key": "Authorization",
@@ -1535,105 +1540,7 @@
                       "value": "application/json"
                     }
                   ],
-                  "body": "{\n  \"providers\": [\n    {\n      \"providerId\": \"walkthrough-platform-00000000-0000-4000-8000-000000000000\",\n      \"fulfillment\": \"SHARED_INSTANCE\",\n      \"kind\": \"SOFTWARE\",\n      \"displayName\": \"Developer journey platform software KMS\",\n      \"enabled\": false,\n      \"suggestedDefault\": false,\n      \"declaredByDeployment\": false,\n      \"credentialFromDeployment\": false\n    }\n  ]\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "06 Enable the offered platform KMS",
-              "request": {
-                "method": "POST",
-                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/shared-providers/{{platformAzureProviderId}}:enable",
-                "description": "The tenant takes up the shared-instance offer. The typed provider resource and credentials remain platform-owned; only this tenant's entitlement and tenant-scoped reference namespace become active.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('Request succeeded', () => pm.response.to.have.status(200));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "POST",
-                    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers/walkthrough-platform-00000000-0000-4000-8000-000000000000:enable",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"providerId\": \"walkthrough-platform-00000000-0000-4000-8000-000000000000\",\n  \"fulfillment\": \"SHARED_INSTANCE\",\n  \"kind\": \"SOFTWARE\",\n  \"displayName\": \"Developer journey platform software KMS\",\n  \"enabled\": true,\n  \"suggestedDefault\": false,\n  \"declaredByDeployment\": false,\n  \"credentialFromDeployment\": false\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "09 List runtime KMS providers",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantKmsApiBaseUrl}}/providers",
-                "description": "Lists the providers the tenant reaches on the runtime KMS REST API. The admin console joins this list to the management-plane resource list on providerId, so the two planes must agree on that identifier exactly, and the runtime plane must never answer with the krh_ management handle.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('Request succeeded', () => pm.response.to.have.status(200));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/kms/v1/providers",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"providers\": [\n    {\n      \"providerId\": \"default\",\n      \"type\": \"SOFTWARE\",\n      \"displayName\": \"Software KMS\",\n      \"ownership\": \"TENANT\",\n      \"sharedFromPlatform\": false,\n      \"isDefault\": true\n    }\n  ]\n}",
+                  "body": "{\n  \"attachment\": {\n    \"attachmentId\": \"trust-attachment-issuer-00000000-0000-4000-8000-000000000000-tenant\",\n    \"consumerKind\": \"TENANT\",\n    \"consumerId\": \"00000000-0000-4000-8000-000000000000\",\n    \"usage\": \"CREDENTIAL_ISSUER_TRUST\",\n    \"policy\": {\n      \"type\": \"IDENTITY_ADMISSION\",\n      \"mode\": \"FAIL_CLOSED\",\n      \"walletEvidencePolicy\": \"NONE\"\n    },\n    \"version\": 1,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\"\n  },\n  \"domains\": [\n    {\n      \"attachmentId\": \"trust-attachment-issuer-00000000-0000-4000-8000-000000000000-tenant\",\n      \"domainId\": \"trust-domain-issuer-00000000-0000-4000-8000-000000000000\",\n      \"ordinal\": 0\n    }\n  ]\n}",
                   "_postman_previewlanguage": "json"
                 }
               ]
@@ -2099,6 +2006,159 @@
                       "pm.expect(result.authorizationServerId).to.eql(pm.collectionVariables.get('hostedAuthorizationServerId'));"
                     ]
                   }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "08 Enable shared Azure provider (optional)",
+          "description": "Run after the platform operator offers the vault in folder 04. Use the tenant application OAuth token. Copy the offered providerId to tenantAzureProviderId before registering external references. Sharing does not grant authority over other tenants or platform keys.",
+          "item": [
+            {
+              "name": "05 List platform KMSes offered to the tenant",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/shared-providers",
+                "description": "Lists the platform KMSes this tenant may enable. The offer carries presentation and fulfillment only; the platform KMS configuration and credentials are never part of it.",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Request succeeded', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "*/*"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"providers\": [\n    {\n      \"providerId\": \"walkthrough-platform-00000000-0000-4000-8000-000000000000\",\n      \"fulfillment\": \"SHARED_INSTANCE\",\n      \"kind\": \"SOFTWARE\",\n      \"displayName\": \"Developer journey platform software KMS\",\n      \"enabled\": false,\n      \"suggestedDefault\": false,\n      \"declaredByDeployment\": false,\n      \"credentialFromDeployment\": false\n    }\n  ]\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "06 Enable the offered platform KMS",
+              "request": {
+                "method": "POST",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/shared-providers/{{platformAzureProviderId}}:enable",
+                "description": "The tenant takes up the shared-instance offer. The typed provider resource and credentials remain platform-owned; only this tenant's entitlement and tenant-scoped reference namespace become active.",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Request succeeded', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "POST",
+                    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/kms/shared-providers/walkthrough-platform-00000000-0000-4000-8000-000000000000:enable",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "*/*"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"providerId\": \"walkthrough-platform-00000000-0000-4000-8000-000000000000\",\n  \"fulfillment\": \"SHARED_INSTANCE\",\n  \"kind\": \"SOFTWARE\",\n  \"displayName\": \"Developer journey platform software KMS\",\n  \"enabled\": true,\n  \"suggestedDefault\": false,\n  \"declaredByDeployment\": false,\n  \"credentialFromDeployment\": false\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "09 List runtime KMS providers",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantKmsApiBaseUrl}}/providers",
+                "description": "Lists the providers the tenant reaches on the runtime KMS REST API. The admin console joins this list to the management-plane resource list on providerId, so the two planes must agree on that identifier exactly, and the runtime plane must never answer with the krh_ management handle.",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Request succeeded', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/kms/v1/providers",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "*/*"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"providers\": [\n    {\n      \"providerId\": \"default\",\n      \"type\": \"SOFTWARE\",\n      \"displayName\": \"Software KMS\",\n      \"ownership\": \"TENANT\",\n      \"sharedFromPlatform\": false,\n      \"isDefault\": true\n    }\n  ]\n}",
+                  "_postman_previewlanguage": "json"
                 }
               ]
             }
@@ -8660,1000 +8720,6 @@
           "event": []
         },
         {
-          "name": "23 Trust Domains and Trust Lists",
-          "description": "Trust Domains V2: domains and anchors as evidence, admission classes as what that evidence may answer, attachments as who uses it, eligibility grants as the governance cap, and the ISO 18013-5 Annex C VICAL path. Runs after tenant onboarding because it starts from the seeded issuer trust domain. The trust list and LoTE source requests show how a list you publish yourself, in ETSI TS 119 612 or TS 119 602 form, is registered as a source the domain consumes.\n\nDocumentation: https://docs.sphereon.com/edk/admin-console/guides/trust-domains",
-          "item": [
-            {
-              "name": "01 List trust domains",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains",
-                "description": "Reads the tenant trust-domain inventory. Onboarding seeds one issuer trust domain, so an empty list here means the sample-data seeder did not run or failed.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('trust domains listed', () => pm.response.to.have.status(200));",
-                      "const items = pm.response.json().items || [];",
-                      "pm.test('the onboarding-seeded issuer trust domain exists', () => pm.expect(items.length).to.be.above(0));",
-                      "const seeded = items.find((d) => /issuer trust/i.test(d.displayName)) || items[0];",
-                      "pm.collectionVariables.set('trustDomainId', seeded.domainId);",
-                      "pm.collectionVariables.set('trustDomainVersion', String(seeded.version));",
-                      "pm.test('seeded domain is active', () => pm.expect(seeded.status).to.eql('ACTIVE'));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"items\": [\n    {\n      \"domainId\": \"trust-domain-issuer-00000000-0000-4000-8000-000000000000\",\n      \"displayName\": \"Acme Corporation issuer trust\",\n      \"description\": \"Issuer material provisioned for Acme Corporation\",\n      \"status\": \"ACTIVE\",\n      \"version\": 1,\n      \"createdAt\": \"2026-01-01T00:00:00Z\",\n      \"updatedAt\": \"2026-01-01T00:00:00Z\"\n    }\n  ]\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "02 List anchors of the seeded domain",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{trustDomainId}}/anchors",
-                "description": "Each entry pairs the stored anchor with an enforcement-safe identifier summary. The seeder creates one anchor per evidence mechanism from the issuer key material.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('anchors listed', () => pm.response.to.have.status(200));",
-                      "const items = pm.response.json().items || [];",
-                      "pm.test('seeded anchors present', () => pm.expect(items.length).to.be.above(0));",
-                      "const mechanisms = items.map((i) => i.anchor.evidenceMechanism);",
-                      "pm.test('issuer DID anchor seeded', () => pm.expect(mechanisms).to.include('DID'));",
-                      "const did = items.find((i) => i.anchor.evidenceMechanism === 'DID');",
-                      "pm.collectionVariables.set('trustAnchorId', did.anchor.anchorId);",
-                      "pm.collectionVariables.set('trustAnchorVersion', String(did.anchor.version));",
-                      "pm.collectionVariables.set('trustIdentityIdentifierId', did.anchor.identityIdentifierId);",
-                      "pm.test('seeded anchors are tenant-produced material', () => pm.expect(did.anchor.origin).to.eql('TENANT_PUBLIC'));",
-                      "pm.test('issuer X.509 anchor seeded', () => pm.expect(mechanisms).to.include('X509'));",
-                      "const x509 = items.find((i) => i.anchor.evidenceMechanism === 'X509');",
-                      "pm.collectionVariables.set('trustX509IdentityIdentifierId', x509.anchor.identityIdentifierId);"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/trust-domain-issuer-00000000-0000-4000-8000-000000000000/anchors",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"items\": [\n    {\n      \"anchor\": {\n        \"anchorId\": \"trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did\",\n        \"domainId\": \"trust-domain-issuer-00000000-0000-4000-8000-000000000000\",\n        \"identityIdentifierId\": \"00000000-0000-4000-8000-000000000000\",\n        \"evidenceMechanism\": \"DID\",\n        \"origin\": \"TENANT_PUBLIC\",\n        \"status\": \"ACTIVE\",\n        \"metadata\": {\n          \"source\": \"tenant-onboarding\",\n          \"productRole\": \"issuer-did\"\n        },\n        \"version\": 2,\n        \"createdAt\": \"2026-01-01T00:00:00Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00Z\"\n      },\n      \"identifier\": {\n        \"anchorId\": \"trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did\",\n        \"identityIdentifierId\": \"00000000-0000-4000-8000-000000000000\",\n        \"resolved\": false\n      }\n    },\n    {\n      \"anchor\": {\n        \"anchorId\": \"trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-jwk\",\n        \"domainId\": \"trust-domain-issuer-00000000-0000-4000-8000-000000000000\",\n        \"identityIdentifierId\": \"00000000-0000-4000-8000-000000000000\",\n        \"evidenceMechanism\": \"JWK\",\n        \"origin\": \"TENANT_PUBLIC\",\n        \"status\": \"ACTIVE\",\n        \"metadata\": {\n          \"source\": \"tenant-onboarding\",\n          \"productRole\": \"issuer-metadata-signing\"\n        },\n        \"version\": 2,\n        \"createdAt\": \"2026-01-01T00:00:00Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00Z\"\n      },\n      \"identifier\": {\n        \"anchorId\": \"trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-jwk\",\n        \"identityIdentifierId\": \"00000000-0000-4000-8000-000000000000\",\n        \"resolved\": false\n      }\n    },\n    {\n      \"anchor\": {\n        \"anchorId\": \"trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-x509\",\n        \"domainId\": \"trust-domain-issuer-00000000-0000-4000-8000-000000000000\",\n        \"identityIdentifierId\": \"00000000-0000-4000-8000-000000000000\",\n        \"evidenceMechanism\": \"X509\",\n        \"origin\": \"TENANT_PUBLIC\",\n        \"status\": \"ACTIVE\",\n        \"metadata\": {\n          \"source\": \"tenant-onboarding\",\n          \"productRole\": \"issuer-certificate\"\n        },\n        \"version\": 2,\n        \"createdAt\": \"2026-01-01T00:00:00Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00Z\"\n      },\n      \"identifier\": {\n        \"anchorId\": \"trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-x509\",\n        \"identityIdentifierId\": \"00000000-0000-4000-8000-000000000000\",\n        \"resolved\": false\n      }\n    }\n  ]\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "03 List admissions of the issuer anchor",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{trustDomainId}}/anchors/{{trustAnchorId}}/admissions",
-                "description": "Membership in a domain is not admission. An anchor answers a usage only when it holds that usage admission class, so an empty list here would mean the anchor is inert.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('admissions listed', () => pm.response.to.have.status(200));",
-                      "const items = pm.response.json().items || [];",
-                      "pm.test('issuer anchor is admitted as CREDENTIAL_ISSUER', () =>",
-                      "  pm.expect(items.map((a) => a.admissionClass)).to.include('CREDENTIAL_ISSUER'));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/trust-domain-issuer-00000000-0000-4000-8000-000000000000/anchors/trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did/admissions",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"items\": [\n    {\n      \"anchorId\": \"trust-anchor-issuer-00000000-0000-4000-8000-000000000000-issuer-did\",\n      \"admissionClass\": \"CREDENTIAL_ISSUER\"\n    }\n  ]\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "04 Read the tenant issuer-trust attachment",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/attachments/TENANT/{{tenantId}}/CREDENTIAL_ISSUER_TRUST",
-                "description": "The tenant fallback is an ordinary attachment. A tenant with none fails closed on every credential-issuer decision, which is the state a brand-new tenant starts in.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('tenant attachment returned', () => pm.response.to.have.status(200));",
-                      "const body = pm.response.json();",
-                      "pm.test('tenant issuer trust is fail closed', () => pm.expect(body.attachment.policy.mode).to.eql('FAIL_CLOSED'));",
-                      "pm.test('tenant attachment selects the seeded domain', () =>",
-                      "  pm.expect(body.domains.map((d) => d.domainId)).to.include(pm.collectionVariables.get('trustDomainId')));",
-                      "pm.test('domain ordinals are contiguous from zero', () =>",
-                      "  pm.expect(body.domains.map((d) => d.order !== undefined ? d.order : d.ordinal)).to.eql(body.domains.map((_, i) => i)));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/trust-domain/v1/attachments/TENANT/00000000-0000-4000-8000-000000000000/CREDENTIAL_ISSUER_TRUST",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"attachment\": {\n    \"attachmentId\": \"trust-attachment-issuer-00000000-0000-4000-8000-000000000000-tenant\",\n    \"consumerKind\": \"TENANT\",\n    \"consumerId\": \"00000000-0000-4000-8000-000000000000\",\n    \"usage\": \"CREDENTIAL_ISSUER_TRUST\",\n    \"policy\": {\n      \"type\": \"IDENTITY_ADMISSION\",\n      \"mode\": \"FAIL_CLOSED\",\n      \"walletEvidencePolicy\": \"NONE\"\n    },\n    \"version\": 1,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\"\n  },\n  \"domains\": [\n    {\n      \"attachmentId\": \"trust-attachment-issuer-00000000-0000-4000-8000-000000000000-tenant\",\n      \"domainId\": \"trust-domain-issuer-00000000-0000-4000-8000-000000000000\",\n      \"ordinal\": 0\n    }\n  ]\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "05 Read the verifier eligibility grant",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/eligibility/OID4VP_VERIFIER/CREDENTIAL_ISSUER_TRUST",
-                "description": "The grant caps which domains a verifier may select. It is governance, not selection, and is checked only against non-tenant attachments.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('eligibility grant returned', () => pm.response.to.have.status(200));",
-                      "const items = pm.response.json().items || [];",
-                      "const eligible = items.flatMap((g) => g.eligibleDomainIds || []);",
-                      "pm.test('seeded domain is eligible for verifiers', () =>",
-                      "  pm.expect(eligible).to.include(pm.collectionVariables.get('trustDomainId')));",
-                      "pm.collectionVariables.set('trustEligibilityVersion', String(items[0] ? items[0].version : 1));",
-                      "pm.collectionVariables.set('trustEligibilityGrantId', items[0] ? items[0].grantId : 'grant-verifier-issuer-trust');",
-                      "pm.collectionVariables.set('trustEligibleDomainIds', JSON.stringify(eligible));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/trust-domain/v1/eligibility/OID4VP_VERIFIER/CREDENTIAL_ISSUER_TRUST",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"items\": [\n    {\n      \"grantId\": \"trust-eligibility-issuer-00000000-0000-4000-8000-000000000000-verifier\",\n      \"subjectConsumerKind\": \"OID4VP_VERIFIER\",\n      \"usage\": \"CREDENTIAL_ISSUER_TRUST\",\n      \"eligibleDomainIds\": [\n        \"trust-domain-issuer-00000000-0000-4000-8000-000000000000\"\n      ],\n      \"version\": 1\n    }\n  ]\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "06 List consumers of the seeded domain",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{trustDomainId}}/consumers",
-                "description": "Reverse lookup used before disabling or deleting a domain. There is no pointer stored on the domain; this is a query over attachments.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "const detail = () => pm.response.code + ' ' + pm.response.text();",
-                      "pm.test('consumers listed', () => pm.expect(pm.response.code, detail()).to.eql(200));",
-                      "const items = pm.response.json().items || [];",
-                      "pm.test('the tenant consumes the seeded domain', () =>",
-                      "  pm.expect(items.map((c) => c.consumerKind)).to.include('TENANT'));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/trust-domain-issuer-00000000-0000-4000-8000-000000000000/consumers",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"items\": [\n    {\n      \"consumerKind\": \"OID4VP_VERIFIER\",\n      \"consumerId\": \"acme\",\n      \"usage\": \"CREDENTIAL_ISSUER_TRUST\",\n      \"attachmentId\": \"trust-attachment-issuer-00000000-0000-4000-8000-000000000000-verifier\"\n    },\n    {\n      \"consumerKind\": \"TENANT\",\n      \"consumerId\": \"00000000-0000-4000-8000-000000000000\",\n      \"usage\": \"CREDENTIAL_ISSUER_TRUST\",\n      \"attachmentId\": \"trust-attachment-issuer-00000000-0000-4000-8000-000000000000-tenant\"\n    }\n  ]\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "07 Create a second trust domain",
-              "request": {
-                "method": "POST",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains",
-                "description": "New domains start as DRAFT. A draft domain can be attached but never resolves, because resolution requires ACTIVE.",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"displayName\": \"Postman mdoc VICAL domain\",\n  \"description\": \"Created by the customer release gate to exercise attachments, eligibility and mdoc VICAL.\"\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('domain created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
-                      "const d = pm.response.json();",
-                      "pm.collectionVariables.set('vicalDomainId', d.domainId);",
-                      "pm.collectionVariables.set('vicalDomainVersion', String(d.version));",
-                      "pm.test('new domains start as DRAFT', () => pm.expect(d.status).to.eql('DRAFT'));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "POST",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains",
-                    "header": [
-                      {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                      },
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ],
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"displayName\": \"Postman mdoc VICAL domain\",\n  \"description\": \"Created by the customer release gate to exercise attachments, eligibility and mdoc VICAL.\"\n}"
-                    }
-                  },
-                  "status": "Created",
-                  "code": 201,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"displayName\": \"Postman mdoc VICAL domain\",\n  \"description\": \"Created by the customer release gate to exercise attachments, eligibility and mdoc VICAL.\",\n  \"status\": \"DRAFT\",\n  \"version\": 1,\n  \"createdAt\": \"2026-01-01T00:00:00Z\",\n  \"updatedAt\": \"2026-01-01T00:00:00Z\"\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "08 Activate the second trust domain",
-              "request": {
-                "method": "PUT",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}",
-                "description": "Mutations are optimistically concurrent: the current version goes in If-Match and a stale value returns 412.",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "If-Match",
-                    "value": "\"{{vicalDomainVersion}}\""
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"domainId\": \"{{vicalDomainId}}\",\n  \"displayName\": \"Postman mdoc VICAL domain\",\n  \"status\": \"ACTIVE\",\n  \"version\": {{vicalDomainVersion}}\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('domain activated', () => pm.response.to.have.status(200));",
-                      "const d = pm.response.json();",
-                      "pm.test('status is ACTIVE', () => pm.expect(d.status).to.eql('ACTIVE'));",
-                      "pm.collectionVariables.set('vicalDomainVersion', String(d.version));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "PUT",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000",
-                    "header": [
-                      {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                      },
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ],
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"displayName\": \"Postman mdoc VICAL domain\",\n  \"status\": \"ACTIVE\",\n  \"version\": 1\n}"
-                    }
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"displayName\": \"Postman mdoc VICAL domain\",\n  \"status\": \"ACTIVE\",\n  \"version\": 2,\n  \"createdAt\": \"2026-01-01T00:00:00Z\",\n  \"updatedAt\": \"2026-01-01T00:00:00Z\"\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "11 Create a VICAL signer anchor",
-              "request": {
-                "method": "POST",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/anchors",
-                "description": "An anchor references public evidence by identity-identifier id rather than carrying raw material. This reuses the identifier the onboarding seeder already materialized. A VICAL is a COSE_Sign1 over an X.509 chain, so its signer anchor carries X.509 evidence; the seeded issuer certificate identifier stands in for the VICAL provider here.",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"domainId\": \"{{vicalDomainId}}\",\n  \"identityIdentifierId\": \"{{trustX509IdentityIdentifierId}}\",\n  \"evidenceMechanism\": \"X509\",\n  \"origin\": \"IMPORTED\",\n  \"status\": \"ACTIVE\",\n  \"metadata\": {\n    \"source\": \"customer-release-gate\",\n    \"productRole\": \"mdoc-vical-signer\"\n  }\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('anchor created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
-                      "const a = pm.response.json();",
-                      "pm.collectionVariables.set('vicalAnchorId', a.anchorId);",
-                      "pm.collectionVariables.set('vicalAnchorVersion', String(a.version));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "POST",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors",
-                    "header": [
-                      {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                      },
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ],
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"identityIdentifierId\": \"00000000-0000-4000-8000-000000000000\",\n  \"evidenceMechanism\": \"X509\",\n  \"origin\": \"IMPORTED\",\n  \"status\": \"ACTIVE\",\n  \"metadata\": {\n    \"source\": \"customer-release-gate\",\n    \"productRole\": \"mdoc-vical-signer\"\n  }\n}"
-                    }
-                  },
-                  "status": "Created",
-                  "code": 201,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"anchorId\": \"00000000-0000-4000-8000-000000000000\",\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"identityIdentifierId\": \"00000000-0000-4000-8000-000000000000\",\n  \"evidenceMechanism\": \"X509\",\n  \"origin\": \"IMPORTED\",\n  \"status\": \"ACTIVE\",\n  \"metadata\": {\n    \"source\": \"customer-release-gate\",\n    \"productRole\": \"mdoc-vical-signer\"\n  },\n  \"version\": 1,\n  \"createdAt\": \"2026-01-01T00:00:00Z\",\n  \"updatedAt\": \"2026-01-01T00:00:00Z\"\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "13 Admit the anchor as MDOC_VICAL_SIGNER",
-              "request": {
-                "method": "PUT",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/anchors/{{vicalAnchorId}}/admissions/MDOC_VICAL_SIGNER",
-                "description": "Admission is a separate decision from membership. MDOC_VICAL_SIGNER only lets the anchor verify a VICAL signature; it does not make it a credential issuer.",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "If-Match",
-                    "value": "\"{{vicalAnchorVersion}}\""
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"anchorId\": \"{{vicalAnchorId}}\",\n  \"admissionClass\": \"MDOC_VICAL_SIGNER\"\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "const detail = () => pm.response.code + ' ' + pm.response.text();",
-                      "pm.test('admission granted', () => pm.expect(pm.response.code, detail()).to.eql(200));",
-                      "pm.test('admission class echoed', () => pm.expect(pm.response.json().admissionClass).to.eql('MDOC_VICAL_SIGNER'));"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "PUT",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors/00000000-0000-4000-8000-000000000000/admissions/MDOC_VICAL_SIGNER",
-                    "header": [
-                      {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                      },
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ],
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"anchorId\": \"00000000-0000-4000-8000-000000000000\",\n  \"admissionClass\": \"MDOC_VICAL_SIGNER\"\n}"
-                    }
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"anchorId\": \"00000000-0000-4000-8000-000000000000\",\n  \"admissionClass\": \"MDOC_VICAL_SIGNER\"\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "15 Configure the VICAL source",
-              "request": {
-                "method": "PUT",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/anchors/{{vicalAnchorId}}/mdoc-vical",
-                "description": "The signer anchor now holds MDOC_VICAL_SIGNER, so the same body that was refused in step 12 is accepted.",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"url\": \"https://vical.example.com/vical.cbor\",\n  \"signerAnchorIds\": [\n    \"{{vicalAnchorId}}\"\n  ],\n  \"issuerAnchorIds\": [],\n  \"requiredCertificateProfiles\": [\n    \"iso18013-5-iaca\"\n  ],\n  \"enabled\": true\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "const detail = () => pm.response.code + ' ' + pm.response.text();",
-                      "pm.test('VICAL configured', () => pm.expect(pm.response.code, detail()).to.eql(200));",
-                      "const v = pm.response.json();",
-                      "pm.test('the source round-trips', () => {",
-                      "  pm.expect(v.source.url).to.eql('https://vical.example.com/vical.cbor');",
-                      "  pm.expect(v.source.signerAnchorIds).to.include(pm.collectionVariables.get('vicalAnchorId'));",
-                      "  pm.expect(v.source.enabled).to.be.true;",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "PUT",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/anchors/00000000-0000-4000-8000-000000000000/mdoc-vical",
-                    "header": [
-                      {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                      },
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ],
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"url\": \"https://vical.example.com/vical.cbor\",\n  \"signerAnchorIds\": [\n    \"00000000-0000-4000-8000-000000000000\"\n  ],\n  \"issuerAnchorIds\": [],\n  \"requiredCertificateProfiles\": [\n    \"iso18013-5-iaca\"\n  ],\n  \"enabled\": true\n}"
-                    }
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"anchorId\": \"00000000-0000-4000-8000-000000000000\",\n  \"source\": {\n    \"url\": \"https://vical.example.com/vical.cbor\",\n    \"signerAnchorIds\": [\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"issuerAnchorIds\": [],\n    \"requiredCertificateProfiles\": [\n      \"iso18013-5-iaca\"\n    ],\n    \"enabled\": true\n  }\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "17a Register a published trust list as a trust source",
-              "request": {
-                "method": "PUT",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/trust-sources/{{customerTrustListSourceId}}",
-                "description": "Registers a trust list you publish yourself (ETSI TS 119 612 structure, signed by your trust-list signing certificate) as a source of the second trust domain. signerAnchorIds names the anchor holding the certificate that signs the list; egressPolicy restricts where the platform may fetch from and how large the artifact may be. If-Match \"*\" registers a source that does not exist yet.",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json",
-                    "type": "text"
-                  },
-                  {
-                    "key": "If-Match",
-                    "value": "*",
-                    "type": "text"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"url\": \"{{customerTrustListUrl}}\",\n  \"format\": \"application/xml\",\n  \"schemeIdentity\": \"{{customerTrustListSchemeIdentity}}\",\n  \"signerAnchorIds\": [\n    \"{{vicalAnchorId}}\"\n  ],\n  \"egressPolicy\": {\n    \"allowedHosts\": [\n      \"{{customerTrustListHost}}\"\n    ],\n    \"maxArtifactBytes\": 5242880\n  }\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "event": [
-                {
-                  "listen": "prerequest",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "const url = String(pm.variables.get('customerTrustListUrl') || '');",
-                      "pm.collectionVariables.set('customerTrustListHost', url.replace(/^https:\\/\\//, '').split('/')[0]);"
-                    ]
-                  }
-                },
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('trust list source registered', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.be.oneOf([200,201]));",
-                      "const source = pm.response.json();",
-                      "pm.test('the source belongs to the domain and is a custom TS 119 612 list', () => {",
-                      "  pm.expect(source.sourceId, 'source id').to.eql(pm.variables.get('customerTrustListSourceId'));",
-                      "  pm.expect(source.domainId, 'domain id').to.eql(pm.collectionVariables.get('vicalDomainId'));",
-                      "  pm.expect(source.kind, 'kind').to.eql('ETSI_119612_CUSTOM_LOTL');",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "PUT",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/trust-sources/customer-trust-list",
-                    "header": [
-                      {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                      },
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ],
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"url\": \"https://trust.example.com/trust-list.xml\",\n  \"format\": \"application/xml\",\n  \"schemeIdentity\": \"https://trust.example.com/trust-list-scheme\",\n  \"signerAnchorIds\": [\n    \"00000000-0000-4000-8000-000000000000\"\n  ],\n  \"egressPolicy\": {\n    \"allowedHosts\": [\n      \"trust.example.com\"\n    ],\n    \"maxArtifactBytes\": 5242880\n  }\n}"
-                    }
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"sourceId\": \"customer-trust-list\",\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"kind\": \"ETSI_119612_CUSTOM_LOTL\",\n  \"revision\": 1,\n  \"state\": \"DRAFT\",\n  \"url\": \"https://trust.example.com/trust-list.xml\",\n  \"format\": \"application/xml\",\n  \"schemeIdentity\": \"https://trust.example.com/trust-list-scheme\",\n  \"bootstrap\": {\n    \"kind\": \"EXPLICIT_SIGNER_ANCHORS\",\n    \"identity\": \"CUSTOM_DOMAIN_SIGNER_ANCHORS\"\n  },\n  \"signerAnchorIds\": [\n    \"00000000-0000-4000-8000-000000000000\"\n  ],\n  \"egressPolicy\": {\n    \"allowedHosts\": [\n      \"trust.example.com\"\n    ],\n    \"maxArtifactBytes\": 5242880\n  },\n  \"managedBy\": \"edk-walkthrough-tenant-service\",\n  \"managedAt\": \"2026-01-01T00:00:00Z\"\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "17b Read the trust list source",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/trust-sources/{{customerTrustListSourceId}}",
-                "description": "Reads the registered source. activeRevision stays empty until a fetched revision has been validated and activated.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('trust list source read', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.be.oneOf([200]));",
-                      "const source = pm.response.json();",
-                      "pm.test('the source reads back as registered', () => {",
-                      "  pm.expect(source.sourceId, 'source id').to.eql(pm.variables.get('customerTrustListSourceId'));",
-                      "  pm.expect(source.enabled, 'enabled').to.be.a('boolean');",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/trust-sources/customer-trust-list",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"sourceId\": \"customer-trust-list\",\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"kind\": \"ETSI_119612_CUSTOM_LOTL\",\n  \"enabled\": true,\n  \"managedBy\": \"edk-walkthrough-tenant-service\",\n  \"managedAt\": \"2026-01-01T00:00:00Z\",\n  \"createdAt\": \"2026-01-01T00:00:00Z\",\n  \"updatedAt\": \"2026-01-01T00:00:00Z\"\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "17c Register a list of trusted entities (LoTE) source",
-              "request": {
-                "method": "PUT",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/lote-sources/{{customerLoteSourceId}}",
-                "description": "Registers a published list of trusted entities (TS 119 602 LoTE) as a remote source of the domain. The call creates the first candidate revision of the source and returns that revision; the source itself, with the etag later mutations must present, is read in the next request.",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json",
-                    "type": "text"
-                  },
-                  {
-                    "key": "If-Match",
-                    "value": "*",
-                    "type": "text"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"sourceKind\": \"REMOTE\",\n  \"profile\": \"PUB_EAA_PROVIDER\",\n  \"url\": \"{{customerLoteUrl}}\",\n  \"verificationTrustAnchorIds\": [\n    \"{{vicalAnchorId}}\"\n  ],\n  \"allowedHosts\": [\n    \"{{customerLoteHost}}\"\n  ],\n  \"maxArtifactBytes\": 5242880,\n  \"enabled\": true\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "event": [
-                {
-                  "listen": "prerequest",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "const url = String(pm.variables.get('customerLoteUrl') || '');",
-                      "pm.collectionVariables.set('customerLoteHost', url.replace(/^https:\\/\\//, '').split('/')[0]);"
-                    ]
-                  }
-                },
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('LoTE source registered', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.be.oneOf([200,201]));",
-                      "const revision = pm.response.json();",
-                      "pm.test('the registration returns the first candidate revision of the source', () => {",
-                      "  pm.expect(revision.sourceId, 'source id').to.eql(pm.variables.get('customerLoteSourceId'));",
-                      "  pm.expect(revision.domainId, 'domain id').to.eql(pm.collectionVariables.get('vicalDomainId'));",
-                      "  pm.expect(revision.profile, 'profile').to.eql('PUB_EAA_PROVIDER');",
-                      "  pm.expect(revision.revision, 'revision number').to.eql(1);",
-                      "  pm.expect(revision.etag, 'revision etag').to.be.a('string').and.not.empty;",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "PUT",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/lote-sources/customer-lote",
-                    "header": [
-                      {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                      },
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ],
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"sourceKind\": \"REMOTE\",\n  \"profile\": \"PUB_EAA_PROVIDER\",\n  \"url\": \"https://trust.example.com/lote.jws\",\n  \"verificationTrustAnchorIds\": [\n    \"00000000-0000-4000-8000-000000000000\"\n  ],\n  \"allowedHosts\": [\n    \"trust.example.com\"\n  ],\n  \"maxArtifactBytes\": 5242880,\n  \"enabled\": true\n}"
-                    }
-                  },
-                  "status": "Created",
-                  "code": 201,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"sourceId\": \"customer-lote\",\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"revision\": 1,\n  \"profile\": \"PUB_EAA_PROVIDER\",\n  \"url\": \"https://trust.example.com/lote.jws\",\n  \"verificationTrustAnchorIds\": [\n    \"00000000-0000-4000-8000-000000000000\"\n  ],\n  \"allowedHosts\": [\n    \"trust.example.com\"\n  ],\n  \"maxArtifactBytes\": 5242880,\n  \"state\": \"CANDIDATE\",\n  \"etag\": \"\\\"remote-lote-revision-1-candidate-188040643\\\"\",\n  \"managedBy\": \"edk-walkthrough-tenant-service\",\n  \"managedAt\": \"2026-01-01T00:00:00Z\"\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            },
-            {
-              "name": "17d Read the LoTE source",
-              "request": {
-                "method": "GET",
-                "url": "{{tenantTrustDomainApiBaseUrl}}/domains/{{vicalDomainId}}/lote-sources/{{customerLoteSourceId}}",
-                "description": "Reads the LoTE source. Its etag is the If-Match value for the next change to the source (enable, disable, replace); revisions carry their own etags.",
-                "header": []
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test('LoTE source read', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.be.oneOf([200]));",
-                      "const source = pm.response.json();",
-                      "pm.test('the source carries the registered profile and an etag for the next mutation', () => {",
-                      "  pm.expect(source.sourceId, 'source id').to.eql(pm.variables.get('customerLoteSourceId'));",
-                      "  pm.expect(source.profile, 'profile').to.eql('PUB_EAA_PROVIDER');",
-                      "  pm.expect(source.etag, 'source etag').to.be.a('string').and.not.empty;",
-                      "});",
-                      "pm.collectionVariables.set('customerLoteEtag', source.etag);"
-                    ]
-                  }
-                }
-              ],
-              "response": [
-                {
-                  "name": "Previously captured response (sanitized)",
-                  "originalRequest": {
-                    "method": "GET",
-                    "url": "https://acme.example.com/api/trust-domain/v1/domains/00000000-0000-4000-8000-000000000000/lote-sources/customer-lote",
-                    "header": [
-                      {
-                        "key": "Authorization",
-                        "value": "Bearer <token>"
-                      },
-                      {
-                        "key": "Accept",
-                        "value": "*/*"
-                      }
-                    ]
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "header": [
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    }
-                  ],
-                  "body": "{\n  \"sourceId\": \"customer-lote\",\n  \"domainId\": \"00000000-0000-4000-8000-000000000000\",\n  \"profile\": \"PUB_EAA_PROVIDER\",\n  \"enabled\": true,\n  \"managedBy\": \"edk-walkthrough-tenant-service\",\n  \"managedAt\": \"2026-01-01T00:00:00Z\",\n  \"etag\": \"\\\"remote-lote-source-1-true-0\\\"\"\n}",
-                  "_postman_previewlanguage": "json"
-                }
-              ]
-            }
-          ],
-          "event": []
-        },
-        {
           "name": "24 KMS Runtime API",
           "description": "The runtime KMS surface a tenant integrates against: discover providers, then generate, read, use and remove a key by provider id and alias. Keys are addressed by the alias the tenant chose, never by a server-issued key id, so the same request works across deployments. Requests run under the tenant service token (folder 04); the tenant KMS API rejects the platform operator token because its audience is the platform, not the tenant KMS.\n\nDocumentation: https://docs.sphereon.com/edk/admin-console/guides/keys-and-did",
           "item": [
@@ -11753,46 +10819,6 @@
       "description": "Provider id of the cloud KMS resource created last in 07 / 01; 07 / 01 / 07 makes it the tenant default."
     },
     {
-      "key": "customerTrustListSourceId",
-      "value": "customer-trust-list",
-      "description": "Source id you choose for your published TS 119 612 trust list."
-    },
-    {
-      "key": "customerTrustListUrl",
-      "value": "https://trust.example.com/trust-list.xml",
-      "description": "HTTPS URL of the trust list you publish. Replace with your own; the platform fetches it on validation and refresh."
-    },
-    {
-      "key": "customerTrustListSchemeIdentity",
-      "value": "https://trust.example.com/trust-list-scheme",
-      "description": "Scheme identity URI your trust list declares."
-    },
-    {
-      "key": "customerTrustListHost",
-      "value": "",
-      "description": "Host of customerTrustListUrl, used as the egress allow-list. Derived by 23 / 17a."
-    },
-    {
-      "key": "customerLoteSourceId",
-      "value": "customer-lote",
-      "description": "Source id you choose for your published list of trusted entities."
-    },
-    {
-      "key": "customerLoteUrl",
-      "value": "https://trust.example.com/lote.jws",
-      "description": "HTTPS URL of the JAdES-signed list of trusted entities you publish. Replace with your own."
-    },
-    {
-      "key": "customerLoteHost",
-      "value": "",
-      "description": "Host of customerLoteUrl, used as the egress allow-list. Derived by 23 / 17c."
-    },
-    {
-      "key": "customerLoteEtag",
-      "value": "",
-      "description": "Etag of the LoTE source as last read; present it as If-Match on the next mutation of the source."
-    },
-    {
       "key": "bitstringStatusListId",
       "value": "",
       "description": "Captured from the response of '12 Status Lists / Bitstring VCDM / 01 Create the bitstring status list'."
@@ -12254,44 +11280,9 @@
       "description": "Captured from the response of '16 Issue with Transaction Code / 03 Fetch transaction-code OID4VCI metadata'."
     },
     {
-      "key": "trustAnchorId",
-      "value": "",
-      "description": "Captured from the response of '23 Trust Domains and Trust Lists / 02 List anchors of the seeded domain'."
-    },
-    {
-      "key": "trustDomainId",
-      "value": "",
-      "description": "Captured from the response of '23 Trust Domains and Trust Lists / 01 List trust domains'."
-    },
-    {
-      "key": "trustX509IdentityIdentifierId",
-      "value": "",
-      "description": "Captured from the response of '23 Trust Domains and Trust Lists / 02 List anchors of the seeded domain'."
-    },
-    {
       "key": "verifyCorrelationId",
       "value": "",
       "description": "Captured from the response of '22 Verification / 01 Create verification request'."
-    },
-    {
-      "key": "vicalAnchorId",
-      "value": "",
-      "description": "Captured from the response of '23 Trust Domains and Trust Lists / 11 Create a VICAL signer anchor'."
-    },
-    {
-      "key": "vicalAnchorVersion",
-      "value": "",
-      "description": "Captured from the response of '23 Trust Domains and Trust Lists / 11 Create a VICAL signer anchor'."
-    },
-    {
-      "key": "vicalDomainId",
-      "value": "",
-      "description": "Captured from the response of '23 Trust Domains and Trust Lists / 07 Create a second trust domain'."
-    },
-    {
-      "key": "vicalDomainVersion",
-      "value": "",
-      "description": "Captured from the response of '23 Trust Domains and Trust Lists / 07 Create a second trust domain'."
     },
     {
       "key": "x5cStatusListUri",
