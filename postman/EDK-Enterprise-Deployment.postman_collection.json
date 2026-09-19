@@ -5353,16 +5353,6 @@
             {
               "name": "05 Request EuPid credential",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{walletAccessToken}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "POST",
                 "url": "{{credentialEndpoint}}",
                 "header": [
@@ -5727,16 +5717,6 @@
             {
               "name": "10 Request Mdl credential",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{walletAccessToken}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "POST",
                 "url": "{{credentialEndpoint}}",
                 "header": [
@@ -6178,16 +6158,6 @@
             {
               "name": "06 Issue transaction-code EuPid credential",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{walletAccessToken}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "POST",
                 "url": "{{transactionCredentialEndpoint}}",
                 "header": [
@@ -6688,16 +6658,6 @@
             {
               "name": "06 Request the EmployeeBadge credential",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{walletAccessToken}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "POST",
                 "url": "{{employeeBadgeCredentialEndpoint}}",
                 "header": [
@@ -7330,16 +7290,6 @@
             {
               "name": "06 Request the Membership credential",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{walletAccessToken}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "POST",
                 "url": "{{membershipCredentialEndpoint}}",
                 "header": [
