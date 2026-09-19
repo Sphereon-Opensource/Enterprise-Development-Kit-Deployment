@@ -1548,6 +1548,66 @@
           ]
         },
         {
+          "name": "09 Authorization-server slug contract",
+          "description": "Run this request once before the optional wallet proxy. It proves the external-AS shape is rejected when a hosted slug is supplied.",
+          "item": [
+            {
+              "name": "00 Reject external authorization server with slug",
+              "request": {
+                "method": "POST",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"displayName\": \"Invalid external authorization server with slug\",\n  \"slug\": \"{{externalAuthorizationServerSlug}}\",\n  \"issuer\": \"{{platformUrl}}\",\n  \"deployment\": \"EXTERNAL\",\n  \"expectedCapabilities\": [\"OAUTH2\", \"OIDC\"]\n}"
+                },
+                "description": "Contract guard: EXTERNAL authorization servers are federated upstreams and must not carry a hosted route slug. A hosted wallet proxy uses the slug in request 09 instead."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('external authorization server with slug is rejected', () => pm.expect([400, 422]).to.include(pm.response.code));",
+                      "const body = pm.response.json();",
+                      "pm.expect(JSON.stringify(body)).to.match(/slug|external|deployment/i);"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Verified rejection response (sanitized)",
+                  "originalRequest": {
+                    "method": "POST",
+                    "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"displayName\": \"Invalid external authorization server with slug\",\n  \"slug\": \"{{externalAuthorizationServerSlug}}\",\n  \"issuer\": \"{{platformUrl}}\",\n  \"deployment\": \"EXTERNAL\",\n  \"expectedCapabilities\": [\"OAUTH2\", \"OIDC\"]\n}"
+                    }
+                  },
+                  "status": "Bad Request",
+                  "code": 400,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"code\": \"INVALID_AUTHORIZATION_SERVER\",\n  \"message\": \"External authorization servers cannot have a hosted slug\"\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            }
+          ]
+        },
+        {
           "name": "09 Keycloak wallet proxy (optional)",
           "description": "Create a separate hosted wallet AS. The default tenant AS stays LOCAL_ONLY for administration. In Keycloak register federationClientId as a confidential OIDC client with Standard Flow and the exact redirect https://<tenant>/as/<authorizationServerSlug>/federation/callback. Set keycloakIssuer to the realm issuer and federationClientSecret to its private client secret. Keycloak is an upstream login provider, not the OID4VCI authorization server. Run this folder after resolving issuerId. No teardown follows. If this tenant already registered the same Keycloak issuer, set externalAuthorizationServerId to that resource UUID and skip request 25; request 25a verifies the selected external upstream before binding it. Each issuer is registered once per tenant.\n\nDocumentation: https://docs.sphereon.com/edk/guides/tenant/federation#postman-keycloak-wallet-proxy",
           "item": [
@@ -10618,6 +10678,10 @@
     {
       "key": "authorizationServerSlug",
       "value": "wallet-proxy"
+    },
+    {
+      "key": "externalAuthorizationServerSlug",
+      "value": "platform-upstream"
     },
     {
       "key": "hostedAuthorizationServerId",
