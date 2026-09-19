@@ -84,6 +84,29 @@ otel:
         endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
         protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
 security:
+  # 0.25.0 posture: keep AuthZEN/PDP enforced, but run password/AAL1 login.
+  # Native AAL2/passkey step-up is deferred to post-0.25.0.
+  "profiles.default-required-aal": "aal1"
+  "profiles.default-cross-border-policy": "allow"
+  "commands.default-required-aal": "aal1"
+  commands:
+    commands:
+      "[account-action.http.dispatch]":
+        required-aal: aal1
+      "[account-action.token.resolve]":
+        required-aal: aal1
+      "[account-action.token.complete]":
+        required-aal: aal1
+      "[account-action.passkey.begin]":
+        required-aal: aal1
+      "[account-action.password-change.initiate]":
+        required-aal: aal1
+      "[theme.resolution.resolve]":
+        required-aal: aal1
+      "[auth.sessions.get]":
+        required-aal: aal1
+      "[kms.encryption.decrypt]":
+        required-aal: aal1
   workload-trust-policy:
     trusted_service_ids:
       - service-crypto
