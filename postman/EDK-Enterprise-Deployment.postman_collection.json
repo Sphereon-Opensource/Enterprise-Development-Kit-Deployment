@@ -1564,7 +1564,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"displayName\": \"Invalid external authorization server with slug\",\n  \"slug\": \"{{externalAuthorizationServerSlug}}\",\n  \"issuer\": \"{{platformUrl}}\",\n  \"deployment\": \"EXTERNAL\",\n  \"expectedCapabilities\": [\"OAUTH2\", \"OIDC\"]\n}"
+                  "raw": "{\n  \"displayName\": \"Invalid external authorization server with slug\",\n  \"slug\": \"not-a-hosted-route\",\n  \"issuer\": \"{{keycloakIssuer}}\",\n  \"deployment\": \"EXTERNAL\",\n  \"expectedCapabilities\": [\n    \"OAUTH2\",\n    \"OIDC\"\n  ],\n  \"purposes\": [\n    \"WALLET_LOGIN\"\n  ]\n}"
                 },
                 "description": "Contract guard: EXTERNAL authorization servers are federated upstreams and must not carry a hosted route slug. A hosted wallet proxy uses the slug in request 09 instead."
               },
@@ -1589,7 +1589,7 @@
                     "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers",
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"displayName\": \"Invalid external authorization server with slug\",\n  \"slug\": \"{{externalAuthorizationServerSlug}}\",\n  \"issuer\": \"{{platformUrl}}\",\n  \"deployment\": \"EXTERNAL\",\n  \"expectedCapabilities\": [\"OAUTH2\", \"OIDC\"]\n}"
+                      "raw": "{\n  \"displayName\": \"Invalid external authorization server with slug\",\n  \"slug\": \"not-a-hosted-route\",\n  \"issuer\": \"{{keycloakIssuer}}\",\n  \"deployment\": \"EXTERNAL\",\n  \"expectedCapabilities\": [\n    \"OAUTH2\",\n    \"OIDC\"\n  ],\n  \"purposes\": [\n    \"WALLET_LOGIN\"\n  ]\n}"
                     }
                   },
                   "status": "Bad Request",
@@ -10680,10 +10680,6 @@
       "value": "wallet-proxy"
     },
     {
-      "key": "externalAuthorizationServerSlug",
-      "value": "platform-upstream"
-    },
-    {
       "key": "hostedAuthorizationServerId",
       "value": ""
     },
@@ -11320,6 +11316,11 @@
       "key": "x5cStatusListUri",
       "value": "",
       "description": "Captured from the response of '12 Status Lists / 04a Create X.509 token status list'."
+    },
+    {
+      "key": "keycloakIssuer",
+      "value": "",
+      "type": "string"
     }
   ]
 }

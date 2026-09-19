@@ -300,7 +300,7 @@ secret-management:
     environment:
       enabled: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_ENABLED:true}
       manifest-path: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_PATH:/app/secret-management/deployment/environment.manifest}
-      manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:sha256:9201eaf4b197235f6b35f3e3293f3118a222af82f292057c3664a4bcde020748}
+      manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e}
     kubernetes-mount:
       enabled: false
 # Trust-domain anchor -> identifier materialization source. The platform executes the routed trust
