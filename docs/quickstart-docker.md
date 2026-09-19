@@ -138,6 +138,16 @@ RC1-to-RC4 request therefore runs RC1-to-RC2-to-RC3-to-RC4 so the application
 database migrations execute in release order. Repeating the command is
 idempotent.
 
+For an RC4 deployment upgrading to RC5, use:
+
+```powershell
+..\scripts\upgrade-compose.ps1 -ImageTag 0.25.0-RC5 -InstalledImageTag 0.25.0-RC4
+```
+
+The RC4-to-RC5 compatibility overlay is intentionally empty because RC5
+preserves the RC4 storage contract; it remains explicit so the planner is
+cumulative and repeatable.
+
 Linux/macOS:
 
 ```bash

@@ -16,9 +16,10 @@ assert_plan() {
   local expected_intermediate="$3"
   local expected_auto="$4"
   local expected_intermediate_files="$5"
+  local rc4_to_rc5_values="${6:-}"
 
   edk_plan_known_upgrade_path "$installed" "$target" "0.25.0-rc1-to-0.25.0-rc2.yaml" \
-    "0.25.0-rc2-to-0.25.0-rc3.yaml" "0.25.0-rc3-to-0.25.0-rc4.yaml"
+    "0.25.0-rc2-to-0.25.0-rc3.yaml" "0.25.0-rc3-to-0.25.0-rc4.yaml" "$rc4_to_rc5_values"
 
   [[ "$EDK_INTERMEDIATE_IMAGE_TAG" == "$expected_intermediate" ]] ||
     fail "$installed -> $target intermediate: expected '$expected_intermediate', got '$EDK_INTERMEDIATE_IMAGE_TAG'"
@@ -56,6 +57,8 @@ fi
 assert_plan "0.25.0-RC3" "0.25.0-RC4" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml" ""
 assert_plan "0.25.0-RC3" "0.25.0-RC4-20260831-4" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml" ""
 assert_plan "0.25.0-rc4" "0.25.0-rc4" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml" ""
+assert_plan "0.25.0-RC4" "0.25.0-RC5" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml 0.25.0-rc4-to-0.25.0-rc5.yaml" "" "0.25.0-rc4-to-0.25.0-rc5.yaml"
+assert_plan "0.25.0-RC5" "0.25.0-RC5-build-1" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml 0.25.0-rc4-to-0.25.0-rc5.yaml" "" "0.25.0-rc4-to-0.25.0-rc5.yaml"
 assert_plan "0.25.0-RC2" "0.25.0-RC40" "" "" ""
 
 if edk_plan_known_upgrade_path "0.25.0-RC4" "0.25.0-RC3" "one" "two" "three"; then
@@ -63,6 +66,9 @@ if edk_plan_known_upgrade_path "0.25.0-RC4" "0.25.0-RC3" "one" "two" "three"; th
 fi
 if edk_plan_known_upgrade_path "0.25.0-RC4-20260831-4" "0.25.0-RC3" "one" "two" "three"; then
   fail "RC4 suffix release downgrade must be rejected"
+fi
+if edk_plan_known_upgrade_path "0.25.0-RC5" "0.25.0-RC4" "one" "two" "three" "four"; then
+  fail "RC5 -> RC4 downgrade must be rejected"
 fi
 
 extracted="$(printf '%s\n' '{"global": {"imageTag": "0.25.0-RC1"}, "services": {"platform": {"imageTag": "wrong"}}}' | edk_extract_global_image_tag)"

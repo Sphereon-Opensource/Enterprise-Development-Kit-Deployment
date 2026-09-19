@@ -65,6 +65,13 @@ ALTER ROLE secret_management_runtime
   WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
   PASSWORD :'runtime_password';
 
+-- The secret-management repositories use unqualified table names. Set the
+-- role search path explicitly so a fresh database and an upgraded database
+-- resolve those tables in public instead of inheriting an empty role path.
+ALTER ROLE secret_management_admin SET search_path TO public;
+ALTER ROLE secret_management_tenant_serving SET search_path TO public;
+ALTER ROLE secret_management_runtime SET search_path TO public;
+
 GRANT CONNECT ON DATABASE :"DBNAME"
   TO secret_management_admin, secret_management_tenant_serving, secret_management_runtime;
 GRANT USAGE ON SCHEMA public

@@ -32,6 +32,7 @@ function Get-ReleaseNumber([string]$Tag) {
     # RC30 or RC40 as a supported release.
     if ($normalized -match '^0\.25\.0-RC3(?:$|[-._].+)') { return 3 }
     if ($normalized -match '^0\.25\.0-RC4(?:$|[-._].+)') { return 4 }
+    if ($normalized -match '^0\.25\.0-RC5(?:$|[-._].+)') { return 5 }
     return 0
 }
 
@@ -71,6 +72,20 @@ $targetRelease = Get-ReleaseNumber $ImageTag
 if ($installedRelease -gt 0 -and $targetRelease -gt 0 -and $targetRelease -lt $installedRelease) {
     throw "Refusing unsupported release downgrade: $InstalledImageTag -> $ImageTag"
 }
+
+# Render the exact target configuration before creating a backup or pulling
+# anything. Missing required secrets, invalid overlays, and malformed mounts
+# must fail before this script changes the host. The release-step check below
+# remains because intermediate releases can introduce their own requirements.
+Write-Host "Preflight-validating target Docker Compose configuration for $ImageTag."
+$previousPreflightTag = $env:EDK_TAG
+try {
+    $env:EDK_TAG = $ImageTag
+    Invoke-DockerCompose config --quiet
+} finally {
+    if ($null -eq $previousPreflightTag) { Remove-Item Env:EDK_TAG -ErrorAction SilentlyContinue } else { $env:EDK_TAG = $previousPreflightTag }
+}
+
 $intermediateTag = $null
 if ($installedRelease -eq 1 -and $targetRelease -ge 3) { $intermediateTag = '0.25.0-RC2' }
 

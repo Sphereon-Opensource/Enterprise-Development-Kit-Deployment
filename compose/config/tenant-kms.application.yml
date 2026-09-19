@@ -239,3 +239,39 @@ secret:
         issuer: enterprise-platform
         audience: sphereon-secret-use
         verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+
+# Tenant-KMS owns the local secret execution graph. Keep this deployment
+# declaration explicit even though the platform is the authority for tenant
+# policy and provider registration: satellites do not mount the platform's
+# environment manifest and therefore must disable that source instead of
+# inheriting a manifest digest through Compose environment merging.
+secret-management:
+  egress:
+    allowed-https-ports: 443
+  bootstrap:
+    kek:
+      mode: SOFTWARE_KMS
+      identity: secret-management-bootstrap-kek
+      version: 1
+      kms-provider-id: software
+      idempotency-mac-key: secret-management-idempotency-mac
+  authority:
+    platform-storage:
+      kms-provider-id: software
+      kms-binding-key: platform-secret-storage
+    default-tenant-offering:
+      kms-provider-id: software
+      kms-binding-template: isolated-tenant-secret-storage
+    tenant-policy:
+      allow-tenant-managed-providers: false
+      allow-platform-offerings: false
+      retention-days: 30
+  internal-resolution:
+    expected-audience: enterprise-platform
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
+    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email
+  deployment:
+    environment:
+      enabled: false
+    kubernetes-mount:
+      enabled: false

@@ -232,6 +232,17 @@ services:
       # configuration surface. Credentials and provider instances remain explicit
       # platform-config data; no cloud secret is copied into Compose.
       SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS: ${SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:-true}
+      # Deployment-declared platform-shared Azure Key Vault provider. The
+      # declaration stays inert when KIND is empty; -AzureKms supplies these
+      # coordinates and the manifest resolves the client secret by id.
+      EDK_PLATFORM_KMS_AZURE_KIND: ${EDK_PLATFORM_KMS_AZURE_KIND:-}
+      EDK_PLATFORM_KMS_AZURE_DISPLAY_NAME: ${EDK_PLATFORM_KMS_AZURE_DISPLAY_NAME:-Platform Azure Key Vault}
+      EDK_PLATFORM_KMS_AZURE_VAULT_URI: ${EDK_PLATFORM_KMS_AZURE_VAULT_URI:-}
+      EDK_PLATFORM_KMS_AZURE_TENANT_ID: ${EDK_PLATFORM_KMS_AZURE_TENANT_ID:-}
+      EDK_PLATFORM_KMS_AZURE_CLIENT_ID: ${EDK_PLATFORM_KMS_AZURE_CLIENT_ID:-}
+      EDK_PLATFORM_KMS_AZURE_CLIENT_SECRET: ${EDK_PLATFORM_KMS_AZURE_CLIENT_SECRET:-}
+      EDK_PLATFORM_KMS_AZURE_HSM_TYPE: ${EDK_PLATFORM_KMS_AZURE_HSM_TYPE:-KEYVAULT}
+      EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS: ${EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS:-*}
       EXTERNAL_BASE_URL: *edk-platform-public-url
       ONBOARDING_UI_BASE_URL: *edk-onboarding-ui-public-url
       ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
@@ -248,7 +259,7 @@ services:
     volumes:
       - ./config/platform.application.yml:/app/config/application.yml:ro
       - ./config:/app/config/external:ro
-      - ./config/secret-management-environment.manifest:/app/secret-management/deployment/environment.manifest:ro
+      - ${EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST:-./config/secret-management-environment.manifest}:/app/secret-management/deployment/environment.manifest:ro
       - ./config/secret-provider-private-endpoints.manifest:/app/secret-management/egress/private-endpoints.manifest:ro
       - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/central:/app/secret-authority/central:ro
       - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public:/app/secret-authority/public:ro

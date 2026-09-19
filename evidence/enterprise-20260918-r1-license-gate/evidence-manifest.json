@@ -1,0 +1,194 @@
+{
+  "status": "failed",
+  "kind": "release",
+  "completedAt": "2026-09-17T23:49:51.144Z",
+  "projectName": "edk-customer-r1-license",
+  "tag": "0.25.0-enterprise-20260918-r1",
+  "requestCount": 193,
+  "teardownStatus": "passed",
+  "canaryStatus": "absent",
+  "optionalLanes": {
+    "keycloak": "skipped",
+    "webhookSink": "skipped",
+    "azureKms": "skipped",
+    "eudi": "skipped"
+  },
+  "evidence": [
+    {
+      "path": "behind-edge/docker-compose.behind-edge.yml",
+      "bytes": 5637,
+      "sha256": "1b2095506f19be79ce61fbfaeb8f5c827053098168d174a8325ddd781c00757f"
+    },
+    {
+      "path": "behind-edge/dynamic.behind-edge.generated.yml",
+      "bytes": 15622,
+      "sha256": "125f8ac780d53b4f9f1824a3bf3564336aed35840f17439ff99ac1ba0076f055"
+    },
+    {
+      "path": "behind-edge/edge-router.e2e.yml",
+      "bytes": 809,
+      "sha256": "c2650d1a8cdb98f9fc2e660815b48805de453d469692f6daf79991e4909b8622"
+    },
+    {
+      "path": "behind-edge/traefik.behind-edge.generated.yml",
+      "bytes": 525,
+      "sha256": "23ee07466f8331dcf9025312d670932259563f6887a6189d384f8702cb8abcbb"
+    },
+    {
+      "path": "compose-config.yml",
+      "bytes": 42060,
+      "sha256": "0e3e71fd031edfa956c0137f12a3d099b11596fb1958197c67a7e8ba0fa6c049"
+    },
+    {
+      "path": "compose-images.txt",
+      "bytes": 822,
+      "sha256": "d9c3c5c1dc584aa491e0e762c7afbd53fd68dbbffa6edb05f04cbf8a07e5f661"
+    },
+    {
+      "path": "compose-initial-containers.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "compose-initial-networks.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "compose-initial-volumes.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "compose-logs.txt",
+      "bytes": 9467804,
+      "sha256": "6be63a508f56c6b7826d09e686a4b87543ac75b8c6e4acb72d4ca2a93d93bf2d"
+    },
+    {
+      "path": "compose-project-classification.log",
+      "bytes": 35,
+      "sha256": "b83a8dc285f63e9301203f866c0b81fcddf03070a52f41ee53b1b5dcbfd28408"
+    },
+    {
+      "path": "compose-project-disposition.json",
+      "bytes": 150,
+      "sha256": "cede657a2a084348e7fd216b8e4fa374b2c064c05aa85ec9e4edd3aa2fd87424"
+    },
+    {
+      "path": "compose-project-inventory.json",
+      "bytes": 155,
+      "sha256": "f1df35a0292a0ceb41c972785bfddfd1627deaf754191d6b830547a517fd8423"
+    },
+    {
+      "path": "compose-ps.jsonl",
+      "bytes": 39927,
+      "sha256": "4617b96bf8bff6b7e73cee2895e4113b3fabf9b72e828e4cbbf064db1fc93d6f"
+    },
+    {
+      "path": "compose-service-image-ids.json",
+      "bytes": 3865,
+      "sha256": "fda2ec3984517d16f6dcfa67bc16565a0c75e520c065f214d08ff71301846170"
+    },
+    {
+      "path": "compose-teardown.json",
+      "bytes": 186,
+      "sha256": "9f13d8905fdcf51764b5fa0f39b66b6ee9b309bafc0cc41867bc4142cc857806"
+    },
+    {
+      "path": "compose-teardown.log",
+      "bytes": 3857,
+      "sha256": "4f0dc12d986681a7e792a83d421a7881f6111baf1a12450bce1f6f1b19d77b26"
+    },
+    {
+      "path": "compose-up.log",
+      "bytes": 10790,
+      "sha256": "9543a762823eee3a215ea3398c18080064004d94ba2b61b8bd39269887e2e984"
+    },
+    {
+      "path": "docker-info.log",
+      "bytes": 3599,
+      "sha256": "7fc373fb677576040dc8dcef9eb4319b37eacdf36489b336909f08d7ddcfb4cd"
+    },
+    {
+      "path": "edge-public-readiness.log",
+      "bytes": 57,
+      "sha256": "1152b54a6034a2282f042504ece2cb85111c466bcfffc72d1430fb7dcb313c04"
+    },
+    {
+      "path": "edge-router-disposition.json",
+      "bytes": 200,
+      "sha256": "a37f8d0d6e8e44e712f2a468d0c4abc663cac1c2bb1ee29a062c89d08d93092d"
+    },
+    {
+      "path": "enterprise-image-preflight.log",
+      "bytes": 171,
+      "sha256": "69c4e9fd4e6b5dadabe4bc7ab680c0d946bfdf18b864e1a3bb889aec1dc0ede0"
+    },
+    {
+      "path": "enterprise-image-set.json",
+      "bytes": 11306,
+      "sha256": "cda72e1463397d4255e410f21c5bfe9812c8b74971fc0b54bd14300bc7d42441"
+    },
+    {
+      "path": "evidence-sanitization.json",
+      "bytes": 209,
+      "sha256": "01c8ec01c9242189b52ae8e70e6cc9f756bde329b68162a8efeb6e5d9ed9ab83"
+    },
+    {
+      "path": "gate-failure.log",
+      "bytes": 120,
+      "sha256": "bf046a9effaec944a862faef7cb0ce9df5dea8601b59562a38dfec60e79b2185"
+    },
+    {
+      "path": "newman.log",
+      "bytes": 59992,
+      "sha256": "d9d9a8afa9cee938e8928a4ab074f663d0aa316696e9c6f11da7a30380a7dcb6"
+    },
+    {
+      "path": "newman/junit.xml",
+      "bytes": 51356,
+      "sha256": "95c47732968a5323c1c704f69b8ea417c75eaf9f37f93ecc697bc399b37d02f8"
+    },
+    {
+      "path": "newman/snapshot-drift.patch",
+      "bytes": 978,
+      "sha256": "e209ee7d6ac43dca8f86d08d6394ebe214e7c65c2f8ae6948185eb134f423c85"
+    },
+    {
+      "path": "platform-database-audit.txt",
+      "bytes": 2731,
+      "sha256": "b03e3f2b6dd66d8da13356d6df79e81c2faa6f6acb8a84ed781cddec5b200ab6"
+    },
+    {
+      "path": "release-gate-plan.json",
+      "bytes": 2830,
+      "sha256": "965be98a9d4052eb6a9daa0398a7984751dcdc3ee987d05cbfc696dfa10323ff"
+    },
+    {
+      "path": "release-identity.json",
+      "bytes": 435,
+      "sha256": "4c865b2257d9c8c00c136167c8f162268f8b00cdb1d8b85f9e5bdfa54b3c234d"
+    },
+    {
+      "path": "setup-evidence.json",
+      "bytes": 718,
+      "sha256": "9de4239f4cf40bbfcfe18000b3559a53e2c7bcbdf56db3a53697bd5b14dfb06d"
+    },
+    {
+      "path": "setup.log",
+      "bytes": 72,
+      "sha256": "b92c77b84ea85105297f28196b5f0a5d9dcbf7e56e5bb813541a0f02e57f32dd"
+    },
+    {
+      "path": "tenant-database-audit.txt",
+      "bytes": 13177,
+      "sha256": "5684480505851cbfa3d54dc02cac8d46838c8a50974d86fb1f393774db4a43e8"
+    }
+  ],
+  "detachedManifestHash": {
+    "algorithm": "sha256",
+    "path": "evidence-manifest.sha256",
+    "scope": "evidence-manifest.json",
+    "note": "The detached hash accounts for the manifest; the hash file cannot self-hash."
+  }
+}

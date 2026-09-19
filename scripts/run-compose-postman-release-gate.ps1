@@ -26,7 +26,7 @@ param(
   [Parameter(Mandatory = $true)][string]$SourceState,
   [Parameter(Mandatory = $true)][ValidatePattern('^https://')][string]$ExpectedSource,
   [string]$ComposeEnvFile = (Join-Path $PSScriptRoot '..\compose\.env'),
-  [string]$PostmanEnvironmentFile = (Join-Path $PSScriptRoot '..\postman\EDK-Enterprise-Deployment.customer.postman_environment.json'),
+  [string]$PostmanEnvironmentFile = '',
   [string]$MailpitUrl = '',
   # The collection that ships with the release under test. Defaults to the maintained one. An
   # upgrade rehearsal gates the older baseline with the collection that release actually shipped,
@@ -88,11 +88,16 @@ $behindEdgeStaticTemplate = Join-Path $composeDir 'gateway\traefik\traefik.behin
 $behindEdgeDynamicTemplate = Join-Path $composeDir 'gateway\traefik\dynamic.public-cert.template.yml'
 $edgeRouterTemplate = Join-Path $composeDir 'gateway\traefik\edge-router.template.yml'
 $collectionPath = if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
-    Join-Path $customerRoot 'postman\EDK-Enterprise-Deployment.postman_collection.json'
+    Join-Path $repoRoot 'deploy\edk\e2e\postman\EDK-Enterprise-Deployment.walkthrough-source.postman_collection.json'
 } else {
     [System.IO.Path]::GetFullPath($CollectionPath)
 }
-# Pinned size of the shipped collection. Bump this in the same commit that adds or removes a request.
+# Native Postman OAuth is interactive. This unattended gate uses the shared REST source
+# with scripted authentication; it does not verify Postman's GUI token acquisition.
+if ([string]::IsNullOrWhiteSpace($PostmanEnvironmentFile)) {
+    $PostmanEnvironmentFile = Join-Path $repoRoot 'deploy\edk\e2e\postman\EDK-Enterprise-Deployment.automation.postman_environment.json'
+}
+# Pinned size of the automation source. Bump this in the same commit that adds or removes a request.
 $DefaultCollectionRequestCount = 218
 $snapshotDir = Join-Path $customerRoot 'postman\snapshots'
 $runnerPath = Join-Path $repoRoot 'deploy\edk\e2e\runner\run-e2e.js'
@@ -119,6 +124,17 @@ $releaseImages = @(
 )
 
 function Fail([string]$Message) { throw $Message }
+function Get-EnvironmentManifestDigest([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { Fail "Secret-management environment manifest not found: $Path" }
+  $ids = @(Get-Content -LiteralPath $Path | ForEach-Object {
+    $line = $_.Trim()
+    if ($line -and -not $line.StartsWith('#')) { ($line -split '=', 2)[0].Trim() }
+  } | Where-Object { $_ } | Sort-Object)
+  $emptyHash = [BitConverter]::ToString(([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes('')))).Replace('-', '').ToLowerInvariant()
+  $canonical = ($ids | ForEach-Object { "$_$([char]0)$emptyHash" }) -join ''
+  $digest = [BitConverter]::ToString(([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical)))).Replace('-', '').ToLowerInvariant()
+  return "sha256:$digest"
+}
 function Require-File([string]$Path, [string]$Label) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { Fail "$Label not found: $Path" }
 }
@@ -722,10 +738,20 @@ function Set-OptionalLaneEnvironment {
     $env:EDK_E2E_ENV_webhookSinkAdminUrl = "http://localhost:$webhookSinkHostPort"
   }
   if ($azureKmsLaneReady) {
-    $env:EDK_E2E_ENV_azureKeyVaultUri = $env:AZURE_KEY_VAULT_URI.Trim().TrimEnd('/')
-    $env:EDK_E2E_ENV_azureTenantId = $env:AZURE_TENANT_ID
-    $env:EDK_E2E_ENV_azureClientId = $env:AZURE_CLIENT_ID
-    $env:EDK_E2E_ENV_azureClientSecret = $env:AZURE_CLIENT_SECRET
+    $vault = $env:AZURE_KEYVAULT_URL.Trim().TrimEnd('/')
+    $env:EDK_PLATFORM_KMS_AZURE_KIND = 'AZURE_KEY_VAULT'
+    $env:EDK_PLATFORM_KMS_AZURE_VAULT_URI = $vault
+    $env:EDK_PLATFORM_KMS_AZURE_TENANT_ID = $env:AZURE_KEYVAULT_TENANT_ID
+    $env:EDK_PLATFORM_KMS_AZURE_CLIENT_ID = $env:AZURE_KEYVAULT_CLIENT_ID
+    $env:EDK_PLATFORM_KMS_AZURE_CLIENT_SECRET = $env:AZURE_KEYVAULT_CLIENT_SECRET
+    $env:EDK_PLATFORM_KMS_AZURE_HSM_TYPE = 'KEYVAULT'
+    $env:EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS = '*'
+    $env:EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST = Join-Path $composeDir 'config\secret-management-environment.azure.manifest'
+    $env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256 = Get-EnvironmentManifestDigest $env:EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST
+    $env:EDK_E2E_ENV_azureKeyVaultUri = $vault
+    $env:EDK_E2E_ENV_azureTenantId = $env:AZURE_KEYVAULT_TENANT_ID
+    $env:EDK_E2E_ENV_azureClientId = $env:AZURE_KEYVAULT_CLIENT_ID
+    $env:EDK_E2E_ENV_azureClientSecret = $env:AZURE_KEYVAULT_CLIENT_SECRET
     $env:EDK_E2E_ENV_azureHsmKeyName = $env:AZURE_HSM_KEY_NAME
     $env:EDK_E2E_ENV_azureCertName = $env:AZURE_CERT_NAME
   }
@@ -915,7 +941,7 @@ if ($WebhookSink) {
 # below. A missing value skips the lane (the collection folder self-skips on an empty
 # azureKeyVaultUri) and the manifest records it as skipped rather than failing the gate.
 # The live platform contract uses AZURE_KEYVAULT_* names; older Postman names remain aliases.
-$azureKmsEnvNames = @('AZURE_KEY_VAULT_URI', 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_HSM_KEY_NAME', 'AZURE_CERT_NAME')
+$azureKmsEnvNames = @('AZURE_KEYVAULT_URL', 'AZURE_KEYVAULT_TENANT_ID', 'AZURE_KEYVAULT_CLIENT_ID', 'AZURE_KEYVAULT_CLIENT_SECRET')
 function Set-AzureKmsCredentialAliases {
   $aliases = [ordered]@{
     AZURE_KEY_VAULT_URI = 'AZURE_KEYVAULT_URL'

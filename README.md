@@ -55,27 +55,13 @@ installation is running:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-Create a private copy of the environment and fill in its six values: `baseDomain`,
-`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword` and
-`tenantOwnerPassword`. Keep that copy out of Git. Every URL, host, API base and
-`did:web` identifier in the collection is derived from `baseDomain` and
-`tenantSlug` before each request (`platform.<baseDomain>` for the operator plane,
-`<tenantSlug>.<baseDomain>` for the tenant), so pointing the collection at another
-installation or another tenant is a two-value change. The collection never writes
-derived values back into the environment.
-
-The collection is a reference for the REST APIs a customer uses, in the order a
-customer uses them: operator sign-in, tenant registration, tenant owner activation
-and the tenant service token, keys and DID, bringing your own KMS and certificate
-chains, authorization servers and federation to an external OIDC provider, issuer
-branding and credential designs, status lists and per-credential configuration,
-issuance of SD-JWT VC, mdoc and W3C VCDM credentials through pre-authorized code,
-transaction code, pipeline and authorization code, DCQL and verification, trust
-domains and trust lists, the KMS runtime API for keys, certificates and
-signatures, and the Developer Console policy. Folders that need resources you own
-(your Azure Key Vault or AWS KMS, existing external keys and certificates, an
-on-premises platform vault) ship disabled; fill in their collection variables and
-enable them.
+Set `baseDomain`, `tenantSubdomain` and `tenantName` in a private environment.
+Follow the [Postman walkthrough](postman/README.md): use Postman's OAuth2 helper
+for platform operator login, create the tenant, activate its owner, register a
+confidential client on the tenant AS, and switch to client credentials for tenant REST calls.
+Platform resource sharing and wallet authorization-code issuance have separate OAuth contexts.
+The optional Azure and Keycloak folders describe the inputs and request order.
+Access tokens are managed by Postman; do not copy them into bearer variables.
 
 ## Domain, DNS, and TLS model
 
@@ -263,7 +249,7 @@ docker compose --project-directory ./compose -f ./compose/docker-compose.yml -f 
 
 Use the install and upgrade wrapper. The wrapper validates the model, pulls the
 published images, starts the services, waits for health checks, and records the
-installed tag. It also preserves the required RC1 to RC2 to RC3 to RC4
+installed tag. It also preserves the required RC1 to RC2 to RC3 to RC4 to RC5
 migration order when an older release is detected.
 
 On Windows PowerShell, run:
@@ -673,7 +659,7 @@ helm upgrade --install sphereon-edk-enterprise ./helm/edk-enterprise --namespace
 ```
 
 Do not use the direct command to skip release-transition steps during an
-upgrade. The wrapper handles the known RC1 to RC2 to RC3 to RC4 order and the one-time
+upgrade. The wrapper handles the known RC1 to RC2 to RC3 to RC4 to RC5 order and the one-time
 Deployment strategy conversion. See
 [the Kubernetes quickstart](docs/quickstart-kubernetes.md) for release-specific
 upgrade details.

@@ -1,0 +1,53 @@
+Pager usage is off.
+=== connection ===
+ database_name | runtime_role 
+---------------+--------------
+ platform      | edk_platform
+(1 row)
+
+=== release roles ===
+             rolname              | rolsuper | rolcreaterole | rolcreatedb | rolcanlogin | rolinherit | rolbypassrls 
+----------------------------------+----------+---------------+-------------+-------------+------------+--------------
+ edk_platform                     | t        | t             | t           | t           | t          | t
+ secret_management_admin          | f        | f             | f           | t           | f          | f
+ secret_management_tenant_serving | f        | f             | f           | t           | f          | f
+(3 rows)
+
+=== application schemas ===
+ schema_name |       owner       | runtime_can_use | runtime_can_create 
+-------------+-------------------+-----------------+--------------------
+ public      | pg_database_owner | t               | t
+(1 row)
+
+=== schema version ownership and readability ===
+ schema_name |   table_name    |    owner     |                                   grants                                   | runtime_can_read | runtime_can_write 
+-------------+-----------------+--------------+----------------------------------------------------------------------------+------------------+-------------------
+ public      | _schema_version | edk_platform | {edk_platform=arwdDxt/edk_platform,secret_management_admin=r/edk_platform} | t                | t
+(1 row)
+
+=== schema version rows ===
+ tenant_schema |       schema_name        | version 
+---------------+--------------------------+---------
+ public        | audit                    |       1
+ public        | auth_credential          |       1
+ public        | auth_rate_limit          |       1
+ public        | auth_session             |       1
+ public        | did                      |       1
+ public        | events                   |       3
+ public        | idempotency              |       2
+ public        | invitation               |       2
+ public        | key_reference            |       4
+ public        | kv                       |       2
+ public        | license_registry         |       1
+ public        | lote                     |       1
+ public        | oauth2_authorization     |       2
+ public        | oauth2_authorization_app |       2
+ public        | party                    |       7
+ public        | secret_management        |      13
+ public        | session                  |       3
+ public        | settings                 |       2
+ public        | tenant_registry          |       4
+ public        | theme                    |       1
+ public        | trust_domain             |      10
+(21 rows)
+

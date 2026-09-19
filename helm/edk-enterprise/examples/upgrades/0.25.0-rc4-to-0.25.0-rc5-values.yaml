@@ -1,0 +1,6 @@
+# Compatibility overlay for upgrades from 0.25.0-RC4 to 0.25.0-RC5.
+#
+# RC5 keeps the RC4 storage and workload contracts. The explicit, empty
+# transition file is intentional: it makes the upgrade planner cumulative and
+# prevents a later RC5 rerun from silently dropping the RC4 compatibility set.
+{}

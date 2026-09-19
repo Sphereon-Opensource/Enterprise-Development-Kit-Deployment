@@ -52,7 +52,7 @@ const idkExampleCollectionPath = join(
 )
 const secretAuthorityGeneratorPath = join(scriptDir, 'generate-secret-authority-keys.ps1')
 const secretAuthorityShellGeneratorPath = join(scriptDir, 'generate-secret-authority-keys.sh')
-const collectionPath = join(customerRoot, 'postman', 'EDK-Enterprise-Deployment.postman_collection.json')
+const collectionPath = join(repoRoot, 'deploy', 'edk', 'e2e', 'postman', 'EDK-Enterprise-Deployment.walkthrough-source.postman_collection.json')
 const composePath = join(customerRoot, 'compose', 'docker-compose.yml')
 const composeGitignorePath = join(customerRoot, 'compose', '.gitignore')
 const composeConfigRoot = join(customerRoot, 'compose', 'config')
@@ -79,7 +79,7 @@ $collection = Get-Content -LiteralPath '${collectionPath.replaceAll("'", "''")}'
 @{ inventory = (Count-Requests @($collection.item)); enabled = (Count-Requests @($collection.item) -EnabledOnly) } | ConvertTo-Json -Compress
 `], {encoding: 'utf8'})
 assert.equal(countProbe.status, 0, countProbe.stderr)
-assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 218, enabled: 193})
+assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 219, enabled: 194})
 
 function requestCount(items) {
   return (items ?? []).reduce(
@@ -113,7 +113,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 218, 'shipped customer collection must contain the current 218-request customer reference')
+assert.equal(requestCount(collection.item), 219, 'shipped customer collection must contain the current 219-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -239,6 +239,24 @@ const composeReleaseImages = [...new Set(
     .map((match) => match[1]),
 )].sort()
 assert.deepEqual(composeReleaseImages, [...expectedImages].sort(), 'customer Compose must use exactly eight release images')
+const customerManifestPath = join(composeConfigRoot, 'secret-management-environment.manifest')
+const customerManifest = readFileSync(customerManifestPath, 'utf8')
+const customerManifestIds = customerManifest
+  .split(/\r?\n/u)
+  .map((line) => line.trim().split('=', 1)[0])
+  .filter(Boolean)
+  .sort()
+const customerManifestDigest = `sha256:${createHash('sha256')
+  .update(customerManifestIds.map((id) => `${id}\0${createHash('sha256').update('').digest('hex')}`).join(''))
+  .digest('hex')}`
+assert.equal(customerManifestDigest, 'sha256:9201eaf4b197235f6b35f3e3293f3118a222af82f292057c3664a4bcde020748',
+  'customer manifest digest must be derived from its opaque secret ids')
+assert.match(compose, /\$\{EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST:-\.\/config\/secret-management-environment\.manifest\}:/u,
+  'customer Compose must mount its own canonical environment manifest by default')
+const customerPlatformConfig = readFileSync(join(customerRoot, 'compose', 'config', 'platform.application.yml'), 'utf8')
+assert.ok(customerPlatformConfig.includes(
+  'manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:' + customerManifestDigest + '}',
+), 'customer platform config must carry the same opaque-id manifest digest')
 const tenantDbEnv = compose.match(/x-edk-tenant-db-env:[\s\S]*?(?=\nx-[a-z]|\nservices:)/u)?.[0] ?? ''
 // Every runtime hosts the secret-use broker, so the tenant-serving and narrow runtime roles are
 // shared. The authority-admin credential is not: it stays on enterprise-platform alone.
@@ -282,10 +300,14 @@ for (const [configName, workloadId] of [
   ['issuer', 'service-oid4vci'],
   ['verifier', 'service-oid4vp'],
 ]) {
-  const config = readFileSync(join(composeConfigRoot, `${configName}.application.yml`), 'utf8')
-  assert.ok(config.includes('secret:\n  authority:'), `${configName} must configure the secret authority role`)
+  const config = readFileSync(join(composeConfigRoot, `${configName}.application.yml`), 'utf8').replaceAll('\r\n', '\n')
+  assert.match(config, /^secret:\r?\n  authority:/mu, `${configName} must configure the secret authority role`)
   assert.ok(config.includes(`workload-id: ${workloadId}`), `${configName} must bind secret assertions to ${workloadId}`)
   assert.ok(config.includes('verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}'), `${configName} must verify central permits`)
+  if (configName === 'tenant-kms') {
+    assert.match(config, /\nsecret-management:\n[\s\S]*\n {2}deployment:\n {4}environment:\n {6}enabled: false\n/u,
+      'tenant-KMS must declare a local secret-management graph and disable the platform-only manifest source')
+  }
   if (configName !== 'platform') {
     assert.match(
       config,
@@ -338,7 +360,7 @@ assert.ok(
   ),
   'customer Compose tenant AS must verify passwords through the platform credential authority',
 )
-const platformConfig = readFileSync(join(composeConfigRoot, 'platform.application.yml'), 'utf8')
+const platformConfig = readFileSync(join(composeConfigRoot, 'platform.application.yml'), 'utf8').replaceAll('\r\n', '\n')
 assert.doesNotMatch(
   platformConfig,
   /operator@example\.com|EDK_PLATFORM_OPERATOR_EMAIL/u,
@@ -464,7 +486,7 @@ for (const sourceInvariant of [
   // The Azure lane has no overlay; it is ran only when -AzureKms is given and every AZURE_*
   // value is present, and a missing value skips it rather than failing the gate.
   '[switch]$AzureKms',
-  "$azureKmsEnvNames = @('AZURE_KEY_VAULT_URI', 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_HSM_KEY_NAME', 'AZURE_CERT_NAME')",
+  "$azureKmsEnvNames = @('AZURE_KEYVAULT_URL', 'AZURE_KEYVAULT_TENANT_ID', 'AZURE_KEYVAULT_CLIENT_ID', 'AZURE_KEYVAULT_CLIENT_SECRET')",
   '$azureKmsLaneReady = [bool]($AzureKms -and $azureKmsMissing.Count -eq 0)',
   '"Azure lane skipped (missing: $($azureKmsMissing -join ', '))"',
   '$env:EDK_E2E_ENV_azureKeyVaultUri',
@@ -941,7 +963,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 218)
+  assert.equal(plan.requestCount, 219)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -980,7 +1002,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 218)
+  assert.equal(monolithPlan.requestCount, 219)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))

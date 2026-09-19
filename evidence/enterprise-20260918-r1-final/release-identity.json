@@ -1,0 +1,9 @@
+{
+  "tag": "0.25.0-enterprise-20260918-r1",
+  "version": "0.25.0-enterprise-20260918-r1",
+  "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+  "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435",
+  "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+  "created": "09/17/2026 22:39:32",
+  "sha256": "928b7473db75a00fc63041d5cff3cddeea1bdbf94f5ddb599ddc3ea8f2b479b2"
+}

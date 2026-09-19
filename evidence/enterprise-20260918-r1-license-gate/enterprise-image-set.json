@@ -1,0 +1,243 @@
+{
+  "verifiedAt": "2026-09-17T23:46:44.021Z",
+  "tag": "0.25.0-enterprise-20260918-r1",
+  "registry": "nexus.sphereon.com/edk-docker",
+  "releaseBuild": {
+    "version": "0.25.0-enterprise-20260918-r1",
+    "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+    "provenance": "per-image"
+  },
+  "sourceFingerprintPolicy": "shared-required",
+  "sourceState": {
+    "path": "D:\\git\\VDX-infra\\deploy\\edk\\build\\reports\\release-source-state-0.25.0-enterprise-20260918-r1.json",
+    "fingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+  },
+  "backendBuild": {
+    "created": "2026-09-17T22:39:32Z",
+    "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+    "version": "0.25.0-enterprise-20260918-r1",
+    "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+    "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+  },
+  "adminConsoleBuild": {
+    "created": "2026-09-17T22:39:32Z",
+    "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+    "version": "0.25.0-enterprise-20260918-r1",
+    "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+    "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+  },
+  "renderedReleaseImages": [
+    "nexus.sphereon.com/edk-docker/enterprise-verifier:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-tenant-kms:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/admin-console:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/service-data:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-did:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-platform:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-issuer:0.25.0-enterprise-20260918-r1",
+    "nexus.sphereon.com/edk-docker/enterprise-tenant-as:0.25.0-enterprise-20260918-r1"
+  ],
+  "images": [
+    {
+      "reference": "nexus.sphereon.com/edk-docker/enterprise-platform:0.25.0-enterprise-20260918-r1",
+      "id": "sha256:c1af9e772c8ded69d9450734e79474f4c9aefdb2a620e712494cba1900bf52ce",
+      "localContentId": "sha256:c1af9e772c8ded69d9450734e79474f4c9aefdb2a620e712494cba1900bf52ce",
+      "runtimeConfigDigest": "sha256:1aeb131e7817481d0287e8bba95dda19ac40df11b26c841f0f558a40277f90ab",
+      "os": "linux",
+      "architecture": "amd64",
+      "variant": "",
+      "repoDigests": [
+        "nexus.sphereon.com/edk-docker/enterprise-platform@sha256:c1af9e772c8ded69d9450734e79474f4c9aefdb2a620e712494cba1900bf52ce"
+      ],
+      "created": "2026-09-17T22:45:43.549857913Z",
+      "entrypoint": [
+        "/app/app",
+        "-XX:MaximumHeapSizePercent=75"
+      ],
+      "command": [],
+      "labels": {
+        "created": "2026-09-17T22:39:32Z",
+        "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+        "version": "0.25.0-enterprise-20260918-r1",
+        "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+        "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+      }
+    },
+    {
+      "reference": "nexus.sphereon.com/edk-docker/enterprise-tenant-kms:0.25.0-enterprise-20260918-r1",
+      "id": "sha256:bc883e4cad1e1ad7b8cdef5bb795e0e46ad8531194a7c1c81909a25ea18f2d95",
+      "localContentId": "sha256:bc883e4cad1e1ad7b8cdef5bb795e0e46ad8531194a7c1c81909a25ea18f2d95",
+      "runtimeConfigDigest": "sha256:e49822df38480eda61c15d2e9e528715ba90fb848c89ad3a2411b6ce3d016b61",
+      "os": "linux",
+      "architecture": "amd64",
+      "variant": "",
+      "repoDigests": [
+        "nexus.sphereon.com/edk-docker/enterprise-tenant-kms@sha256:bc883e4cad1e1ad7b8cdef5bb795e0e46ad8531194a7c1c81909a25ea18f2d95"
+      ],
+      "created": "2026-09-17T22:47:41.601997147Z",
+      "entrypoint": [
+        "/app/app",
+        "-XX:MaximumHeapSizePercent=75"
+      ],
+      "command": [],
+      "labels": {
+        "created": "2026-09-17T22:39:32Z",
+        "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+        "version": "0.25.0-enterprise-20260918-r1",
+        "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+        "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+      }
+    },
+    {
+      "reference": "nexus.sphereon.com/edk-docker/enterprise-did:0.25.0-enterprise-20260918-r1",
+      "id": "sha256:99b528e76eb62b6f7a613bef371185e00c548bdfa6022a5edae821c2a914904d",
+      "localContentId": "sha256:99b528e76eb62b6f7a613bef371185e00c548bdfa6022a5edae821c2a914904d",
+      "runtimeConfigDigest": "sha256:926dac5dfaecf9e753f8cabb174c705d18f330b4721491e01bb936e65f14b59d",
+      "os": "linux",
+      "architecture": "amd64",
+      "variant": "",
+      "repoDigests": [
+        "nexus.sphereon.com/edk-docker/enterprise-did@sha256:99b528e76eb62b6f7a613bef371185e00c548bdfa6022a5edae821c2a914904d"
+      ],
+      "created": "2026-09-17T22:49:30.409067122Z",
+      "entrypoint": [
+        "/app/app",
+        "-XX:MaximumHeapSizePercent=75"
+      ],
+      "command": [],
+      "labels": {
+        "created": "2026-09-17T22:39:32Z",
+        "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+        "version": "0.25.0-enterprise-20260918-r1",
+        "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+        "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+      }
+    },
+    {
+      "reference": "nexus.sphereon.com/edk-docker/enterprise-tenant-as:0.25.0-enterprise-20260918-r1",
+      "id": "sha256:02d7b65ddb21b1a0a6fe4d9bf8c276fffef5a67418ae24b35d9dc4a25fdf6c5b",
+      "localContentId": "sha256:02d7b65ddb21b1a0a6fe4d9bf8c276fffef5a67418ae24b35d9dc4a25fdf6c5b",
+      "runtimeConfigDigest": "sha256:765d973a237e20c41c87b494fabbf5ffcbff3832894c3551b9cbaa5df1fa4619",
+      "os": "linux",
+      "architecture": "amd64",
+      "variant": "",
+      "repoDigests": [
+        "nexus.sphereon.com/edk-docker/enterprise-tenant-as@sha256:02d7b65ddb21b1a0a6fe4d9bf8c276fffef5a67418ae24b35d9dc4a25fdf6c5b"
+      ],
+      "created": "2026-09-17T22:51:33.522939912Z",
+      "entrypoint": [
+        "/app/app",
+        "-XX:MaximumHeapSizePercent=75"
+      ],
+      "command": [],
+      "labels": {
+        "created": "2026-09-17T22:39:32Z",
+        "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+        "version": "0.25.0-enterprise-20260918-r1",
+        "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+        "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+      }
+    },
+    {
+      "reference": "nexus.sphereon.com/edk-docker/enterprise-issuer:0.25.0-enterprise-20260918-r1",
+      "id": "sha256:8eec7bd8ca61f033ee54891ca8309a30dfc41e9adf8ea6fad711d76e6d1c096a",
+      "localContentId": "sha256:8eec7bd8ca61f033ee54891ca8309a30dfc41e9adf8ea6fad711d76e6d1c096a",
+      "runtimeConfigDigest": "sha256:11ac1d099118dcfac91fb8deed9ef766cb4ba5219f8903b3fcf954eb4e53503d",
+      "os": "linux",
+      "architecture": "amd64",
+      "variant": "",
+      "repoDigests": [
+        "nexus.sphereon.com/edk-docker/enterprise-issuer@sha256:8eec7bd8ca61f033ee54891ca8309a30dfc41e9adf8ea6fad711d76e6d1c096a"
+      ],
+      "created": "2026-09-17T22:56:16.064355657Z",
+      "entrypoint": [
+        "/app/app",
+        "-XX:MaximumHeapSizePercent=75"
+      ],
+      "command": [],
+      "labels": {
+        "created": "2026-09-17T22:39:32Z",
+        "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+        "version": "0.25.0-enterprise-20260918-r1",
+        "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+        "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+      }
+    },
+    {
+      "reference": "nexus.sphereon.com/edk-docker/enterprise-verifier:0.25.0-enterprise-20260918-r1",
+      "id": "sha256:77fbb493aca047d3e05be57677f6cbed2c9452e3cbba47fc5a6f9c95074e0c56",
+      "localContentId": "sha256:77fbb493aca047d3e05be57677f6cbed2c9452e3cbba47fc5a6f9c95074e0c56",
+      "runtimeConfigDigest": "sha256:e9e4c3d4645e75f61da038f92fede46f92c239453895c57b589c86d2f82621cc",
+      "os": "linux",
+      "architecture": "amd64",
+      "variant": "",
+      "repoDigests": [
+        "nexus.sphereon.com/edk-docker/enterprise-verifier@sha256:77fbb493aca047d3e05be57677f6cbed2c9452e3cbba47fc5a6f9c95074e0c56"
+      ],
+      "created": "2026-09-17T22:58:10.242607326Z",
+      "entrypoint": [
+        "/app/app",
+        "-XX:MaximumHeapSizePercent=75"
+      ],
+      "command": [],
+      "labels": {
+        "created": "2026-09-17T22:39:32Z",
+        "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+        "version": "0.25.0-enterprise-20260918-r1",
+        "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+        "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+      }
+    },
+    {
+      "reference": "nexus.sphereon.com/edk-docker/service-data:0.25.0-enterprise-20260918-r1",
+      "id": "sha256:8abcdb0ce0042f89d1fc12e5d49079e1904ee3a9857ca80e84dfcf51c08a266b",
+      "localContentId": "sha256:8abcdb0ce0042f89d1fc12e5d49079e1904ee3a9857ca80e84dfcf51c08a266b",
+      "runtimeConfigDigest": "sha256:e1f065934f32d46f46b7d64dd3a7ed4ec97ce60957fd44dc289214c154164df7",
+      "os": "linux",
+      "architecture": "amd64",
+      "variant": "",
+      "repoDigests": [
+        "nexus.sphereon.com/edk-docker/service-data@sha256:8abcdb0ce0042f89d1fc12e5d49079e1904ee3a9857ca80e84dfcf51c08a266b"
+      ],
+      "created": "2026-09-17T22:54:00.443169726Z",
+      "entrypoint": [
+        "/app/app",
+        "-XX:MaximumHeapSizePercent=75"
+      ],
+      "command": [],
+      "labels": {
+        "created": "2026-09-17T22:39:32Z",
+        "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+        "version": "0.25.0-enterprise-20260918-r1",
+        "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+        "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+      }
+    },
+    {
+      "reference": "nexus.sphereon.com/edk-docker/admin-console:0.25.0-enterprise-20260918-r1",
+      "id": "sha256:6f7bf0aaeae7b32aa24145d0af0c0c1170ea31a1478a59569b2109b3833be593",
+      "localContentId": "sha256:6f7bf0aaeae7b32aa24145d0af0c0c1170ea31a1478a59569b2109b3833be593",
+      "runtimeConfigDigest": "sha256:1e53791103febb7a28707e9c5f41c2408ea362b16800ff493141530a39b99474",
+      "os": "linux",
+      "architecture": "amd64",
+      "variant": "",
+      "repoDigests": [
+        "nexus.sphereon.com/edk-docker/admin-console@sha256:6f7bf0aaeae7b32aa24145d0af0c0c1170ea31a1478a59569b2109b3833be593"
+      ],
+      "created": "2026-09-17T23:02:31.798953288Z",
+      "entrypoint": [
+        "docker-entrypoint.sh"
+      ],
+      "command": [
+        "node",
+        "packages/admin-console/server.js"
+      ],
+      "labels": {
+        "created": "2026-09-17T22:39:32Z",
+        "revision": "b116bafeec1d07030cefda0569d2b8ce7538b492",
+        "version": "0.25.0-enterprise-20260918-r1",
+        "source": "https://github.com/Sphereon-Opensource/VDX-infra",
+        "sourceFingerprint": "sha256:abf7831aa50592ed3b05eb279f24ea968eb0b1c7f95aedd3fb5449e58714c435"
+      }
+    }
+  ]
+}

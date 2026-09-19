@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="EDK-Enterprise-Deployment" tests="341" failures="0" errors="0" time="89.660">
+  <testsuite name="single-tenant" tests="341" failures="0" errors="0" time="89.660">
+    <testcase name="authorize redirects to the hosted login page" classname="01 Operator Sign-in > 01 Start authorization request" time="0.286"/>
+    <testcase name="login page rendered" classname="01 Operator Sign-in > 02 Open login page" time="0.058"/>
+    <testcase name="credentials accepted" classname="01 Operator Sign-in > 03 Submit operator credentials" time="0.249"/>
+    <testcase name="authorization code issued" classname="01 Operator Sign-in > 04 Resume authorization callback" time="0.280"/>
+    <testcase name="token issued" classname="01 Operator Sign-in > 05 Exchange code for operator token" time="0.184"/>
+    <testcase name="operator token carries platform-admin role" classname="01 Operator Sign-in > 05 Exchange code for operator token" time="0.184"/>
+    <testcase name="operator token binds the platform tenant" classname="01 Operator Sign-in > 05 Exchange code for operator token" time="0.184"/>
+    <testcase name="tenant registered" classname="02 Tenant Onboarding > 01 Register tenant" time="23.213"/>
+    <testcase name="registration returned tenant gateway protocol URLs" classname="02 Tenant Onboarding > 01 Register tenant" time="23.213"/>
+    <testcase name="tenant onboarding status returned" classname="02 Tenant Onboarding > 02 Get tenant onboarding status" time="0.018"/>
+    <testcase name="tenant returned" classname="02 Tenant Onboarding > 03 Get tenant" time="0.017"/>
+    <testcase name="tenant returned" classname="02 Tenant Onboarding > 03 Get tenant" time="0.017"/>
+    <testcase name="tenants listed" classname="02 Tenant Onboarding > 04 List tenants" time="0.025"/>
+    <testcase name="endpoints listed" classname="02 Tenant Onboarding > 05 List tenant gateway endpoint bindings" time="0.021"/>
+    <testcase name="registration created gateway bindings for AS, issuer, and verifier protocol routes" classname="02 Tenant Onboarding > 05 List tenant gateway endpoint bindings" time="0.021"/>
+    <testcase name="tenant public endpoint bindings use the exact HTTPS tenant gateway origin" classname="02 Tenant Onboarding > 05 List tenant gateway endpoint bindings" time="0.021"/>
+    <testcase name="tenant runtime config returned" classname="02 Tenant Onboarding > 06 Resolve tenant runtime service discovery" time="0.062"/>
+    <testcase name="runtime config exposes tenant workload services" classname="02 Tenant Onboarding > 06 Resolve tenant runtime service discovery" time="0.062"/>
+    <testcase name="runtime config matches the bases derived from baseDomain and tenantSubdomain" classname="02 Tenant Onboarding > 06 Resolve tenant runtime service discovery" time="0.062"/>
+    <testcase name="verifier instances listed" classname="02 Tenant Onboarding > 07 Resolve verifier party id" time="0.018"/>
+    <testcase name="verifier party id resolved from platform config" classname="02 Tenant Onboarding > 07 Resolve verifier party id" time="0.018"/>
+    <testcase name="verifier runtime instance id resolved from platform config" classname="02 Tenant Onboarding > 07 Resolve verifier party id" time="0.018"/>
+    <testcase name="issuer instances listed" classname="02 Tenant Onboarding > 08 Resolve issuer instance id" time="0.014"/>
+    <testcase name="issuer instance id resolved from platform config" classname="02 Tenant Onboarding > 08 Resolve issuer instance id" time="0.014"/>
+    <testcase name="issuer testing-console config returned" classname="02 Tenant Onboarding > 09 Get issuer testing-console config" time="0.026"/>
+    <testcase name="issuer testing-console config is enabled PUBLIC on the tenant host" classname="02 Tenant Onboarding > 09 Get issuer testing-console config" time="0.026"/>
+    <testcase name="verifier testing-console config returned" classname="02 Tenant Onboarding > 10 Get verifier testing-console config" time="0.022"/>
+    <testcase name="verifier testing-console config is enabled PUBLIC on the tenant host" classname="02 Tenant Onboarding > 10 Get verifier testing-console config" time="0.022"/>
+    <testcase name="tenant owner activation resolves" classname="03 Tenant Owner Activation and Sign-in > 01 Resolve tenant owner activation" time="0.061"/>
+    <testcase name="tenant owner activation completed" classname="03 Tenant Owner Activation and Sign-in > 02 Complete tenant owner activation" time="0.147"/>
+    <testcase name="tenant authorize redirects to hosted login" classname="03 Tenant Owner Activation and Sign-in > 03 Start tenant owner authorization" time="0.314"/>
+    <testcase name="tenant authorize redirects to hosted login" classname="03 Tenant Owner Activation and Sign-in > 03 Start tenant owner authorization" time="0.314"/>
+    <testcase name="tenant owner login page rendered" classname="03 Tenant Owner Activation and Sign-in > 04 Open tenant owner login page" time="0.506"/>
+    <testcase name="tenant owner credentials accepted" classname="03 Tenant Owner Activation and Sign-in > 05 Submit tenant owner credentials" time="0.684"/>
+    <testcase name="tenant owner authorization code issued" classname="03 Tenant Owner Activation and Sign-in > 06 Resume tenant owner authorization" time="0.549"/>
+    <testcase name="tenant owner token issued" classname="03 Tenant Owner Activation and Sign-in > 07 Exchange tenant owner authorization code" time="0.671"/>
+    <testcase name="tenant authorization servers listed" classname="03 Tenant Owner Activation and Sign-in > 07a Resolve tenant hosted authorization server" time="0.323"/>
+    <testcase name="tenant registration created an active hosted authorization server" classname="03 Tenant Owner Activation and Sign-in > 07a Resolve tenant hosted authorization server" time="0.323"/>
+    <testcase name="exactly one hosted authorization server is the tenant default" classname="03 Tenant Owner Activation and Sign-in > 07a Resolve tenant hosted authorization server" time="0.323"/>
+    <testcase name="tenant service client registered" classname="03 Tenant Owner Activation and Sign-in > 07b Register walkthrough tenant service client" time="0.273"/>
+    <testcase name="tenant authorization-server discovery returned" classname="04 Tenant Service Token > 01 Resolve tenant token endpoint" time="0.081"/>
+    <testcase name="discovery exposes a token endpoint" classname="04 Tenant Service Token > 01 Resolve tenant token endpoint" time="0.081"/>
+    <testcase name="token endpoint belongs to the tenant gateway" classname="04 Tenant Service Token > 01 Resolve tenant token endpoint" time="0.081"/>
+    <testcase name="tenant service token issued" classname="04 Tenant Service Token > 02 Tenant service token (client credentials)" time="0.373"/>
+    <testcase name="access token returned" classname="04 Tenant Service Token > 02 Tenant service token (client credentials)" time="0.373"/>
+    <testcase name="access token is a compact JWT" classname="04 Tenant Service Token > 02 Tenant service token (client credentials)" time="0.373"/>
+    <testcase name="tenant service token has issuer" classname="04 Tenant Service Token > 02 Tenant service token (client credentials)" time="0.373"/>
+    <testcase name="tenant service token binds the registered tenant" classname="04 Tenant Service Token > 02 Tenant service token (client credentials)" time="0.373"/>
+    <testcase name="tenant service token is a workload token of the registered client" classname="04 Tenant Service Token > 02 Tenant service token (client credentials)" time="0.373"/>
+    <testcase name="tenant service token carries the tenant-admin role" classname="04 Tenant Service Token > 02 Tenant service token (client credentials)" time="0.373"/>
+    <testcase name="tenant service token is scoped to runtime audiences" classname="04 Tenant Service Token > 02 Tenant service token (client credentials)" time="0.373"/>
+    <testcase name="platform token has platform-admin role" classname="04a Authentication Preflight > 01 Validate platform and tenant token scopes" time="0.082"/>
+    <testcase name="platform token binds the platform tenant" classname="04a Authentication Preflight > 01 Validate platform and tenant token scopes" time="0.082"/>
+    <testcase name="platform token audience is enterprise-platform" classname="04a Authentication Preflight > 01 Validate platform and tenant token scopes" time="0.082"/>
+    <testcase name="tenant token has tenant-admin role" classname="04a Authentication Preflight > 01 Validate platform and tenant token scopes" time="0.082"/>
+    <testcase name="tenant token binds the registered tenant" classname="04a Authentication Preflight > 01 Validate platform and tenant token scopes" time="0.082"/>
+    <testcase name="tenant token has the required runtime audiences" classname="04a Authentication Preflight > 01 Validate platform and tenant token scopes" time="0.082"/>
+    <testcase name="acme-eu registered" classname="05 Subtenants > 01 Register the acme-eu subtenant" time="19.602"/>
+    <testcase name="acme-eu is a child of the expected parent" classname="05 Subtenants > 01 Register the acme-eu subtenant" time="19.602"/>
+    <testcase name="acme-eu onboarding status returned" classname="05 Subtenants > 02 Wait for the acme-eu onboarding to complete" time="0.017"/>
+    <testcase name="acme-eu onboarding completed" classname="05 Subtenants > 02 Wait for the acme-eu onboarding to complete" time="0.017"/>
+    <testcase name="acme-eu onboarding provisioned every step without error" classname="05 Subtenants > 02 Wait for the acme-eu onboarding to complete" time="0.017"/>
+    <testcase name="root tenant children listed" classname="05 Subtenants > 05 List the children of the root tenant" time="0.019"/>
+    <testcase name="the root tenant lists acme-eu as its immediate child" classname="05 Subtenants > 05 List the children of the root tenant" time="0.019"/>
+    <testcase name="the children listing is immediate, not transitive" classname="05 Subtenants > 05 List the children of the root tenant" time="0.019"/>
+    <testcase name="kms offerings listed" classname="06 Tenant Keys and DID > 01 List KMS offerings" time="0.105"/>
+    <testcase name="kms resources listed" classname="06 Tenant Keys and DID > 02 List KMS resources" time="0.108"/>
+    <testcase name="every resource publishes the provider id the runtime KMS plane uses" classname="06 Tenant Keys and DID > 02 List KMS resources" time="0.108"/>
+    <testcase name="tenant setup KMS resource validates" classname="06 Tenant Keys and DID > 03 Validate tenant setup KMS resource" time="0.108"/>
+    <testcase name="tenant setup KMS validation returns the required public shape" classname="06 Tenant Keys and DID > 03 Validate tenant setup KMS resource" time="0.108"/>
+    <testcase name="did identifiers listed" classname="06 Tenant Keys and DID > 11 List activation-created DID identifiers" time="0.350"/>
+    <testcase name="did resolved" classname="06 Tenant Keys and DID > 12 Resolve activation-created DID" time="0.082"/>
+    <testcase name="verification methods listed" classname="06 Tenant Keys and DID > 13 List activation-created DID verification methods" time="0.074"/>
+    <testcase name="did.json returned" classname="06 Tenant Keys and DID > 14 Fetch hosted activation did.json" time="0.013"/>
+    <testcase name="platform-owned KMS resource created or managed KMS is unavailable" classname="08 KMS Provider Sharing > 01 Create shareable platform KMS resource" time="0.084"/>
+    <testcase name="the platform KMS is addressable on both planes" classname="08 KMS Provider Sharing > 01 Create shareable platform KMS resource" time="0.084"/>
+    <testcase name="shared-instance offer accepted" classname="08 KMS Provider Sharing > 03 Offer the platform KMS as a shared instance" time="0.026"/>
+    <testcase name="the stored offer names shared-instance fulfillment and the offered tenant" classname="08 KMS Provider Sharing > 03 Offer the platform KMS as a shared instance" time="0.026"/>
+    <testcase name="offered platform KMSes listed" classname="08 KMS Provider Sharing > 05 List platform KMSes offered to the tenant" time="0.103"/>
+    <testcase name="the platform offer reaches the tenant unenabled" classname="08 KMS Provider Sharing > 05 List platform KMSes offered to the tenant" time="0.103"/>
+    <testcase name="offered platform KMS enabled" classname="08 KMS Provider Sharing > 06 Enable the offered platform KMS" time="0.106"/>
+    <testcase name="the provider comes back enabled under the same provider id" classname="08 KMS Provider Sharing > 06 Enable the offered platform KMS" time="0.106"/>
+    <testcase name="default KMS provider readable" classname="08 KMS Provider Sharing > 07 Read the tenant default KMS provider" time="0.108"/>
+    <testcase name="a tenant with no default reads as an absent value, not an error" classname="08 KMS Provider Sharing > 07 Read the tenant default KMS provider" time="0.108"/>
+    <testcase name="tenant default KMS provider set" classname="08 KMS Provider Sharing > 08 Set the tenant default KMS provider" time="0.121"/>
+    <testcase name="the tenant selection is recorded as the tenant's own" classname="08 KMS Provider Sharing > 08 Set the tenant default KMS provider" time="0.121"/>
+    <testcase name="runtime KMS providers listed" classname="08 KMS Provider Sharing > 09 List runtime KMS providers" time="0.339"/>
+    <testcase name="every runtime provider carries the operator-facing projection" classname="08 KMS Provider Sharing > 09 List runtime KMS providers" time="0.339"/>
+    <testcase name="the runtime plane addresses the tenant setup KMS by its management-plane provider id" classname="08 KMS Provider Sharing > 09 List runtime KMS providers" time="0.339"/>
+    <testcase name="the provider selected as default reports itself as the default" classname="08 KMS Provider Sharing > 09 List runtime KMS providers" time="0.339"/>
+    <testcase name="hosted authorization server created" classname="09 Authorization Server Configuration > 09 Create hosted authorization server" time="0.183"/>
+    <testcase name="hosted authorization server read" classname="09 Authorization Server Configuration > 10 Get hosted authorization server by UUID" time="0.097"/>
+    <testcase name="hosted authorization server replaced" classname="09 Authorization Server Configuration > 11 Replace hosted authorization server metadata" time="0.099"/>
+    <testcase name="hosted authorization server activated" classname="09 Authorization Server Configuration > 15 Activate hosted authorization server" time="0.097"/>
+    <testcase name="public client registered" classname="09 Authorization Server Configuration > 16 Register public hosted client" time="0.099"/>
+    <testcase name="hosted identity created" classname="09 Authorization Server Configuration > 19 Create hosted identity" time="0.821"/>
+    <testcase name="hosted identity activation resolves" classname="09 Authorization Server Configuration > 20a Resolve hosted identity activation" time="0.080"/>
+    <testcase name="hosted identity activation completed" classname="09 Authorization Server Configuration > 20b Complete hosted identity activation" time="0.141"/>
+    <testcase name="external authorization server created" classname="09 Authorization Server Configuration > 25 Create external authorization server from discovery" time="0.422"/>
+    <testcase name="external discovery validated" classname="09 Authorization Server Configuration > 26 Validate external authorization server discovery" time="0.414"/>
+    <testcase name="external discovery refreshed" classname="09 Authorization Server Configuration > 27 Refresh external authorization server discovery" time="0.391"/>
+    <testcase name="external authorization server activated" classname="09 Authorization Server Configuration > 29 Activate external authorization server" time="0.095"/>
+    <testcase name="default issuer AS binding created" classname="09 Authorization Server Configuration > 36 Create default issuer authorization server binding" time="0.108"/>
+    <testcase name="credential AS override stored" classname="09 Authorization Server Configuration > 39 Apply credential authorization server override" time="0.176"/>
+    <testcase name="issuer protocol profile read" classname="09 Authorization Server Configuration > 44 Read issuer protocol profile" time="0.106"/>
+    <testcase name="profile upgrade dry-run completed" classname="09 Authorization Server Configuration > 45 Dry-run compatible OID4VCI protocol profile upgrade" time="0.164"/>
+    <testcase name="issuer AS bindings refreshed" classname="09 Authorization Server Configuration > 47a Refresh issuer authorization server bindings" time="0.119"/>
+    <testcase name="issuer default restored to the seeded AS" classname="09 Authorization Server Configuration > 47b Restore the issuer default to the seeded authorization server" time="0.102"/>
+    <testcase name="credential AS override deleted under revision CAS" classname="09 Authorization Server Configuration > 42 Delete credential authorization server override under revision CAS" time="0.153"/>
+    <testcase name="leftover walkthrough binding deleted" classname="09 Authorization Server Configuration > 47d Delete leftover walkthrough issuer authorization server binding" time="0.102"/>
+    <testcase name="issuer design created" classname="10 Issuer Configuration > 01 Create issuer design" time="0.320"/>
+    <testcase name="02 Upload issuer logo asset succeeded" classname="10 Issuer Configuration > 02 Upload issuer logo asset" time="0.083"/>
+    <testcase name="asset uri is content-addressed" classname="10 Issuer Configuration > 02 Upload issuer logo asset" time="0.083"/>
+    <testcase name="asset carries sha256 integrity" classname="10 Issuer Configuration > 02 Upload issuer logo asset" time="0.083"/>
+    <testcase name="issuer render variant created" classname="10 Issuer Configuration > 03 Create issuer render variant" time="0.073"/>
+    <testcase name="issuer design updated with render variant" classname="10 Issuer Configuration > 04 Attach render variant to issuer design" time="0.094"/>
+    <testcase name="eupid design created" classname="11 Credential Designs > 01 Create EuPid SD-JWT design" time="0.176"/>
+    <testcase name="02 Upload EuPid logo asset succeeded" classname="11 Credential Designs > 02 Upload EuPid logo asset" time="0.077"/>
+    <testcase name="asset uri is content-addressed" classname="11 Credential Designs > 02 Upload EuPid logo asset" time="0.077"/>
+    <testcase name="asset carries sha256 integrity" classname="11 Credential Designs > 02 Upload EuPid logo asset" time="0.077"/>
+    <testcase name="eupid en render variant created" classname="11 Credential Designs > 03 Create EuPid render variant (en)" time="0.074"/>
+    <testcase name="eupid nl render variant created" classname="11 Credential Designs > 04 Create EuPid render variant (nl)" time="0.107"/>
+    <testcase name="eupid design updated with render variants" classname="11 Credential Designs > 05 Attach render variants to EuPid design" time="0.195"/>
+    <testcase name="mdl design created" classname="11 Credential Designs > 06 Create Mdl mdoc design" time="0.186"/>
+    <testcase name="07 Upload Mdl logo asset succeeded" classname="11 Credential Designs > 07 Upload Mdl logo asset" time="0.078"/>
+    <testcase name="asset uri is content-addressed" classname="11 Credential Designs > 07 Upload Mdl logo asset" time="0.078"/>
+    <testcase name="asset carries sha256 integrity" classname="11 Credential Designs > 07 Upload Mdl logo asset" time="0.078"/>
+    <testcase name="mdl en render variant created" classname="11 Credential Designs > 08 Create Mdl render variant (en)" time="0.082"/>
+    <testcase name="mdl design updated with render variant" classname="11 Credential Designs > 09 Attach render variant to Mdl design" time="0.199"/>
+    <testcase name="designs listed" classname="11 Credential Designs > 10 List credential designs" time="0.089"/>
+    <testcase name="EuPid signing configuration returned" classname="12 Status Lists > 00a Resolve EuPid DID signing selection" time="0.102"/>
+    <testcase name="EuPid carries an exact DID signing selection" classname="12 Status Lists > 00a Resolve EuPid DID signing selection" time="0.102"/>
+    <testcase name="the DID signing selection belongs to the tenant did:web" classname="12 Status Lists > 00a Resolve EuPid DID signing selection" time="0.102"/>
+    <testcase name="mDL signing configuration returned" classname="12 Status Lists > 00b Resolve mDL X.509 signing selection" time="0.103"/>
+    <testcase name="mDL carries an exact X.509 signing selection" classname="12 Status Lists > 00b Resolve mDL X.509 signing selection" time="0.103"/>
+    <testcase name="status list created" classname="12 Status Lists > 01 Create token status list" time="0.639"/>
+    <testcase name="status list response matches EuPid revocation contract" classname="12 Status Lists > 01 Create token status list" time="0.639"/>
+    <testcase name="status list signed token claims match hosted list" classname="12 Status Lists > 01 Create token status list" time="0.639"/>
+    <testcase name="status lists returned" classname="12 Status Lists > 02 List status lists" time="0.115"/>
+    <testcase name="EuPid revocation status list visible" classname="12 Status Lists > 02 List status lists" time="0.115"/>
+    <testcase name="status list returned" classname="12 Status Lists > 03 Get token status list" time="0.107"/>
+    <testcase name="status list hosted" classname="12 Status Lists > 04 Fetch hosted status list token" time="0.041"/>
+    <testcase name="hosted status list has statuslist JWT media type and claims" classname="12 Status Lists > 04 Fetch hosted status list token" time="0.041"/>
+    <testcase name="X.509 status list created or already provisioned" classname="12 Status Lists > 04a Create X.509 token status list" time="0.500"/>
+    <testcase name="X.509 status list response uses x5c without kid" classname="12 Status Lists > 04a Create X.509 token status list" time="0.500"/>
+    <testcase name="X.509 status list hosted" classname="12 Status Lists > 04b Fetch hosted X.509 status list token" time="0.038"/>
+    <testcase name="hosted X.509 status list uses x5c without kid" classname="12 Status Lists > 04b Fetch hosted X.509 status list token" time="0.038"/>
+    <testcase name="entry revoked" classname="12 Status Lists > 05 Revoke a status entry" time="0.492"/>
+    <testcase name="entry reactivated" classname="12 Status Lists > 06 Reactivate the status entry" time="0.511"/>
+    <testcase name="status entry returned" classname="12 Status Lists > 07 Read status entry" time="0.100"/>
+    <testcase name="reactivated status entry is readable without allocation leak" classname="12 Status Lists > 07 Read status entry" time="0.100"/>
+    <testcase name="CWT status list created or already provisioned" classname="12 Status Lists > CWT mdoc > 01 Create the CWT token status list" time="0.451"/>
+    <testcase name="the CWT status list matches the mdoc revocation contract" classname="12 Status Lists > CWT mdoc > 01 Create the CWT token status list" time="0.451"/>
+    <testcase name="the list declares the ISO 18013-5 mdoc status_list profile" classname="12 Status Lists > CWT mdoc > 01 Create the CWT token status list" time="0.451"/>
+    <testcase name="CWT status list hosted" classname="12 Status Lists > CWT mdoc > 02 Fetch the hosted CWT status list" time="0.048"/>
+    <testcase name="the hosted CWT list is an untagged COSE_Sign1 with the statuslist CWT media type" classname="12 Status Lists > CWT mdoc > 02 Fetch the hosted CWT status list" time="0.048"/>
+    <testcase name="bitstring status list created or already provisioned" classname="12 Status Lists > Bitstring VCDM > 01 Create the bitstring status list" time="0.588"/>
+    <testcase name="the bitstring list serves revocation and suspension with two bits per status" classname="12 Status Lists > Bitstring VCDM > 01 Create the bitstring status list" time="0.588"/>
+    <testcase name="bitstring status list returned" classname="12 Status Lists > Bitstring VCDM > 02 Get the bitstring status list" time="0.113"/>
+    <testcase name="the persisted list keeps both purposes and two bits per status" classname="12 Status Lists > Bitstring VCDM > 02 Get the bitstring status list" time="0.113"/>
+    <testcase name="entry suspended" classname="12 Status Lists > Bitstring VCDM > 03 Suspend a bitstring status entry" time="0.495"/>
+    <testcase name="bitstring status entry returned" classname="12 Status Lists > Bitstring VCDM > 04 Read the suspended entry" time="0.102"/>
+    <testcase name="the entry reads back as suspended" classname="12 Status Lists > Bitstring VCDM > 04 Read the suspended entry" time="0.102"/>
+    <testcase name="EuPid credential configuration returned" classname="13 Credential Configurations > 01 Read the EuPid credential configuration" time="0.094"/>
+    <testcase name="EuPid already references the shared list" classname="13 Credential Configurations > 01 Read the EuPid credential configuration" time="0.094"/>
+    <testcase name="Mdl credential configuration returned" classname="13 Credential Configurations > 02 Read the Mdl credential configuration" time="0.100"/>
+    <testcase name="EmployeeBadge credential configuration registered" classname="13 Credential Configurations > 03 Register the EmployeeBadge configuration (VCDM 1.1)" time="0.154"/>
+    <testcase name="EmployeeBadge is a VCDM 1.1 configuration bound to the bitstring list" classname="13 Credential Configurations > 03 Register the EmployeeBadge configuration (VCDM 1.1)" time="0.154"/>
+    <testcase name="Membership credential configuration registered" classname="13 Credential Configurations > 04 Register the Membership configuration (VCDM 2.0)" time="0.145"/>
+    <testcase name="Membership is a VCDM 2.0 configuration bound to the bitstring list" classname="13 Credential Configurations > 04 Register the Membership configuration (VCDM 2.0)" time="0.145"/>
+    <testcase name="CWT status list bound to Mdl" classname="13 Credential Configurations > 05 Bind the CWT status list to the Mdl configuration" time="0.150"/>
+    <testcase name="the mDL configuration references the CWT list by correlation id" classname="13 Credential Configurations > 05 Bind the CWT status list to the Mdl configuration" time="0.150"/>
+    <testcase name="vct metadata served" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="vct present" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="display has en and nl entries" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="display entries use locale (not legacy lang)" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="display has rendering.simple" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="rendering.simple has logo with uri under asset base" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="hosted logo uri is content-addressed" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="hosted logo carries uri#integrity sha256" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="en and nl displays share the same content-addressed logo uri" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="rendering.simple has background_color and text_color" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="claims carry localized display labels (en and nl)" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="claims[].sd is lowercase" classname="14 Hosted Branding Verification > 01 Fetch hosted VCT metadata" time="0.131"/>
+    <testcase name="issuer metadata served" classname="14 Hosted Branding Verification > 02 Fetch issuer well-known metadata" time="0.291"/>
+    <testcase name="top-level display has issuer name and logo (en and nl)" classname="14 Hosted Branding Verification > 02 Fetch issuer well-known metadata" time="0.291"/>
+    <testcase name="issuer metadata uses locale key (not lang)" classname="14 Hosted Branding Verification > 02 Fetch issuer well-known metadata" time="0.291"/>
+    <testcase name="EuPid configuration present with branding metadata" classname="14 Hosted Branding Verification > 02 Fetch issuer well-known metadata" time="0.291"/>
+    <testcase name="content-addressed asset served" classname="14 Hosted Branding Verification > 03 Fetch content-addressed asset" time="0.016"/>
+    <testcase name="asset has an image content-type" classname="14 Hosted Branding Verification > 03 Fetch content-addressed asset" time="0.016"/>
+    <testcase name="offer created" classname="15 Issue SD-JWT VC and mdoc > 01 Create EuPid offer" time="0.302"/>
+    <testcase name="offer resolved" classname="15 Issue SD-JWT VC and mdoc > 02 Resolve credential offer" time="0.141"/>
+    <testcase name="resolved EuPid offer carries exact credential configuration id" classname="15 Issue SD-JWT VC and mdoc > 02 Resolve credential offer" time="0.141"/>
+    <testcase name="OID4VCI metadata served" classname="15 Issue SD-JWT VC and mdoc > 03 Fetch OID4VCI metadata" time="0.213"/>
+    <testcase name="sample credential metadata separates PID and mdoc contracts" classname="15 Issue SD-JWT VC and mdoc > 03 Fetch OID4VCI metadata" time="0.213"/>
+    <testcase name="token issued" classname="15 Issue SD-JWT VC and mdoc > 04 Exchange pre-authorized code for token" time="0.425"/>
+    <testcase name="pre-authorized token returns an opaque EuPid credential identifier distinct from its configuration id" classname="15 Issue SD-JWT VC and mdoc > 04 Exchange pre-authorized code for token" time="0.425"/>
+    <testcase name="eupid credential issued" classname="15 Issue SD-JWT VC and mdoc > 05 Request EuPid credential" time="1.790"/>
+    <testcase name="EuPid credential carries expected VCT and status-list reference" classname="15 Issue SD-JWT VC and mdoc > 05 Request EuPid credential" time="1.790"/>
+    <testcase name="EuPid credential and status list use the same did:web signer identity" classname="15 Issue SD-JWT VC and mdoc > 05 Request EuPid credential" time="1.790"/>
+    <testcase name="eupid credential issued" classname="15 Issue SD-JWT VC and mdoc > 05 Request EuPid credential" time="1.790"/>
+    <testcase name="EuPid credential carries expected VCT and status-list reference" classname="15 Issue SD-JWT VC and mdoc > 05 Request EuPid credential" time="1.790"/>
+    <testcase name="EuPid credential and status list use the same did:web signer identity" classname="15 Issue SD-JWT VC and mdoc > 05 Request EuPid credential" time="1.790"/>
+    <testcase name="session tracked" classname="15 Issue SD-JWT VC and mdoc > 06 Check EuPid offer status" time="0.088"/>
+    <testcase name="mdl offer created" classname="15 Issue SD-JWT VC and mdoc > 07 Create Mdl offer" time="0.308"/>
+    <testcase name="mdl offer resolved" classname="15 Issue SD-JWT VC and mdoc > 08 Resolve Mdl offer" time="0.065"/>
+    <testcase name="resolved mDL offer carries exact credential configuration id" classname="15 Issue SD-JWT VC and mdoc > 08 Resolve Mdl offer" time="0.065"/>
+    <testcase name="mdl token issued" classname="15 Issue SD-JWT VC and mdoc > 09 Exchange Mdl code for token" time="0.423"/>
+    <testcase name="pre-authorized token returns an opaque Mdl credential identifier distinct from its configuration id" classname="15 Issue SD-JWT VC and mdoc > 09 Exchange Mdl code for token" time="0.423"/>
+    <testcase name="mdl credential issued" classname="15 Issue SD-JWT VC and mdoc > 10 Request Mdl credential" time="1.388"/>
+    <testcase name="mDL credential response contains an opaque mdoc payload" classname="15 Issue SD-JWT VC and mdoc > 10 Request Mdl credential" time="1.388"/>
+    <testcase name="mdl credential issued" classname="15 Issue SD-JWT VC and mdoc > 10 Request Mdl credential" time="1.388"/>
+    <testcase name="mDL credential response contains an opaque mdoc payload" classname="15 Issue SD-JWT VC and mdoc > 10 Request Mdl credential" time="1.388"/>
+    <testcase name="transaction-code offer created" classname="16 Issue with Transaction Code > 01 Create transaction-code EuPid offer" time="0.329"/>
+    <testcase name="transaction-code offer resolved" classname="16 Issue with Transaction Code > 02 Resolve transaction-code EuPid offer" time="0.127"/>
+    <testcase name="transaction-code metadata served" classname="16 Issue with Transaction Code > 03 Fetch transaction-code OID4VCI metadata" time="0.170"/>
+    <testcase name="correct transaction code succeeds after wrong attempt" classname="16 Issue with Transaction Code > 05 Exchange transaction code for token" time="0.428"/>
+    <testcase name="credential nonce issued" classname="16 Issue with Transaction Code > 05a Fetch credential nonce" time="0.054"/>
+    <testcase name="transaction-code credential issued" classname="16 Issue with Transaction Code > 06 Issue transaction-code EuPid credential" time="1.316"/>
+    <testcase name="transaction-code offer status is readable" classname="16 Issue with Transaction Code > 07 Assert transaction-code offer status correlation" time="0.096"/>
+    <testcase name="credential status reference dereferenced" classname="16 Issue with Transaction Code > 09 Dereference transaction-code credential status" time="0.041"/>
+    <testcase name="EmployeeBadge offer created" classname="17 Issue W3C VCDM 1.1 > 02 Create the EmployeeBadge offer" time="0.299"/>
+    <testcase name="EmployeeBadge offer resolved" classname="17 Issue W3C VCDM 1.1 > 03 Resolve the EmployeeBadge offer" time="0.062"/>
+    <testcase name="VCDM 1.1 metadata served" classname="17 Issue W3C VCDM 1.1 > 04 Fetch the VCDM 1.1 OID4VCI metadata" time="0.173"/>
+    <testcase name="the issuer advertises EmployeeBadge as jwt_vc_json" classname="17 Issue W3C VCDM 1.1 > 04 Fetch the VCDM 1.1 OID4VCI metadata" time="0.173"/>
+    <testcase name="EmployeeBadge token issued" classname="17 Issue W3C VCDM 1.1 > 05 Exchange the EmployeeBadge pre-authorized code" time="0.395"/>
+    <testcase name="the token returns an opaque EmployeeBadge credential identifier" classname="17 Issue W3C VCDM 1.1 > 05 Exchange the EmployeeBadge pre-authorized code" time="0.395"/>
+    <testcase name="EmployeeBadge credential issued" classname="17 Issue W3C VCDM 1.1 > 06 Request the EmployeeBadge credential" time="1.280"/>
+    <testcase name="the credential is a VCDM 1.1 verifiable credential of type EmployeeBadgeCredential" classname="17 Issue W3C VCDM 1.1 > 06 Request the EmployeeBadge credential" time="1.280"/>
+    <testcase name="the credential status entry is a BitstringStatusListEntry on the bitstring list" classname="17 Issue W3C VCDM 1.1 > 06 Request the EmployeeBadge credential" time="1.280"/>
+    <testcase name="EmployeeBadge credential issued" classname="17 Issue W3C VCDM 1.1 > 06 Request the EmployeeBadge credential" time="1.280"/>
+    <testcase name="the credential is a VCDM 1.1 verifiable credential of type EmployeeBadgeCredential" classname="17 Issue W3C VCDM 1.1 > 06 Request the EmployeeBadge credential" time="1.280"/>
+    <testcase name="the credential status entry is a BitstringStatusListEntry on the bitstring list" classname="17 Issue W3C VCDM 1.1 > 06 Request the EmployeeBadge credential" time="1.280"/>
+    <testcase name="EmployeeBadge session tracked" classname="17 Issue W3C VCDM 1.1 > 07 Check the EmployeeBadge offer status" time="0.089"/>
+    <testcase name="EmployeeBadge status entry returned" classname="17 Issue W3C VCDM 1.1 > 08 Read the EmployeeBadge status entry" time="0.122"/>
+    <testcase name="the freshly issued VCDM 1.1 credential is valid" classname="17 Issue W3C VCDM 1.1 > 08 Read the EmployeeBadge status entry" time="0.122"/>
+    <testcase name="Membership offer created" classname="18 Issue W3C VCDM 2.0 > 02 Create the Membership offer" time="0.381"/>
+    <testcase name="Membership offer resolved" classname="18 Issue W3C VCDM 2.0 > 03 Resolve the Membership offer" time="0.067"/>
+    <testcase name="VCDM 2.0 metadata served" classname="18 Issue W3C VCDM 2.0 > 04 Fetch the VCDM 2.0 OID4VCI metadata" time="0.155"/>
+    <testcase name="the issuer advertises Membership as jwt_vc_json-ld" classname="18 Issue W3C VCDM 2.0 > 04 Fetch the VCDM 2.0 OID4VCI metadata" time="0.155"/>
+    <testcase name="Membership token issued" classname="18 Issue W3C VCDM 2.0 > 05 Exchange the Membership pre-authorized code" time="0.385"/>
+    <testcase name="the token returns an opaque Membership credential identifier" classname="18 Issue W3C VCDM 2.0 > 05 Exchange the Membership pre-authorized code" time="0.385"/>
+    <testcase name="Membership credential issued" classname="18 Issue W3C VCDM 2.0 > 06 Request the Membership credential" time="1.140"/>
+    <testcase name="the credential is a VCDM 2.0 verifiable credential of type MembershipCredential" classname="18 Issue W3C VCDM 2.0 > 06 Request the Membership credential" time="1.140"/>
+    <testcase name="the credential status entry is a BitstringStatusListEntry on the bitstring list" classname="18 Issue W3C VCDM 2.0 > 06 Request the Membership credential" time="1.140"/>
+    <testcase name="Membership credential issued" classname="18 Issue W3C VCDM 2.0 > 06 Request the Membership credential" time="1.140"/>
+    <testcase name="the credential is a VCDM 2.0 verifiable credential of type MembershipCredential" classname="18 Issue W3C VCDM 2.0 > 06 Request the Membership credential" time="1.140"/>
+    <testcase name="the credential status entry is a BitstringStatusListEntry on the bitstring list" classname="18 Issue W3C VCDM 2.0 > 06 Request the Membership credential" time="1.140"/>
+    <testcase name="Membership session tracked" classname="18 Issue W3C VCDM 2.0 > 07 Check the Membership offer status" time="0.085"/>
+    <testcase name="Membership status entry returned" classname="18 Issue W3C VCDM 2.0 > 08 Read the Membership status entry" time="0.097"/>
+    <testcase name="the freshly issued VCDM 2.0 credential is valid" classname="18 Issue W3C VCDM 2.0 > 08 Read the Membership status entry" time="0.097"/>
+    <testcase name="pipeline session opened" classname="19 Issue Through a Pipeline > 01 Initialize pipeline session" time="0.099"/>
+    <testcase name="attributes contributed" classname="19 Issue Through a Pipeline > 02 Contribute attributes" time="0.095"/>
+    <testcase name="attributes returned" classname="19 Issue Through a Pipeline > 03 Read accumulated attributes" time="0.081"/>
+    <testcase name="completeness evaluated" classname="19 Issue Through a Pipeline > 04 Evaluate completeness" time="0.079"/>
+    <testcase name="issuance approved" classname="19 Issue Through a Pipeline > 05 Approve issuance" time="0.083"/>
+    <testcase name="auth-code offer created" classname="20 Authorization Code Issuance > 01 Create offer with authorization code grant" time="0.211"/>
+    <testcase name="as metadata served" classname="20 Authorization Code Issuance > 02 Fetch authorization server metadata" time="0.150"/>
+    <testcase name="eupid query stored" classname="21 DCQL Queries > 01 Create EuPid query" time="0.311"/>
+    <testcase name="EuPid DCQL query content is versioned and enabled" classname="21 DCQL Queries > 01 Create EuPid query" time="0.311"/>
+    <testcase name="mdl query stored" classname="21 DCQL Queries > 02 Create Mdl query" time="0.083"/>
+    <testcase name="mDL DCQL query content is versioned and enabled" classname="21 DCQL Queries > 02 Create Mdl query" time="0.083"/>
+    <testcase name="combined query stored" classname="21 DCQL Queries > 03 Create combined query" time="0.082"/>
+    <testcase name="combined DCQL query contains EuPid and mDL credentials" classname="21 DCQL Queries > 03 Create combined query" time="0.082"/>
+    <testcase name="queries listed" classname="21 DCQL Queries > 04 List queries" time="0.075"/>
+    <testcase name="query list includes exact enabled EuPid, mDL, and combined definitions" classname="21 DCQL Queries > 04 List queries" time="0.075"/>
+    <testcase name="query versions listed" classname="21 DCQL Queries > 05 List combined query versions" time="0.074"/>
+    <testcase name="combined query version history starts at version 1" classname="21 DCQL Queries > 05 List combined query versions" time="0.074"/>
+    <testcase name="combined query bound or already provisioned" classname="21 DCQL Queries > 06 Bind combined query to verifier" time="0.079"/>
+    <testcase name="combined query binding pins version 1 on the tenant verifier" classname="21 DCQL Queries > 06 Bind combined query to verifier" time="0.079"/>
+    <testcase name="verifier bindings listed" classname="21 DCQL Queries > 07 List verifier DCQL bindings" time="0.072"/>
+    <testcase name="verifier binding list includes the combined query" classname="21 DCQL Queries > 07 List verifier DCQL bindings" time="0.072"/>
+    <testcase name="combined query verifier bindings listed" classname="21 DCQL Queries > 08 List combined query verifier bindings" time="0.073"/>
+    <testcase name="combined query is bound to the tenant verifier" classname="21 DCQL Queries > 08 List combined query verifier bindings" time="0.073"/>
+    <testcase name="verification session created" classname="22 Verification > 01 Create verification request" time="1.052"/>
+    <testcase name="signed verification request object returned" classname="22 Verification > 01a Fetch signed verification request object" time="0.487"/>
+    <testcase name="verifier request object issuer and kid use the same DID" classname="22 Verification > 01a Fetch signed verification request object" time="0.487"/>
+    <testcase name="status returned" classname="22 Verification > 02 Poll verification status" time="0.082"/>
+    <testcase name="session removed" classname="22 Verification > 03 Cancel verification session" time="0.081"/>
+    <testcase name="trust domains listed" classname="23 Trust Domains and Trust Lists > 01 List trust domains" time="0.119"/>
+    <testcase name="the onboarding-seeded issuer trust domain exists" classname="23 Trust Domains and Trust Lists > 01 List trust domains" time="0.119"/>
+    <testcase name="seeded domain is active" classname="23 Trust Domains and Trust Lists > 01 List trust domains" time="0.119"/>
+    <testcase name="anchors listed" classname="23 Trust Domains and Trust Lists > 02 List anchors of the seeded domain" time="0.100"/>
+    <testcase name="seeded anchors present" classname="23 Trust Domains and Trust Lists > 02 List anchors of the seeded domain" time="0.100"/>
+    <testcase name="issuer DID anchor seeded" classname="23 Trust Domains and Trust Lists > 02 List anchors of the seeded domain" time="0.100"/>
+    <testcase name="seeded anchors are tenant-produced material" classname="23 Trust Domains and Trust Lists > 02 List anchors of the seeded domain" time="0.100"/>
+    <testcase name="issuer X.509 anchor seeded" classname="23 Trust Domains and Trust Lists > 02 List anchors of the seeded domain" time="0.100"/>
+    <testcase name="admissions listed" classname="23 Trust Domains and Trust Lists > 03 List admissions of the issuer anchor" time="0.103"/>
+    <testcase name="issuer anchor is admitted as CREDENTIAL_ISSUER" classname="23 Trust Domains and Trust Lists > 03 List admissions of the issuer anchor" time="0.103"/>
+    <testcase name="tenant attachment returned" classname="23 Trust Domains and Trust Lists > 04 Read the tenant issuer-trust attachment" time="0.100"/>
+    <testcase name="tenant issuer trust is fail closed" classname="23 Trust Domains and Trust Lists > 04 Read the tenant issuer-trust attachment" time="0.100"/>
+    <testcase name="tenant attachment selects the seeded domain" classname="23 Trust Domains and Trust Lists > 04 Read the tenant issuer-trust attachment" time="0.100"/>
+    <testcase name="domain ordinals are contiguous from zero" classname="23 Trust Domains and Trust Lists > 04 Read the tenant issuer-trust attachment" time="0.100"/>
+    <testcase name="eligibility grant returned" classname="23 Trust Domains and Trust Lists > 05 Read the verifier eligibility grant" time="0.100"/>
+    <testcase name="seeded domain is eligible for verifiers" classname="23 Trust Domains and Trust Lists > 05 Read the verifier eligibility grant" time="0.100"/>
+    <testcase name="consumers listed" classname="23 Trust Domains and Trust Lists > 06 List consumers of the seeded domain" time="0.100"/>
+    <testcase name="the tenant consumes the seeded domain" classname="23 Trust Domains and Trust Lists > 06 List consumers of the seeded domain" time="0.100"/>
+    <testcase name="domain created" classname="23 Trust Domains and Trust Lists > 07 Create a second trust domain" time="0.101"/>
+    <testcase name="new domains start as DRAFT" classname="23 Trust Domains and Trust Lists > 07 Create a second trust domain" time="0.101"/>
+    <testcase name="domain activated" classname="23 Trust Domains and Trust Lists > 08 Activate the second trust domain" time="0.099"/>
+    <testcase name="status is ACTIVE" classname="23 Trust Domains and Trust Lists > 08 Activate the second trust domain" time="0.099"/>
+    <testcase name="anchor created" classname="23 Trust Domains and Trust Lists > 11 Create a VICAL signer anchor" time="0.128"/>
+    <testcase name="an unadmitted VICAL signer is refused" classname="23 Trust Domains and Trust Lists > 12 Refuse a VICAL whose signer anchor is not admitted" time="0.108"/>
+    <testcase name="the refusal names the missing admission" classname="23 Trust Domains and Trust Lists > 12 Refuse a VICAL whose signer anchor is not admitted" time="0.108"/>
+    <testcase name="admission granted" classname="23 Trust Domains and Trust Lists > 13 Admit the anchor as MDOC_VICAL_SIGNER" time="0.128"/>
+    <testcase name="admission class echoed" classname="23 Trust Domains and Trust Lists > 13 Admit the anchor as MDOC_VICAL_SIGNER" time="0.128"/>
+    <testcase name="VICAL configured" classname="23 Trust Domains and Trust Lists > 15 Configure the VICAL source" time="0.109"/>
+    <testcase name="the source round-trips" classname="23 Trust Domains and Trust Lists > 15 Configure the VICAL source" time="0.109"/>
+    <testcase name="VICAL removed" classname="23 Trust Domains and Trust Lists > 17 Remove the VICAL configuration" time="0.101"/>
+    <testcase name="the anchor reads as unconfigured again" classname="23 Trust Domains and Trust Lists > 17 Remove the VICAL configuration" time="0.101"/>
+    <testcase name="trust list source registered" classname="23 Trust Domains and Trust Lists > 17a Register a published trust list as a trust source" time="0.112"/>
+    <testcase name="the source belongs to the domain and is a custom TS 119 612 list" classname="23 Trust Domains and Trust Lists > 17a Register a published trust list as a trust source" time="0.112"/>
+    <testcase name="trust list source read" classname="23 Trust Domains and Trust Lists > 17b Read the trust list source" time="0.103"/>
+    <testcase name="the source reads back as registered" classname="23 Trust Domains and Trust Lists > 17b Read the trust list source" time="0.103"/>
+    <testcase name="LoTE source registered" classname="23 Trust Domains and Trust Lists > 17c Register a list of trusted entities (LoTE) source" time="0.149"/>
+    <testcase name="the registration returns the first candidate revision of the source" classname="23 Trust Domains and Trust Lists > 17c Register a list of trusted entities (LoTE) source" time="0.149"/>
+    <testcase name="LoTE source read" classname="23 Trust Domains and Trust Lists > 17d Read the LoTE source" time="0.150"/>
+    <testcase name="the source carries the registered profile and an etag for the next mutation" classname="23 Trust Domains and Trust Lists > 17d Read the LoTE source" time="0.150"/>
+    <testcase name="platform secret offerings returned" classname="24 KMS Runtime API > 00 List platform secret offerings" time="0.018"/>
+    <testcase name="platform secret storage returned" classname="24 KMS Runtime API > 00 Get platform secret storage" time="0.013"/>
+    <testcase name="tenant secret options returned" classname="24 KMS Runtime API > 00 Get tenant secret options" time="0.152"/>
+    <testcase name="tenant secret assignment returned" classname="24 KMS Runtime API > 00 Get tenant secret assignment" time="0.101"/>
+    <testcase name="runtime providers listed" classname="24 KMS Runtime API > 01 List runtime providers" time="0.126"/>
+    <testcase name="public key imported" classname="24 KMS Runtime API > 01a Import externally supplied public key" time="0.398"/>
+    <testcase name="import response identifies the imported key" classname="24 KMS Runtime API > 01a Import externally supplied public key" time="0.398"/>
+    <testcase name="keys listed for the provider" classname="24 KMS Runtime API > 02 List keys by providerId" time="0.091"/>
+    <testcase name="key generated" classname="24 KMS Runtime API > 03 Generate key with providerId and alias" time="0.592"/>
+    <testcase name="key read by alias" classname="24 KMS Runtime API > 04 Get key by providerId and alias" time="0.093"/>
+    <testcase name="raw signature created" classname="24 KMS Runtime API > 05 Create raw signature with providerId and alias" time="0.316"/>
+    <testcase name="raw signature verified" classname="24 KMS Runtime API > 06 Verify raw signature with providerId and alias" time="0.082"/>
+    <testcase name="generated key deleted" classname="24 KMS Runtime API > 07 Delete generated key by providerId and alias" time="0.344"/>
+    <testcase name="tenant-wide key list returned" classname="24 KMS Runtime API > 08 List keys across every provider" time="0.119"/>
+    <testcase name="key generated through the tenant-wide route" classname="24 KMS Runtime API > 09 Generate a key without naming a provider in the path" time="0.545"/>
+    <testcase name="key read by alias" classname="24 KMS Runtime API > 10 Read the key by alias" time="0.084"/>
+    <testcase name="certificate reference registered" classname="24 KMS Runtime API > 11 Register the key certificate chain" time="0.507"/>
+    <testcase name="certificate references listed" classname="24 KMS Runtime API > 12 List certificate references" time="0.065"/>
+    <testcase name="certificate reference read" classname="24 KMS Runtime API > 13 Read one certificate reference" time="0.076"/>
+    <testcase name="registered chain read" classname="24 KMS Runtime API > 14 Read the registered chain" time="0.424"/>
+    <testcase name="certificate reference deleted" classname="24 KMS Runtime API > 15 Delete the certificate reference" time="0.085"/>
+    <testcase name="tenant-wide key deleted" classname="24 KMS Runtime API > 16 Delete the tenant-wide key" time="0.340"/>
+    <testcase name="developer console policy read" classname="25 Developer Console Settings > 01 Read current console policy" time="0.117"/>
+  </testsuite>
+</testsuites>

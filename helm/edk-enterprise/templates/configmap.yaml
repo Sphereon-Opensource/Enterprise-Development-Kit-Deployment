@@ -276,7 +276,8 @@ data:
       user-provider:
         mode: {{ $bootstrap.userProviderMode | quote }}
       servers:
-        default:
+        default-server: platform
+        platform:
           mode: HOSTED
           # The platform AS is provisioned entirely from this shipped configuration, so
           # configuration is authoritative for its client registry and persisted
@@ -361,11 +362,6 @@ data:
               allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" . "role" "wallet-onboarding") | quote }}
             {{- end }}
           {{- end }}
-        platform:
-          # Application bootstrap provisions the control-plane AS with slug
-          # `platform`; keep key materialization enabled for that instance as well.
-          signing-key:
-            auto-generate: true
       clients:
         {{- if .Values.portalBff.existingSecret }}
         admin-console-portal-bff:

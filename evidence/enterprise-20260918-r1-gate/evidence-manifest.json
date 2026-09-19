@@ -1,0 +1,174 @@
+{
+  "status": "failed",
+  "kind": "release",
+  "completedAt": "2026-09-17T23:45:53.257Z",
+  "projectName": "edk-customer-r1",
+  "tag": "0.25.0-enterprise-20260918-r1",
+  "requestCount": 193,
+  "teardownStatus": "passed",
+  "canaryStatus": "absent",
+  "optionalLanes": {
+    "keycloak": "skipped",
+    "webhookSink": "skipped",
+    "azureKms": "skipped",
+    "eudi": "skipped"
+  },
+  "evidence": [
+    {
+      "path": "behind-edge/docker-compose.behind-edge.yml",
+      "bytes": 5621,
+      "sha256": "67f3cab2257d40f4b4a212f21f64014bec0b75753d455ef038cc9cb46a77c8b5"
+    },
+    {
+      "path": "behind-edge/dynamic.behind-edge.generated.yml",
+      "bytes": 15622,
+      "sha256": "125f8ac780d53b4f9f1824a3bf3564336aed35840f17439ff99ac1ba0076f055"
+    },
+    {
+      "path": "behind-edge/edge-router.e2e.yml",
+      "bytes": 809,
+      "sha256": "c2650d1a8cdb98f9fc2e660815b48805de453d469692f6daf79991e4909b8622"
+    },
+    {
+      "path": "behind-edge/traefik.behind-edge.generated.yml",
+      "bytes": 525,
+      "sha256": "23ee07466f8331dcf9025312d670932259563f6887a6189d384f8702cb8abcbb"
+    },
+    {
+      "path": "compose-config.yml",
+      "bytes": 41972,
+      "sha256": "988b684237950319b4e38d8926fc13391ecfb3404941582e794f4f22b4cb5213"
+    },
+    {
+      "path": "compose-images.txt",
+      "bytes": 822,
+      "sha256": "abe2fbca9ba8f68900d0b560f5906c0faec3fc9c524469eb436b63384fe92f36"
+    },
+    {
+      "path": "compose-initial-containers.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "compose-initial-networks.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "compose-initial-volumes.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "compose-logs.txt",
+      "bytes": 789652,
+      "sha256": "3d169ac2e225af84c8ca33cd935bb8017d89c187ee6406a7622ac3e1fdef3087"
+    },
+    {
+      "path": "compose-project-classification.log",
+      "bytes": 35,
+      "sha256": "b83a8dc285f63e9301203f866c0b81fcddf03070a52f41ee53b1b5dcbfd28408"
+    },
+    {
+      "path": "compose-project-disposition.json",
+      "bytes": 150,
+      "sha256": "cede657a2a084348e7fd216b8e4fa374b2c064c05aa85ec9e4edd3aa2fd87424"
+    },
+    {
+      "path": "compose-project-inventory.json",
+      "bytes": 147,
+      "sha256": "fbb6c768371c913561f1795e4e7f702bdc96e0090161b4600a34117629bf0722"
+    },
+    {
+      "path": "compose-ps.jsonl",
+      "bytes": 38943,
+      "sha256": "f5c266c3b3529c64a914097b83f1dd216da4decbcfbd7b17980f3445bb6232f8"
+    },
+    {
+      "path": "compose-service-image-ids.json",
+      "bytes": 3865,
+      "sha256": "99e3ca0270c15ba23c8909a236096d10447d01135ecbd828c85fa21bfd4e9c05"
+    },
+    {
+      "path": "compose-teardown.json",
+      "bytes": 186,
+      "sha256": "8ca6b50ad754b87539f99bfd3a9ba893cbb0873113fa61311a6e827aba46c2c6"
+    },
+    {
+      "path": "compose-teardown.log",
+      "bytes": 3361,
+      "sha256": "151cb332daa78fda5e9eb828372edd869bb5bc457b58df3d51fa1a276642d7ad"
+    },
+    {
+      "path": "compose-up.log",
+      "bytes": 9414,
+      "sha256": "e164d19dee7a658bcae3a8bc67e8470e4b7214e969cab660819c49d9144b2eed"
+    },
+    {
+      "path": "docker-info.log",
+      "bytes": 3599,
+      "sha256": "7fc373fb677576040dc8dcef9eb4319b37eacdf36489b336909f08d7ddcfb4cd"
+    },
+    {
+      "path": "edge-public-readiness.log",
+      "bytes": 57,
+      "sha256": "1152b54a6034a2282f042504ece2cb85111c466bcfffc72d1430fb7dcb313c04"
+    },
+    {
+      "path": "edge-router-disposition.json",
+      "bytes": 200,
+      "sha256": "a37f8d0d6e8e44e712f2a468d0c4abc663cac1c2bb1ee29a062c89d08d93092d"
+    },
+    {
+      "path": "enterprise-image-preflight.log",
+      "bytes": 171,
+      "sha256": "69c4e9fd4e6b5dadabe4bc7ab680c0d946bfdf18b864e1a3bb889aec1dc0ede0"
+    },
+    {
+      "path": "enterprise-image-set.json",
+      "bytes": 11306,
+      "sha256": "9862681e29bdd88e5fa240675bece15a85e6d1f31d9f1946255a3f30916f5346"
+    },
+    {
+      "path": "evidence-sanitization.json",
+      "bytes": 148,
+      "sha256": "32c626968fb9e2b20c18cbced110c76692f455c7bdda8185ab6cf03baddca3e7"
+    },
+    {
+      "path": "gate-failure.log",
+      "bytes": 111,
+      "sha256": "fe7f3dfb606ae0d6426ad4df89af02f186d1590558c96314e972876bde573d1f"
+    },
+    {
+      "path": "platform-database-audit.txt",
+      "bytes": 2731,
+      "sha256": "b03e3f2b6dd66d8da13356d6df79e81c2faa6f6acb8a84ed781cddec5b200ab6"
+    },
+    {
+      "path": "release-gate-plan.json",
+      "bytes": 2773,
+      "sha256": "41b2eccd4fe2015c0edb39fa78d9ea7b062902f3594350572a7d675412c180a6"
+    },
+    {
+      "path": "release-identity.json",
+      "bytes": 435,
+      "sha256": "4c865b2257d9c8c00c136167c8f162268f8b00cdb1d8b85f9e5bdfa54b3c234d"
+    },
+    {
+      "path": "setup.log",
+      "bytes": 90,
+      "sha256": "df3e41910149fa786e63846e526d89b8e42ff75236cf14ba3ff05da39bcff9f6"
+    },
+    {
+      "path": "tenant-database-audit.txt",
+      "bytes": 4325,
+      "sha256": "53c7081cac1ee04fc7238045ab96c257949921f806cbacb1874a296b48ccc04a"
+    }
+  ],
+  "detachedManifestHash": {
+    "algorithm": "sha256",
+    "path": "evidence-manifest.sha256",
+    "scope": "evidence-manifest.json",
+    "note": "The detached hash accounts for the manifest; the hash file cannot self-hash."
+  }
+}

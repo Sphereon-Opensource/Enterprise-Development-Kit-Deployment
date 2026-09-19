@@ -1,0 +1,26 @@
+# Shared edge route for one customer EDK Compose environment.
+# The customer release wrapper renders the exact host space, environment label,
+# and internal stack-gateway alias. The shared edge owns TLS and hot-reloads
+# the installed result from its watched dynamic configuration directory.
+
+http:
+  routers:
+    customer-e2e:
+      rule: >-
+        Host(`platform.e2e.nk.sphereon.com`) || HostRegexp(`^[a-z0-9-]+\.e2e\.nk\.sphereon\.com$`)
+      priority: 20000
+      entryPoints: ["websecure"]
+      service: customer-e2e
+      tls:
+        certResolver: le
+        domains:
+          - main: "e2e.nk.sphereon.com"
+            sans:
+              - "*.e2e.nk.sphereon.com"
+
+  services:
+    customer-e2e:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://gw-e2e:80"
