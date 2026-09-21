@@ -79,7 +79,7 @@ $collection = Get-Content -LiteralPath '${collectionPath.replaceAll("'", "''")}'
 @{ inventory = (Count-Requests @($collection.item)); enabled = (Count-Requests @($collection.item) -EnabledOnly) } | ConvertTo-Json -Compress
 `], {encoding: 'utf8'})
 assert.equal(countProbe.status, 0, countProbe.stderr)
-assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 219, enabled: 194})
+assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 229, enabled: 204})
 
 function requestCount(items) {
   return (items ?? []).reduce(
@@ -113,7 +113,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 219, 'shipped customer collection must contain the current 219-request customer reference')
+assert.equal(requestCount(collection.item), 229, 'shipped customer collection must contain the current 229-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -246,10 +246,15 @@ const customerManifestIds = customerManifest
   .map((line) => line.trim().split('=', 1)[0])
   .filter(Boolean)
   .sort()
-const customerManifestDigest = `sha256:${createHash('sha256')
-  .update(customerManifestIds.map((id) => `${id}\0${createHash('sha256').update('').digest('hex')}`).join(''))
-  .digest('hex')}`
-assert.equal(customerManifestDigest, 'sha256:9201eaf4b197235f6b35f3e3293f3118a222af82f292057c3664a4bcde020748',
+const customerManifestEmptyDigest = createHash('sha256').update(Buffer.alloc(0)).digest()
+const customerManifestDigestHash = createHash('sha256')
+for (const secretId of customerManifestIds) {
+  customerManifestDigestHash.update(secretId)
+  customerManifestDigestHash.update(Buffer.from([0]))
+  customerManifestDigestHash.update(customerManifestEmptyDigest)
+}
+const customerManifestDigest = `sha256:${customerManifestDigestHash.digest('hex')}`
+assert.equal(customerManifestDigest, 'sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e',
   'customer manifest digest must be derived from its opaque secret ids')
 assert.match(compose, /\$\{EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST:-\.\/config\/secret-management-environment\.manifest\}:/u,
   'customer Compose must mount its own canonical environment manifest by default')
@@ -963,7 +968,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 219)
+  assert.equal(plan.requestCount, 229)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -1002,7 +1007,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 219)
+  assert.equal(monolithPlan.requestCount, 229)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))
@@ -1094,13 +1099,17 @@ ${suppliedDryRun.stderr}`)
   assert.equal(edgePlan.publicOrigin, 'https://platform.compose-rc3.nk.sphereon.com')
   assert.equal(edgePlan.requiresLocalCa, false)
   assert.equal(edgePlan.edgeEnvironment, 'compose-rc3')
-  assert.equal(edgePlan.edgeAlias, 'gw-compose-rc3')
+  const edgeProject = 'edk_customer_edge_contract'
+  const edgeSafeProject = edgeProject.toLowerCase().replaceAll('_', '-')
+  const edgeProjectDigest = createHash('sha256').update(edgeProject).digest('hex').slice(0, 12)
+  const edgeAlias = `gw-${edgeSafeProject}-${edgeProjectDigest}`
+  assert.equal(edgePlan.edgeAlias, edgeAlias)
   assert.equal(edgePlan.edgeNetwork, 'edge')
   assert.equal(edgePlan.composeFiles[1], join(edgeReportDir, 'behind-edge', 'docker-compose.behind-edge.yml'))
 
   const edgeCompose = readFileSync(edgePlan.composeFiles[1], 'utf8')
   assert.match(edgeCompose, /EDK_PLATFORM_PUBLIC_URL: https:\/\/platform\.compose-rc3\.nk\.sphereon\.com/u)
-  assert.match(edgeCompose, /aliases:\s*\n\s+- gw-compose-rc3/u)
+  assert.match(edgeCompose, new RegExp(`aliases:\\s*\\n\\s+- ${edgeAlias}`, 'u'))
   assert.match(edgeCompose, /name: edge\s*\n\s+external: true/u)
   for (const service of [
     'enterprise-platform',
@@ -1140,7 +1149,7 @@ ${suppliedDryRun.stderr}`)
   assert.match(edgeRouter, /HostRegexp\(`\^\[a-z0-9-\]\+\\\.compose-rc3\\\.nk\\\.sphereon\\\.com\$`\)/u)
   assert.match(edgeRouter, /Host\(`platform\.compose-rc3\.nk\.sphereon\.com`\)/u)
   assert.equal(edgeRouter.includes('priority: 20000'), true)
-  assert.match(edgeRouter, /url: "http:\/\/gw-compose-rc3:80"/u)
+  assert.match(edgeRouter, new RegExp(`url: "http://${edgeAlias}:80"`, 'u'))
   assert.match(edgeRouter, /certResolver: le/u)
 } finally {
   rmSync(testRoot, {recursive: true, force: true})

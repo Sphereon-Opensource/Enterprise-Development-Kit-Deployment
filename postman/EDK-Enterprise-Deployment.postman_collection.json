@@ -1260,7 +1260,7 @@
         },
         {
           "name": "07 Azure Key Vault and external keys (optional)",
-          "description": "Tenant-owned vault: set tenantAzureVaultUri, tenantAzureTenantId, tenantAzureClientId and private tenantAzureClientSecret. Keys remain in Azure. Supply a matching public DER certificate chain; repeat array entries for intermediates. For a shared platform vault use folder 04 first and skip requests 01-03 here, setting tenantAzureProviderId to the offered providerId.\n\nDocumentation: https://docs.sphereon.com/edk/guides/azure-kms-byok-byoc",
+          "description": "Tenant-owned vault: set tenantAzureVaultUri, tenantAzureTenantId, tenantAzureClientId and private tenantAzureClientSecret. Keys remain in Azure. Supply a matching public DER certificate chain; repeat array entries for intermediates. For a shared platform vault use folder 04 first and skip requests 01-03 here, setting tenantAzureProviderId to the offered providerId.\n\nOptional scenario guard: set enableTenantAzure=true and provide tenantAzureVaultUri, tenantAzureTenantId, tenantAzureClientId, tenantAzureClientSecret, externalKeyAlias, externalAzureCertificateAlias, externalCertificateDerBase64. When false, requests are skipped and reported as optional skipped.\n\nDocumentation: https://docs.sphereon.com/edk/guides/azure-kms-byok-byoc",
           "item": [
             {
               "name": "01 Create an Azure Key Vault KMS resource",
@@ -1286,6 +1286,23 @@
                 }
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableTenantAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: tenant Azure KMS and external keys (set enableTenantAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1334,6 +1351,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableTenantAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: tenant Azure KMS and external keys (set enableTenantAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1364,6 +1398,23 @@
                 "header": []
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableTenantAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: tenant Azure KMS and external keys (set enableTenantAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1404,6 +1455,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableTenantAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: tenant Azure KMS and external keys (set enableTenantAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1422,6 +1490,23 @@
                 "header": []
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableTenantAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: tenant Azure KMS and external keys (set enableTenantAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1456,6 +1541,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableTenantAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: tenant Azure KMS and external keys (set enableTenantAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1475,6 +1577,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableTenantAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: tenant Azure KMS and external keys (set enableTenantAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1485,7 +1604,20 @@
                 }
               ]
             }
-          ]
+          ],
+          "_sphereon": {
+            "optional": true,
+            "enableVariable": "enableTenantAzure",
+            "requirements": [
+              "tenantAzureVaultUri",
+              "tenantAzureTenantId",
+              "tenantAzureClientId",
+              "tenantAzureClientSecret",
+              "externalKeyAlias",
+              "externalAzureCertificateAlias",
+              "externalCertificateDerBase64"
+            ]
+          }
         },
         {
           "name": "08 Trust Domains V2 (optional)",
@@ -1549,7 +1681,7 @@
         },
         {
           "name": "09 Authorization-server slug contract",
-          "description": "Run this request once before the optional wallet proxy. It proves the external-AS shape is rejected when a hosted slug is supplied.",
+          "description": "Run this request once before the optional wallet proxy. It proves the external-AS shape is rejected when a hosted slug is supplied.\n\nOptional scenario guard: set enableKeycloakWalletProxy=true and provide keycloakIssuer. When false, requests are skipped and reported as optional skipped.",
           "item": [
             {
               "name": "00 Reject external authorization server with slug",
@@ -1569,6 +1701,23 @@
                 "description": "Contract guard: EXTERNAL authorization servers are federated upstreams and must not carry a hosted route slug. A hosted wallet proxy uses the slug in request 09 instead."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak authorization-server contract (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak authorization-server contract.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1605,11 +1754,18 @@
                 }
               ]
             }
-          ]
+          ],
+          "_sphereon": {
+            "optional": true,
+            "enableVariable": "enableKeycloakWalletProxy",
+            "requirements": [
+              "keycloakIssuer"
+            ]
+          }
         },
         {
           "name": "09 Keycloak wallet proxy (optional)",
-          "description": "Create a separate hosted wallet AS. The default tenant AS stays LOCAL_ONLY for administration. In Keycloak register federationClientId as a confidential OIDC client with Standard Flow and the exact redirect https://<tenant>/as/<authorizationServerSlug>/federation/callback. Set keycloakIssuer to the realm issuer and federationClientSecret to its private client secret. Keycloak is an upstream login provider, not the OID4VCI authorization server. Run this folder after resolving issuerId. No teardown follows. If this tenant already registered the same Keycloak issuer, set externalAuthorizationServerId to that resource UUID and skip request 25; request 25a verifies the selected external upstream before binding it. Each issuer is registered once per tenant.\n\nDocumentation: https://docs.sphereon.com/edk/guides/tenant/federation#postman-keycloak-wallet-proxy",
+          "description": "Create a separate hosted wallet AS. The default tenant AS stays LOCAL_ONLY for administration. In Keycloak register federationClientId as a confidential OIDC client with Standard Flow and the exact redirect https://<tenant>/as/<authorizationServerSlug>/federation/callback. Set keycloakIssuer to the realm issuer and federationClientSecret to its private client secret. Keycloak is an upstream login provider, not the OID4VCI authorization server. Run this folder after resolving issuerId. No teardown follows. If this tenant already registered the same Keycloak issuer, set externalAuthorizationServerId to that resource UUID and skip request 25; request 25a verifies the selected external upstream before binding it. Each issuer is registered once per tenant.\n\nOptional scenario guard: set enableKeycloakWalletProxy=true and provide keycloakIssuer, federationClientId, federationClientSecret. When false, requests are skipped and reported as optional skipped.\n\nDocumentation: https://docs.sphereon.com/edk/guides/tenant/federation#postman-keycloak-wallet-proxy",
           "item": [
             {
               "name": "09 Create hosted authorization server",
@@ -1629,6 +1785,23 @@
                 }
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1664,6 +1837,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1696,6 +1886,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1724,6 +1931,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1748,6 +1972,23 @@
                 "header": []
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1810,6 +2051,23 @@
                 }
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -1880,6 +2138,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1941,6 +2216,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -1993,6 +2285,23 @@
                 "header": []
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -2051,10 +2360,27 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"authorizationServerId\": \"{{hostedAuthorizationServerId}}\",\n  \"enabled\": true,\n  \"default\": true,\n  \"allowedGrantTypes\": [\n    \"authorization_code\"\n  ]\n}"
+                  "raw": "{\n  \"authorizationServerId\": \"{{hostedAuthorizationServerId}}\",\n  \"enabled\": true,\n  \"default\": false,\n  \"allowedGrantTypes\": [\n    \"authorization_code\"\n  ]\n}"
                 }
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet proxy (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -2069,11 +2395,20 @@
                 }
               ]
             }
-          ]
+          ],
+          "_sphereon": {
+            "optional": true,
+            "enableVariable": "enableKeycloakWalletProxy",
+            "requirements": [
+              "keycloakIssuer",
+              "federationClientId",
+              "federationClientSecret"
+            ]
+          }
         },
         {
           "name": "08 Enable shared Azure provider (optional)",
-          "description": "Run after the platform operator offers the vault in folder 04. Use the tenant application OAuth token. Copy the offered providerId to tenantAzureProviderId before registering external references. Sharing does not grant authority over other tenants or platform keys.",
+          "description": "Run after the platform operator offers the vault in folder 04. Use the tenant application OAuth token. Copy the offered providerId to tenantAzureProviderId before registering external references. Sharing does not grant authority over other tenants or platform keys.\n\nOptional scenario guard: set enableSharedAzure=true and provide tenantAzureProviderId. When false, requests are skipped and reported as optional skipped.",
           "item": [
             {
               "name": "05 List platform KMSes offered to the tenant",
@@ -2084,6 +2419,23 @@
                 "header": []
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableSharedAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: shared platform Azure provider (set enableSharedAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureProviderId\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling shared platform Azure provider.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -2134,6 +2486,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableSharedAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: shared platform Azure provider (set enableSharedAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureProviderId\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling shared platform Azure provider.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -2183,6 +2552,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableSharedAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: shared platform Azure provider (set enableSharedAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureProviderId\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling shared platform Azure provider.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -2222,7 +2608,14 @@
                 }
               ]
             }
-          ]
+          ],
+          "_sphereon": {
+            "optional": true,
+            "enableVariable": "enableSharedAzure",
+            "requirements": [
+              "tenantAzureProviderId"
+            ]
+          }
         },
         {
           "name": "10 Issuer Configuration",
@@ -2241,11 +2634,24 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"bindings\": [\n    {\n      \"issuerDid\": \"{{did}}\",\n      \"issuerId\": \"{{issuerId}}\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\"\n    }\n  ],\n  \"alias\": \"{{tenantSubdomain}}-authority\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"displayName\": \"{{tenantName}} Authority\",\n      \"description\": \"{{tenantName}} credential issuing authority\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"displayName\": \"{{tenantName}} Autoriteit\",\n      \"description\": \"Uitgevende autoriteit voor verifieerbare credentials van {{tenantName}}\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"bindings\": [\n    {\n      \"issuerDid\": \"{{did}}\",\n      \"issuerId\": \"{{issuerId}}\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\"\n    }\n  ],\n  \"alias\": \"{{tenantSubdomain}}-authority-{{issuerRunId}}\",\n  \"hostingMode\": \"LOCAL\",\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"displayName\": \"{{tenantName}} Authority\",\n      \"description\": \"{{tenantName}} credential issuing authority\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"displayName\": \"{{tenantName}} Autoriteit\",\n      \"description\": \"Uitgevende autoriteit voor verifieerbare credentials van {{tenantName}}\"\n    }\n  ]\n}"
                 },
                 "description": "Binds the issuing identity to the tenant's did:web identifier. Wallets display this name and description when presenting a credential offer."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const suffix = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);",
+                      "pm.collectionVariables.set('issuerRunId', suffix);",
+                      "pm.variables.set('issuerRunId', suffix);",
+                      "pm.collectionVariables.set('issuerDesignCreated', 'false');",
+                      "pm.collectionVariables.set('issuerVariantCreated', 'false');"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -2253,7 +2659,14 @@
                     "exec": [
                       "pm.test('issuer design created', () => pm.expect([200, 201]).to.include(pm.response.code));",
                       "const j = pm.response.json();",
-                      "if (j.id) pm.collectionVariables.set('issuerDesignId', j.id);"
+                      "if ([200, 201].includes(pm.response.code) && j.id) {",
+                      "  pm.collectionVariables.set('runOwnedIssuerDesignId', j.id);",
+                      "  pm.variables.set('runOwnedIssuerDesignId', j.id);",
+                      "  pm.collectionVariables.set('issuerDesignCreated', 'true');",
+                      "} else {",
+                      "  pm.collectionVariables.set('issuerDesignCreated', 'false');",
+                      "}",
+                      "pm.collectionVariables.set('issuerDesignCreated', j.id ? 'true' : 'false');"
                     ]
                   }
                 }
@@ -2300,7 +2713,7 @@
               "name": "02 Upload issuer logo asset",
               "request": {
                 "method": "POST",
-                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{issuerDesignId}}/assets/en/LOGO",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{runOwnedIssuerDesignId}}/assets/en/LOGO",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -2316,6 +2729,17 @@
                 "description": "Uploads the binary PNG logo as raw application/octet-stream (Content-Type image/png) for this credential design. The response is an AssetReference whose uri is content-addressed (/public/assets/design/<sha256>.png) and whose integrity is sha256-<base64>. The captured uri/integrity are reused by the render variant(s) below so branding is hosted, de-duplicated by content hash, and SRI-verifiable. The runner mounts the file through its configured file resolver."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('issuerDesignCreated') || '') !== 'true' || !String(pm.variables.get('runOwnedIssuerDesignId') || pm.collectionVariables.get('runOwnedIssuerDesignId') || '').trim()) {",
+                      "  throw new Error('Run-owned issuer design was not created; refusing stale design ID.');",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -2378,7 +2802,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"kind\": \"SIMPLE_CARD\",\n  \"alias\": \"issuer-card\",\n  \"localeApplicability\": [\n    \"en\",\n    \"nl\"\n  ],\n  \"backgroundColor\": \"#0B5FFF\",\n  \"textColor\": \"#FFFFFF\",\n  \"logo\": {\n    \"uri\": \"{{issuerLogoUri}}\",\n    \"integrity\": \"{{issuerLogoIntegrity}}\",\n    \"altText\": \"{{tenantName}} authority logo\"\n  }\n}"
+                  "raw": "{\n  \"kind\": \"SIMPLE_CARD\",\n  \"alias\": \"issuer-card-{{issuerRunId}}\",\n  \"localeApplicability\": [\n    \"en\",\n    \"nl\"\n  ],\n  \"backgroundColor\": \"#0B5FFF\",\n  \"textColor\": \"#FFFFFF\",\n  \"logo\": {\n    \"uri\": \"{{issuerLogoUri}}\",\n    \"integrity\": \"{{issuerLogoIntegrity}}\",\n    \"altText\": \"{{tenantName}} authority logo\"\n  }\n}"
                 },
                 "description": "SIMPLE_CARD render variant whose logo references the content-addressed asset uploaded above (uri + uri#integrity SRI), so the hosted branding path is exercised end-to-end."
               },
@@ -2390,7 +2814,14 @@
                     "exec": [
                       "pm.test('issuer render variant created', () => pm.expect([200, 201]).to.include(pm.response.code));",
                       "const j = pm.response.json();",
-                      "if (j.id) pm.collectionVariables.set('issuerVariantId', j.id);"
+                      "if ([200, 201].includes(pm.response.code) && j.id) {",
+                      "  pm.collectionVariables.set('runOwnedIssuerVariantId', j.id);",
+                      "  pm.variables.set('runOwnedIssuerVariantId', j.id);",
+                      "  pm.collectionVariables.set('issuerVariantCreated', 'true');",
+                      "} else {",
+                      "  pm.collectionVariables.set('issuerVariantCreated', 'false');",
+                      "}",
+                      "pm.collectionVariables.set('issuerVariantCreated', j.id ? 'true' : 'false');"
                     ]
                   }
                 }
@@ -2437,7 +2868,7 @@
               "name": "04 Attach render variant to issuer design",
               "request": {
                 "method": "PUT",
-                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/issuers/{{issuerDesignId}}",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/issuers/{{runOwnedIssuerDesignId}}",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -2446,11 +2877,22 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"renderVariantIds\": [\n    \"{{issuerVariantId}}\"\n  ]\n}"
+                  "raw": "{\n  \"renderVariantIds\": [\n    \"{{runOwnedIssuerVariantId}}\"\n  ]\n}"
                 },
                 "description": "Attaches the freshly created render variant(s) to the credential design. Done as a follow-up PUT because the design must exist first to give the asset-upload endpoint a real {designId}, and the variants must exist before they can be referenced. Ordering: create design -> upload asset -> create variant(s) -> update design."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('issuerDesignCreated') || '') !== 'true' || String(pm.collectionVariables.get('issuerVariantCreated') || '') !== 'true') {",
+                      "  throw new Error('Run-owned issuer resources were not created; refusing stale IDs.');",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -2507,6 +2949,56 @@
           "description": "Creates the EuPid SD-JWT and Mdl mdoc credential designs, uploads branding assets, attaches render variants, and confirms the tenant can list the designs.\n\nDocumentation: https://docs.sphereon.com/edk/admin-console/guides/credential-designs",
           "item": [
             {
+              "name": "00 Resolve existing EuPid SD-JWT design",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials",
+                "header": [],
+                "description": "Lists tenant credential designs and reuses the seeded EuPid design when present. On a new tenant the following create request provisions it."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Start each run with no stale ownership markers or response-derived IDs.\nfor (const name of [\n  'eupidDesignId', 'eupidDesignCreated', 'eupidDesignResolved', 'seededEuPidDesignId',\n  'eupidLogoUri', 'eupidLogoIntegrity', 'eupidVariantEnId', 'eupidVariantNlId',\n  'mdlDesignId', 'mdlDesignCreated', 'mdlLogoUri', 'mdlLogoIntegrity', 'mdlVariantEnId'\n]) pm.collectionVariables.unset(name);\nconst runId = String(Date.now()) + '-' + String(Math.floor(Math.random() * 100000));",
+                      "pm.collectionVariables.set('customerDesignRunId', runId);",
+                      "pm.collectionVariables.set('customerDesignVariantEnAlias', 'eu-pid-e2e-card-en-' + runId);",
+                      "pm.collectionVariables.set('customerDesignVariantNlAlias', 'eu-pid-e2e-card-nl-' + runId);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('EuPid designs resolved', () => pm.response.to.have.status(200));",
+                      "const payload = pm.response.json();",
+                      "const designs = Array.isArray(payload) ? payload : (payload.items || payload.content || payload.data || []);",
+                      "const euPid = designs.find(design => design.credentialType?.vct === 'EuPid' || design.bindings?.some(binding => binding.vct === 'EuPid'));",
+                      "if (euPid?.id) {",
+                      "  pm.collectionVariables.set('seededEuPidDesignId', euPid.id);",
+                      "  pm.collectionVariables.set('eupidDesignId', euPid.id);",
+                      "  pm.collectionVariables.set('customerDesignVct', euPid.credentialType?.vct || euPid.bindings?.find(binding => binding.vct === 'EuPid')?.vct || 'EuPid');",
+                      "  pm.collectionVariables.set('customerDesignConfigurationId', euPid.bindings?.find(binding => binding.vct === 'EuPid')?.credentialConfigurationId || 'EuPid');",
+                      "  pm.collectionVariables.set('customerDesignAlias', euPid.alias || 'eu-pid');",
+                      "  pm.collectionVariables.set('eupidDesignResolved', 'true');",
+                      "  pm.collectionVariables.set('eupidDesignCreated', 'false');",
+                      "} else {",
+                      "  pm.collectionVariables.unset('eupidDesignId');",
+                      "  pm.collectionVariables.unset('seededEuPidDesignId');",
+                      "  pm.collectionVariables.set('eupidDesignCreated', 'false');",
+                      "  pm.collectionVariables.set('eupidDesignResolved', 'false');",
+                      "}",
+                      "pm.test('EuPid design id is available when seeded', () => { if (euPid) pm.expect(pm.collectionVariables.get('seededEuPidDesignId')).to.be.a('string').and.not.empty; });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
               "name": "01 Create EuPid SD-JWT design",
               "request": {
                 "method": "POST",
@@ -2519,19 +3011,35 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"EuPid\",\n      \"vctHostingMode\": \"HOSTED\",\n      \"credentialConfigurationId\": \"EuPid\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\",\n      \"issuerId\": \"{{issuerId}}\"\n    }\n  ],\n  \"alias\": \"eu-pid\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"SD_JWT_VC\",\n    \"vct\": \"EuPid\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
+                  "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"{{customerDesignVct}}\",\n      \"vctHostingMode\": \"HOSTED\",\n      \"credentialConfigurationId\": \"{{customerDesignConfigurationId}}\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\",\n      \"issuerId\": \"{{issuerId}}\"\n    }\n  ],\n  \"alias\": \"{{customerDesignAlias}}\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"SD_JWT_VC\",\n    \"vct\": \"{{customerDesignVct}}\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
                 },
                 "description": "EuPid credential design with English and Dutch displays, per-locale claim labels, and the en/nl render variants attached (both at the design level and as per-display preferred variants). family_name, given_name, and issuing_country are always selectively disclosable."
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "  const runId = String(Date.now()) + '-' + String(Math.floor(Math.random() * 100000));",
+                      "  pm.collectionVariables.set('customerDesignRunId', runId);",
+                      "  pm.collectionVariables.set('customerDesignVct', 'EuPidE2E-' + runId);",
+                      "  pm.collectionVariables.set('customerDesignConfigurationId', 'EuPidE2E-' + runId);",
+                      "  pm.collectionVariables.set('customerDesignAlias', 'eu-pid-e2e-' + runId);",
+                      "  pm.collectionVariables.set('customerDesignVariantEnAlias', 'eu-pid-e2e-card-en-' + runId);",
+                      "  pm.collectionVariables.set('customerDesignVariantNlAlias', 'eu-pid-e2e-card-nl-' + runId);"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test('eupid design created', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                      "pm.test('eupid design created when absent', () => pm.expect([200, 201]).to.include(pm.response.code));",
                       "const j = pm.response.json();",
-                      "if (j.id) pm.collectionVariables.set('eupidDesignId', j.id);"
+                      "if (j.id) pm.collectionVariables.set('eupidDesignId', j.id);",
+                      "if (j.id) pm.collectionVariables.set('eupidDesignCreated', 'true');"
                     ]
                   }
                 }
@@ -2573,6 +3081,40 @@
                   "_postman_previewlanguage": "json"
                 }
               ]
+            },
+            {
+              "name": "01b Reject duplicate dedicated EuPid E2E design",
+              "request": {
+                "method": "POST",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bindings\": [\n    {\n      \"vct\": \"{{customerDesignVct}}\",\n      \"vctHostingMode\": \"HOSTED\",\n      \"credentialConfigurationId\": \"{{customerDesignConfigurationId}}\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\",\n      \"issuerId\": \"{{issuerId}}\"\n    }\n  ],\n  \"alias\": \"{{customerDesignAlias}}\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"SD_JWT_VC\",\n    \"vct\": \"{{customerDesignVct}}\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"age_over_18\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Age over 18\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Ouder dan 18\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"nationality\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Nationality\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Nationaliteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7,\n      \"sdPolicy\": \"ALWAYS\"\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": false,\n      \"order\": 8\n    }\n  ]\n}"
+                },
+                "description": "EuPid credential design with English and Dutch displays, per-locale claim labels, and the en/nl render variants attached (both at the design level and as per-display preferred variants). family_name, given_name, and issuing_country are always selectively disclosable."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('duplicate dedicated design is rejected', () => pm.expect(pm.response.code).to.eql(409));",
+                      "const duplicate = pm.response.json();",
+                      "pm.test('duplicate response is a conflict', () => pm.expect(duplicate.error?.code).to.eql('CONFLICT'));",
+                      "pm.test('duplicate response identifies the dedicated VCT', () => pm.expect(String(duplicate.error?.message || '')).to.include(pm.collectionVariables.get('customerDesignVct')));",
+                      "pm.test('duplicate response does not overwrite the created design id', () => pm.expect(pm.collectionVariables.get('eupidDesignId')).to.be.a('string').and.not.empty);"
+                    ]
+                  }
+                }
+              ],
+              "description": "Replays the resolved EuPid design payload to preserve the explicit duplicate-VCT conflict contract without changing the canonical design id."
             },
             {
               "name": "02 Upload EuPid logo asset",
@@ -2656,7 +3198,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"kind\": \"SIMPLE_CARD\",\n  \"alias\": \"eupid-card-en\",\n  \"localeApplicability\": [\n    \"en\"\n  ],\n  \"backgroundColor\": \"#0B5FFF\",\n  \"textColor\": \"#FFFFFF\",\n  \"logo\": {\n    \"uri\": \"{{eupidLogoUri}}\",\n    \"integrity\": \"{{eupidLogoIntegrity}}\",\n    \"altText\": \"EU PID logo\"\n  }\n}"
+                  "raw": "{\n  \"kind\": \"SIMPLE_CARD\",\n  \"alias\": \"{{customerDesignVariantEnAlias}}\",\n  \"localeApplicability\": [\n    \"en\"\n  ],\n  \"backgroundColor\": \"#0B5FFF\",\n  \"textColor\": \"#FFFFFF\",\n  \"logo\": {\n    \"uri\": \"{{eupidLogoUri}}\",\n    \"integrity\": \"{{eupidLogoIntegrity}}\",\n    \"altText\": \"EU PID logo\"\n  }\n}"
                 },
                 "description": "SIMPLE_CARD render variant whose logo references the content-addressed asset uploaded above (uri + uri#integrity SRI), so the hosted branding path is exercised end-to-end."
               },
@@ -2724,7 +3266,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"kind\": \"SIMPLE_CARD\",\n  \"alias\": \"eupid-card-nl\",\n  \"localeApplicability\": [\n    \"nl\"\n  ],\n  \"backgroundColor\": \"#0B5FFF\",\n  \"textColor\": \"#FFFFFF\",\n  \"logo\": {\n    \"uri\": \"{{eupidLogoUri}}\",\n    \"integrity\": \"{{eupidLogoIntegrity}}\",\n    \"altText\": \"EU PID logo\"\n  }\n}"
+                  "raw": "{\n  \"kind\": \"SIMPLE_CARD\",\n  \"alias\": \"{{customerDesignVariantNlAlias}}\",\n  \"localeApplicability\": [\n    \"nl\"\n  ],\n  \"backgroundColor\": \"#0B5FFF\",\n  \"textColor\": \"#FFFFFF\",\n  \"logo\": {\n    \"uri\": \"{{eupidLogoUri}}\",\n    \"integrity\": \"{{eupidLogoIntegrity}}\",\n    \"altText\": \"EU PID logo\"\n  }\n}"
                 },
                 "description": "SIMPLE_CARD render variant whose logo references the content-addressed asset uploaded above (uri + uri#integrity SRI), so the hosted branding path is exercised end-to-end."
               },
@@ -2858,11 +3400,25 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"bindings\": [\n    {\n      \"docType\": \"org.iso.18013.5.1.mDL\",\n      \"credentialConfigurationId\": \"Mdl\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\",\n      \"issuerId\": \"{{issuerId}}\"\n    }\n  ],\n  \"alias\": \"mdl\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"MSO_MDOC\",\n    \"docType\": \"org.iso.18013.5.1.mDL\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"Mobile Driving Licence\",\n      \"description\": \"ISO 18013-5 mobile driving licence\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"Mobiel Rijbewijs\",\n      \"description\": \"ISO 18013-5 mobiel rijbewijs\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issue_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issue date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Datum van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"expiry_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Expiry date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Vervaldatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 8\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"portrait\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Portrait\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Portret\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 9\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"driving_privileges\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Driving privileges\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Rijbevoegdheden\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 10\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"un_distinguishing_sign\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"UN distinguishing sign\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"VN-onderscheidingsteken\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 11\n    }\n  ]\n}"
+                  "raw": "{\n  \"bindings\": [\n    {\n      \"docType\": \"{{customerMdlDocType}}\",\n      \"credentialConfigurationId\": \"{{customerMdlConfigurationId}}\",\n      \"issuerUri\": \"{{tenantGatewayUrl}}\",\n      \"issuerId\": \"{{issuerId}}\"\n    }\n  ],\n  \"alias\": \"{{customerMdlAlias}}\",\n  \"hostingMode\": \"LOCAL\",\n  \"credentialType\": {\n    \"format\": \"MSO_MDOC\",\n    \"docType\": \"{{customerMdlDocType}}\"\n  },\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"Mobile Driving Licence\",\n      \"description\": \"ISO 18013-5 mobile driving licence\"\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"Mobiel Rijbewijs\",\n      \"description\": \"ISO 18013-5 mobiel rijbewijs\"\n    }\n  ],\n  \"claims\": [\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"family_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Family name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Achternaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 1\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"given_name\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Given name\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Voornaam\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 2\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"birth_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Date of birth\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Geboortedatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 3\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issue_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issue date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Datum van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 4\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"expiry_date\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Expiry date\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Vervaldatum\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 5\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_country\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing country\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Land van uitgifte\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 6\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"issuing_authority\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Issuing authority\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Uitgevende autoriteit\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 7\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"document_number\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Document number\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Documentnummer\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 8\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"portrait\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Portrait\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Portret\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 9\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"driving_privileges\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"Driving privileges\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"Rijbevoegdheden\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 10\n    },\n    {\n      \"path\": [\n        {\n          \"type\": \"property\",\n          \"name\": \"org.iso.18013.5.1\"\n        },\n        {\n          \"type\": \"property\",\n          \"name\": \"un_distinguishing_sign\"\n        }\n      ],\n      \"labels\": [\n        {\n          \"locale\": \"en\",\n          \"label\": \"UN distinguishing sign\"\n        },\n        {\n          \"locale\": \"nl\",\n          \"label\": \"VN-onderscheidingsteken\"\n        }\n      ],\n      \"mandatory\": true,\n      \"order\": 11\n    }\n  ]\n}"
                 },
                 "description": "Mdl credential design with English and Dutch displays, per-locale claim labels under the org.iso.18013.5.1 namespace, and the en render variant attached."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const runId = String(pm.collectionVariables.get('customerDesignRunId') || (String(Date.now()) + '-' + String(Math.floor(Math.random() * 100000))));",
+                      "pm.collectionVariables.set('customerDesignRunId', runId);",
+                      "pm.collectionVariables.set('customerMdlDocType', 'org.iso.18013.5.1.mDL.E2E-' + runId);",
+                      "pm.collectionVariables.set('customerMdlConfigurationId', 'MdlE2E-' + runId);",
+                      "pm.collectionVariables.set('customerMdlAlias', 'mdl-e2e-' + runId);",
+                      "pm.collectionVariables.set('customerMdlVariantEnAlias', 'mdl-e2e-card-en-' + runId);"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -2870,7 +3426,8 @@
                     "exec": [
                       "pm.test('mdl design created', () => pm.expect([200, 201]).to.include(pm.response.code));",
                       "const j = pm.response.json();",
-                      "if (j.id) pm.collectionVariables.set('mdlDesignId', j.id);"
+                      "if (j.id) pm.collectionVariables.set('mdlDesignId', j.id);",
+                      "if (j.id) pm.collectionVariables.set('mdlDesignCreated', 'true');"
                     ]
                   }
                 }
@@ -2995,7 +3552,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"kind\": \"SIMPLE_CARD\",\n  \"alias\": \"mdl-card-en\",\n  \"localeApplicability\": [\n    \"en\"\n  ],\n  \"backgroundColor\": \"#1B5E20\",\n  \"textColor\": \"#FFFFFF\",\n  \"logo\": {\n    \"uri\": \"{{mdlLogoUri}}\",\n    \"integrity\": \"{{mdlLogoIntegrity}}\",\n    \"altText\": \"Mobile driving licence logo\"\n  }\n}"
+                  "raw": "{\n  \"kind\": \"SIMPLE_CARD\",\n  \"alias\": \"{{customerMdlVariantEnAlias}}\",\n  \"localeApplicability\": [\n    \"en\"\n  ],\n  \"backgroundColor\": \"#1B5E20\",\n  \"textColor\": \"#FFFFFF\",\n  \"logo\": {\n    \"uri\": \"{{mdlLogoUri}}\",\n    \"integrity\": \"{{mdlLogoIntegrity}}\",\n    \"altText\": \"Mobile driving licence logo\"\n  }\n}"
                 },
                 "description": "SIMPLE_CARD render variant whose logo references the content-addressed asset uploaded above (uri + uri#integrity SRI), so the hosted branding path is exercised end-to-end."
               },
@@ -3162,6 +3719,412 @@
                   ],
                   "body": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000000\",\n    \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n    \"alias\": \"eu-pid\",\n    \"hostingMode\": \"LOCAL\",\n    \"bindings\": [\n      {\n        \"vct\": \"EuPid\",\n        \"vctHostingMode\": \"HOSTED\",\n        \"credentialConfigurationId\": \"EuPid\",\n        \"schemaId\": null,\n        \"docType\": null,\n        \"type\": null,\n        \"@context\": null,\n        \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n        \"issuerDid\": null,\n        \"issuerUri\": \"https://acme.example.com/oid4vci/acme\",\n        \"verifierClientId\": null,\n        \"ocaSaid\": null,\n        \"credentialType\": null,\n        \"credentialDesignId\": null,\n        \"credentialDesignVersion\": null,\n        \"activeFrom\": null,\n        \"activeUntil\": null\n      }\n    ],\n    \"credentialTemplateId\": null,\n    \"issuerDesignId\": \"00000000-0000-4000-8000-000000000000\",\n    \"displays\": [\n      {\n        \"locale\": \"en\",\n        \"name\": \"EU Personal ID\",\n        \"description\": \"European personal identity credential\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      },\n      {\n        \"locale\": \"nl\",\n        \"name\": \"EU Persoonlijke ID\",\n        \"description\": \"Europese persoonlijke identiteitscredential\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      }\n    ],\n    \"claims\": [\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"family_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Family name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Achternaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 1,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Doe\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"given_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Given name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Voornaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 2,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Jane\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"birth_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Date of birth\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Geboortedatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 3,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"1990-01-15\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"age_over_18\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Age over 18\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Ouder dan 18\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": false,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 4,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"true\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"nationality\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Nationality\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Nationaliteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 5,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"NL\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_authority\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing authority\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Uitgevende autoriteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 6,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Test Authority\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_country\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing country\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Land van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 7,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"NL\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"document_number\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Document number\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Documentnummer\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": false,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 8,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"DOC-102938\"\n      }\n    ],\n    \"renderVariantIds\": [\n      \"00000000-0000-4000-8000-000000000000\",\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"derivedRenderHintsId\": null,\n    \"sourceSnapshotIds\": [],\n    \"contentHash\": null,\n    \"semanticAttributeSetRef\": {\n      \"bundleId\": \"credential-design:00000000-0000-4000-8000-000000000000\",\n      \"version\": \"00000000-0000-4000-8000-000000000000\"\n    },\n    \"attributeProfileId\": null,\n    \"attributeProfileVersion\": null,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\",\n    \"credentialType\": {\n      \"format\": \"SD_JWT_VC\",\n      \"vct\": \"EuPid\",\n      \"docType\": null,\n      \"type\": null,\n      \"@context\": null\n    },\n    \"deferral\": null\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000000\",\n    \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n    \"alias\": \"mdl\",\n    \"hostingMode\": \"LOCAL\",\n    \"bindings\": [\n      {\n        \"vct\": null,\n        \"vctHostingMode\": \"NONE\",\n        \"credentialConfigurationId\": \"Mdl\",\n        \"schemaId\": null,\n        \"docType\": \"org.iso.18013.5.1.mDL\",\n        \"type\": null,\n        \"@context\": null,\n        \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n        \"issuerDid\": null,\n        \"issuerUri\": \"https://acme.example.com/oid4vci/acme\",\n        \"verifierClientId\": null,\n        \"ocaSaid\": null,\n        \"credentialType\": null,\n        \"credentialDesignId\": null,\n        \"credentialDesignVersion\": null,\n        \"activeFrom\": null,\n        \"activeUntil\": null\n      }\n    ],\n    \"credentialTemplateId\": null,\n    \"issuerDesignId\": \"00000000-0000-4000-8000-000000000000\",\n    \"displays\": [\n      {\n        \"locale\": \"en\",\n        \"name\": \"Mobile Driving Licence\",\n        \"description\": \"ISO 18013-5 mobile driving licence\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      },\n      {\n        \"locale\": \"nl\",\n        \"name\": \"Mobiel Rijbewijs\",\n        \"description\": \"ISO 18013-5 mobiel rijbewijs\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      }\n    ],\n    \"claims\": [\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"family_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Family name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Achternaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 1,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Doe\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"given_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Given name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Voornaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 2,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Jane\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"birth_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Date of birth\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Geboortedatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 3,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"1990-01-15\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issue_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issue date\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Datum van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 4,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"2024-01-01\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"expiry_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Expiry date\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Vervaldatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 5,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"2030-01-01\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_country\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing country\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Land van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 6,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"NL\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_authority\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing authority\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Uitgevende autoriteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 7,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Test Authority\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"document_number\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Document number\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Documentnummer\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 8,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"DOC-102938\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"portrait\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Portrait\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Portret\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 9,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"driving_privileges\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Driving privileges\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Rijbevoegdheden\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 10,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"[{\\\"vehicle_category_code\\\":\\\"B\\\",\\\"issue_date\\\":\\\"2024-01-01\\\",\\\"expiry_date\\\":\\\"2030-01-01\\\"}]\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"un_distinguishing_sign\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"UN distinguishing sign\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"VN-onderscheidingsteken\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 11,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"NL\"\n      }\n    ],\n    \"renderVariantIds\": [\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"derivedRenderHintsId\": null,\n    \"sourceSnapshotIds\": [],\n    \"contentHash\": null,\n    \"semanticAttributeSetRef\": {\n      \"bundleId\": \"credential-design:00000000-0000-4000-8000-000000000000\",\n      \"version\": \"00000000-0000-4000-8000-000000000000\"\n    },\n    \"attributeProfileId\": null,\n    \"attributeProfileVersion\": null,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\",\n    \"credentialType\": {\n      \"format\": \"MSO_MDOC\",\n      \"vct\": null,\n      \"docType\": \"org.iso.18013.5.1.mDL\",\n      \"type\": null,\n      \"@context\": null\n    },\n    \"deferral\": null\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000000\",\n    \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n    \"alias\": \"eu-pid\",\n    \"hostingMode\": \"LOCAL\",\n    \"bindings\": [\n      {\n        \"vct\": \"EuPid\",\n        \"vctHostingMode\": \"HOSTED\",\n        \"credentialConfigurationId\": \"EuPid\",\n        \"schemaId\": null,\n        \"docType\": null,\n        \"type\": null,\n        \"@context\": null,\n        \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n        \"issuerDid\": null,\n        \"issuerUri\": \"https://acme.example.com\",\n        \"verifierClientId\": null,\n        \"ocaSaid\": null,\n        \"credentialType\": null,\n        \"credentialDesignId\": null,\n        \"credentialDesignVersion\": null,\n        \"activeFrom\": null,\n        \"activeUntil\": null\n      }\n    ],\n    \"credentialTemplateId\": null,\n    \"issuerDesignId\": null,\n    \"displays\": [\n      {\n        \"locale\": \"en\",\n        \"name\": \"EU Personal ID\",\n        \"description\": \"European personal identity credential\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      },\n      {\n        \"locale\": \"nl\",\n        \"name\": \"EU Persoonlijke ID\",\n        \"description\": \"Europese persoonlijke identiteitscredential\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      }\n    ],\n    \"claims\": [\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"family_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Family name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Achternaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 1,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"given_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Given name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Voornaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 2,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"birth_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Date of birth\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Geboortedatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 3,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"age_over_18\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Age over 18\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Ouder dan 18\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": false,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 4,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"nationality\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Nationality\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Nationaliteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 5,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_authority\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing authority\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Uitgevende autoriteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 6,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_country\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing country\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Land van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 7,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"document_number\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Document number\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Documentnummer\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": false,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 8,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      }\n    ],\n    \"renderVariantIds\": [\n      \"00000000-0000-4000-8000-000000000000\",\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"derivedRenderHintsId\": null,\n    \"sourceSnapshotIds\": [],\n    \"contentHash\": null,\n    \"semanticAttributeSetRef\": {\n      \"bundleId\": \"credential-design:00000000-0000-4000-8000-000000000000\",\n      \"version\": \"00000000-0000-4000-8000-000000000000\"\n    },\n    \"attributeProfileId\": null,\n    \"attributeProfileVersion\": null,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\",\n    \"credentialType\": {\n      \"format\": \"SD_JWT_VC\",\n      \"vct\": \"EuPid\",\n      \"docType\": null,\n      \"type\": null,\n      \"@context\": null\n    },\n    \"deferral\": null\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000000\",\n    \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n    \"alias\": \"mdl\",\n    \"hostingMode\": \"LOCAL\",\n    \"bindings\": [\n      {\n        \"vct\": null,\n        \"vctHostingMode\": \"NONE\",\n        \"credentialConfigurationId\": \"Mdl\",\n        \"schemaId\": null,\n        \"docType\": \"org.iso.18013.5.1.mDL\",\n        \"type\": null,\n        \"@context\": null,\n        \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n        \"issuerDid\": null,\n        \"issuerUri\": \"https://acme.example.com\",\n        \"verifierClientId\": null,\n        \"ocaSaid\": null,\n        \"credentialType\": null,\n        \"credentialDesignId\": null,\n        \"credentialDesignVersion\": null,\n        \"activeFrom\": null,\n        \"activeUntil\": null\n      }\n    ],\n    \"credentialTemplateId\": null,\n    \"issuerDesignId\": null,\n    \"displays\": [\n      {\n        \"locale\": \"en\",\n        \"name\": \"Mobile Driving Licence\",\n        \"description\": \"ISO 18013-5 mobile driving licence\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      },\n      {\n        \"locale\": \"nl\",\n        \"name\": \"Mobiel Rijbewijs\",\n        \"description\": \"ISO 18013-5 mobiel rijbewijs\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      }\n    ],\n    \"claims\": [\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"family_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Family name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Achternaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 1,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"given_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Given name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Voornaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 2,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"birth_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Date of birth\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Geboortedatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 3,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issue_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issue date\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Datum van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 4,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"expiry_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Expiry date\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Vervaldatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 5,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_country\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing country\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Land van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 6,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_authority\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing authority\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Uitgevende autoriteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 7,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"document_number\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Document number\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Documentnummer\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 8,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"portrait\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Portrait\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Portret\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 9,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"driving_privileges\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Driving privileges\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Rijbevoegdheden\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 10,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"un_distinguishing_sign\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"UN distinguishing sign\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"VN-onderscheidingsteken\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 11,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": null\n      }\n    ],\n    \"renderVariantIds\": [\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"derivedRenderHintsId\": null,\n    \"sourceSnapshotIds\": [],\n    \"contentHash\": null,\n    \"semanticAttributeSetRef\": {\n      \"bundleId\": \"credential-design:00000000-0000-4000-8000-000000000000\",\n      \"version\": \"00000000-0000-4000-8000-000000000000\"\n    },\n    \"attributeProfileId\": null,\n    \"attributeProfileVersion\": null,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\",\n    \"credentialType\": {\n      \"format\": \"MSO_MDOC\",\n      \"vct\": null,\n      \"docType\": \"org.iso.18013.5.1.mDL\",\n      \"type\": null,\n      \"@context\": null\n    },\n    \"deferral\": null\n  }\n]",
                   "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "11 Detach dedicated EuPid render variants",
+              "request": {
+                "method": "PUT",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{eupidDesignId}}",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"EU Personal ID\",\n      \"description\": \"European personal identity credential\",\n      \"preferredRenderVariantIds\": []\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"EU Persoonlijke ID\",\n      \"description\": \"Europese persoonlijke identiteitscredential\",\n      \"preferredRenderVariantIds\": []\n    }\n  ],\n  \"renderVariantIds\": []\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('eupidDesignCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('11 Detach dedicated EuPid render variants succeeded', () => pm.expect(pm.response.code).to.eql(200));",
+                      "const design = pm.response.json();",
+                      "pm.test('dedicated EuPid variants detached', () => pm.expect(design.renderVariantIds || []).to.eql([]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12 Delete dedicated EuPid render variant (en)",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/render/variants/{{eupidVariantEnId}}",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('eupidDesignCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('12 Delete dedicated EuPid render variant (en) succeeded', () => pm.expect(pm.response.code).to.eql(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "13 Delete dedicated EuPid render variant (nl)",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/render/variants/{{eupidVariantNlId}}",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('eupidDesignCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('13 Delete dedicated EuPid render variant (nl) succeeded', () => pm.expect(pm.response.code).to.eql(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "14 Delete dedicated EuPid design",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{eupidDesignId}}",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('eupidDesignCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('14 Delete dedicated EuPid design succeeded', () => pm.expect(pm.response.code).to.eql(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "15 Detach dedicated Mdl render variant",
+              "request": {
+                "method": "PUT",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{mdlDesignId}}",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"name\": \"Mobile Driving Licence\",\n      \"description\": \"ISO 18013-5 mobile driving licence\",\n      \"preferredRenderVariantIds\": []\n    },\n    {\n      \"locale\": \"nl\",\n      \"name\": \"Mobiel Rijbewijs\",\n      \"description\": \"ISO 18013-5 mobiel rijbewijs\",\n      \"preferredRenderVariantIds\": []\n    }\n  ],\n  \"renderVariantIds\": []\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('mdlDesignCreated') || '') !== 'true') {\n  pm.execution.skipRequest();\n}\n"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('15 Detach dedicated Mdl render variant succeeded', () => pm.expect(pm.response.code).to.eql(200));",
+                      "const design = pm.response.json();",
+                      "pm.test('dedicated Mdl variant detached', () => pm.expect(design.renderVariantIds || []).to.eql([]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "16 Delete dedicated Mdl render variant (en)",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/render/variants/{{mdlVariantEnId}}",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('mdlDesignCreated') || '') !== 'true') {\n  pm.execution.skipRequest();\n}\n"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('16 Delete dedicated Mdl render variant (en) succeeded', () => pm.expect(pm.response.code).to.eql(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "17 Delete dedicated Mdl design",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{mdlDesignId}}",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('mdlDesignCreated') || '') !== 'true') {\n  pm.execution.skipRequest();\n}\n"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('17 Delete dedicated Mdl design succeeded', () => pm.expect(pm.response.code).to.eql(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "18 Verify dedicated designs cleaned up",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('eupidDesignCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('credential designs cleanup list succeeded', () => pm.response.to.have.status(200));",
+                      "const designs = pm.response.json();",
+                      "pm.test('dedicated EuPid design is absent after cleanup', () => pm.expect(designs.some((design) => design.id === pm.collectionVariables.get('eupidDesignId'))).to.eql(false));",
+                      "pm.test('dedicated Mdl design is absent after cleanup', () => pm.expect(designs.some((design) => design.id === pm.collectionVariables.get('mdlDesignId'))).to.eql(false));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "19 Detach run-owned issuer render variant",
+              "request": {
+                "method": "PUT",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/issuers/{{runOwnedIssuerDesignId}}",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"renderVariantIds\": []\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('issuerDesignCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('run-owned issuer detach succeeded', () => pm.expect(pm.response.code).to.eql(200));",
+                      "pm.test('run-owned issuer variant detached', () => pm.expect(pm.response.json().renderVariantIds || []).to.eql([]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "20 Delete run-owned issuer render variant",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/render/variants/{{runOwnedIssuerVariantId}}",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('issuerVariantCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('run-owned issuer render variant deleted', () => pm.expect(pm.response.code).to.eql(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "21 Delete run-owned issuer design",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/issuers/{{runOwnedIssuerDesignId}}",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('issuerDesignCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('run-owned issuer design deleted', () => pm.expect(pm.response.code).to.eql(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "22 Verify run-owned issuer cleanup",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/issuers",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('issuerDesignCreated') || '') !== 'true') {",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('issuer design cleanup list succeeded', () => pm.response.to.have.status(200));",
+                      "const issuers = pm.response.json();",
+                      "pm.test('run-owned issuer design is absent after cleanup', () => pm.expect(issuers.some((design) => design.id === pm.collectionVariables.get('runOwnedIssuerDesignId'))).to.eql(false));"
+                    ]
+                  }
                 }
               ]
             }
@@ -6239,6 +7202,126 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Minimal collection-local P-256 holder fixture for Postman/Newman.",
+                      "// The private scalar stays in a runtime collection variable and is never sent or logged.",
+                      "const CURVE_P = BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff');",
+                      "const CURVE_A = CURVE_P - 3n;",
+                      "const CURVE_N = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');",
+                      "const CURVE_G = {",
+                      "  x: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),",
+                      "  y: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')",
+                      "};",
+                      "const mod = (value, modulus) => {",
+                      "  const result = value % modulus;",
+                      "  return result >= 0n ? result : result + modulus;",
+                      "};",
+                      "const inverse = (value, modulus) => {",
+                      "  let low = mod(value, modulus);",
+                      "  let high = modulus;",
+                      "  let lowCoefficient = 1n;",
+                      "  let highCoefficient = 0n;",
+                      "  while (low > 1n) {",
+                      "    const ratio = high / low;",
+                      "    const next = high - low * ratio;",
+                      "    const nextCoefficient = highCoefficient - lowCoefficient * ratio;",
+                      "    high = low;",
+                      "    low = next;",
+                      "    highCoefficient = lowCoefficient;",
+                      "    lowCoefficient = nextCoefficient;",
+                      "  }",
+                      "  if (low !== 1n) throw new Error('P-256 modular inverse does not exist');",
+                      "  return mod(lowCoefficient, modulus);",
+                      "};",
+                      "const pointAdd = (left, right) => {",
+                      "  if (!left) return right;",
+                      "  if (!right) return left;",
+                      "  let slope;",
+                      "  if (left.x === right.x) {",
+                      "    if (mod(left.y + right.y, CURVE_P) === 0n) return null;",
+                      "    slope = mod((3n * left.x * left.x + CURVE_A) * inverse(2n * left.y, CURVE_P), CURVE_P);",
+                      "  } else {",
+                      "    slope = mod((right.y - left.y) * inverse(right.x - left.x, CURVE_P), CURVE_P);",
+                      "  }",
+                      "  const x = mod(slope * slope - left.x - right.x, CURVE_P);",
+                      "  return { x: x, y: mod(slope * (left.x - x) - left.y, CURVE_P) };",
+                      "};",
+                      "const scalarMultiply = (scalar, point) => {",
+                      "  let remaining = scalar;",
+                      "  let result = null;",
+                      "  let addend = point;",
+                      "  while (remaining > 0n) {",
+                      "    if ((remaining & 1n) === 1n) result = pointAdd(result, addend);",
+                      "    addend = pointAdd(addend, addend);",
+                      "    remaining >>= 1n;",
+                      "  }",
+                      "  return result;",
+                      "};",
+                      "const randomScalar = () => {",
+                      "  while (true) {",
+                      "    const candidateHex = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);",
+                      "    const candidate = BigInt('0x' + candidateHex);",
+                      "    if (candidate > 0n && candidate < CURVE_N) return candidate;",
+                      "  }",
+                      "};",
+                      "const hex32 = (value) => value.toString(16).padStart(64, '0');",
+                      "const base64Url = (wordArray) => CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                      "const base64UrlHex = (hex) => base64Url(CryptoJS.enc.Hex.parse(hex));",
+                      "const base64UrlJson = (value) => base64Url(CryptoJS.enc.Utf8.parse(JSON.stringify(value)));",
+                      "if (pm.info.requestName === '01 Create EuPid offer') {",
+                      "  pm.collectionVariables.unset('holderWalletPrivateScalar');",
+                      "  pm.collectionVariables.unset('holderWalletPublicJwk');",
+                      "  pm.collectionVariables.unset('proofJwt');",
+                      "}",
+                      "let holderPrivateHex = String(pm.collectionVariables.get('holderWalletPrivateScalar') || '');",
+                      "let holderPublicJwkText = String(pm.collectionVariables.get('holderWalletPublicJwk') || '');",
+                      "let holderPublicJwk;",
+                      "try { holderPublicJwk = JSON.parse(holderPublicJwkText); } catch (_) { holderPublicJwk = null; }",
+                      "if (!/^[0-9a-f]{64}$/.test(holderPrivateHex) || !holderPublicJwk || holderPublicJwk.kty !== 'EC' || holderPublicJwk.crv !== 'P-256') {",
+                      "  const holderPrivate = randomScalar();",
+                      "  const holderPublic = scalarMultiply(holderPrivate, CURVE_G);",
+                      "  holderPrivateHex = hex32(holderPrivate);",
+                      "  holderPublicJwk = { kty: 'EC', crv: 'P-256', x: base64UrlHex(hex32(holderPublic.x)), y: base64UrlHex(hex32(holderPublic.y)) };",
+                      "  holderPublicJwkText = JSON.stringify(holderPublicJwk);",
+                      "  pm.collectionVariables.set('holderWalletPrivateScalar', holderPrivateHex);",
+                      "  pm.collectionVariables.set('holderWalletPublicJwk', holderPublicJwkText);",
+                      "}",
+                      "const signEs256 = (signingInput) => {",
+                      "  const privateScalar = BigInt('0x' + holderPrivateHex);",
+                      "  const digest = BigInt('0x' + CryptoJS.SHA256(signingInput).toString(CryptoJS.enc.Hex));",
+                      "  while (true) {",
+                      "    const ephemeral = randomScalar();",
+                      "    const point = scalarMultiply(ephemeral, CURVE_G);",
+                      "    const r = mod(point.x, CURVE_N);",
+                      "    if (r === 0n) continue;",
+                      "    let s = mod(inverse(ephemeral, CURVE_N) * (digest + r * privateScalar), CURVE_N);",
+                      "    if (s === 0n) continue;",
+                      "    if (s > CURVE_N / 2n) s = CURVE_N - s;",
+                      "    return base64UrlHex(hex32(r) + hex32(s));",
+                      "  }",
+                      "};",
+                      "const buildHolderProof = (nonce) => {",
+                      "  const header = { alg: 'ES256', typ: 'openid4vci-proof+jwt', jwk: holderPublicJwk };",
+                      "  const payload = {",
+                      "    aud: pm.collectionVariables.get('credentialIssuer') || pm.variables.get('tenantGatewayUrl'),",
+                      "    iat: Math.floor(Date.now() / 1000)",
+                      "  };",
+                      "  if (nonce) payload.nonce = nonce;",
+                      "  const signingInput = base64UrlJson(header) + '.' + base64UrlJson(payload);",
+                      "  pm.collectionVariables.set('proofJwt', signingInput + '.' + signEs256(signingInput));",
+                      "};",
+                      "if (pm.info.requestName === '06 Issue transaction-code EuPid credential') {",
+                      "  const transactionNonce = String(pm.collectionVariables.get('transactionNonce') || '').trim();",
+                      "  if (!transactionNonce) throw new Error('Missing transactionNonce. Run the preceding nonce request first.');",
+                      "  buildHolderProof(transactionNonce);",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -7726,7 +8809,10 @@
                       "const pipeline = pm.response.json();",
                       "const actualPipelineSessionId = pipeline.sessionId || pipeline.session_id || pipeline.id;",
                       "pm.expect(actualPipelineSessionId, 'actual pipeline session id').to.be.a('string').and.not.empty;",
-                      "pm.collectionVariables.set('pipelineSessionId', actualPipelineSessionId);"
+                      "const actualPipelineCorrelationId = pipeline.correlationId || pipeline.correlation_id;",
+                      "pm.expect(actualPipelineCorrelationId, 'actual pipeline correlation id').to.be.a('string').and.not.empty;",
+                      "pm.collectionVariables.set('pipelineSessionId', actualPipelineSessionId);",
+                      "pm.collectionVariables.set('pipelineCorrelationId', actualPipelineCorrelationId);"
                     ]
                   }
                 }
@@ -7773,7 +8859,7 @@
               "name": "02 Contribute attributes",
               "request": {
                 "method": "POST",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineSessionId}}/attributes",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineCorrelationId}}/attributes",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -7839,7 +8925,7 @@
               "name": "03 Read accumulated attributes",
               "request": {
                 "method": "GET",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineSessionId}}/attributes",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineCorrelationId}}/attributes",
                 "description": "Reads the attributes accumulated so far across all sources.",
                 "header": []
               },
@@ -7888,7 +8974,7 @@
               "name": "04 Evaluate completeness",
               "request": {
                 "method": "GET",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineSessionId}}/completeness",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineCorrelationId}}/completeness",
                 "description": "Evaluates whether the accumulated attributes satisfy each credential binding's mandatory claims, and whether deferral or approval is recommended.",
                 "header": []
               },
@@ -7937,7 +9023,7 @@
               "name": "05 Approve issuance",
               "request": {
                 "method": "POST",
-                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineSessionId}}/approve",
+                "url": "{{tenantIssuerApiBaseUrl}}/backend/sessions/{{pipelineCorrelationId}}/approve",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -9605,6 +10691,102 @@
                   "_postman_previewlanguage": "json"
                 }
               ]
+            },
+            {
+              "name": "15 Delete the certificate reference",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantKmsApiBaseUrl}}/certificate-chains/{{kmsTenantCertificateAlias}}?providerId={{kmsRuntimeProviderId}}",
+                "description": "Removes the EDK reference only. For an externally managed reference this never touches the provider certificate; here it removes material this walkthrough itself stored.",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('certificate reference deleted', () => pm.expect([200, 204]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "DELETE",
+                    "url": "https://acme.example.com/api/kms/v1/certificate-chains/customer-tenant-signing-chain?providerId=default",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "*/*"
+                      }
+                    ]
+                  },
+                  "status": "No Content",
+                  "code": 204,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "16 Delete the tenant-wide key",
+              "request": {
+                "method": "DELETE",
+                "url": "{{tenantKmsApiBaseUrl}}/keys/{{kmsTenantKeyAlias}}?providerId={{kmsRuntimeProviderId}}",
+                "description": "Removes the key created by request 09 so the run leaves no residue.",
+                "header": []
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('tenant-wide key deleted', () => pm.expect([200, 204]).to.include(pm.response.code));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "DELETE",
+                    "url": "https://acme.example.com/api/kms/v1/keys/customer-tenant-signing-key?providerId=default",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "*/*"
+                      }
+                    ]
+                  },
+                  "status": "No Content",
+                  "code": 204,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "_postman_previewlanguage": "json"
+                }
+              ]
             }
           ],
           "event": []
@@ -9667,7 +10849,7 @@
         },
         {
           "name": "20 Authorization code through Keycloak (optional)",
-          "description": "Run after folder 09 and the credential metadata request in folder 15. This selects the proxy only for EuPid, so subsequent EuPid pre-authorized offers require removing that override first. Postman handles code, PKCE and access tokens. A real wallet owns its holder proof key; no private signing key is uploaded to a helper service.",
+          "description": "Run after folder 09 and the credential metadata request in folder 15. This selects the proxy only for EuPid, so subsequent EuPid pre-authorized offers require removing that override first. Postman handles code, PKCE and access tokens. A real wallet owns its holder proof key; no private signing key is uploaded to a helper service.\n\nOptional scenario guard: set enableKeycloakWalletProxy=true and provide keycloakIssuer, federationClientId, federationClientSecret, walletProofJwt. When false, requests are skipped and reported as optional skipped.",
           "item": [
             {
               "name": "01 Select wallet proxy for EuPid authorization code",
@@ -9687,6 +10869,23 @@
                 }
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -9757,6 +10956,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -9792,6 +11008,27 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
+                      "  }",
+                      "}",
+                      "const parseUrl = value => require('url').parse(value, true);\nconst httpsOrigin = value => {\n  const parsed = parseUrl(value);\n  if (parsed.protocol !== 'https:' || !parsed.host || parsed.auth) throw new Error('Expected an HTTPS URL without embedded credentials');\n  return parsed.protocol + '//' + parsed.host.toLowerCase();\n};",
+                      "const issuer = parseUrl(offer.credential_issuer);",
+                      "pm.expect(httpsOrigin(offer.credential_issuer)).to.eql(httpsOrigin(pm.variables.get('tenantGatewayUrl')));",
+                      "pm.collectionVariables.set('walletCredentialMetadataUrl', httpsOrigin(offer.credential_issuer) + '/.well-known/openid-credential-issuer' + issuer.pathname.replace(/\\/$/, ''));"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -9800,11 +11037,7 @@
                       "const offer = pm.response.json();",
                       "pm.collectionVariables.set('walletIssuerState', offer.grants.authorization_code.issuer_state);",
                       "pm.collectionVariables.set('walletCredentialIssuer', offer.credential_issuer);",
-                      "pm.expect(pm.collectionVariables.get('walletIssuerState')).to.be.a('string').and.not.empty;",
-                      "const parseUrl = value => require('url').parse(value, true);\nconst httpsOrigin = value => {\n  const parsed = parseUrl(value);\n  if (parsed.protocol !== 'https:' || !parsed.host || parsed.auth) throw new Error('Expected an HTTPS URL without embedded credentials');\n  return parsed.protocol + '//' + parsed.host.toLowerCase();\n};",
-                      "const issuer = parseUrl(offer.credential_issuer);",
-                      "pm.expect(httpsOrigin(offer.credential_issuer)).to.eql(httpsOrigin(pm.variables.get('tenantGatewayUrl')));",
-                      "pm.collectionVariables.set('walletCredentialMetadataUrl', httpsOrigin(offer.credential_issuer) + '/.well-known/openid-credential-issuer' + issuer.pathname.replace(/\\/$/, ''));"
+                      "pm.expect(pm.collectionVariables.get('walletIssuerState')).to.be.a('string').and.not.empty;"
                     ]
                   }
                 }
@@ -9821,6 +11054,23 @@
                 "header": []
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -9848,6 +11098,23 @@
               },
               "event": [
                 {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
@@ -9874,6 +11141,23 @@
                 "header": []
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -9996,6 +11280,23 @@
                   },
                   "event": [
                     {
+                      "listen": "prerequest",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                          "if (!enabled) {",
+                          "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
+                          "  pm.execution.skipRequest();",
+                          "} else {",
+                          "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                          "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
+                          "  }",
+                          "}"
+                        ]
+                      }
+                    },
+                    {
                       "listen": "test",
                       "script": {
                         "type": "text/javascript",
@@ -10009,13 +11310,23 @@
                 }
               ]
             }
-          ]
+          ],
+          "_sphereon": {
+            "optional": true,
+            "enableVariable": "enableKeycloakWalletProxy",
+            "requirements": [
+              "keycloakIssuer",
+              "federationClientId",
+              "federationClientSecret",
+              "walletProofJwt"
+            ]
+          }
         }
       ]
     },
     {
       "name": "04 Platform - shared Azure vault (optional)",
-      "description": "Platform operator owns this resource. Set platformTenantId and platformAzure inputs. Create, attach credentials, validate, then offer to tenantId. Return to tenant application / 08 to accept the offer with tenant authority. Keep platform credentials out of tenant requests.",
+      "description": "Platform operator owns this resource. Set platformTenantId and platformAzure inputs. Create, attach credentials, validate, then offer to tenantId. Return to tenant application / 08 to accept the offer with tenant authority. Keep platform credentials out of tenant requests.\n\nOptional scenario guard: set enableSharedAzure=true and provide platformTenantId, platformAzureVaultUri, platformAzureTenantId, platformAzureClientId, platformAzureClientSecret. When false, requests are skipped and reported as optional skipped.",
       "auth": {
         "type": "oauth2",
         "oauth2": [
@@ -10107,6 +11418,23 @@
           },
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const enabled = String(pm.variables.get('enableSharedAzure') || '').toLowerCase() === 'true';",
+                  "if (!enabled) {",
+                  "  console.log('Skipped optional scenario: platform shared Azure vault (set enableSharedAzure=true to enable)');",
+                  "  pm.execution.skipRequest();",
+                  "} else {",
+                  "  for (const key of [\"platformTenantId\",\"platformAzureVaultUri\",\"platformAzureTenantId\",\"platformAzureClientId\",\"platformAzureClientSecret\"]) {",
+                  "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling platform shared Azure vault.');",
+                  "  }",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -10154,6 +11482,23 @@
           },
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const enabled = String(pm.variables.get('enableSharedAzure') || '').toLowerCase() === 'true';",
+                  "if (!enabled) {",
+                  "  console.log('Skipped optional scenario: platform shared Azure vault (set enableSharedAzure=true to enable)');",
+                  "  pm.execution.skipRequest();",
+                  "} else {",
+                  "  for (const key of [\"platformTenantId\",\"platformAzureVaultUri\",\"platformAzureTenantId\",\"platformAzureClientId\",\"platformAzureClientSecret\"]) {",
+                  "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling platform shared Azure vault.');",
+                  "  }",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -10184,6 +11529,23 @@
             "header": []
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const enabled = String(pm.variables.get('enableSharedAzure') || '').toLowerCase() === 'true';",
+                  "if (!enabled) {",
+                  "  console.log('Skipped optional scenario: platform shared Azure vault (set enableSharedAzure=true to enable)');",
+                  "  pm.execution.skipRequest();",
+                  "} else {",
+                  "  for (const key of [\"platformTenantId\",\"platformAzureVaultUri\",\"platformAzureTenantId\",\"platformAzureClientId\",\"platformAzureClientSecret\"]) {",
+                  "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling platform shared Azure vault.');",
+                  "  }",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -10219,6 +11581,23 @@
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const enabled = String(pm.variables.get('enableSharedAzure') || '').toLowerCase() === 'true';",
+                  "if (!enabled) {",
+                  "  console.log('Skipped optional scenario: platform shared Azure vault (set enableSharedAzure=true to enable)');",
+                  "  pm.execution.skipRequest();",
+                  "} else {",
+                  "  for (const key of [\"platformTenantId\",\"platformAzureVaultUri\",\"platformAzureTenantId\",\"platformAzureClientId\",\"platformAzureClientSecret\"]) {",
+                  "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling platform shared Azure vault.');",
+                  "  }",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -10267,7 +11646,18 @@
             }
           ]
         }
-      ]
+      ],
+      "_sphereon": {
+        "optional": true,
+        "enableVariable": "enableSharedAzure",
+        "requirements": [
+          "platformTenantId",
+          "platformAzureVaultUri",
+          "platformAzureTenantId",
+          "platformAzureClientId",
+          "platformAzureClientSecret"
+        ]
+      }
     },
     {
       "name": "05 Subtenants",
@@ -10943,6 +12333,36 @@
       "description": "Captured from the response of '17 Issue W3C VCDM 1.1 / 04 Fetch the VCDM 1.1 OID4VCI metadata'."
     },
     {
+      "key": "customerDesignRunId",
+      "value": "",
+      "description": "Per-run suffix for the dedicated positive credential-design CRUD fixture."
+    },
+    {
+      "key": "customerDesignVct",
+      "value": "",
+      "description": "Per-run VCT used by the dedicated positive credential-design CRUD fixture; canonical EuPid remains the seeded issuance design."
+    },
+    {
+      "key": "customerDesignConfigurationId",
+      "value": "",
+      "description": "Per-run credential configuration id paired with customerDesignVct."
+    },
+    {
+      "key": "customerDesignAlias",
+      "value": "",
+      "description": "Per-run alias paired with customerDesignVct."
+    },
+    {
+      "key": "customerDesignVariantEnAlias",
+      "value": "",
+      "description": "Per-run English render-variant alias."
+    },
+    {
+      "key": "customerDesignVariantNlAlias",
+      "value": "",
+      "description": "Per-run Dutch render-variant alias."
+    },
+    {
       "key": "eupidDesignId",
       "value": "",
       "description": "Captured from the response of '11 Credential Designs / 01 Create EuPid SD-JWT design'."
@@ -10973,11 +12393,6 @@
       "description": "Captured from the response of '11 Credential Designs / 04 Create EuPid render variant (nl)'."
     },
     {
-      "key": "issuerDesignId",
-      "value": "",
-      "description": "Captured from the response of '10 Issuer Configuration / 01 Create issuer design'."
-    },
-    {
       "key": "issuerLogoIntegrity",
       "value": "",
       "description": "Captured from the response of '10 Issuer Configuration / 02 Upload issuer logo asset'."
@@ -10991,11 +12406,6 @@
       "key": "issuerMetadataUrl",
       "value": "",
       "description": "Captured from the response of '15 Issue SD-JWT VC and mdoc / 02 Resolve credential offer'."
-    },
-    {
-      "key": "issuerVariantId",
-      "value": "",
-      "description": "Captured from the response of '10 Issuer Configuration / 03 Create issuer render variant'."
     },
     {
       "key": "kmsRuntimeKeyAlias",
@@ -11021,6 +12431,26 @@
       "key": "mdlCredentialOfferUri",
       "value": "",
       "description": "Captured from the response of '15 Issue SD-JWT VC and mdoc / 07 Create Mdl offer'."
+    },
+    {
+      "key": "customerMdlDocType",
+      "value": "",
+      "description": "Per-run mdoc document type for the dedicated positive credential-design CRUD fixture; canonical mDL issuance remains seeded."
+    },
+    {
+      "key": "customerMdlConfigurationId",
+      "value": "",
+      "description": "Per-run mdoc credential configuration id."
+    },
+    {
+      "key": "customerMdlAlias",
+      "value": "",
+      "description": "Per-run mdoc design alias."
+    },
+    {
+      "key": "customerMdlVariantEnAlias",
+      "value": "",
+      "description": "Per-run mdoc English render-variant alias."
     },
     {
       "key": "mdlDesignId",
@@ -11318,8 +12748,53 @@
       "description": "Captured from the response of '12 Status Lists / 04a Create X.509 token status list'."
     },
     {
+      "key": "seededEuPidDesignId",
+      "value": "",
+      "description": "Response-derived id of the canonical seeded EuPid design; dedicated CRUD uses eupidDesignId separately."
+    },
+    {
+      "key": "issuerRunId",
+      "value": "",
+      "description": "Generated once per collection run; scopes issuer design/card aliases and cleanup to this run."
+    },
+    {
+      "key": "issuerDesignCreated",
+      "value": "",
+      "description": "Set true after the run-owned issuer design is created."
+    },
+    {
+      "key": "issuerVariantCreated",
+      "value": "",
+      "description": "Set true after the run-owned issuer-card variant is created."
+    },
+    {
+      "key": "runOwnedIssuerDesignId",
+      "value": "",
+      "description": "Response-derived issuer design ID owned by this collection run."
+    },
+    {
+      "key": "runOwnedIssuerVariantId",
+      "value": "",
+      "description": "Response-derived issuer render variant ID owned by this collection run."
+    },
+    {
       "key": "keycloakIssuer",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "enableTenantAzure",
+      "value": "false",
+      "type": "string"
+    },
+    {
+      "key": "enableSharedAzure",
+      "value": "false",
+      "type": "string"
+    },
+    {
+      "key": "enableKeycloakWalletProxy",
+      "value": "false",
       "type": "string"
     }
   ]

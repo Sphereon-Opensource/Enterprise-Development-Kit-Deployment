@@ -98,7 +98,7 @@ if ([string]::IsNullOrWhiteSpace($PostmanEnvironmentFile)) {
     $PostmanEnvironmentFile = Join-Path $repoRoot 'deploy\edk\e2e\postman\EDK-Enterprise-Deployment.automation.postman_environment.json'
 }
 # Pinned size of the automation source. Bump this in the same commit that adds or removes a request.
-$DefaultCollectionRequestCount = 218
+$DefaultCollectionRequestCount = 229
 $snapshotDir = Join-Path $customerRoot 'postman\snapshots'
 $runnerPath = Join-Path $repoRoot 'deploy\edk\e2e\runner\run-e2e.js'
 $imageVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-enterprise-image-set.mjs'
@@ -130,9 +130,21 @@ function Get-EnvironmentManifestDigest([string]$Path) {
     $line = $_.Trim()
     if ($line -and -not $line.StartsWith('#')) { ($line -split '=', 2)[0].Trim() }
   } | Where-Object { $_ } | Sort-Object)
-  $emptyHash = [BitConverter]::ToString(([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes('')))).Replace('-', '').ToLowerInvariant()
-  $canonical = ($ids | ForEach-Object { "$_$([char]0)$emptyHash" }) -join ''
-  $digest = [BitConverter]::ToString(([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical)))).Replace('-', '').ToLowerInvariant()
+  # Match the canonical manifest contract: each sorted opaque id is followed by a NUL
+  # byte and the raw SHA-256(empty) bytes. Do not hex-encode the empty digest before
+  # hashing; that produces a different contract digest than the platform configuration.
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  $emptyHash = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(''))
+  $canonical = [System.IO.MemoryStream]::new()
+  foreach ($id in $ids) {
+    $idBytes = [Text.Encoding]::UTF8.GetBytes($id)
+    $canonical.Write($idBytes, 0, $idBytes.Length)
+    $canonical.WriteByte(0)
+    $canonical.Write($emptyHash, 0, $emptyHash.Length)
+  }
+  $digest = [BitConverter]::ToString($sha.ComputeHash($canonical.ToArray())).Replace('-', '').ToLowerInvariant()
+  $canonical.Dispose()
+  $sha.Dispose()
   return "sha256:$digest"
 }
 function Require-File([string]$Path, [string]$Label) {
@@ -173,6 +185,15 @@ function Publish-NewmanSafeArtifacts([string]$StageDir, [string]$ReportDir) {
 }
 function ConvertTo-ComposeMountPath([string]$Path) {
   return [System.IO.Path]::GetFullPath($Path).Replace('\', '/')
+}
+function Get-ProjectGatewayAlias([string]$Project) {
+  $original = $Project.Trim()
+  $safe = $original.ToLowerInvariant() -replace '_', '-'
+  $digest = ([System.Security.Cryptography.SHA256]::Create()).ComputeHash([System.Text.Encoding]::UTF8.GetBytes($original))
+  $suffix = ([System.BitConverter]::ToString($digest).Replace('-', '').ToLowerInvariant()).Substring(0, 12)
+  $prefixLength = [Math]::Min(47, $safe.Length)
+  $prefix = $safe.Substring(0, $prefixLength).TrimEnd('-')
+  return "gw-$prefix-$suffix"
 }
 function Render-BehindEdgeArtifacts {
   New-Item -ItemType Directory -Path $behindEdgeArtifactDir -Force | Out-Null
@@ -909,7 +930,10 @@ if ($AccessMode -eq 'BehindEdge') {
   $selectedGatewayDynamic = Join-Path $behindEdgeArtifactDir 'dynamic.behind-edge.generated.yml'
   $selectedGatewayStatic = Join-Path $behindEdgeArtifactDir 'traefik.behind-edge.generated.yml'
   $edgeRouterCandidate = Join-Path $behindEdgeArtifactDir "edge-router.$EdgeEnvironment.yml"
-  $edgeAlias = "gw-$EdgeEnvironment"
+  # Keep EdgeEnvironment as the route/file identity, but isolate the stack
+  # gateway network alias by Compose project so same-host rehearsals cannot
+  # resolve through another project's gw-e2e-style alias.
+  $edgeAlias = Get-ProjectGatewayAlias $ProjectName
   $resolvedEdgeRouterDirectory = [System.IO.Path]::GetFullPath($EdgeRouterDirectory)
   $edgeRouterTarget = Join-Path $resolvedEdgeRouterDirectory "$EdgeEnvironment.yml"
   if ($Topology -eq 'Monolith') {
