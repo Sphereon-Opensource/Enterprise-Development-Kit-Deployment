@@ -8,20 +8,35 @@ const customerEdkRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)
 const chart = path.join(customerEdkRoot, 'helm', 'edk-enterprise')
 const repositoryRoot = path.resolve(customerEdkRoot, '..', '..')
 const baseValues = path.join(repositoryRoot, 'deploy', 'edk', 'e2e', 'helm', 'values.yaml')
-const upgradeValues = path.join(
-  repositoryRoot,
-  'deploy',
-  'edk',
-  'e2e',
-  'build',
-  'reports',
-  'helm-upgrade',
-  '20260802T085826Z',
-  'upgrade-runtime-values.yaml',
-)
 
 function renderChart() {
-  const result = spawnSync('helm', ['template', 'topology-test', chart, '-f', baseValues, '-f', upgradeValues], {
+  const result = spawnSync('helm', [
+    'template',
+    'topology-test',
+    chart,
+    '-f',
+    baseValues,
+    '--set',
+    'global.platformBaseDomain=topology.example.test',
+    '--set',
+    'platform.externalBaseUrl=https://platform.topology.example.test',
+    '--set',
+    'platform.bootstrap.issuer=https://platform.topology.example.test',
+    '--set',
+    'secretAuthority.existingSecrets.platform=platform-authority',
+    '--set',
+    'secretAuthority.existingSecrets.tenant-kms=tenant-kms-authority',
+    '--set',
+    'secretAuthority.existingSecrets.tenant-as=tenant-as-authority',
+    '--set',
+    'secretAuthority.existingSecrets.did=did-authority',
+    '--set',
+    'secretAuthority.existingSecrets.blob=blob-authority',
+    '--set',
+    'secretAuthority.existingSecrets.issuer=issuer-authority',
+    '--set',
+    'secretAuthority.existingSecrets.verifier=verifier-authority',
+  ], {
     cwd: repositoryRoot,
     encoding: 'utf8',
   })
@@ -89,7 +104,7 @@ test('identity-plane Services replace authority-bootstrap and publish not-ready 
   assert.match(tenantKmsIdentityService, /^    - name: grpc$/m)
   assert.doesNotMatch(tenantKmsIdentityService, /^    - name: (?:http|rest)$/m)
   assert.match(platformDeployment, new RegExp(`TENANT_KMS_AUTHORITY_BOOTSTRAP_HOST[\\s\\S]*${tenantKmsIdentityName}`))
-  assert.equal((platformConfig.match(new RegExp(`grpc://${tenantKmsIdentityName}:`, 'g')) ?? []).length, 4)
+  assert.equal((platformConfig.match(new RegExp(`grpc://${tenantKmsIdentityName}:`, 'g')) ?? []).length, 5)
 
   const tenantKmsIdentityDeployment = tenantKmsDeployment
   assert.match(

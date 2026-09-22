@@ -4,9 +4,9 @@ import test from 'node:test'
 
 const source = readFileSync(new URL('./upgrade-helm.sh', import.meta.url), 'utf8')
 
-test('immutable RC3 upgrades require and persist canonical release-set evidence', () => {
+test('immutable RC3, RC4, and RC5 upgrades require and persist canonical release-set evidence', () => {
   assert.match(source, /--release-set-evidence PATH/)
-  assert.match(source, /--release-set-evidence is required for immutable RC3 upgrades/)
+  assert.match(source, /--release-set-evidence is required for immutable RC3, RC4, and RC5 upgrades\./)
   assert.match(source, /report\.tag !== process\.env\.RELEASE_REQUESTED_TAG/)
   assert.match(source, /build\.version !== process\.env\.RELEASE_REQUESTED_TAG/)
   assert.match(source, /report\.images\.length !== 7/)

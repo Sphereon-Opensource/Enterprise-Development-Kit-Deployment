@@ -8,27 +8,82 @@ import os from 'node:os'
 import path from 'node:path'
 import {randomBytes, createHash} from 'node:crypto'
 import {spawnSync} from 'node:child_process'
+import {pathToFileURL} from 'node:url'
 
 const arg = (name, fallback = '') => { const i = process.argv.indexOf(name); return i >= 0 ? (process.argv[i + 1] ?? '') : fallback }
-const rawCollectionPath = arg('--collection')
-const rawSourcePath = arg('--source')
-const rawEnvironmentPath = arg('--environment')
-const rawReportDir = arg('--report-dir')
-if (!rawCollectionPath || !rawSourcePath || !rawEnvironmentPath || !rawReportDir) throw new Error('Usage: run-customer-postman-with-auth.mjs --collection FILE --source FILE --environment FILE --report-dir DIR [--runner FILE]')
-const collectionPath = path.resolve(rawCollectionPath)
-const sourcePath = path.resolve(rawSourcePath)
-const environmentPath = path.resolve(rawEnvironmentPath)
-const reportDir = path.resolve(rawReportDir)
+const isMain = Boolean(process.argv[1]) && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
+const rawCollectionPath = isMain ? arg('--collection') : ''
+const rawSourcePath = isMain ? arg('--source') : ''
+const rawEnvironmentPath = isMain ? arg('--environment') : ''
+const rawReportDir = isMain ? arg('--report-dir') : ''
+if (isMain && (!rawCollectionPath || !rawSourcePath || !rawEnvironmentPath || !rawReportDir)) throw new Error('Usage: run-customer-postman-with-auth.mjs --collection FILE --source FILE --environment FILE --report-dir DIR [--runner FILE]')
+const collectionPath = rawCollectionPath ? path.resolve(rawCollectionPath) : null
+const sourcePath = rawSourcePath ? path.resolve(rawSourcePath) : null
+const environmentPath = rawEnvironmentPath ? path.resolve(rawEnvironmentPath) : null
+const reportDir = rawReportDir ? path.resolve(rawReportDir) : null
 const runner = path.resolve(arg('--runner', 'deploy/edk/e2e/runner/run-e2e.js'))
 
 const read = file => JSON.parse(fs.readFileSync(file, 'utf8'))
 const clone = value => structuredClone(value)
-const env = read(environmentPath)
+const DERIVED_TENANT_ROUTING_KEYS = new Set(['tenantSlug', 'tenantHost', 'tenantGatewayUrl'])
+
+/**
+ * Remove only the stale tenant-routing aliases. The shipped collection derives
+ * tenant routing in collection scope before each request; stale environment
+ * values would otherwise win Postman's variable precedence.
+ */
+export function normalizeEnvironment(environment) {
+  const normalized = clone(environment)
+  normalized.values = (normalized.values ?? []).filter((entry) => !DERIVED_TENANT_ROUTING_KEYS.has(entry?.key))
+  return normalized
+}
+
+const env = isMain ? normalizeEnvironment(read(environmentPath)) : null
 const value = key => String(env.values?.find(v => v.key === key)?.value ?? '').trim()
 const setVar = (collection, key, val) => { const entry = (collection.variable ?? []).find(v => v.key === key); if (entry) entry.value = val; else (collection.variable ??= []).push({key, value: val, enabled: true}) }
 const setEnvironmentVar = (environment, key, val) => { const entry = (environment.values ?? []).find(v => v.key === key); if (entry) entry.value = val; else (environment.values ??= []).push({key, value: val, enabled: true, type: 'default'}) }
 const save = (file, object) => { fs.mkdirSync(path.dirname(file), {recursive: true}); fs.writeFileSync(file, `${JSON.stringify(object, null, 2)}\n`, {mode: 0o600}) }
-function leaves(items, parents = [], out = []) { for (const item of items ?? []) item.item ? leaves(item.item, [...parents, item.name], out) : out.push({item, parents}); return out }
+function isOptional(item) {
+  const description = typeof item?.description === 'string' ? item.description : JSON.stringify(item?.description ?? '')
+  return String(item?.name ?? '').includes('(optional)') || description.includes('Optional scenario guard')
+}
+function leaves(items, parents = [], inheritedOptional = false, out = []) {
+  for (const item of items ?? []) {
+    const optional = inheritedOptional || isOptional(item)
+    if (item.item) leaves(item.item, [...parents, item.name], optional, out)
+    else out.push({item, parents, identity: [...parents, item.name].join(' > '), optional})
+  }
+  return out
+}
+export function reconcileCoverage(projectedLeaves, executionOccurrences) {
+  const projected = projectedLeaves.map(leaf => typeof leaf === 'string' ? {identity: leaf, optional: false} : leaf)
+  const frequencies = new Map()
+  for (const occurrence of executionOccurrences ?? []) {
+    const identity = String(occurrence).replace(/^__executed_request__\s+/, '')
+    frequencies.set(identity, (frequencies.get(identity) ?? 0) + 1)
+  }
+  const projectedIdentities = new Set(projected.map(leaf => leaf.identity))
+  const unknownExecutedIdentities = [...frequencies.keys()].filter(identity => !projectedIdentities.has(identity))
+  if (unknownExecutedIdentities.length) throw new Error('Executed public request identity is not projected: ' + unknownExecutedIdentities.join(', '))
+  const uniqueExecutedIdentities = [...frequencies.keys()].filter(identity => projectedIdentities.has(identity))
+  const missing = projected.filter(leaf => !frequencies.has(leaf.identity))
+  const nonoptionalMissing = missing.filter(leaf => !leaf.optional)
+  if (nonoptionalMissing.length) throw new Error('Missing nonoptional public request(s): ' + nonoptionalMissing.map(leaf => leaf.identity).join(', '))
+  const repeated = uniqueExecutedIdentities.filter(identity => frequencies.get(identity) > 1)
+  const skippedOptionalRequestIdentities = missing.map(leaf => leaf.identity)
+  const repeatedPublicRequestIdentities = repeated.map(identity => ({identity, count: frequencies.get(identity)}))
+  const result = {
+    projectedPublicRequests: projected.length,
+    executedPublicRequests: uniqueExecutedIdentities.length,
+    skippedOptionalRequests: skippedOptionalRequestIdentities.length,
+    repeatedPublicExecutions: repeatedPublicRequestIdentities.reduce((sum, entry) => sum + entry.count - 1, 0),
+    publicRequestIdentities: uniqueExecutedIdentities,
+    skippedOptionalRequestIdentities,
+    repeatedPublicRequestIdentities,
+  }
+  if (result.executedPublicRequests + result.skippedOptionalRequests !== result.projectedPublicRequests) throw new Error('Public phase request coverage mismatch')
+  return result
+}
 function onlyFolders(collection, names) { const c = clone(collection); c.item = c.item.filter(i => names.includes(i.name)); return c }
 function mergeVariables(target, from) { const values = new Map((target.variable ?? []).map(v => [v.key, v])); for (const v of from.variable ?? []) values.set(v.key, clone(v)); target.variable = [...values.values()] }
 function instrumentRequests(collection) {
@@ -101,6 +156,7 @@ function run(collection, environment, privateDir, evidenceDir, extra = []) {
   if (result.error) throw result.error; if ((result.status ?? 1) !== 0) throw new Error(`customer auth phase failed with exit code ${result.status}`)
 }
 
+if (isMain) {
 const publicCollection = bearerize(read(collectionPath)); const source = read(sourcePath); const base = fs.mkdtempSync(path.join(os.tmpdir(), 'edk-customer-auth-')); fs.mkdirSync(reportDir, {recursive: true})
 try {
   const operator = await exactOperatorToken(value('platformUrl') || `https://platform.${value('baseDomain')}`, value('operatorEmail'), value('operatorPassword')); setVar(publicCollection, 'platformAccessToken', operator)
@@ -113,16 +169,15 @@ try {
   const state2 = read(path.join(base, 'owner.json')); const public2 = bearerize(publicCollection); mergeVariables(public2, state2.collection); const runClientId = String(state2.collection.variable.find(v => v.key === 'tenantSubdomain')?.value ?? 'tenant') + '-service-' + randomBytes(8).toString('hex'); const runClientSecret = randomBytes(32).toString('hex'); setVar(public2, 'tenantServiceClientId', runClientId); setVar(public2, 'tenantServiceClientSecret', runClientSecret); setEnvironmentVar(state2.environment, 'tenantServiceClientId', runClientId); setEnvironmentVar(state2.environment, 'tenantServiceClientSecret', runClientSecret); const checkpoint2 = path.join(base, 'owner-register.json'); run(onlyFolders(public2, ['02 Tenant owner - register application']), state2.environment, path.join(base, 'register'), path.join(reportDir, 'register'), ['--through-item', '02 Tenant owner - register application > 02 Register confidential tenant application', '--continuation-out', checkpoint2])
   const state3 = read(checkpoint2); const generatedClientId = String(state3.collection.variable.find(v => v.key === 'tenantServiceClientId')?.value ?? ''); const generatedClientSecret = String(state3.collection.variable.find(v => v.key === 'tenantServiceClientSecret')?.value ?? ''); if (!generatedClientId || !generatedClientSecret) throw new Error('Registration continuation did not retain generated tenant client credentials'); setEnvironmentVar(state3.environment, 'tenantServiceClientId', generatedClientId); setEnvironmentVar(state3.environment, 'tenantServiceClientSecret', generatedClientSecret); const token = onlyFolders(source, ['04 Tenant Service Token']); mergeVariables(token, state3.collection); const checkpoint3 = path.join(base, 'token.json'); run(token, state3.environment, path.join(base, 'token'), path.join(reportDir, 'token'), ['--through-item', '04 Tenant Service Token > 02 Tenant service token (client credentials)', '--continuation-out', checkpoint3])
   const state4 = read(checkpoint3); const remaining = onlyFolders(bearerize(publicCollection), ['03 Tenant application', '04 Platform - shared Azure vault (optional)', '05 Subtenants']); mergeVariables(remaining, state4.collection); run(remaining, state4.environment, path.join(base, 'public-remaining'), path.join(reportDir, 'public-remaining'))
-  const projectedPublicRequests = leaves(publicCollection.item).length
+  const projectedLeaves = leaves(publicCollection.item)
   const publicPhaseDirs = ['phase1', 'register', 'public-remaining']
   const publicRequestIdentities = publicPhaseDirs.flatMap(name => {
     const file = path.join(reportDir, name, 'executed-request-identities.json')
     return fs.existsSync(file) ? read(file).requestIdentities : []
   })
-  const executedPublicRequests = publicRequestIdentities.length
-  const skippedOptionalRequests = projectedPublicRequests - executedPublicRequests
-  if (executedPublicRequests + skippedOptionalRequests !== projectedPublicRequests) throw new Error('Public phase request coverage mismatch: executed ' + executedPublicRequests + ' plus skipped ' + skippedOptionalRequests + ', projection ' + projectedPublicRequests)
-  save(path.join(reportDir, 'customer-public-auth-handoff.json'), {status: 'passed', projectedPublicRequests, executedPublicRequests, skippedOptionalRequests, publicRequestIdentities, authorityCoverage: {platformBootstrap: 'native PKCE operator', tenantOwnerBootstrap: 'native PKCE owner', tenantActions: 'tenant-AS client credentials'}, phases: ['platform discovery and registration', 'tenant owner PKCE', 'public owner client registration', 'tenant-AS client credentials', 'public tenant journey']})
+  const coverage = reconcileCoverage(projectedLeaves, publicRequestIdentities)
+  save(path.join(reportDir, 'customer-public-auth-handoff.json'), {status: 'passed', ...coverage, authorityCoverage: {platformBootstrap: 'native PKCE operator', tenantOwnerBootstrap: 'native PKCE owner', tenantActions: 'tenant-AS client credentials'}, phases: ['platform discovery and registration', 'tenant owner PKCE', 'public owner client registration', 'tenant-AS client credentials', 'public tenant journey']})
 } finally { fs.rmSync(base, {recursive: true, force: true}) }
+}
 
 
