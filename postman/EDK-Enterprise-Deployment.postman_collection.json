@@ -2622,6 +2622,61 @@
           "description": "Issuer configuration is separate from authorization-server configuration. This stage creates the issuer design and display metadata; credential configurations, signing material, and status-list references follow in 11, 12, and 13.\n\nDocumentation: https://docs.sphereon.com/edk/admin-console/guides/issuer-configuration",
           "item": [
             {
+              "name": "00 List tenant credential issuers",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/instances",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Lists the credential issuers this tenant runs, from the issuer service. The tenant is taken from the access token. The id is the issuer instance id that issuer-scoped settings and authorization-server bindings use."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('issuers listed', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('page shape', () => pm.expect(body.items).to.be.an('array'));",
+                      "const current = String(pm.collectionVariables.get('issuerId') || '').trim();",
+                      "if (!current && body.items.length) pm.collectionVariables.set('issuerId', body.items[0].id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "00a Read one tenant credential issuer",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantGatewayUrl}}/api/oid4vci/v1/instances/{{issuerId}}",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads one issuer by id: display name, lifecycle and management mode, the credential issuer identifier and its public endpoints."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('issuer read', () => pm.response.to.have.status(200));",
+                      "pm.test('no secret material', () => pm.expect(pm.response.text()).to.not.match(/secret|privateKey|\"d\"\\s*:/i));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
               "name": "01 Create issuer design",
               "request": {
                 "method": "POST",
