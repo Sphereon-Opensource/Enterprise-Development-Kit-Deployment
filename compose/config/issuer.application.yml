@@ -312,6 +312,14 @@ kv:
 # platform-config-remote provider. Use config.overrides.* for explicit local
 # deployment overrides only.
 
+# Task 8 / LiveStack e2e: keep public status-list Cache-Control short so
+# present→revoke→refreshStatus observes the new bit without waiting out the
+# signed token's ttl (JWT ttl remains a publication freshness hint; hosting
+# max-age=0 forces resolvers to re-fetch each decision).
+statuslists:
+  hosting:
+    cache-max-age-seconds: 0
+
 secret:
   authority:
     allowed-clock-skew-millis: 5000

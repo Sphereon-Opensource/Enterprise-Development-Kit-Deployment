@@ -239,3 +239,12 @@ secret:
         issuer: enterprise-platform
         audience: sphereon-secret-use
         verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+
+# mdoc status-list CWT verification (MdocCredentialStatusVerifier → X509TrustAnchorLoader).
+# PEM is mounted at runtime from the postman25 issuer-signing x5c (see task8-mdoc-status-trust override).
+trust:
+  anchors:
+    x509:
+      enabled: true
+      ca-bundle-paths:
+        - /app/config/mdoc-status-trust.pem

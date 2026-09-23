@@ -255,6 +255,16 @@ application:
   bootstrap:
     on-startup: false
 app:
+  security:
+    encryption:
+      # Federation session store encrypts PendingFederation under SYSTEM_TENANT using
+      # this app-level key. Without it, Keycloak initiate fails at persist with
+      # "encrypt PendingFederation failed".
+      activeKeyId: ${env:FEDERATION_SESSION_ENCRYPTION_ACTIVE_KEY_ID:federation.session.v1}
+      keys:
+        federation:
+          session:
+            v1: ${env:FEDERATION_SESSION_ENCRYPTION_KEY}
   # TODO: set to prod for a production deployment.
   deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
 auth:

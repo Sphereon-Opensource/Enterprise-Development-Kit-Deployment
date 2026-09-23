@@ -84,6 +84,29 @@ otel:
         endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
         protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
 security:
+  # 0.25.0 posture: keep AuthZEN/PDP enforced, but run password/AAL1 login.
+  # Native AAL2/passkey step-up is deferred to post-0.25.0.
+  "profiles.default-required-aal": "aal1"
+  "profiles.default-cross-border-policy": "allow"
+  "commands.default-required-aal": "aal1"
+  commands:
+    commands:
+      "[account-action.http.dispatch]":
+        required-aal: aal1
+      "[account-action.token.resolve]":
+        required-aal: aal1
+      "[account-action.token.complete]":
+        required-aal: aal1
+      "[account-action.passkey.begin]":
+        required-aal: aal1
+      "[account-action.password-change.initiate]":
+        required-aal: aal1
+      "[theme.resolution.resolve]":
+        required-aal: aal1
+      "[auth.sessions.get]":
+        required-aal: aal1
+      "[kms.encryption.decrypt]":
+        required-aal: aal1
   workload-trust-policy:
     trusted_service_ids:
       - service-crypto
@@ -300,7 +323,7 @@ secret-management:
     environment:
       enabled: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_ENABLED:true}
       manifest-path: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_PATH:/app/secret-management/deployment/environment.manifest}
-      manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:sha256:9201eaf4b197235f6b35f3e3293f3118a222af82f292057c3664a4bcde020748}
+      manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e}
     kubernetes-mount:
       enabled: false
 # Trust-domain anchor -> identifier materialization source. The platform executes the routed trust

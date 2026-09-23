@@ -260,6 +260,15 @@ http:
       middlewares: ["developer-console-page-rewrite"]
       priority: 280
       tls: {}
+    developer-journeys-artifact:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        Path(`/developer-journeys/index.json`)
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["developer-journeys-artifact-rewrite"]
+      priority: 282
+      tls: {}
     developer-console-api:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
@@ -393,6 +402,10 @@ http:
       replacePathRegex:
         regex: "^/developer-console(?:/(.*))?$"
         replacement: "/admin-console/developer-console/$1"
+    developer-journeys-artifact-rewrite:
+      replacePathRegex:
+        regex: "^/developer-journeys/index\\.json$"
+        replacement: "/admin-console/developer-journeys/index.json"
     developer-console-api-rewrite:
       replacePathRegex:
         regex: "^/developer-console/(.*)"
