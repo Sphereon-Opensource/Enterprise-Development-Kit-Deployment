@@ -198,6 +198,39 @@ data:
           allow-tenant-managed-providers: {{ .Values.secretManagement.authority.allowTenantManagedProviders }}
           allow-platform-offerings: {{ .Values.secretManagement.authority.allowPlatformOfferings }}
           retention-days: {{ .Values.secretManagement.authority.retentionDays }}
+        {{- with .Values.secretManagement.authority.platformProviders }}
+        platform-providers:
+          {{- range $providerId := keys . | sortAlpha }}
+          {{- $provider := index $.Values.secretManagement.authority.platformProviders $providerId }}
+          {{ $providerId }}:
+            kind: {{ $provider.kind | quote }}
+            display-name: {{ $provider.displayName | quote }}
+            {{- with $provider.applicationId }}
+            application-id: {{ . | quote }}
+            {{- end }}
+            {{- if eq $provider.kind "AZURE_KEY_VAULT" }}
+            vault-uri: {{ $provider.vaultUri | quote }}
+            tenant-id: {{ $provider.tenantId | quote }}
+            client-id: {{ $provider.clientId | quote }}
+            hsm-type: {{ $provider.hsmType | quote }}
+            {{- else if eq $provider.kind "AWS_KMS" }}
+            region: {{ $provider.region | quote }}
+            access-key-id: {{ $provider.accessKeyId | quote }}
+            {{- with $provider.endpointUrl }}
+            endpoint-url: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            credential:
+              secret-id: {{ $provider.credentialSecretId | quote }}
+            {{- $sharing := default dict $provider.sharing }}
+            sharing:
+              fulfillment: {{ default "SHARED_INSTANCE" $sharing.fulfillment | quote }}
+              {{- with $sharing.tenants }}
+              tenants: {{ . | quote }}
+              {{- end }}
+              suggested-default: {{ default false $sharing.suggestedDefault }}
+          {{- end }}
+        {{- end }}
       internal-resolution:
         expected-audience: {{ .Values.secretManagement.internalResolution.expectedAudience | quote }}
         allowed-service-actors: {{ join "," $secretBootstrapActors | quote }}
@@ -488,6 +521,13 @@ data:
               leaf:
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "tenant-kms")) .Values.grpc.port | quote }}
+                commands:
+                  # Validate opens the resource's provider to report its health.
+                  # The application tenant's own resources would otherwise stay
+                  # LOCAL, where no provider can be opened, so the probe goes to
+                  # tenant-KMS for every session.
+                  "[kms.leaf.probe-resource]":
+                    target: SERVER
               # Raw signature creation over a tenant key. Every JWS the platform
               # builds for a customer tenant ends in kms.signature.create, which is
               # a separate routing service from the typed leaves. Customer tenant

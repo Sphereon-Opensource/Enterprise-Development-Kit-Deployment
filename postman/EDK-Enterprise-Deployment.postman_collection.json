@@ -131,7 +131,7 @@
     },
     {
       "name": "01 Platform - create tenant",
-      "description": "Platform operator only. Register the tenant, then repeat status until COMPLETED. Open tenantOwnerActivationLink in your browser, or use the invitation email. Complete owner activation before folder 02.\n\nDocumentation: https://docs.sphereon.com/edk/deployment/onboarding-walkthrough#postman-oauth-and-the-first-tenant-client",
+      "description": "Platform operator only. List the tenants first: when tenantSubdomain already exists it is reused and the next two requests are skipped. Otherwise register the tenant, then repeat status until COMPLETED. Open tenantOwnerActivationLink in your browser, or use the invitation email. Complete owner activation before folder 02.\n\nDocumentation: https://docs.sphereon.com/edk/deployment/onboarding-walkthrough#postman-oauth-and-the-first-tenant-client",
       "auth": {
         "type": "oauth2",
         "oauth2": [
@@ -199,6 +199,43 @@
       },
       "item": [
         {
+          "name": "00 List tenants and select the configured tenant",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/admin/v1/tenants?page=0&size=100",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "description": "Lists the root tenants (first 100) and looks for the tenant whose slug equals tenantSubdomain. When it exists, tenantId is taken from this list and the next two requests are skipped. With more than 100 tenants and no match here, set tenantId yourself before continuing."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request succeeded', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const slug = String(pm.variables.get('tenantSubdomain') || '').trim().toLowerCase();",
+                  "const tenant = (body.data || []).find((candidate) => String(candidate.slug || '').toLowerCase() === slug && !candidate.deletedAt);",
+                  "if (tenant) {",
+                  "  pm.collectionVariables.set('tenantId', tenant.id);",
+                  "  pm.collectionVariables.set('tenantReused', 'true');",
+                  "  console.log('Tenant ' + slug + ' already exists; registration is skipped. Continue with folder 02.');",
+                  "} else {",
+                  "  pm.collectionVariables.set('tenantReused', 'false');",
+                  "  pm.collectionVariables.unset('tenantId');",
+                  "  if (body.pagination && body.pagination.hasMore) console.log('Tenant ' + slug + ' is not among the first 100 tenants. If it exists, set tenantId before continuing.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "01 Register tenant",
           "request": {
             "method": "POST",
@@ -213,9 +250,21 @@
               "mode": "raw",
               "raw": "{\n  \"tenant\": {\n    \"tenantType\": \"organization\",\n    \"name\": \"{{tenantName}}\",\n    \"description\": \"{{tenantName}} issuing and verification tenant\",\n    \"slug\": \"{{tenantSubdomain}}\",\n    \"initialPlatformSubdomain\": true\n  },\n  \"contacts\": {\n    \"technical\": {\n      \"email\": \"admin@{{tenantSubdomain}}.example\",\n      \"displayName\": \"{{tenantName}} Technical Contact\"\n    },\n    \"administrativeSameAsTechnical\": true,\n    \"ownerAdmin\": {\n      \"source\": \"technical\"\n    }\n  },\n  \"login\": {\n    \"enabled\": true,\n    \"defaultAuthorizationServerRequired\": true\n  },\n  \"provisioning\": {\n    \"issuer\": true,\n    \"verifier\": true,\n    \"keysAndDids\": true,\n    \"sampleData\": true\n  }\n}"
             },
-            "description": "Registers an organization tenant with natural-person contacts, owner/admin login, mandatory default authorization server, and default issuer/verifier/key/DID/sample-data provisioning. The platform selects its configured email route; when none is effective it returns a one-time manual activation link."
+            "description": "Registers an organization tenant with natural-person contacts, owner/admin login, mandatory default authorization server, and default issuer/verifier/key/DID/sample-data provisioning. The platform selects its configured email route; when none is effective it returns a one-time manual activation link. Skipped when request 00 found an existing tenant with this slug."
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.collectionVariables.get('tenantReused') || '') === 'true') {",
+                  "  console.log('Skipped: tenant ' + pm.variables.get('tenantSubdomain') + ' already exists, so it is not registered again.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -278,10 +327,22 @@
           "request": {
             "method": "GET",
             "url": "{{platformUrl}}/api/platform/admin/v1/tenant-onboarding/{{tenantRegistrationCorrelationId}}",
-            "description": "Reads the platform tenant-onboarding status row produced by registration and verifies the platform completed every default activation step before customer-facing setup continues.",
+            "description": "Reads the platform tenant-onboarding status row produced by registration and verifies the platform completed every default activation step before customer-facing setup continues. Skipped for an existing tenant, which has no onboarding run in this session.",
             "header": []
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.collectionVariables.get('tenantReused') || '') === 'true') {",
+                  "  console.log('Skipped: tenant ' + pm.variables.get('tenantSubdomain') + ' already exists, so there is no onboarding run to wait for.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -329,7 +390,7 @@
     },
     {
       "name": "02 Tenant owner - register application",
-      "description": "Send discovery before Get New Access Token. Sign in as the activated tenant owner. Set tenantServiceClientId and private tenantServiceClientSecret, then register the confidential client on the default hosted tenant AS. This is the one-time bootstrap; ordinary REST work uses folder 03.\n\nDocumentation: https://docs.sphereon.com/edk/deployment/onboarding-walkthrough#postman-oauth-and-the-first-tenant-client",
+      "description": "Send discovery before Get New Access Token. Sign in as the activated tenant owner. Set tenantServiceClientId and private tenantServiceClientSecret, then list the registered applications. A new tenant registers the confidential client on the default hosted tenant AS; an existing registration only receives your secret. This is the one-time bootstrap; ordinary REST work uses folder 03.\n\nDocumentation: https://docs.sphereon.com/edk/deployment/onboarding-walkthrough#postman-oauth-and-the-first-tenant-client",
       "auth": {
         "type": "oauth2",
         "oauth2": [
@@ -489,11 +550,44 @@
           ]
         },
         {
+          "name": "07a1 List registered tenant service clients",
+          "request": {
+            "method": "GET",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{tenantHostedAuthorizationServerId}}/clients",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "description": "Lists the applications registered on the tenant default authorization server. When tenantServiceClientId is already registered, request 02 is skipped and request 02a sets its secret to your private tenantServiceClientSecret."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('tenant service clients listed', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                  "const clients = pm.response.json().clients;",
+                  "pm.expect(clients, 'clients').to.be.an('array');",
+                  "pm.test('listed clients carry no raw secret', () => clients.forEach((client) => pm.expect(client.clientCredential || {}).not.to.have.property('secretValue')));",
+                  "const clientId = String(pm.variables.get('tenantServiceClientId') || '').trim() || (pm.collectionVariables.get('tenantSubdomain') + '-service');",
+                  "pm.collectionVariables.set('tenantServiceClientId', clientId);",
+                  "const existing = clients.find((client) => client.clientId === clientId);",
+                  "pm.collectionVariables.set('tenantServiceClientReused', existing ? 'true' : 'false');",
+                  "if (existing) console.log('Tenant service client ' + clientId + ' already exists; 07b is skipped and 07c sets its secret.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "02 Register confidential tenant application",
           "request": {
             "method": "POST",
             "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{tenantHostedAuthorizationServerId}}/clients",
-            "description": "Use the tenant owner OAuth token once. Set tenantServiceClientId and a private local tenantServiceClientSecret before sending. The response contains only an opaque credential reference. Then get a client-credentials token on folder 03 Tenant application.",
+            "description": "Use the tenant owner OAuth token once. Set tenantServiceClientId and a private local tenantServiceClientSecret before sending. The response contains only an opaque credential reference. Then get a client-credentials token on folder 03 Tenant application. Skipped when request 07a1 found the application already registered.",
             "header": [
               {
                 "key": "Content-Type",
@@ -513,6 +607,10 @@
                 "exec": [
                   "for (const key of ['tenantServiceClientId', 'tenantServiceClientSecret']) {",
                   "  if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set the private local input ' + key + ' before registering the client.');",
+                  "}",
+                  "if (String(pm.collectionVariables.get('tenantServiceClientReused') || '') === 'true') {",
+                  "  console.log('Skipped: ' + pm.variables.get('tenantServiceClientId') + ' is already registered; request 02a sets its secret.');",
+                  "  pm.execution.skipRequest();",
                   "}"
                 ]
               }
@@ -552,7 +650,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"clientId\": \"edk-walkthrough-tenant-service\",\n  \"clientName\": \"Acme Corporation walkthrough tenant service\",\n  \"clientType\": \"confidential\",\n  \"enabled\": true,\n  \"grantTypes\": [\n    \"client_credentials\"\n  ],\n  \"responseTypes\": [],\n  \"redirectUris\": [],\n  \"defaultAccessTokenAudience\": \"enterprise-platform\",\n  \"allowedAccessTokenAudiences\": [\n    \"enterprise-tenant-kms\",\n    \"enterprise-tenant-did\",\n    \"enterprise-issuer\",\n    \"enterprise-verifier\"\n  ],\n  \"tokenEndpointAuthMethod\": \"client_secret_post\",\n  \"principalRoles\": [\n    \"tenant-admin\"\n  ],\n  \"clientCredential\": {\n    \"method\": \"client_secret_post\",\n    \"clientId\": \"edk-walkthrough-tenant-service\",\n    \"secretValue\": \"<redacted>\"\n  }\n}"
+                  "raw": "{\n  \"clientId\": \"edk-walkthrough-tenant-service\",\n  \"clientName\": \"Acme Corporation walkthrough tenant service\",\n  \"clientType\": \"confidential\",\n  \"enabled\": true,\n  \"grantTypes\": [\n    \"client_credentials\"\n  ],\n  \"responseTypes\": [],\n  \"redirectUris\": [],\n  \"defaultAccessTokenAudience\": \"enterprise-platform\",\n  \"allowedAccessTokenAudiences\": [\n    \"enterprise-tenant-kms\",\n    \"enterprise-tenant-did\",\n    \"enterprise-tenant-as\",\n    \"enterprise-issuer\",\n    \"enterprise-verifier\"\n  ],\n  \"tokenEndpointAuthMethod\": \"client_secret_post\",\n  \"principalRoles\": [\n    \"tenant-admin\"\n  ],\n  \"clientCredential\": {\n    \"method\": \"client_secret_post\",\n    \"clientId\": \"edk-walkthrough-tenant-service\",\n    \"secretValue\": \"<redacted>\"\n  }\n}"
                 }
               },
               "status": "Created",
@@ -563,8 +661,60 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"clientId\": \"edk-walkthrough-tenant-service\",\n  \"clientName\": \"Acme Corporation walkthrough tenant service\",\n  \"clientType\": \"confidential\",\n  \"enabled\": true,\n  \"grantTypes\": [\n    \"client_credentials\"\n  ],\n  \"responseTypes\": [],\n  \"redirectUris\": [],\n  \"defaultAccessTokenAudience\": \"enterprise-platform\",\n  \"allowedAccessTokenAudiences\": [\n    \"enterprise-tenant-kms\",\n    \"enterprise-tenant-did\",\n    \"enterprise-issuer\",\n    \"enterprise-verifier\"\n  ],\n  \"principalRoles\": [\n    \"tenant-admin\"\n  ],\n  \"tokenEndpointAuthMethod\": \"client_secret_post\",\n  \"clientCredential\": {\n    \"method\": \"client_secret_post\",\n    \"clientId\": \"edk-walkthrough-tenant-service\",\n    \"secretReference\": {\n      \"resourceHandle\": \"sec_<opaque>\",\n      \"purpose\": \"OAUTH_CLIENT_SECRET\"\n    }\n  },\n  \"postLogoutRedirectUris\": [],\n  \"requestUris\": []\n}",
+              "body": "{\n  \"clientId\": \"edk-walkthrough-tenant-service\",\n  \"clientName\": \"Acme Corporation walkthrough tenant service\",\n  \"clientType\": \"confidential\",\n  \"enabled\": true,\n  \"grantTypes\": [\n    \"client_credentials\"\n  ],\n  \"responseTypes\": [],\n  \"redirectUris\": [],\n  \"defaultAccessTokenAudience\": \"enterprise-platform\",\n  \"allowedAccessTokenAudiences\": [\n    \"enterprise-tenant-kms\",\n    \"enterprise-tenant-did\",\n    \"enterprise-tenant-as\",\n    \"enterprise-issuer\",\n    \"enterprise-verifier\"\n  ],\n  \"principalRoles\": [\n    \"tenant-admin\"\n  ],\n  \"tokenEndpointAuthMethod\": \"client_secret_post\",\n  \"clientCredential\": {\n    \"method\": \"client_secret_post\",\n    \"clientId\": \"edk-walkthrough-tenant-service\",\n    \"secretReference\": {\n      \"resourceHandle\": \"sec_<opaque>\",\n      \"purpose\": \"OAUTH_CLIENT_SECRET\"\n    }\n  },\n  \"postLogoutRedirectUris\": [],\n  \"requestUris\": []\n}",
               "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "02a Set the secret of the existing tenant application",
+          "request": {
+            "method": "PATCH",
+            "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{tenantHostedAuthorizationServerId}}/clients/{{tenantServiceClientId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/merge-patch+json"
+              }
+            ],
+            "description": "Runs only when request 07a1 found the application already registered. Secrets are write-once and never returned, so this merge patch sets the secret to your private tenantServiceClientSecret. Other integrations that use this application need the same secret.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientCredential\": {\n    \"method\": \"client_secret_post\",\n    \"clientId\": \"{{tenantServiceClientId}}\",\n    \"secretValue\": \"{{tenantServiceClientSecret}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const key of ['tenantServiceClientId', 'tenantServiceClientSecret']) {",
+                  "  if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set the private local input ' + key + ' before registering the client.');",
+                  "}",
+                  "if (String(pm.collectionVariables.get('tenantServiceClientReused') || '') !== 'true') {",
+                  "  console.log('Skipped: request 02 registered the application with your secret.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request succeeded', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json();",
+                  "pm.expect(result.clientId).to.eql(pm.variables.get('tenantServiceClientId'));",
+                  "pm.expect(JSON.stringify(result)).not.to.include(pm.variables.get('tenantServiceClientSecret'));"
+                ]
+              }
             }
           ]
         }
@@ -697,7 +847,12 @@
                   "  uuidOf(instance.verifierId) ||",
                   "  uuidOf(instance.id)",
                   ");",
-                  "const selected = instances.find((instance) => instance.enabled !== false) || instances[0];",
+                  "// An existing tenant can hold more instances than the provisioned one, which publishes under /oid4vp/<tenantSubdomain>.",
+                  "const tenantSlug = String(pm.variables.get('tenantSubdomain') || '').trim().toLowerCase();",
+                  "const primaryUrl = (instance) => String((((instance && instance.endpoints) || []).find((endpoint) => endpoint.isPrimary) || ((instance && instance.endpoints) || [])[0] || {}).url || '').replace(/\\/+$/, '');",
+                  "const enabled = instances.filter((instance) => instance.enabled !== false);",
+                  "const oldestFirst = [...enabled].sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')));",
+                  "const selected = enabled.find((instance) => primaryUrl(instance).endsWith('/oid4vp/' + tenantSlug)) || oldestFirst[0] || instances[0];",
                   "const resolvedId = idOf(selected);",
                   "const resolvedInstanceId = stringOf(selected && selected.instanceId);",
                   "pm.test('verifier party id resolved from platform config', () => {",
@@ -773,7 +928,12 @@
                   "  stringOf(instance.issuerId) ||",
                   "  stringOf(instance.partyId)",
                   ");",
-                  "const selected = instances.find((instance) => instance.enabled !== false) || instances[0];",
+                  "// An existing tenant can hold more instances than the provisioned one, which publishes under /oid4vci/<tenantSubdomain>.",
+                  "const tenantSlug = String(pm.variables.get('tenantSubdomain') || '').trim().toLowerCase();",
+                  "const primaryUrl = (instance) => String((((instance && instance.endpoints) || []).find((endpoint) => endpoint.isPrimary) || ((instance && instance.endpoints) || [])[0] || {}).url || '').replace(/\\/+$/, '');",
+                  "const enabled = instances.filter((instance) => instance.enabled !== false);",
+                  "const oldestFirst = [...enabled].sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')));",
+                  "const selected = enabled.find((instance) => primaryUrl(instance).endsWith('/oid4vci/' + tenantSlug)) || oldestFirst[0] || instances[0];",
                   "const resolvedId = uuidOf(selected) || idOf(selected);",
                   "pm.test('issuer instance id resolved from platform config', () => {",
                   "  pm.expect(resolvedId, 'issuer instance id').to.be.a('string').and.not.empty;",
@@ -904,9 +1064,12 @@
                       "    pm.expect(['PRODUCT_MANAGED', 'TENANT_SUPPLIED'], 'credential ownership').to.include(resource.credentialOwnership);",
                       "  });",
                       "});",
-                      "pm.collectionVariables.set('kmsResourceHandle', handles[0]);",
-                      "pm.collectionVariables.set('kmsResourceProviderId', resources[0] && resources[0].providerId);",
-                      "pm.collectionVariables.set('kmsResourceKind', resources[0] && resources[0].kind);",
+                      "// An existing tenant can hold more resources than the setup one; retired or detached ones are not usable.",
+                      "const usable = resources.filter((resource) => !['RETIRED', 'DETACHED'].includes(resource.state));",
+                      "const setup = usable.find((resource) => resource.kind === 'SOFTWARE' && resource.credentialOwnership === 'PRODUCT_MANAGED' && resource.providerId === 'default') || usable.find((resource) => resource.kind === 'SOFTWARE') || usable[0] || resources[0];",
+                      "pm.collectionVariables.set('kmsResourceHandle', setup.handle);",
+                      "pm.collectionVariables.set('kmsResourceProviderId', setup.providerId);",
+                      "pm.collectionVariables.set('kmsResourceKind', setup.kind);",
                       "const text = pm.response.text();",
                       "['INTERNAL_SOFTWARE_KMS', 'internal-token-verifier', 'keyAlias', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'resources hide ' + shape).to.not.include(shape));"
                     ]
@@ -940,6 +1103,36 @@
                   ],
                   "body": "{\n  \"resources\": [\n    {\n      \"handle\": \"krh_<opaque>\",\n      \"providerId\": \"default\",\n      \"kind\": \"SOFTWARE\",\n      \"displayName\": \"Software KMS\",\n      \"state\": \"CONFIGURED\",\n      \"resourceVersion\": 2,\n      \"credentialConfigured\": true,\n      \"health\": \"UNKNOWN\",\n      \"credentialOwnership\": \"PRODUCT_MANAGED\",\n      \"softwareStorageMode\": \"FILE\",\n      \"softwareKeyStoreFileName\": \"keystore.p12\",\n      \"credentialSecretRef\": \"<redacted>\",\n      \"providerAssignmentId\": null,\n      \"availableActions\": [\n        \"VALIDATE\",\n        \"UPDATE_CREDENTIAL\",\n        \"ROTATE_CREDENTIAL\",\n        \"DETACH\"\n      ],\n      \"declaredByDeployment\": false,\n      \"credentialFromDeployment\": false\n    }\n  ]\n}",
                   "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "02a Read the tenant setup KMS resource",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources/{{kmsResourceHandle}}",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads the KMS resource request 02 selected by its opaque krh_ handle: kind, state, health, credential ownership and the providerId the runtime KMS API uses."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('kms resource read', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                      "const j = pm.response.json();",
+                      "pm.expect(j.handle, 'resource handle').to.eql(pm.collectionVariables.get('kmsResourceHandle'));",
+                      "pm.expect(j.providerId, 'runtime provider id').to.eql(pm.collectionVariables.get('kmsResourceProviderId'));",
+                      "const text = pm.response.text();",
+                      "['INTERNAL_SOFTWARE_KMS', 'internal-token-verifier', 'keyAlias', 'locator', 'permit'].forEach((shape) => pm.expect(text, 'resource hides ' + shape).to.not.include(shape));"
+                    ]
+                  }
                 }
               ]
             },
@@ -1260,14 +1453,63 @@
         },
         {
           "name": "07 Azure Key Vault and external keys (optional)",
-          "description": "Tenant-owned vault: set tenantAzureVaultUri, tenantAzureTenantId, tenantAzureClientId and private tenantAzureClientSecret. Keys remain in Azure. Supply a matching public DER certificate chain; repeat array entries for intermediates. For a shared platform vault use folder 04 first and skip requests 01-03 here, setting tenantAzureProviderId to the offered providerId.\n\nOptional scenario guard: set enableTenantAzure=true and provide tenantAzureVaultUri, tenantAzureTenantId, tenantAzureClientId, tenantAzureClientSecret, externalKeyAlias, externalAzureCertificateAlias, externalCertificateDerBase64. When false, requests are skipped and reported as optional skipped.\n\nDocumentation: https://docs.sphereon.com/edk/guides/azure-kms-byok-byoc",
+          "description": "Tenant-owned vault: set tenantAzureVaultUri, tenantAzureTenantId, tenantAzureClientId and private tenantAzureClientSecret. Keys remain in Azure. Supply a matching public DER certificate chain; repeat array entries for intermediates. For a shared platform vault use folder 04 first and skip requests 00-03 here, setting tenantAzureProviderId to the offered providerId. Request 00 lists the existing resources first, so a rerun reuses the resource with this providerId.\n\nOptional scenario guard: set enableTenantAzure=true and provide tenantAzureVaultUri, tenantAzureTenantId, tenantAzureClientId, tenantAzureClientSecret, externalKeyAlias, externalAzureCertificateAlias, externalCertificateDerBase64. When false, requests are skipped and reported as optional skipped.\n\nDocumentation: https://docs.sphereon.com/edk/guides/azure-kms-byok-byoc",
           "item": [
+            {
+              "name": "00 List tenant KMS resources",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Lists the KMS resources. A resource that already carries tenantAzureProviderId is reused: its handle, version and credential slot are stored and request 01 is skipped."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableTenantAzure') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: tenant Azure KMS and external keys (set enableTenantAzure=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Request succeeded', () => pm.response.to.have.status(200));",
+                      "const existing = (pm.response.json().resources || []).find((resource) => resource.providerId === pm.variables.get('tenantAzureProviderId') && !['RETIRED', 'DETACHED'].includes(resource.state));",
+                      "pm.collectionVariables.set('tenantAzureResourceReused', existing ? 'true' : 'false');",
+                      "if (existing) {",
+                      "  pm.collectionVariables.set('tenantAzureResourceHandle', existing.handle);",
+                      "  pm.collectionVariables.set('tenantAzureResourceVersion', String(existing.resourceVersion));",
+                      "  pm.collectionVariables.set('tenantAzureCredentialSecretRef', existing.credentialSecretRef);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
             {
               "name": "01 Create an Azure Key Vault KMS resource",
               "request": {
                 "method": "POST",
                 "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/kms/resources",
-                "description": "Registers your own Azure Key Vault as a KMS resource of this tenant. providerId is the name you will use for this KMS on the KMS runtime API; applicationId is the label EDK stamps on keys it generates in the vault; tenantId and clientId identify the Entra application EDK signs in with. Keys generated through this resource never leave the vault.",
+                "description": "Registers your own Azure Key Vault as a KMS resource of this tenant. providerId is the name you will use for this KMS on the KMS runtime API; applicationId is the label EDK stamps on keys it generates in the vault; tenantId and clientId identify the Entra application EDK signs in with. Keys generated through this resource never leave the vault. Skipped when request 00 found a resource with this providerId; the credential and validation requests then use that resource.",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -1299,6 +1541,18 @@
                       "  for (const key of [\"tenantAzureVaultUri\",\"tenantAzureTenantId\",\"tenantAzureClientId\",\"tenantAzureClientSecret\",\"externalKeyAlias\",\"externalAzureCertificateAlias\",\"externalCertificateDerBase64\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling tenant Azure KMS and external keys.');",
                       "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('tenantAzureResourceReused') || '') === 'true') {",
+                      "  console.log('Skipped: a KMS resource with this providerId already exists; requests 02 and 03 use it.');",
+                      "  pm.execution.skipRequest();",
                       "}"
                     ]
                   }
@@ -1872,7 +2126,7 @@
               "request": {
                 "method": "POST",
                 "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers",
-                "description": "",
+                "description": " Skipped when the tenant already registered this issuer; its id is then reused.",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -1898,6 +2152,18 @@
                       "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
                       "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('externalAuthorizationServerReused') || '') === 'true') {",
+                      "  console.log('Skipped: this tenant already registered the external authorization server ' + pm.collectionVariables.get('externalAuthorizationServerId') + '.');",
+                      "  pm.execution.skipRequest();",
                       "}"
                     ]
                   }
@@ -2038,7 +2304,7 @@
               "request": {
                 "method": "POST",
                 "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/authorization-servers/{{externalAuthorizationServerId}}/activate",
-                "description": "",
+                "description": " Skipped when the reused external server is already active.",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -2064,6 +2330,18 @@
                       "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet proxy.');",
                       "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (String(pm.collectionVariables.get('externalAuthorizationServerReused') || '') === 'true' && pm.collectionVariables.get('externalAuthorizationServerLifecycle') === 'ACTIVE') {",
+                      "  console.log('Skipped: the reused external authorization server is already ACTIVE.');",
+                      "  pm.execution.skipRequest();",
                       "}"
                     ]
                   }
@@ -2618,6 +2896,130 @@
           }
         },
         {
+          "name": "08b Authorization Server Discovery",
+          "description": "List the authorization servers the tenant can use, and read one, before configuring any.",
+          "item": [
+            {
+              "name": "01 List tenant authorization servers",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantGatewayUrl}}/api/oauth2/v1/servers",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Lists the authorization servers this tenant can use, from the authorization server service itself. The tenant is taken from the access token. Open here before creating or changing a server."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('authorization servers listed', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('page shape', () => pm.expect(body.items).to.be.an('array'));",
+                      "pm.test('every listed server has an id and lifecycle', () => body.items.forEach((server) => { pm.expect(server.id).to.be.a('string').and.not.empty; pm.expect(server.lifecycleStatus).to.be.a('string'); }));",
+                      "const current = String(pm.collectionVariables.get('tenantHostedAuthorizationServerId') || '').trim();",
+                      "if (!body.items.some((server) => server.id === current) && body.items.length) {",
+                      "  const active = body.items.find((server) => server.lifecycleStatus === 'ACTIVE') || body.items[0];",
+                      "  pm.collectionVariables.set('tenantHostedAuthorizationServerId', active.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/oauth2/v1/servers",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"items\": [\n    {\n      \"id\": \"00000000-0000-4000-8000-000000000000\",\n      \"displayName\": \"00000000-0000-4000-8000-000000000000\",\n      \"lifecycleStatus\": \"ACTIVE\",\n      \"managementMode\": \"MANAGED\",\n      \"endpoints\": [\n        {\n          \"host\": \"acme.example.com\",\n          \"pathPrefix\": \"/as/acme\",\n          \"primary\": true,\n          \"enabled\": true\n        }\n      ],\n      \"links\": {\n        \"self\": \"/api/oauth2/v1/servers/00000000-0000-4000-8000-000000000000\",\n        \"settings\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000\",\n        \"configuration\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/configuration\"\n      }\n    }\n  ]\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "02 Read one tenant authorization server",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantGatewayUrl}}/api/oauth2/v1/servers/{{tenantHostedAuthorizationServerId}}",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads one authorization server by id: display name, lifecycle status and public issuer. Client secrets, signing keys and upstream credentials are never returned."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('authorization server read', () => pm.response.to.have.status(200));",
+                      "pm.test('no secret material', () => pm.expect(pm.response.text()).to.not.match(/secret|privateKey|\"d\"\\s*:/i));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/oauth2/v1/servers/00000000-0000-4000-8000-000000000000",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"id\": \"00000000-0000-4000-8000-000000000000\",\n  \"displayName\": \"00000000-0000-4000-8000-000000000000\",\n  \"lifecycleStatus\": \"ACTIVE\",\n  \"managementMode\": \"MANAGED\",\n  \"endpoints\": [\n    {\n      \"host\": \"acme.example.com\",\n      \"pathPrefix\": \"/as/acme\",\n      \"primary\": true,\n      \"enabled\": true\n    }\n  ],\n  \"links\": {\n    \"self\": \"/api/oauth2/v1/servers/00000000-0000-4000-8000-000000000000\",\n    \"settings\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000\",\n    \"configuration\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/authorization-servers/00000000-0000-4000-8000-000000000000/configuration\"\n  }\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            }
+          ],
+          "event": []
+        },
+        {
           "name": "10 Issuer Configuration",
           "description": "Issuer configuration is separate from authorization-server configuration. This stage creates the issuer design and display metadata; credential configurations, signing material, and status-list references follow in 11, 12, and 13.\n\nDocumentation: https://docs.sphereon.com/edk/admin-console/guides/issuer-configuration",
           "item": [
@@ -2644,9 +3046,42 @@
                       "const body = pm.response.json();",
                       "pm.test('page shape', () => pm.expect(body.items).to.be.an('array'));",
                       "const current = String(pm.collectionVariables.get('issuerId') || '').trim();",
-                      "if (!current && body.items.length) pm.collectionVariables.set('issuerId', body.items[0].id);"
+                      "// Keep the instance resolved earlier when it is listed; otherwise take the provisioned one, which publishes under the tenant slug.",
+                      "const tenantSlug = String(pm.variables.get('tenantSubdomain') || '').trim().toLowerCase();",
+                      "const provisioned = body.items.find((item) => (item.endpoints || []).some((endpoint) => endpoint.primary && String(endpoint.pathPrefix || '').replace(/\\/+$/, '') === '/oid4vci/' + tenantSlug));",
+                      "if (!body.items.some((item) => item.id === current) && body.items.length) pm.collectionVariables.set('issuerId', (provisioned || body.items[0]).id);",
+                      "pm.test('the selected instance is listed', () => pm.expect(body.items.map((item) => item.id)).to.include(pm.collectionVariables.get('issuerId')));"
                     ]
                   }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/oid4vci/v1/instances",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"items\": [\n    {\n      \"id\": \"00000000-0000-4000-8000-000000000000\",\n      \"displayName\": \"00000000-0000-4000-8000-000000000000\",\n      \"lifecycleStatus\": \"ACTIVE\",\n      \"managementMode\": \"MANAGED\",\n      \"credentialIssuer\": \"https://acme.example.com/oid4vci/acme\",\n      \"endpoints\": [\n        {\n          \"host\": \"acme.example.com\",\n          \"pathPrefix\": \"/oid4vci/acme\",\n          \"primary\": true,\n          \"enabled\": true\n        }\n      ],\n      \"links\": {\n        \"self\": \"/api/oid4vci/v1/instances/00000000-0000-4000-8000-000000000000\",\n        \"settings\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuer/instances/00000000-0000-4000-8000-000000000000\",\n        \"authorizationServerBindings\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/authorization-server-bindings\"\n      }\n    }\n  ]\n}",
+                  "_postman_previewlanguage": "json"
                 }
               ]
             },
@@ -2671,6 +3106,65 @@
                     "exec": [
                       "pm.test('issuer read', () => pm.response.to.have.status(200));",
                       "pm.test('no secret material', () => pm.expect(pm.response.text()).to.not.match(/secret|privateKey|\"d\"\\s*:/i));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/oid4vci/v1/instances/00000000-0000-4000-8000-000000000000",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"id\": \"00000000-0000-4000-8000-000000000000\",\n  \"displayName\": \"00000000-0000-4000-8000-000000000000\",\n  \"lifecycleStatus\": \"ACTIVE\",\n  \"managementMode\": \"MANAGED\",\n  \"credentialIssuer\": \"https://acme.example.com/oid4vci/acme\",\n  \"endpoints\": [\n    {\n      \"host\": \"acme.example.com\",\n      \"pathPrefix\": \"/oid4vci/acme\",\n      \"primary\": true,\n      \"enabled\": true\n    }\n  ],\n  \"links\": {\n    \"self\": \"/api/oid4vci/v1/instances/00000000-0000-4000-8000-000000000000\",\n    \"settings\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuer/instances/00000000-0000-4000-8000-000000000000\",\n    \"authorizationServerBindings\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vci/issuers/00000000-0000-4000-8000-000000000000/authorization-server-bindings\"\n  }\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "00b List issuer designs",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/issuers",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Lists the issuer designs of the tenant before this folder creates its own run-owned design. The designs bound to issuerId are the ones wallets see for this issuer."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('issuer designs listed', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                      "const designs = pm.response.json();",
+                      "pm.expect(designs, 'issuer designs').to.be.an('array');",
+                      "const issuerId = pm.collectionVariables.get('issuerId');",
+                      "const bound = designs.find((design) => (design.bindings || []).some((binding) => binding.issuerId === issuerId));",
+                      "if (bound) pm.collectionVariables.set('issuerDesignId', bound.id); else pm.collectionVariables.unset('issuerDesignId');"
                     ]
                   }
                 }
@@ -3079,6 +3573,45 @@
                   ],
                   "body": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000000\",\n    \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n    \"alias\": \"eu-pid\",\n    \"hostingMode\": \"LOCAL\",\n    \"bindings\": [\n      {\n        \"vct\": \"EuPid\",\n        \"vctHostingMode\": \"HOSTED\",\n        \"credentialConfigurationId\": \"EuPid\",\n        \"schemaId\": null,\n        \"docType\": null,\n        \"type\": null,\n        \"@context\": null,\n        \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n        \"issuerDid\": null,\n        \"issuerUri\": \"https://acme.example.com/oid4vci/acme\",\n        \"verifierClientId\": null,\n        \"ocaSaid\": null,\n        \"credentialType\": null,\n        \"credentialDesignId\": null,\n        \"credentialDesignVersion\": null,\n        \"activeFrom\": null,\n        \"activeUntil\": null\n      }\n    ],\n    \"credentialTemplateId\": null,\n    \"issuerDesignId\": \"00000000-0000-4000-8000-000000000000\",\n    \"displays\": [\n      {\n        \"locale\": \"en\",\n        \"name\": \"EU Personal ID\",\n        \"description\": \"European personal identity credential\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      },\n      {\n        \"locale\": \"nl\",\n        \"name\": \"EU Persoonlijke ID\",\n        \"description\": \"Europese persoonlijke identiteitscredential\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      }\n    ],\n    \"claims\": [\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"family_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Family name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Achternaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 1,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Doe\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"given_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Given name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Voornaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 2,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Jane\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"birth_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Date of birth\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Geboortedatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 3,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"1990-01-15\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"age_over_18\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Age over 18\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Ouder dan 18\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": false,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 4,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"true\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"nationality\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Nationality\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Nationaliteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 5,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"NL\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_authority\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing authority\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Uitgevende autoriteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 6,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Test Authority\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_country\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing country\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Land van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALWAYS\",\n        \"order\": 7,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"NL\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"document_number\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Document number\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Documentnummer\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": false,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 8,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"DOC-102938\"\n      }\n    ],\n    \"renderVariantIds\": [\n      \"00000000-0000-4000-8000-000000000000\",\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"derivedRenderHintsId\": null,\n    \"sourceSnapshotIds\": [],\n    \"contentHash\": null,\n    \"semanticAttributeSetRef\": {\n      \"bundleId\": \"credential-design:00000000-0000-4000-8000-000000000000\",\n      \"version\": \"00000000-0000-4000-8000-000000000000\"\n    },\n    \"attributeProfileId\": null,\n    \"attributeProfileVersion\": null,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\",\n    \"credentialType\": {\n      \"format\": \"SD_JWT_VC\",\n      \"vct\": \"EuPid\",\n      \"docType\": null,\n      \"type\": null,\n      \"@context\": null\n    },\n    \"deferral\": null\n  },\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000000\",\n    \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n    \"alias\": \"mdl\",\n    \"hostingMode\": \"LOCAL\",\n    \"bindings\": [\n      {\n        \"vct\": null,\n        \"vctHostingMode\": \"NONE\",\n        \"credentialConfigurationId\": \"Mdl\",\n        \"schemaId\": null,\n        \"docType\": \"org.iso.18013.5.1.mDL\",\n        \"type\": null,\n        \"@context\": null,\n        \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n        \"issuerDid\": null,\n        \"issuerUri\": \"https://acme.example.com/oid4vci/acme\",\n        \"verifierClientId\": null,\n        \"ocaSaid\": null,\n        \"credentialType\": null,\n        \"credentialDesignId\": null,\n        \"credentialDesignVersion\": null,\n        \"activeFrom\": null,\n        \"activeUntil\": null\n      }\n    ],\n    \"credentialTemplateId\": null,\n    \"issuerDesignId\": \"00000000-0000-4000-8000-000000000000\",\n    \"displays\": [\n      {\n        \"locale\": \"en\",\n        \"name\": \"Mobile Driving Licence\",\n        \"description\": \"ISO 18013-5 mobile driving licence\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      },\n      {\n        \"locale\": \"nl\",\n        \"name\": \"Mobiel Rijbewijs\",\n        \"description\": \"ISO 18013-5 mobiel rijbewijs\",\n        \"issuerNameOverride\": null,\n        \"preferredRenderVariantIds\": [\n          \"00000000-0000-4000-8000-000000000000\"\n        ]\n      }\n    ],\n    \"claims\": [\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"family_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Family name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Achternaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 1,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Doe\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"given_name\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Given name\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Voornaam\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 2,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Jane\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"birth_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Date of birth\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Geboortedatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 3,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"1990-01-15\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issue_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issue date\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Datum van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 4,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"2024-01-01\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"expiry_date\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Expiry date\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Vervaldatum\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 5,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"2030-01-01\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_country\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing country\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Land van uitgifte\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 6,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"NL\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"issuing_authority\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Issuing authority\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Uitgevende autoriteit\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 7,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"Test Authority\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"document_number\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Document number\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Documentnummer\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 8,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"DOC-102938\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"portrait\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Portrait\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Portret\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 9,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"driving_privileges\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"Driving privileges\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"Rijbevoegdheden\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 10,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"[{\\\"vehicle_category_code\\\":\\\"B\\\",\\\"issue_date\\\":\\\"2024-01-01\\\",\\\"expiry_date\\\":\\\"2030-01-01\\\"}]\"\n      },\n      {\n        \"path\": [\n          {\n            \"type\": \"property\",\n            \"name\": \"org.iso.18013.5.1\"\n          },\n          {\n            \"type\": \"property\",\n            \"name\": \"un_distinguishing_sign\"\n          }\n        ],\n        \"labels\": [\n          {\n            \"locale\": \"en\",\n            \"label\": \"UN distinguishing sign\",\n            \"description\": null,\n            \"entryValues\": null\n          },\n          {\n            \"locale\": \"nl\",\n            \"label\": \"VN-onderscheidingsteken\",\n            \"description\": null,\n            \"entryValues\": null\n          }\n        ],\n        \"mandatory\": true,\n        \"sdPolicy\": \"ALLOWED\",\n        \"order\": 11,\n        \"group\": null,\n        \"svgId\": null,\n        \"valueKind\": null,\n        \"widgetHint\": null,\n        \"markdownAllowed\": false,\n        \"entryCodes\": null,\n        \"unit\": null,\n        \"defaultValue\": null,\n        \"exampleValue\": \"NL\"\n      }\n    ],\n    \"renderVariantIds\": [\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"derivedRenderHintsId\": null,\n    \"sourceSnapshotIds\": [],\n    \"contentHash\": null,\n    \"semanticAttributeSetRef\": {\n      \"bundleId\": \"credential-design:00000000-0000-4000-8000-000000000000\",\n      \"version\": \"00000000-0000-4000-8000-000000000000\"\n    },\n    \"attributeProfileId\": null,\n    \"attributeProfileVersion\": null,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\",\n    \"credentialType\": {\n      \"format\": \"MSO_MDOC\",\n      \"vct\": null,\n      \"docType\": \"org.iso.18013.5.1.mDL\",\n      \"type\": null,\n      \"@context\": null\n    },\n    \"deferral\": null\n  }\n]",
                   "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "00a Read the resolved EuPid design",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantCredentialDesignApiBaseUrl}}/designs/credentials/{{seededEuPidDesignId}}",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads the EuPid design request 00 found. Skipped when the tenant has none; request 01 then creates a dedicated design."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (!String(pm.collectionVariables.get('seededEuPidDesignId') || '').trim()) {",
+                      "  console.log('Skipped: the tenant has no EuPid design yet; request 01 creates one.');",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('EuPid design read', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                      "const design = pm.response.json();",
+                      "pm.expect(design.id, 'design id').to.eql(pm.collectionVariables.get('seededEuPidDesignId'));"
+                    ]
+                  }
                 }
               ]
             },
@@ -4407,7 +4940,7 @@
                       "value": "application/json"
                     }
                   ],
-                  "body": "{\n  \"id\": \"00000000-0000-4000-8000-000000000000\",\n  \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n  \"alias\": \"<tenant>-authority-<generated>\",\n  \"hostingMode\": \"LOCAL\",\n  \"bindings\": [\n    {\n      \"vct\": null,\n      \"vctHostingMode\": \"NONE\",\n      \"credentialConfigurationId\": null,\n      \"schemaId\": null,\n      \"docType\": null,\n      \"type\": null,\n      \"@context\": null,\n      \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n      \"issuerDid\": \"did:web:acme.e2e.nk.sphereon.com\",\n      \"issuerUri\": \"https://acme.example.com\",\n      \"verifierClientId\": null,\n      \"ocaSaid\": null,\n      \"credentialType\": null,\n      \"credentialDesignId\": null,\n      \"credentialDesignVersion\": null,\n      \"activeFrom\": null,\n      \"activeUntil\": null\n    }\n  ],\n  \"partyId\": null,\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"displayName\": \"Acme Corporation Authority\",\n      \"description\": \"Acme Corporation credential issuing authority\",\n      \"logo\": null\n    },\n    {\n      \"locale\": \"nl\",\n      \"displayName\": \"Acme Corporation Autoriteit\",\n      \"description\": \"Uitgevende autoriteit voor verifieerbare credentials van Acme Corporation\",\n      \"logo\": null\n    }\n  ],\n  \"renderVariantIds\": [],\n  \"sourceSnapshotIds\": [],\n  \"contentHash\": null,\n  \"createdAt\": \"2026-01-01T00:00:00Z\",\n  \"updatedAt\": \"2026-01-01T00:00:00Z\"\n}",
+                  "body": "{\n  \"id\": \"00000000-0000-4000-8000-000000000000\",\n  \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n  \"alias\": \"<tenant>-authority-<generated>\",\n  \"hostingMode\": \"LOCAL\",\n  \"bindings\": [\n    {\n      \"vct\": null,\n      \"vctHostingMode\": \"NONE\",\n      \"credentialConfigurationId\": null,\n      \"schemaId\": null,\n      \"docType\": null,\n      \"type\": null,\n      \"@context\": null,\n      \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n      \"issuerDid\": \"did:web:acme.example.com\",\n      \"issuerUri\": \"https://acme.example.com\",\n      \"verifierClientId\": null,\n      \"ocaSaid\": null,\n      \"credentialType\": null,\n      \"credentialDesignId\": null,\n      \"credentialDesignVersion\": null,\n      \"activeFrom\": null,\n      \"activeUntil\": null\n    }\n  ],\n  \"partyId\": null,\n  \"displays\": [\n    {\n      \"locale\": \"en\",\n      \"displayName\": \"Acme Corporation Authority\",\n      \"description\": \"Acme Corporation credential issuing authority\",\n      \"logo\": null\n    },\n    {\n      \"locale\": \"nl\",\n      \"displayName\": \"Acme Corporation Autoriteit\",\n      \"description\": \"Uitgevende autoriteit voor verifieerbare credentials van Acme Corporation\",\n      \"logo\": null\n    }\n  ],\n  \"renderVariantIds\": [],\n  \"sourceSnapshotIds\": [],\n  \"contentHash\": null,\n  \"createdAt\": \"2026-01-01T00:00:00Z\",\n  \"updatedAt\": \"2026-01-01T00:00:00Z\"\n}",
                   "_postman_previewlanguage": "json"
                 }
               ]
@@ -4574,7 +5107,7 @@
                       "value": "application/json"
                     }
                   ],
-                  "body": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000000\",\n    \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n    \"alias\": \"acme-authority\",\n    \"hostingMode\": \"LOCAL\",\n    \"bindings\": [\n      {\n        \"vct\": null,\n        \"vctHostingMode\": \"NONE\",\n        \"credentialConfigurationId\": null,\n        \"schemaId\": null,\n        \"docType\": null,\n        \"type\": null,\n        \"@context\": null,\n        \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n        \"issuerDid\": \"did:web:acme.e2e.nk.sphereon.com\",\n        \"issuerUri\": \"https://acme.example.com/oid4vci/acme\",\n        \"verifierClientId\": null,\n        \"ocaSaid\": null,\n        \"credentialType\": null,\n        \"credentialDesignId\": null,\n        \"credentialDesignVersion\": null,\n        \"activeFrom\": null,\n        \"activeUntil\": null\n      }\n    ],\n    \"partyId\": \"00000000-0000-4000-8000-000000000000\",\n    \"displays\": [\n      {\n        \"locale\": \"en\",\n        \"displayName\": \"Acme Corporation Authority\",\n        \"description\": \"Acme Corporation credential issuing authority\",\n        \"logo\": {\n          \"uri\": \"/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png\",\n          \"integrity\": \"sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=\",\n          \"altText\": \"Acme Corporation authority logo\",\n          \"contentType\": null,\n          \"localBlob\": null\n        }\n      },\n      {\n        \"locale\": \"nl\",\n        \"displayName\": \"Acme Corporation Autoriteit\",\n        \"description\": \"Uitgevende autoriteit voor verifieerbare credentials van Acme Corporation\",\n        \"logo\": {\n          \"uri\": \"/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png\",\n          \"integrity\": \"sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=\",\n          \"altText\": \"Acme Corporation authority logo\",\n          \"contentType\": null,\n          \"localBlob\": null\n        }\n      }\n    ],\n    \"renderVariantIds\": [\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"sourceSnapshotIds\": [],\n    \"contentHash\": null,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\"\n  }\n]",
+                  "body": "[\n  {\n    \"id\": \"00000000-0000-4000-8000-000000000000\",\n    \"tenantId\": \"00000000-0000-4000-8000-000000000000\",\n    \"alias\": \"acme-authority\",\n    \"hostingMode\": \"LOCAL\",\n    \"bindings\": [\n      {\n        \"vct\": null,\n        \"vctHostingMode\": \"NONE\",\n        \"credentialConfigurationId\": null,\n        \"schemaId\": null,\n        \"docType\": null,\n        \"type\": null,\n        \"@context\": null,\n        \"issuerId\": \"00000000-0000-4000-8000-000000000000\",\n        \"issuerDid\": \"did:web:acme.example.com\",\n        \"issuerUri\": \"https://acme.example.com/oid4vci/acme\",\n        \"verifierClientId\": null,\n        \"ocaSaid\": null,\n        \"credentialType\": null,\n        \"credentialDesignId\": null,\n        \"credentialDesignVersion\": null,\n        \"activeFrom\": null,\n        \"activeUntil\": null\n      }\n    ],\n    \"partyId\": \"00000000-0000-4000-8000-000000000000\",\n    \"displays\": [\n      {\n        \"locale\": \"en\",\n        \"displayName\": \"Acme Corporation Authority\",\n        \"description\": \"Acme Corporation credential issuing authority\",\n        \"logo\": {\n          \"uri\": \"/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png\",\n          \"integrity\": \"sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=\",\n          \"altText\": \"Acme Corporation authority logo\",\n          \"contentType\": null,\n          \"localBlob\": null\n        }\n      },\n      {\n        \"locale\": \"nl\",\n        \"displayName\": \"Acme Corporation Autoriteit\",\n        \"description\": \"Uitgevende autoriteit voor verifieerbare credentials van Acme Corporation\",\n        \"logo\": {\n          \"uri\": \"/public/assets/design/2b3582f505a052b8f8c011eae6c10cecc590cf2f3941a8dbecd181e4c9f0e863.png\",\n          \"integrity\": \"sha256-KzWC9QWgUrj4wBHq5sEM7MWQzy85Qajb7NGB5Mnw6GM=\",\n          \"altText\": \"Acme Corporation authority logo\",\n          \"contentType\": null,\n          \"localBlob\": null\n        }\n      }\n    ],\n    \"renderVariantIds\": [\n      \"00000000-0000-4000-8000-000000000000\"\n    ],\n    \"sourceSnapshotIds\": [],\n    \"contentHash\": null,\n    \"createdAt\": \"2026-01-01T00:00:00Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00Z\"\n  }\n]",
                   "_postman_previewlanguage": "json"
                 }
               ]
@@ -4587,10 +5120,48 @@
           "description": "Creates the EuPid token status list, verifies the hosted status-list token, updates an entry, reactivates it, and reads the resulting entry state.\n\nDocumentation: https://docs.sphereon.com/edk/admin-console/guides/status-lists-and-revocation",
           "item": [
             {
+              "name": "00 List status lists",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantStatusListApiBaseUrl}}/statuslists?limit=100",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Lists the status lists of the tenant. Onboarding seeds the EuPid revocation list. Lists this folder created in an earlier run (walkthrough-revocation, x509-revocation, mdoc-revocation and status-bitstring) are reused: their ids and hosted URIs are stored and the create requests for them are skipped."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status lists listed', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                      "const j = pm.response.json();",
+                      "const lists = Array.isArray(j) ? j : (j.data || j.items || []);",
+                      "pm.expect(lists, 'status lists').to.be.an('array');",
+                      "const existing = {};",
+                      "for (const [correlationId, idVariable, uriVariable] of [[\"walkthrough-revocation\",\"statusListId\",\"statusListUri\"],[\"x509-revocation\",\"x5cStatusListId\",\"x5cStatusListUri\"],[\"mdoc-revocation\",\"cwtStatusListId\",\"cwtStatusListUri\"],[\"status-bitstring\",\"bitstringStatusListId\",\"bitstringStatusListUri\"]]) {",
+                      "  const list = lists.find((entry) => entry.correlationId === correlationId);",
+                      "  if (!list) continue;",
+                      "  existing[correlationId] = list.id;",
+                      "  pm.collectionVariables.set(idVariable, list.id);",
+                      "  pm.collectionVariables.set(uriVariable, list.statusListUri || pm.variables.get('tenantGatewayUrl') + '/public/statuslists/' + correlationId);",
+                      "}",
+                      "pm.collectionVariables.set('existingStatusListIds', JSON.stringify(existing));",
+                      "if (Object.keys(existing).length) console.log('Reusing status lists from an earlier run: ' + Object.keys(existing).join(', '));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
               "name": "00a Resolve EuPid DID signing selection",
               "request": {
                 "method": "GET",
-                "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid",
                 "description": "Reads the provisioned EuPid signing configuration so status-list creation selects the exact KMS resource, key, and DID assertionMethod instead of a generic DID method.",
                 "header": []
               },
@@ -4659,7 +5230,7 @@
               "name": "00b Resolve mDL X.509 signing selection",
               "request": {
                 "method": "GET",
-                "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Mdl",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Mdl",
                 "description": "Reads the provisioned mDL signing configuration and reuses its exact X.509-backed KMS key for the certificate-signed status-list verification case.",
                 "header": []
               },
@@ -4730,9 +5301,21 @@
                   "mode": "raw",
                   "raw": "{\n  \"correlationId\": \"walkthrough-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{did}}\",\n  \"signingKeyMode\": \"did:web\",\n  \"kmsResourceHandle\": \"{{statusListDidKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListDidKmsKeyAlias}}\",\n  \"signingVerificationMethodId\": \"{{statusListDidVerificationMethodId}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/walkthrough-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
                 },
-                "description": "Creates the IETF Token Status List referenced by the EuPid configuration with its exact provisioned KMS resource, key alias, and DID assertionMethod. The platform authority owns that selection; the issuer validates it and does not rewrite tenant configuration."
+                "description": "Creates the IETF Token Status List referenced by the EuPid configuration with its exact provisioned KMS resource, key alias, and DID assertionMethod. The platform authority owns that selection; the issuer validates it and does not rewrite tenant configuration. Skipped when request 00 found the walkthrough-revocation list from an earlier run."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (JSON.parse(pm.collectionVariables.get('existingStatusListIds') || '{}')['walkthrough-revocation']) {",
+                      "  console.log('Skipped: status list walkthrough-revocation already exists as ' + pm.collectionVariables.get('statusListId') + '.');",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -5013,9 +5596,21 @@
                   "mode": "raw",
                   "raw": "{\n  \"correlationId\": \"x509-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"jwt\",\n  \"issuer\": \"{{tenantGatewayUrl}}\",\n  \"signingKeyMode\": \"x5c\",\n  \"kmsResourceHandle\": \"{{statusListX509KmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListX509KmsKeyAlias}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/x509-revocation\",\n  \"purposes\": [\"revocation\"],\n  \"length\": 131072,\n  \"bitsPerStatus\": 1\n}"
                 },
-                "description": "Creates a second Token Status List using the X.509 public trust mechanism. The server-owned signing key must carry a certificate chain; the protected JWS header uses x5c and deliberately omits kid."
+                "description": "Creates a second Token Status List using the X.509 public trust mechanism. The server-owned signing key must carry a certificate chain; the protected JWS header uses x5c and deliberately omits kid. Skipped when request 00 found the x509-revocation list from an earlier run."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (JSON.parse(pm.collectionVariables.get('existingStatusListIds') || '{}')['x509-revocation']) {",
+                      "  console.log('Skipped: status list x509-revocation already exists as ' + pm.collectionVariables.get('x5cStatusListId') + '.');",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -5364,7 +5959,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"correlationId\": \"mdoc-revocation\",\n  \"spec\": \"token_status_list\",\n  \"proofFormat\": \"cwt\",\n  \"hostingMode\": \"hosted\",\n  \"purposes\": [\n    \"revocation\"\n  ],\n  \"issuer\": \"{{tenantGatewayUrl}}\",\n  \"signingKeyMode\": \"x5c\",\n  \"kmsResourceHandle\": \"{{statusListX509KmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListX509KmsKeyAlias}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/mdoc-revocation\",\n  \"length\": 131072,\n  \"bitsPerStatus\": 1,\n  \"mdocProfile\": \"status_list\",\n  \"validUntil\": \"{{cwtStatusListValidUntil}}\",\n  \"ttlSeconds\": 300\n}"
                     },
-                    "description": "Creates the CWT-proofed Token Status List that mdoc credentials reference, signed with the certificate chain of the mDL signing key."
+                    "description": "Creates the CWT-proofed Token Status List that mdoc credentials reference, signed with the certificate chain of the mDL signing key. Skipped when request 00 found the mdoc-revocation list from an earlier run."
                   },
                   "event": [
                     {
@@ -5372,6 +5967,10 @@
                       "script": {
                         "type": "text/javascript",
                         "exec": [
+                          "if (JSON.parse(pm.collectionVariables.get('existingStatusListIds') || '{}')['mdoc-revocation']) {",
+                          "  console.log('Skipped: status list mdoc-revocation already exists as ' + pm.collectionVariables.get('cwtStatusListId') + '.');",
+                          "  pm.execution.skipRequest();",
+                          "}",
                           "// The ISO 18013-5 mdoc profile requires an expiry on the list; one year from now keeps the example valid.",
                           "const validUntil = new Date(); validUntil.setUTCFullYear(validUntil.getUTCFullYear() + 1);",
                           "pm.collectionVariables.set('cwtStatusListValidUntil', validUntil.toISOString());"
@@ -5522,9 +6121,21 @@
                       "mode": "raw",
                       "raw": "{\n  \"correlationId\": \"status-bitstring\",\n  \"spec\": \"bitstring_status_list\",\n  \"proofFormat\": \"vc+jwt\",\n  \"hostingMode\": \"hosted\",\n  \"purposes\": [\n    \"revocation\",\n    \"suspension\"\n  ],\n  \"issuer\": \"{{did}}\",\n  \"signingKeyMode\": \"did:web\",\n  \"kmsResourceHandle\": \"{{statusListDidKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{statusListDidKmsKeyAlias}}\",\n  \"signingVerificationMethodId\": \"{{statusListDidVerificationMethodId}}\",\n  \"statusListUri\": \"{{tenantGatewayUrl}}/public/statuslists/status-bitstring\",\n  \"length\": 131072,\n  \"bitsPerStatus\": 2,\n  \"ttlSeconds\": 300\n}"
                     },
-                    "description": "Creates the W3C bitstring status list that the VCDM credential configurations reference. Two bits per status carry more than a single revoked flag, so the same list serves both the revocation and the suspension purpose. The hosted representation is a VC-JWT."
+                    "description": "Creates the W3C bitstring status list that the VCDM credential configurations reference. Two bits per status carry more than a single revoked flag, so the same list serves both the revocation and the suspension purpose. The hosted representation is a VC-JWT. Skipped when request 00 found the status-bitstring list from an earlier run."
                   },
                   "event": [
+                    {
+                      "listen": "prerequest",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "if (JSON.parse(pm.collectionVariables.get('existingStatusListIds') || '{}')['status-bitstring']) {",
+                          "  console.log('Skipped: status list status-bitstring already exists as ' + pm.collectionVariables.get('bitstringStatusListId') + '.');",
+                          "  pm.execution.skipRequest();",
+                          "}"
+                        ]
+                      }
+                    },
                     {
                       "listen": "test",
                       "script": {
@@ -5775,10 +6386,41 @@
           "description": "How per-credential configuration is expressed on an issuer instance: the signing key (kmsResourceHandle and kmsKeyAlias), the public trust mechanism (signingKeyMode did:web or x5c), the validity period, the OAuth scope and the status list binding. Reads show the provisioned defaults; the registrations add VCDM 1.1 and 2.0 configurations; the last request binds the CWT status list to the mdoc configuration.\n\nDocumentation: https://docs.sphereon.com/edk/admin-console/console-reference/protocols/issuer/credentials",
           "item": [
             {
+              "name": "00 List the issuer credential configurations",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Lists the credential configurations issuerId advertises with their non-display settings. Onboarding provisions EuPid and Mdl; EmployeeBadge and Membership appear once request 03 and 04 registered them, and those PUT requests replace them on a later run."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('credential configurations listed', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                      "const body = pm.response.json();",
+                      "const configurations = (body.data || body).credentialConfigurations;",
+                      "pm.expect(configurations, 'credential configurations').to.be.an('array');",
+                      "const ids = configurations.map((configuration) => configuration.credentialConfigurationId);",
+                      "pm.test('onboarding provisioned EuPid and Mdl', () => pm.expect(ids).to.include.members(['EuPid', 'Mdl']));",
+                      "pm.collectionVariables.set('credentialConfigurationIds', ids.join(','));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
               "name": "01 Read the EuPid credential configuration",
               "request": {
                 "method": "GET",
-                "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid",
                 "description": "Reads the EuPid settings that already reference the shared list, so the second credential configuration is registered with the same signing selection rather than a new one.",
                 "header": []
               },
@@ -5833,7 +6475,7 @@
               "name": "02 Read the Mdl credential configuration",
               "request": {
                 "method": "GET",
-                "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Mdl",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Mdl",
                 "description": "Reads the mDL credential configuration before the CWT status list is bound to it. The immutable `resourceId` of the configuration is reused by the write so the binding updates the existing resource instead of creating a second one.",
                 "header": []
               },
@@ -5887,7 +6529,7 @@
               "name": "03 Register the EmployeeBadge configuration (VCDM 1.1)",
               "request": {
                 "method": "PUT",
-                "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EmployeeBadge",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EmployeeBadge",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -5961,7 +6603,7 @@
               "name": "04 Register the Membership configuration (VCDM 2.0)",
               "request": {
                 "method": "PUT",
-                "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Membership",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Membership",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -6035,7 +6677,7 @@
               "name": "05 Bind the CWT status list to the Mdl configuration",
               "request": {
                 "method": "PUT",
-                "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Mdl",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/Mdl",
                 "header": [
                   {
                     "key": "Content-Type",
@@ -9540,9 +10182,407 @@
           "event": []
         },
         {
+          "name": "20a Verifier Setup",
+          "description": "Find the tenant verifier and read its settings before any verification request is created.",
+          "item": [
+            {
+              "name": "01 List tenant verifiers",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantGatewayUrl}}/api/oid4vp/v1/instances",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Lists the OID4VP verifiers this tenant runs, from the verifier service. The tenant is taken from the access token."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('verifiers listed', () => pm.response.to.have.status(200));",
+                      "const body = pm.response.json();",
+                      "pm.test('page shape', () => pm.expect(body.items).to.be.an('array'));",
+                      "const current = String(pm.collectionVariables.get('verifierInstanceId') || '').trim();",
+                      "// Keep the instance resolved earlier when it is listed; otherwise take the provisioned one, which publishes under the tenant slug.",
+                      "const tenantSlug = String(pm.variables.get('tenantSubdomain') || '').trim().toLowerCase();",
+                      "const provisioned = body.items.find((item) => (item.endpoints || []).some((endpoint) => endpoint.primary && String(endpoint.pathPrefix || '').replace(/\\/+$/, '') === '/oid4vp/' + tenantSlug));",
+                      "if (!body.items.some((item) => item.id === current) && body.items.length) pm.collectionVariables.set('verifierInstanceId', (provisioned || body.items[0]).id);",
+                      "pm.test('the selected instance is listed', () => pm.expect(body.items.map((item) => item.id)).to.include(pm.collectionVariables.get('verifierInstanceId')));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/oid4vp/v1/instances",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"items\": [\n    {\n      \"id\": \"acme\",\n      \"displayName\": \"acme\",\n      \"lifecycleStatus\": \"ACTIVE\",\n      \"managementMode\": \"MANAGED\",\n      \"endpoints\": [\n        {\n          \"host\": \"acme.example.com\",\n          \"pathPrefix\": \"/oid4vp/acme\",\n          \"primary\": true,\n          \"enabled\": true\n        }\n      ],\n      \"links\": {\n        \"self\": \"/api/oid4vp/v1/instances/acme\",\n        \"settings\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vp/verifier/instances/acme\"\n      }\n    }\n  ]\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "02 Read one tenant verifier",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantGatewayUrl}}/api/oid4vp/v1/instances/{{verifierInstanceId}}",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads one verifier by id: display name, lifecycle and management mode and its public endpoints."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('verifier read', () => pm.response.to.have.status(200));",
+                      "pm.test('no secret material', () => pm.expect(pm.response.text()).to.not.match(/secret|privateKey|\"d\"\\s*:/i));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/oid4vp/v1/instances/acme",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"id\": \"acme\",\n  \"displayName\": \"acme\",\n  \"lifecycleStatus\": \"ACTIVE\",\n  \"managementMode\": \"MANAGED\",\n  \"endpoints\": [\n    {\n      \"host\": \"acme.example.com\",\n      \"pathPrefix\": \"/oid4vp/acme\",\n      \"primary\": true,\n      \"enabled\": true\n    }\n  ],\n  \"links\": {\n    \"self\": \"/api/oid4vp/v1/instances/acme\",\n    \"settings\": \"/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vp/verifier/instances/acme\"\n  }\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "03 Read verifier client settings",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vp/verifier/client",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads the verifier client settings as stored now, before any update."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('verifier client settings read', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vp/verifier/client",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"kmsResourceHandle\": {\n    \"value\": \"krh_<opaque>\",\n    \"source\": \"tenant\"\n  },\n  \"kmsKeyAlias\": {\n    \"value\": \"jarm-encryption-acme\",\n    \"source\": \"tenant\"\n  }\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "04 Read verifier request-object signing settings",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vp/verifier/request-object-signing",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads the verifier request object signing settings as stored now, before any update."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('verifier request-object-signing settings read', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vp/verifier/request-object-signing",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"enabled\": {\n    \"value\": true,\n    \"source\": \"default\"\n  },\n  \"mode\": {\n    \"value\": \"did:web\",\n    \"source\": \"default\"\n  },\n  \"kmsResourceHandle\": {\n    \"value\": \"krh_<opaque>\",\n    \"source\": \"tenant\"\n  },\n  \"kmsKeyAlias\": {\n    \"value\": \"oid4vp-verifier-signing-acme\",\n    \"source\": \"tenant\"\n  },\n  \"includeIss\": {\n    \"value\": true,\n    \"source\": \"default\"\n  },\n  \"audience\": {\n    \"value\": \"https://self-issued.me/v2\",\n    \"source\": \"default\"\n  },\n  \"expirationSeconds\": {\n    \"value\": 300,\n    \"source\": \"default\"\n  }\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "05 Read verifier session settings",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vp/verifier/sessions",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads the verifier sessions settings as stored now, before any update."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('verifier sessions settings read', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vp/verifier/sessions",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"sessionTtlSeconds\": {\n    \"value\": 300,\n    \"source\": \"default\"\n  }\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            },
+            {
+              "name": "06 Read verifier identity reconciliation settings",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vp/verifier/identity-reconciliation",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads the verifier identity reconciliation settings as stored now, before any update."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('verifier identity-reconciliation settings read', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "response": [
+                {
+                  "name": "Previously captured response (sanitized)",
+                  "originalRequest": {
+                    "method": "GET",
+                    "url": "https://acme.example.com/api/platform/config/v1/tenants/00000000-0000-4000-8000-000000000000/oid4vp/verifier/identity-reconciliation",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      }
+                    ]
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"autoCreateUser\": {\n    \"value\": false,\n    \"source\": \"default\"\n  },\n  \"requireReconciliation\": {\n    \"value\": false,\n    \"source\": \"default\"\n  },\n  \"userIdentifierClaimPath\": {\n    \"value\": \"sub\",\n    \"source\": \"default\"\n  }\n}",
+                  "_postman_previewlanguage": "json"
+                }
+              ]
+            }
+          ],
+          "event": []
+        },
+        {
           "name": "21 DCQL Queries",
           "description": "Creates and lists the DCQL query definitions used by the verifier, including a combined query that requests EuPid and Mdl together.\n\nDocumentation: https://docs.sphereon.com/edk/admin-console/guides/verify-credentials#define-the-dcql-query",
           "item": [
+            {
+              "name": "00 List DCQL queries",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantDcqlApiBaseUrl}}/queries",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Lists the stored DCQL queries of the tenant. Onboarding seeds eupid-sdjwt, mdl-mdoc and eupid-and-mdl. Walkthrough queries created by an earlier run are recorded, and requests 01 to 03 skip the ones that already exist."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('queries listed', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                      "const queries = pm.response.json();",
+                      "pm.expect(queries, 'queries').to.be.an('array');",
+                      "const ids = queries.map((query) => query.queryId);",
+                      "pm.collectionVariables.set('existingDcqlQueryIds', JSON.stringify(ids));",
+                      "pm.test('onboarding seeded the combined query', () => pm.expect(ids).to.include('eupid-and-mdl'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "00a Read the combined DCQL query",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantDcqlApiBaseUrl}}/queries/eupid-and-mdl",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads one stored query by queryId: the seeded combined query that requests the EuPid and the mDL together."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('query read', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                      "const q = pm.response.json();",
+                      "pm.expect(q.queryId).to.eql('eupid-and-mdl');",
+                      "pm.expect(q.dcqlQuery.credentials.map((credential) => credential.id).sort()).to.eql(['eupid', 'mdl']);"
+                    ]
+                  }
+                }
+              ]
+            },
             {
               "name": "01 Create EuPid query",
               "request": {
@@ -9558,9 +10598,21 @@
                   "mode": "raw",
                   "raw": "{\n  \"queryId\": \"walkthrough-eupid-sdjwt\",\n  \"name\": \"EuPid identity check\",\n  \"description\": \"Requests name and age attestation from the EU Personal ID\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] },\n          { \"path\": [\"age_over_18\"] }\n        ]\n      }\n    ]\n  }\n}"
                 },
-                "description": "Selects only family_name, given_name, and age_over_18 from the EuPid. The other claims stay undisclosed."
+                "description": "Selects only family_name, given_name, and age_over_18 from the EuPid. The other claims stay undisclosed. Skipped when request 00 found walkthrough-eupid-sdjwt."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (JSON.parse(pm.collectionVariables.get('existingDcqlQueryIds') || '[]').includes('walkthrough-eupid-sdjwt')) {",
+                      "  console.log('Skipped: DCQL query walkthrough-eupid-sdjwt already exists.');",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -9633,9 +10685,21 @@
                   "mode": "raw",
                   "raw": "{\n  \"queryId\": \"walkthrough-mdl-mdoc\",\n  \"name\": \"Driving licence check\",\n  \"description\": \"Requests the holder name from the mobile driving licence\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] }\n        ]\n      }\n    ]\n  }\n}"
                 },
-                "description": "Selects family_name and given_name from the ISO 18013-5 namespace."
+                "description": "Selects family_name and given_name from the ISO 18013-5 namespace. Skipped when request 00 found walkthrough-mdl-mdoc."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (JSON.parse(pm.collectionVariables.get('existingDcqlQueryIds') || '[]').includes('walkthrough-mdl-mdoc')) {",
+                      "  console.log('Skipped: DCQL query walkthrough-mdl-mdoc already exists.');",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -9709,9 +10773,21 @@
                   "mode": "raw",
                   "raw": "{\n  \"queryId\": \"walkthrough-eupid-and-mdl\",\n  \"name\": \"Identity and driving licence\",\n  \"description\": \"Requests the EuPid and the mobile driving licence in one presentation\",\n  \"enabled\": true,\n  \"dcqlQuery\": {\n    \"credentials\": [\n      {\n        \"id\": \"eupid\",\n        \"format\": \"dc+sd-jwt\",\n        \"meta\": {\n          \"vct_values\": [\"{{tenantGatewayUrl}}/public/schema/vct/EuPid\"]\n        },\n        \"claims\": [\n          { \"path\": [\"family_name\"] },\n          { \"path\": [\"given_name\"] }\n        ]\n      },\n      {\n        \"id\": \"mdl\",\n        \"format\": \"mso_mdoc\",\n        \"meta\": {\n          \"doctype_value\": \"org.iso.18013.5.1.mDL\"\n        },\n        \"claims\": [\n          { \"path\": [\"org.iso.18013.5.1\", \"family_name\"] },\n          { \"path\": [\"org.iso.18013.5.1\", \"given_name\"] }\n        ]\n      }\n    ]\n  }\n}"
                 },
-                "description": "Requests both credentials in a single presentation, each with its own claim selection."
+                "description": "Requests both credentials in a single presentation, each with its own claim selection. Skipped when request 00 found walkthrough-eupid-and-mdl."
               },
               "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (JSON.parse(pm.collectionVariables.get('existingDcqlQueryIds') || '[]').includes('walkthrough-eupid-and-mdl')) {",
+                      "  console.log('Skipped: DCQL query walkthrough-eupid-and-mdl already exists.');",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
                 {
                   "listen": "test",
                   "script": {
@@ -11300,8 +12376,53 @@
         },
         {
           "name": "20 Authorization code through Keycloak (optional)",
-          "description": "Run after folder 09 and the credential metadata request in folder 15. This selects the proxy only for EuPid, so subsequent EuPid pre-authorized offers require removing that override first. Postman handles code, PKCE and access tokens. A real wallet owns its holder proof key; no private signing key is uploaded to a helper service.\n\nOptional scenario guard: set enableKeycloakWalletProxy=true and provide keycloakIssuer, federationClientId, federationClientSecret, walletProofJwt. When false, requests are skipped and reported as optional skipped.",
+          "description": "Run after folder 09 and the credential metadata request in folder 15. This selects the proxy only for EuPid, so subsequent EuPid pre-authorized offers require removing that override first. Postman handles code, PKCE and access tokens. A real wallet owns its holder proof key; no private signing key is uploaded to a helper service.\n\nOptional scenario guard: set enableKeycloakWalletProxy=true and provide keycloakIssuer, federationClientId, federationClientSecret. When false, requests are skipped and reported as optional skipped.",
           "item": [
+            {
+              "name": "00 Read the EuPid authorization-server override",
+              "request": {
+                "method": "GET",
+                "url": "{{tenantPlatformConfigApiBaseUrl}}/tenants/{{tenantId}}/oid4vci/issuers/{{issuerId}}/credential-configurations/EuPid/authorization-server",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "description": "Reads the EuPid authorization-server override of the issuer before request 39 replaces it. A new tenant has none (revision 0). A tenant where an earlier run created and deleted it keeps that revision, and request 39 creates the override under it."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
+                      "if (!enabled) {",
+                      "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
+                      "  pm.execution.skipRequest();",
+                      "} else {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
+                      "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('credential AS override read', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                      "const current = pm.response.json();",
+                      "pm.expect(current.revision, 'override revision').to.be.a('number');",
+                      "pm.collectionVariables.set('credentialAuthorizationServerOverrideCurrentRevision', String(current.revision));"
+                    ]
+                  }
+                }
+              ]
+            },
             {
               "name": "01 Select wallet proxy for EuPid authorization code",
               "request": {
@@ -11330,9 +12451,24 @@
                       "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
                       "  pm.execution.skipRequest();",
                       "} else {",
-                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
                       "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// On a rerun the override an earlier run deleted keeps its revision; create it under that revision.",
+                      "const currentOverrideRevision = Number(pm.collectionVariables.get('credentialAuthorizationServerOverrideCurrentRevision') || 0);",
+                      "if (currentOverrideRevision > 0) {",
+                      "  const overrideBody = JSON.parse(pm.request.body.raw);",
+                      "  overrideBody.expectedRevision = currentOverrideRevision;",
+                      "  pm.request.body.update(JSON.stringify(overrideBody, null, 2));",
                       "}"
                     ]
                   }
@@ -11416,7 +12552,7 @@
                       "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
                       "  pm.execution.skipRequest();",
                       "} else {",
-                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
                       "  }",
                       "}"
@@ -11468,14 +12604,10 @@
                       "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
                       "  pm.execution.skipRequest();",
                       "} else {",
-                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
                       "  }",
-                      "}",
-                      "const parseUrl = value => require('url').parse(value, true);\nconst httpsOrigin = value => {\n  const parsed = parseUrl(value);\n  if (parsed.protocol !== 'https:' || !parsed.host || parsed.auth) throw new Error('Expected an HTTPS URL without embedded credentials');\n  return parsed.protocol + '//' + parsed.host.toLowerCase();\n};",
-                      "const issuer = parseUrl(offer.credential_issuer);",
-                      "pm.expect(httpsOrigin(offer.credential_issuer)).to.eql(httpsOrigin(pm.variables.get('tenantGatewayUrl')));",
-                      "pm.collectionVariables.set('walletCredentialMetadataUrl', httpsOrigin(offer.credential_issuer) + '/.well-known/openid-credential-issuer' + issuer.pathname.replace(/\\/$/, ''));"
+                      "}"
                     ]
                   }
                 },
@@ -11488,7 +12620,11 @@
                       "const offer = pm.response.json();",
                       "pm.collectionVariables.set('walletIssuerState', offer.grants.authorization_code.issuer_state);",
                       "pm.collectionVariables.set('walletCredentialIssuer', offer.credential_issuer);",
-                      "pm.expect(pm.collectionVariables.get('walletIssuerState')).to.be.a('string').and.not.empty;"
+                      "pm.expect(pm.collectionVariables.get('walletIssuerState')).to.be.a('string').and.not.empty;",
+                      "const parseUrl = value => require('url').parse(value, true);\nconst httpsOrigin = value => {\n  const parsed = parseUrl(value);\n  if (parsed.protocol !== 'https:' || !parsed.host || parsed.auth) throw new Error('Expected an HTTPS URL without embedded credentials');\n  return parsed.protocol + '//' + parsed.host.toLowerCase();\n};",
+                      "const issuer = parseUrl(offer.credential_issuer);",
+                      "pm.expect(httpsOrigin(offer.credential_issuer)).to.eql(httpsOrigin(pm.variables.get('tenantGatewayUrl')));",
+                      "pm.collectionVariables.set('walletCredentialMetadataUrl', httpsOrigin(offer.credential_issuer) + '/.well-known/openid-credential-issuer' + issuer.pathname.replace(/\\/$/, ''));"
                     ]
                   }
                 }
@@ -11515,7 +12651,7 @@
                       "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
                       "  pm.execution.skipRequest();",
                       "} else {",
-                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
                       "  }",
                       "}"
@@ -11558,7 +12694,7 @@
                       "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
                       "  pm.execution.skipRequest();",
                       "} else {",
-                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
                       "  }",
                       "}"
@@ -11602,7 +12738,7 @@
                       "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
                       "  pm.execution.skipRequest();",
                       "} else {",
-                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                      "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                       "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
                       "  }",
                       "}"
@@ -11735,12 +12871,21 @@
                       "script": {
                         "type": "text/javascript",
                         "exec": [
+                          "if (String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true' && !String(pm.variables.get('walletProofJwt') || '').trim()) throw new Error('Set walletProofJwt before requesting a credential.');"
+                        ]
+                      }
+                    },
+                    {
+                      "listen": "prerequest",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
                           "const enabled = String(pm.variables.get('enableKeycloakWalletProxy') || '').toLowerCase() === 'true';",
                           "if (!enabled) {",
                           "  console.log('Skipped optional scenario: Keycloak wallet authorization-code issuance (set enableKeycloakWalletProxy=true to enable)');",
                           "  pm.execution.skipRequest();",
                           "} else {",
-                          "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\",\"walletProofJwt\"]) {",
+                          "  for (const key of [\"keycloakIssuer\",\"federationClientId\",\"federationClientSecret\"]) {",
                           "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling Keycloak wallet authorization-code issuance.');",
                           "  }",
                           "}"
@@ -11768,8 +12913,7 @@
             "requirements": [
               "keycloakIssuer",
               "federationClientId",
-              "federationClientSecret",
-              "walletProofJwt"
+              "federationClientSecret"
             ]
           }
         }
@@ -11845,11 +12989,60 @@
       },
       "item": [
         {
+          "name": "00 List platform KMS resources",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "description": "Lists the KMS resources of the platform tenant. A resource that already carries platformAzureProviderId is reused: its handle, version and credential slot are stored and request 01 is skipped."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const enabled = String(pm.variables.get('enableSharedAzure') || '').toLowerCase() === 'true';",
+                  "if (!enabled) {",
+                  "  console.log('Skipped optional scenario: platform shared Azure vault (set enableSharedAzure=true to enable)');",
+                  "  pm.execution.skipRequest();",
+                  "} else {",
+                  "  for (const key of [\"platformTenantId\",\"platformAzureVaultUri\",\"platformAzureTenantId\",\"platformAzureClientId\",\"platformAzureClientSecret\"]) {",
+                  "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling platform shared Azure vault.');",
+                  "  }",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request succeeded', () => pm.response.to.have.status(200));",
+                  "const existing = (pm.response.json().resources || []).find((resource) => resource.providerId === pm.variables.get('platformAzureProviderId') && !['RETIRED', 'DETACHED'].includes(resource.state));",
+                  "pm.collectionVariables.set('platformAzureResourceReused', existing ? 'true' : 'false');",
+                  "if (existing) {",
+                  "  pm.collectionVariables.set('platformAzureResourceHandle', existing.handle);",
+                  "  pm.collectionVariables.set('platformAzureResourceVersion', String(existing.resourceVersion));",
+                  "  pm.collectionVariables.set('platformAzureCredentialSecretRef', existing.credentialSecretRef);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "01 Create an Azure Key Vault KMS resource",
           "request": {
             "method": "POST",
             "url": "{{platformUrl}}/api/platform/config/v1/tenants/{{platformTenantId}}/kms/resources",
-            "description": "Registers your own Azure Key Vault as a KMS resource of this tenant. providerId is the name you will use for this KMS on the KMS runtime API; applicationId is the label EDK stamps on keys it generates in the vault; tenantId and clientId identify the Entra application EDK signs in with. Keys generated through this resource never leave the vault.",
+            "description": "Registers your own Azure Key Vault as a KMS resource of this tenant. providerId is the name you will use for this KMS on the KMS runtime API; applicationId is the label EDK stamps on keys it generates in the vault; tenantId and clientId identify the Entra application EDK signs in with. Keys generated through this resource never leave the vault. Skipped when request 00 found a resource with this providerId; the credential and validation requests then use that resource.",
             "header": [
               {
                 "key": "Content-Type",
@@ -11881,6 +13074,18 @@
                   "  for (const key of [\"platformTenantId\",\"platformAzureVaultUri\",\"platformAzureTenantId\",\"platformAzureClientId\",\"platformAzureClientSecret\"]) {",
                   "    if (!String(pm.variables.get(key) || '').trim()) throw new Error('Set ' + key + ' before enabling platform shared Azure vault.');",
                   "  }",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.collectionVariables.get('platformAzureResourceReused') || '') === 'true') {",
+                  "  console.log('Skipped: a KMS resource with this providerId already exists; requests 02 and 03 use it.');",
+                  "  pm.execution.skipRequest();",
                   "}"
                 ]
               }
@@ -12152,6 +13357,41 @@
       ],
       "item": [
         {
+          "name": "00 Find the acme-eu subtenant among the root tenant children",
+          "request": {
+            "method": "GET",
+            "url": "{{platformUrl}}/api/platform/admin/v1/tenants/{{tenantId}}/children?page=0&size=100",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "description": "Lists the children of the tenant from folder 02 and looks for the subtenant slug <tenantSubdomain>-eu. When it exists, subTenantId comes from this list and requests 01 and 02 are skipped."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('child tenants listed', () => pm.expect(pm.response.code, 'body: ' + String(pm.response.text() || '').slice(0, 300)).to.eql(200));",
+                  "const body = pm.response.json();",
+                  "const children = Array.isArray(body) ? body : (body.data || body.items || []);",
+                  "pm.expect(children, 'children').to.be.an('array');",
+                  "const existing = children.find((child) => child.slug === pm.collectionVariables.get('subTenantSlug') && !child.deletedAt);",
+                  "pm.collectionVariables.set('subTenantReused', existing ? 'true' : 'false');",
+                  "if (existing) {",
+                  "  pm.collectionVariables.set('subTenantId', existing.id);",
+                  "  pm.collectionVariables.unset('subTenantOnboardingCorrelationId');",
+                  "  console.log('Subtenant ' + existing.slug + ' already exists as ' + existing.id + '; registration is skipped.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "01 Register the acme-eu subtenant",
           "request": {
             "method": "POST",
@@ -12166,9 +13406,21 @@
               "mode": "raw",
               "raw": "{\n  \"tenant\": {\n    \"tenantType\": \"organization\",\n    \"name\": \"{{tenantName}} EU\",\n    \"description\": \"{{tenantName}} EU subtenant\",\n    \"slug\": \"{{subTenantSlug}}\",\n    \"parentTenantId\": \"{{tenantId}}\",\n    \"initialPlatformSubdomain\": true\n  },\n  \"contacts\": {\n    \"technical\": {\n      \"email\": \"admin@{{subTenantSlug}}.example\",\n      \"displayName\": \"{{tenantName}} EU Technical Contact\"\n    },\n    \"administrativeSameAsTechnical\": true,\n    \"ownerAdmin\": {\n      \"source\": \"technical\"\n    }\n  },\n  \"login\": {\n    \"enabled\": true,\n    \"defaultAuthorizationServerRequired\": true\n  },\n  \"provisioning\": {\n    \"issuer\": true,\n    \"verifier\": true,\n    \"keysAndDids\": true,\n    \"sampleData\": true\n  }\n}"
             },
-            "description": "Registers the first subtenant under the tenant of folder 03. `parentTenantId` sits inside the `tenant` section; a null value there would make the registration a root tenant. Slugs are globally unique rather than unique per parent, so the subtenant slug derives from the root slug. The QA licence must allow subtenants, otherwise the platform rejects the registration with `license_subtenants_disallowed`."
+            "description": "Registers the first subtenant under the tenant of folder 03. `parentTenantId` sits inside the `tenant` section; a null value there would make the registration a root tenant. Slugs are globally unique rather than unique per parent, so the subtenant slug derives from the root slug. The QA licence must allow subtenants, otherwise the platform rejects the registration with `license_subtenants_disallowed`. Skipped when request 00 found the subtenant."
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.collectionVariables.get('subTenantReused') || '') === 'true') {",
+                  "  console.log('Skipped: subtenant ' + pm.collectionVariables.get('subTenantSlug') + ' already exists.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -12232,7 +13484,7 @@
           "request": {
             "method": "GET",
             "url": "{{platformUrl}}/api/platform/admin/v1/tenant-onboarding/{{subTenantOnboardingCorrelationId}}",
-            "description": "Polls the onboarding status row the registration created. The status is one of IN_FLIGHT, COMPLETED, COMPENSATED or ORPHANED; the request re-runs itself while the saga is still in flight. Subtenants receive the same provisioning as roots: hosted authorization server, issuer instance, verifier and a did:web identifier.",
+            "description": "Polls the onboarding status row the registration created. The status is one of IN_FLIGHT, COMPLETED, COMPENSATED or ORPHANED; the request re-runs itself while the saga is still in flight. Subtenants receive the same provisioning as roots: hosted authorization server, issuer instance, verifier and a did:web identifier. Skipped when request 00 found the subtenant.",
             "header": []
           },
           "event": [
@@ -12241,6 +13493,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "if (String(pm.collectionVariables.get('subTenantReused') || '') === 'true') {",
+                  "  console.log('Skipped: subtenant ' + pm.collectionVariables.get('subTenantSlug') + ' already exists.');",
+                  "  pm.execution.skipRequest();",
+                  "}",
                   "const attempt = Number(pm.collectionVariables.get('subTenantOnboardingAttempt') || 0);",
                   "pm.collectionVariables.set('subTenantOnboardingAttempt', String(attempt + 1));"
                 ]
@@ -13227,6 +14483,61 @@
       "key": "runOwnedIssuerVariantId",
       "value": "",
       "description": "Response-derived issuer render variant ID owned by this collection run."
+    },
+    {
+      "key": "tenantReused",
+      "value": "",
+      "description": "Set by '02 Tenant Onboarding / 00 List tenants and select the configured tenant': true when the tenant named by tenantSubdomain already exists and is reused, so registration and one-time owner activation are skipped."
+    },
+    {
+      "key": "tenantServiceClientReused",
+      "value": "",
+      "description": "Set by '03 Tenant Owner Activation and Sign-in / 07a1 List registered tenant service clients': true when tenantServiceClientId is already registered, so 07b is skipped and 07c sets its secret."
+    },
+    {
+      "key": "subTenantReused",
+      "value": "",
+      "description": "Set by '05 Subtenants / 00 Find the acme-eu subtenant among the root tenant children': true when the acme-eu subtenant already exists, so its registration and onboarding wait are skipped."
+    },
+    {
+      "key": "tenantAzureResourceReused",
+      "value": "",
+      "description": "Set by '07 Bring Your Own KMS / 01 / 00 List tenant KMS resources': true when a resource with tenantAzureProviderId already exists, so it is reused instead of created."
+    },
+    {
+      "key": "externalAuthorizationServerReused",
+      "value": "",
+      "description": "Set by the internal '09a Authorization Server Invariants / 08' list: true when the tenant already registered the platform issuer as an EXTERNAL server, so request 25 reuses it."
+    },
+    {
+      "key": "externalAuthorizationServerLifecycle",
+      "value": "",
+      "description": "Lifecycle of the reused EXTERNAL authorization server, recorded with externalAuthorizationServerReused."
+    },
+    {
+      "key": "credentialAuthorizationServerOverrideCurrentRevision",
+      "value": "",
+      "description": "Set by '09 Authorization Server Configuration / 38c': the current revision of the EuPid authorization-server override, 0 on a new tenant. Request 39 creates the override under it."
+    },
+    {
+      "key": "issuerDesignId",
+      "value": "",
+      "description": "Set by '10 Issuer Configuration / 00b List issuer designs': an existing issuer design bound to issuerId, when the tenant has one."
+    },
+    {
+      "key": "existingStatusListIds",
+      "value": "",
+      "description": "Set by '12 Status Lists / 00 List status lists': JSON map from correlationId to id of the walkthrough status lists that already exist, so their create requests are skipped."
+    },
+    {
+      "key": "credentialConfigurationIds",
+      "value": "",
+      "description": "Set by '13 Credential Configurations / 00 List the issuer credential configurations': the comma-separated credential configuration ids issuerId advertises."
+    },
+    {
+      "key": "existingDcqlQueryIds",
+      "value": "",
+      "description": "Set by '21 DCQL Queries / 00 List DCQL queries': JSON array of the query ids that already exist, so requests 01 to 03 create only missing walkthrough queries."
     },
     {
       "key": "keycloakIssuer",

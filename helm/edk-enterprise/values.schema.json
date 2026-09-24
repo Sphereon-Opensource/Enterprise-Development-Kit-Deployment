@@ -300,7 +300,49 @@
             },
             "allowTenantManagedProviders": { "type": "boolean" },
             "allowPlatformOfferings": { "type": "boolean" },
-            "retentionDays": { "type": "integer", "minimum": 1, "maximum": 3650 }
+            "retentionDays": { "type": "integer", "minimum": 1, "maximum": 3650 },
+            "platformProviders": {
+              "type": "object",
+              "maxProperties": 32,
+              "propertyNames": { "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "displayName", "credentialSecretId"],
+                "properties": {
+                  "kind": { "type": "string", "enum": ["AZURE_KEY_VAULT", "AWS_KMS"] },
+                  "displayName": { "type": "string", "minLength": 1, "maxLength": 160 },
+                  "applicationId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,160}$" },
+                  "vaultUri": { "type": "string", "pattern": "^https://[^?]+$" },
+                  "tenantId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,160}$" },
+                  "clientId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,160}$" },
+                  "hsmType": { "type": "string", "enum": ["KEYVAULT", "MANAGED_HSM"] },
+                  "region": { "type": "string", "pattern": "^[a-z]{2}-[a-z]+-\\d+$" },
+                  "accessKeyId": { "type": "string", "pattern": "^[A-Z0-9]{16,128}$" },
+                  "endpointUrl": { "type": "string", "pattern": "^https://" },
+                  "credentialSecretId": { "type": "string", "pattern": "^sec_[A-Za-z0-9_-]{16,128}$" },
+                  "sharing": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "fulfillment": { "type": "string", "enum": ["SHARED_INSTANCE", "TEMPLATE"] },
+                      "tenants": { "type": "string", "pattern": "^(\\*|[A-Za-z0-9][A-Za-z0-9._-]{0,159}(,[A-Za-z0-9][A-Za-z0-9._-]{0,159})*)$" },
+                      "suggestedDefault": { "type": "boolean" }
+                    }
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": { "properties": { "kind": { "const": "AZURE_KEY_VAULT" } } },
+                    "then": { "required": ["vaultUri", "tenantId", "clientId", "hsmType"] }
+                  },
+                  {
+                    "if": { "properties": { "kind": { "const": "AWS_KMS" } } },
+                    "then": { "required": ["region", "accessKeyId"] }
+                  }
+                ]
+              }
+            }
           }
         },
         "internalResolution": {

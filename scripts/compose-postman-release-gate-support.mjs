@@ -285,8 +285,9 @@ export const EVIDENCE_LABELS = Object.freeze({
 /**
  * Optional lanes the gate can run. Every lane is always recorded so a reader can tell a lane
  * that was not exercised from one that does not exist. keycloak and webhookSink follow their
- * switches; azureKms is ran only when -AzureKms is given and every AZURE_* value is present;
- * eudi has no switch yet and is recorded as skipped until it does.
+ * switches; azureKms is ran only when -AzureKms is given and all four AZURE_KEYVAULT_* provider
+ * credentials are present. External customer BYOK/BYOC references are a separate cycle with
+ * separate existing-key and matching-certificate inputs. eudi has no switch yet and is skipped.
  */
 export const OPTIONAL_LANES = Object.freeze(['keycloak', 'webhookSink', 'azureKms', 'eudi'])
 export const OPTIONAL_LANE_STATES = Object.freeze(['ran', 'skipped'])

@@ -79,7 +79,7 @@ $collection = Get-Content -LiteralPath '${collectionPath.replaceAll("'", "''")}'
 @{ inventory = (Count-Requests @($collection.item)); enabled = (Count-Requests @($collection.item) -EnabledOnly) } | ConvertTo-Json -Compress
 `], {encoding: 'utf8'})
 assert.equal(countProbe.status, 0, countProbe.stderr)
-assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 233, enabled: 208})
+assert.deepEqual(JSON.parse(countProbe.stdout), {inventory: 257, enabled: 231})
 
 function requestCount(items) {
   return (items ?? []).reduce(
@@ -113,7 +113,7 @@ function writeEnvironment(path, overrides = {}) {
   }, null, 2)}\n`, 'utf8')
 }
 
-assert.equal(requestCount(collection.item), 233, 'shipped customer collection must contain the current 233-request customer reference')
+assert.equal(requestCount(collection.item), 257, 'shipped customer collection must contain the current 257-request customer reference')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -262,6 +262,9 @@ const customerPlatformConfig = readFileSync(join(customerRoot, 'compose', 'confi
 assert.ok(customerPlatformConfig.includes(
   'manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:' + customerManifestDigest + '}',
 ), 'customer platform config must carry the same opaque-id manifest digest')
+assert.ok(compose.includes(
+  'SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256: ${EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST_SHA256:-' + customerManifestDigest + '}',
+), 'customer Compose must forward the digest of whichever environment manifest it mounts')
 const tenantDbEnv = compose.match(/x-edk-tenant-db-env:[\s\S]*?(?=\nx-[a-z]|\nservices:)/u)?.[0] ?? ''
 // Every runtime hosts the secret-use broker, so the tenant-serving and narrow runtime roles are
 // shared. The authority-admin credential is not: it stays on enterprise-platform alone.
@@ -488,8 +491,8 @@ for (const sourceInvariant of [
   '$env:EDK_E2E_ENV_keycloakClientSecret',
   '$env:EDK_E2E_ENV_webhookSinkInternalUrl',
   '$env:EDK_E2E_ENV_webhookSinkAdminUrl',
-  // The Azure lane has no overlay; it is ran only when -AzureKms is given and every AZURE_*
-  // value is present, and a missing value skips it rather than failing the gate.
+  // The Azure provider-configuration lane has no overlay; it is ran only when -AzureKms is given
+  // and all four AZURE_KEYVAULT_* credentials are present. BYOK/BYOC references are separate.
   '[switch]$AzureKms',
   "$azureKmsEnvNames = @('AZURE_KEYVAULT_URL', 'AZURE_KEYVAULT_TENANT_ID', 'AZURE_KEYVAULT_CLIENT_ID', 'AZURE_KEYVAULT_CLIENT_SECRET')",
   '$azureKmsLaneReady = [bool]($AzureKms -and $azureKmsMissing.Count -eq 0)',
@@ -968,7 +971,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const plan = JSON.parse(readFileSync(join(reportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(plan.mode, 'dry-run')
   assert.equal(plan.accessMode, 'Localtest')
-  assert.equal(plan.requestCount, 233)
+  assert.equal(plan.requestCount, 257)
   assert.equal(plan.projectName, 'edk_customer_contract')
   assert.equal(plan.requiresLocalCa, true)
   assert.equal(plan.composeFiles[1], join(customerRoot, 'compose', 'docker-compose.gateway.yml'))
@@ -1007,7 +1010,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   const monolithPlan = JSON.parse(readFileSync(join(monolithReportDir, 'release-gate-plan.json'), 'utf8').replace(/^\uFEFF/u, ''))
   assert.equal(monolithPlan.topology, 'Monolith')
   assert.equal(monolithPlan.accessMode, 'Localtest')
-  assert.equal(monolithPlan.requestCount, 233)
+  assert.equal(monolithPlan.requestCount, 257)
   assert.equal(monolithPlan.composeFiles.length, 3)
   assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))

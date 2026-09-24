@@ -278,6 +278,34 @@ http:
       middlewares: ["developer-console-api-rewrite"]
       priority: 285
       tls: {}
+    # The BFF above serves browser sessions and deliberately drops a caller's
+    # Authorization header, so a bearer client reached the platform anonymously
+    # and an AS_PROTECTED catalog read back as an empty list. Bearer reads of the
+    # public Developer Console API go straight to the platform, which verifies
+    # the token and rejects a token issued for another tenant than this host.
+    # Session writes (/bff) are POST only and always stay on the BFF.
+    developer-console-api-bearer:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        PathRegexp(`^/developer-console/api/developer-console/v1/(bootstrap|catalog|related-surfaces|specs/[^/]+|artifacts/postman/(collection|environment))$`) &&
+        (Method(`GET`) || Method(`HEAD`)) &&
+        HeaderRegexp(`Authorization`, `^[Bb]earer [^ ]+$`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      middlewares: ["developer-console-api-bearer-rewrite"]
+      priority: 286
+      tls: {}
+    # The gateway inventory advertises /api/developer-console/v1 as a platform
+    # prefix and the catalog lists these reads, so tenant hosts serve them.
+    tenant-developer-console-api:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        PathRegexp(`^/api/developer-console/v1/(bootstrap|catalog|related-surfaces|specs/[^/]+|artifacts/postman/(collection|environment))$`) &&
+        (Method(`GET`) || Method(`HEAD`))
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 286
+      tls: {}
     developer-console-auth:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
@@ -410,6 +438,10 @@ http:
       replacePathRegex:
         regex: "^/developer-console/(.*)"
         replacement: "/admin-console/$1"
+    developer-console-api-bearer-rewrite:
+      replacePathRegex:
+        regex: "^/developer-console(/api/developer-console/v1/.*)$"
+        replacement: "$1"
     developer-console-auth-rewrite:
       replacePathRegex:
         regex: "^/developer-console/api/auth/(session|login|callback|token|logout)$"

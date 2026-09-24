@@ -278,69 +278,6 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
-    # Preserve the neutral public testing-console page and API rewrites.
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /testing-console
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /admin-console/testing-console
-      backendRefs:
-        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
-          port: {{ $svc.restPort }}
-    # Neutral public catalog-console page, same shape as the testing console.
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /catalog-console
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /admin-console/catalog-console
-      backendRefs:
-        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
-          port: {{ $svc.restPort }}
-    # Browser-facing testing API under the neutral /testing-console prefix, so the
-    # customer-facing surface never exposes admin-console URLs. One rule per path
-    # because each carries its own ReplacePrefixMatch; longest-prefix precedence
-    # keeps these ahead of the page rule above.
-    {{- range $apiPrefix := list "/api/oid4vci/v1/testing" "/api/oid4vp/v1/testing" "/api/portal-oauth/login" "/api/portal-oauth/callback" "/api/portal-oauth/grant" "/api/portal-oauth/revoke" }}
-    - matches:
-        - path:
-            type: PathPrefix
-            value: {{ printf "/testing-console%s" $apiPrefix | quote }}
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: {{ printf "/admin-console%s" $apiPrefix | quote }}
-      backendRefs:
-        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
-          port: {{ $svc.restPort }}
-    {{- end }}
-    # Same rewrite set for the catalog-console prefix.
-    {{- range $apiPrefix := list "/api/oid4vci/v1/catalog-console" "/api/oid4vp/v1/catalog-console" "/api/portal-oauth/login" "/api/portal-oauth/callback" "/api/portal-oauth/grant" "/api/portal-oauth/revoke" }}
-    - matches:
-        - path:
-            type: PathPrefix
-            value: {{ printf "/catalog-console%s" $apiPrefix | quote }}
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: {{ printf "/admin-console%s" $apiPrefix | quote }}
-      backendRefs:
-        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
-          port: {{ $svc.restPort }}
-    {{- end }}
     - matches:
         {{- range $path := (include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim | fromYamlArray) }}
         - path:
@@ -356,6 +293,61 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
 ---
+# The neutral testing-console and catalog-console projections get one route each,
+# so no tenant console route exceeds the Gateway API limit of 16 rules. Every
+# match path here is unique on the tenant listener, so Gateway API precedence
+# (Exact, then longest prefix) selects the same rule as when these rules lived
+# in the route above; list order and route creation time never decide a winner.
+{{- range $console := list (dict "prefix" "testing-console" "apis" (list "/api/oid4vci/v1/testing" "/api/oid4vp/v1/testing")) (dict "prefix" "catalog-console" "apis" (list "/api/oid4vci/v1/catalog-console" "/api/oid4vp/v1/catalog-console")) }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" $ }}-tenant-{{ $console.prefix }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    # Neutral public page.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /{{ $console.prefix }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /admin-console/{{ $console.prefix }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    # Browser-facing API under the neutral prefix, so the customer-facing surface
+    # never exposes admin-console URLs. One rule per path because each carries
+    # its own ReplacePrefixMatch; longest-prefix precedence keeps these ahead of
+    # the page rule above.
+    {{- range $apiPrefix := concat $console.apis (list "/api/portal-oauth/login" "/api/portal-oauth/callback" "/api/portal-oauth/grant" "/api/portal-oauth/revoke") }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ printf "/%s%s" $console.prefix $apiPrefix | quote }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: {{ printf "/admin-console%s" $apiPrefix | quote }}
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+    {{- end }}
+---
+{{- end }}
 {{- else }}
 {{- $paths := include "edk-enterprise.gateway.tenantPaths" (dict "name" $name) | trim }}
 {{- if $paths }}
@@ -654,6 +646,30 @@ spec:
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
           port: {{ .Values.services.platform.restPort }}
+---
+# Developer Console API reads on tenant hosts. Bearer clients (Postman, scripts)
+# bypass the tenant BFF, which drops their Authorization header; the platform
+# verifies the token against this tenant host. See the rule helper for the
+# precedence contract with the BFF route above.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-developer-console-api
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: platform
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    {{- include "edk-enterprise.developerConsoleApiReadRules" (dict
+      "backendName" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform"))
+      "backendPort" .Values.services.platform.restPort
+      "hostFilter" (ternary $edgeHostFilterName "" $preserveOriginalHost)
+      "timeouts" dict) | nindent 4 }}
 ---
 {{- end }}
 {{- if eq (include "edk-enterprise.walletOnboardingEnabled" .) "true" }}

@@ -162,6 +162,34 @@ secretManagement:
     # The baseline publishes only the per-tenant software-KMS offering.
     allowPlatformOfferings: true
     retentionDays: 30
+    # Platform-owned cloud KMS providers declared by the deployment instead of
+    # being registered through the Platform Config API. Keyed by the permanent
+    # runtime provider id. Each entry needs allowTenantManagedProviders=true and
+    # a credentialSecretId listed in secretManagement.kubernetesMount.manifest.
+    # Only the non-secret coordinates belong here.
+    #
+    # platformProviders:
+    #   azure-shared-signing:
+    #     kind: AZURE_KEY_VAULT
+    #     displayName: Platform Azure Key Vault
+    #     vaultUri: https://example-vault.vault.azure.net/
+    #     tenantId: 00000000-0000-0000-0000-000000000000
+    #     clientId: 00000000-0000-0000-0000-000000000000
+    #     hsmType: KEYVAULT
+    #     credentialSecretId: sec_platform_azure_kms_client_secret_01
+    #     sharing:
+    #       fulfillment: SHARED_INSTANCE
+    #       tenants: "*"
+    #       suggestedDefault: false
+    #   aws-shared-signing:
+    #     kind: AWS_KMS
+    #     displayName: Platform AWS KMS
+    #     region: eu-west-1
+    #     accessKeyId: AKIAIOSFODNN7EXAMPLE
+    #     credentialSecretId: sec_platform_aws_kms_secret_access_key_01
+    #     sharing:
+    #       tenants: "*"
+    platformProviders: {}
   internalResolution:
     expectedAudience: enterprise-platform
     # Standard tenant satellites resolve their opaque, tenant-bound service

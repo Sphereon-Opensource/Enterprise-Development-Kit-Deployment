@@ -54,9 +54,11 @@ param(
   # The evidence manifest records every lane as ran or skipped.
   [switch]$Keycloak,
   [switch]$WebhookSink,
-  # Azure Key Vault lane: no overlay, a real vault. Needs AZURE_KEY_VAULT_URI, AZURE_TENANT_ID,
-  # AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_HSM_KEY_NAME and AZURE_CERT_NAME in the process
-  # environment; when any is missing the lane is recorded as skipped, not failed.
+  # Azure KMS provider lane: no overlay, a real vault. Readiness requires the four
+  # AZURE_KEYVAULT_* credential variables checked below. AZURE_HSM_KEY_NAME and AZURE_CERT_NAME
+  # are forwarded as optional Postman overrides, not lane prerequisites. The separate external
+  # customer BYOK/BYOC integration cycle uses EDK_AZURE_TEST_EXISTING_KEY_ALIAS and
+  # EDK_AZURE_TEST_CERTIFICATE_DER_BASE64 through deploy/edk/e2e/scripts/run-e2e.ps1.
   [switch]$AzureKms,
   # Re-mints the committed response snapshots from this run. The runner refuses to write them
   # when any assertion failed, so a mint always reflects a fully passing gate.
@@ -768,7 +770,7 @@ function Set-OptionalLaneEnvironment {
     $env:EDK_PLATFORM_KMS_AZURE_HSM_TYPE = 'KEYVAULT'
     $env:EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS = '*'
     $env:EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST = Join-Path $composeDir 'config\secret-management-environment.azure.manifest'
-    $env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256 = Get-EnvironmentManifestDigest $env:EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST
+    $env:EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST_SHA256 = Get-EnvironmentManifestDigest $env:EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST
     $env:EDK_E2E_ENV_azureKeyVaultUri = $vault
     $env:EDK_E2E_ENV_azureTenantId = $env:AZURE_KEYVAULT_TENANT_ID
     $env:EDK_E2E_ENV_azureClientId = $env:AZURE_KEYVAULT_CLIENT_ID
@@ -963,7 +965,9 @@ if ($WebhookSink) {
 }
 # The Azure Key Vault lane has no overlay: it runs against a real vault and needs every value
 # below. A missing value skips the lane (the collection folder self-skips on an empty
-# azureKeyVaultUri) and the manifest records it as skipped rather than failing the gate.
+# azureKeyVaultUri) and the manifest records it as skipped rather than failing the gate. This
+# provider-configuration lane does not imply that the separate external customer reference cycle
+# ran; that cycle has its own existing-key alias and matching-certificate inputs.
 # The live platform contract uses AZURE_KEYVAULT_* names; older Postman names remain aliases.
 $azureKmsEnvNames = @('AZURE_KEYVAULT_URL', 'AZURE_KEYVAULT_TENANT_ID', 'AZURE_KEYVAULT_CLIENT_ID', 'AZURE_KEYVAULT_CLIENT_SECRET')
 function Set-AzureKmsCredentialAliases {

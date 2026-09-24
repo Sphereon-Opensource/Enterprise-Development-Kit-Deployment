@@ -29,3 +29,19 @@
 {{- if eq $kek.idempotencyMacKey $kek.identity -}}
 {{- fail "secretManagement.bootstrap.kek.idempotencyMacKey must be distinct from the bootstrap encryption key identity" -}}
 {{- end -}}
+{{- with .Values.secretManagement.authority.platformProviders -}}
+{{- if ne (include "edk-enterprise.topologyMode" $) "distributed" -}}
+{{- fail "secretManagement.authority.platformProviders requires the distributed topology" -}}
+{{- end -}}
+{{- if not $.Values.secretManagement.authority.allowTenantManagedProviders -}}
+{{- fail "secretManagement.authority.platformProviders requires secretManagement.authority.allowTenantManagedProviders=true, which publishes the Azure and AWS offerings" -}}
+{{- end -}}
+{{- if not $.Values.secretManagement.kubernetesMount.enabled -}}
+{{- fail "secretManagement.authority.platformProviders requires secretManagement.kubernetesMount.enabled=true to supply the provider credential" -}}
+{{- end -}}
+{{- range $providerId, $provider := . -}}
+{{- if not (hasKey $.Values.secretManagement.kubernetesMount.manifest $provider.credentialSecretId) -}}
+{{- fail (printf "secretManagement.authority.platformProviders.%s.credentialSecretId must be listed in secretManagement.kubernetesMount.manifest" $providerId) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

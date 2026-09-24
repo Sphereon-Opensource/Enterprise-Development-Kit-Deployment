@@ -794,6 +794,26 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console-tenant") }}
           port: {{ (index .Values.services "admin-console-tenant").restPort }}
 ---
+# Developer Console API reads on tenant hosts, served by the monolith. Bearer
+# clients bypass the tenant BFF, which drops their Authorization header. A
+# separate route keeps the tenant route above within the 16 rule limit.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-developer-console-api
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monolith
+spec:
+  parentRefs: [{ name: {{ $gatewayName | quote }}, sectionName: https }]
+  hostnames: [{{ $wildcard | quote }}]
+  rules:
+    {{- include "edk-enterprise.developerConsoleApiReadRules" (dict
+      "backendName" $name
+      "backendPort" .Values.monolith.restPort
+      "hostFilter" ""
+      "timeouts" (dict "request" .Values.gateway.requestTimeout "backendRequest" .Values.gateway.backendRequestTimeout)) | nindent 4 }}
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
