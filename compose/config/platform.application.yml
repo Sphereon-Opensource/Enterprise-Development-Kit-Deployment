@@ -147,6 +147,13 @@ transport:
           leaf:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
+            commands:
+              # Validate opens the resource's provider to report its health. The
+              # application tenant's own resources would otherwise stay LOCAL,
+              # where no provider can be opened, so the probe goes to tenant-KMS
+              # for every session.
+              "[kms.leaf.probe-resource]":
+                target: SERVER
           # Raw signature creation over a tenant key. Every JWS the platform builds
           # for a customer tenant (LoTE publications among them) ends in
           # kms.signature.create, which is a separate routing service from the typed
@@ -312,6 +319,17 @@ secret-management:
         sharing:
           fulfillment: SHARED_INSTANCE
           tenants: ${env:EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS:*}
+          suggested-default: false
+      aws-shared-signing:
+        kind: ${env:EDK_PLATFORM_KMS_AWS_KIND:}
+        display-name: ${env:EDK_PLATFORM_KMS_AWS_DISPLAY_NAME:Platform AWS KMS}
+        region: ${env:EDK_PLATFORM_KMS_AWS_REGION:}
+        access-key-id: ${env:EDK_PLATFORM_KMS_AWS_ACCESS_KEY_ID:}
+        credential:
+          secret-id: sec_platform_aws_kms_secret_access_key_01
+        sharing:
+          fulfillment: SHARED_INSTANCE
+          tenants: ${env:EDK_PLATFORM_KMS_AWS_SHARED_TENANTS:*}
           suggested-default: false
   internal-resolution:
     expected-audience: enterprise-platform

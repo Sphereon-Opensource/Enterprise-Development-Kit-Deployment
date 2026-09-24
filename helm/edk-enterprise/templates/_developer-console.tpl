@@ -39,3 +39,58 @@ All its REST receivers use the platform audience. Keep explicit namespaces, neve
 {{- end -}}
 {{- toJson $entries -}}
 {{- end -}}
+
+{{/* Gateway API rules for the Developer Console API reads served by the platform
+(or the monolith). The tenant BFF route for /developer-console/api/developer-console/v1
+drops the caller's Authorization header, so a bearer client reached the platform
+anonymously and an AS_PROTECTED catalog read came back as an empty list.
+
+Bearer rules: GET/HEAD reads carrying Authorization: Bearer go straight to the
+platform. Exact paths (and the longer specs prefix) take precedence over the
+BFF PathPrefix rule by Gateway API match precedence, and only when the header
+and method match; browser cookie sessions and every /bff POST stay on the BFF.
+Tenant rules: the same reads under /api/developer-console/v1, which the gateway
+inventory advertises as a platform prefix.
+
+Gateway API cannot rewrite a regular expression match, so specs/<id> uses a
+specs PathPrefix; the platform answers a nested path under specs with 404.
+
+Params: backendName, backendPort, hostFilter (Envoy Gateway HTTPRouteFilter name
+or empty), timeouts (dict or empty). */}}
+{{- define "edk-enterprise.developerConsoleApiReadRules" -}}
+{{- $publicPrefix := "/developer-console/api/developer-console/v1" -}}
+{{- $apiPrefix := "/api/developer-console/v1" -}}
+{{- $reads := list "bootstrap" "catalog" "related-surfaces" "artifacts/postman/collection" "artifacts/postman/environment" -}}
+{{- $bearer := list (dict "type" "RegularExpression" "name" "Authorization" "value" "^[Bb]earer [^ ]+$") -}}
+{{- $rules := list -}}
+{{- range $read := append $reads "specs" -}}
+{{- $isSpecs := eq $read "specs" -}}
+{{- $path := dict "type" (ternary "PathPrefix" "Exact" $isSpecs) "value" (printf "%s/%s" $publicPrefix $read) -}}
+{{- $rewrite := ternary (dict "type" "ReplacePrefixMatch" "replacePrefixMatch" (printf "%s/%s" $apiPrefix $read)) (dict "type" "ReplaceFullPath" "replaceFullPath" (printf "%s/%s" $apiPrefix $read)) $isSpecs -}}
+{{- $matches := list -}}
+{{- range $method := list "GET" "HEAD" -}}
+{{- $matches = append $matches (dict "path" $path "method" $method "headers" $bearer) -}}
+{{- end -}}
+{{- $rules = append $rules (dict "matches" $matches "filters" (list (dict "type" "URLRewrite" "urlRewrite" (dict "path" $rewrite)))) -}}
+{{- end -}}
+{{- $matches := list -}}
+{{- range $read := append $reads "specs" -}}
+{{- $path := dict "type" (ternary "PathPrefix" "Exact" (eq $read "specs")) "value" (printf "%s/%s" $apiPrefix $read) -}}
+{{- range $method := list "GET" "HEAD" -}}
+{{- $matches = append $matches (dict "path" $path "method" $method) -}}
+{{- end -}}
+{{- end -}}
+{{- $rules = append $rules (dict "matches" $matches "filters" (list)) -}}
+{{- $out := list -}}
+{{- range $rule := $rules -}}
+{{- $filters := $rule.filters -}}
+{{- if $.hostFilter -}}
+{{- $filters = append $filters (dict "type" "ExtensionRef" "extensionRef" (dict "group" "gateway.envoyproxy.io" "kind" "HTTPRouteFilter" "name" $.hostFilter)) -}}
+{{- end -}}
+{{- $entry := dict "matches" $rule.matches "backendRefs" (list (dict "name" $.backendName "port" (int $.backendPort))) -}}
+{{- if $filters -}}{{- $_ := set $entry "filters" $filters -}}{{- end -}}
+{{- if $.timeouts -}}{{- $_ := set $entry "timeouts" $.timeouts -}}{{- end -}}
+{{- $out = append $out $entry -}}
+{{- end -}}
+{{- toYaml $out -}}
+{{- end -}}

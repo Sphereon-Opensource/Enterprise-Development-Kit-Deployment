@@ -8,16 +8,27 @@ The installation must already have completed platform setup and provisioned the
 
 1. Send **00 Start here / 01 Discover platform OAuth endpoints**. On **01 Platform -
    create tenant**, choose **Authorization > Get New Access Token**, sign in as the
-   platform operator, and choose **Use Token**. Create the tenant and repeat the status
+   platform operator, and choose **Use Token**. Send **00 List tenants** first. When a
+   tenant with the slug `tenantSubdomain` already exists, it sets `tenantId` and the
+   registration and status requests are skipped; continue at step 2 and sign in with the
+   owner account you already activated. Otherwise create the tenant and repeat the status
    request until `COMPLETED`.
 2. Open the returned `tenantOwnerActivationLink` in a browser, or use the invitation
    email. Complete the owner's activation. On **02 Tenant owner - register application**,
    send discovery, then get a new OAuth token as that tenant owner. Set
    `tenantServiceClientId` and a private local `tenantServiceClientSecret`. Resolve the
-   tenant's default AS and register the confidential application.
+   tenant's default AS, list its registered applications and register the confidential
+   application. When it is already registered, registration is skipped and **02a** sets its
+   secret to your `tenantServiceClientSecret`, because a stored secret cannot be read back.
 3. On **03 Tenant application**, choose **Get New Access Token** and **Use Token**.
    This uses client credentials at the discovered tenant token endpoint. All ordinary
    tenant REST requests inherit this configuration. Refresh the token here when needed.
+
+Each tenant section starts with a list request, and a read-one request where it helps, so
+you see the live objects before changing anything: authorization servers, issuers,
+verifiers, KMS resources, credential designs and configurations, status lists and DCQL
+queries. Their tests store the ids in collection variables and reuse objects that already
+exist, so you can run the collection again against the same tenant.
 
 Keep the imported advanced token parameters on **03 Tenant application**. They send
 one `audience` body parameter for each registered tenant workload, including KMS and
