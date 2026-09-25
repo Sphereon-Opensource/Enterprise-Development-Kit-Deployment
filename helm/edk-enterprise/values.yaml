@@ -391,7 +391,8 @@ platform:
   sts:
     # Clients whose exchanged tenant tokens carry the dedicated tenant-provisioning role
     # the tenant AS bootstrap trust window requires. null (default) applies the built-in
-    # sanction list: the operator CLI plus the secret-bootstrap workload client ids. An
+    # sanction list: the operator CLI, the platform Postman client (developer-postman) and
+    # the secret-bootstrap workload client ids. An
     # explicit "" sanctions nobody; a comma-separated list sanctions exactly those clients.
     # The admin console is deliberately not sanctioned by default.
     provisioningRoleClientIds: null

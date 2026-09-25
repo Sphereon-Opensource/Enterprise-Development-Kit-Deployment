@@ -202,7 +202,7 @@ data:
         platform-providers:
           {{- range $providerId := keys . | sortAlpha }}
           {{- $provider := index $.Values.secretManagement.authority.platformProviders $providerId }}
-          {{ $providerId }}:
+          {{ printf "[%s]" $providerId | quote }}:
             kind: {{ $provider.kind | quote }}
             display-name: {{ $provider.displayName | quote }}
             {{- with $provider.applicationId }}
@@ -597,7 +597,8 @@ data:
         {{- if and (hasKey $platformSts "provisioningRoleClientIds") (not (kindIs "invalid" $platformSts.provisioningRoleClientIds)) }}
         # Clients whose exchanged tenant tokens carry the dedicated tenant-provisioning role
         # required by the tenant AS bootstrap trust window. Omitting the value applies the
-        # built-in default (operator CLI plus the secret-bootstrap workload client ids);
+        # built-in default (operator CLI, the platform Postman client and the secret-bootstrap
+        # workload client ids);
         # an explicit empty string sanctions nobody.
         provisioning-role-client-ids: {{ $platformSts.provisioningRoleClientIds | quote }}
         {{- end }}

@@ -20,8 +20,9 @@
 #     or an explicit platformUrl in the environment file. Tenant AS, tenant KMS,
 #     and DID must be running before tenant registration, because registration
 #     provisions signing material and the tenant DID through east-west services.
-#   - A Sphereon protected license bundle ZIP (set in the environment file as
-#     licenseBundleZipPath).
+#   - A Sphereon protected license bundle ZIP, needed only while the setup
+#     gate is still open (--license-bundle, EDK_LICENSE_BUNDLE_ZIP_PATH, or
+#     licenseBundleZipPath in the environment file).
 #   - curl and node installed. node parses the environment JSON and computes the
 #     PKCE S256 code challenge.
 #
@@ -31,8 +32,25 @@
 # gateway URL from baseDomain and tenantSlug. Override the tenant gateway only
 # for non-standard gateway deployments.
 #
+# The operator credentials are not part of the shipped environment file, which
+# is also imported into Postman. Email and license bundle, first wins:
+#   - flags: --operator-email, --license-bundle
+#   - environment variables: EDK_OPERATOR_EMAIL, EDK_LICENSE_BUNDLE_ZIP_PATH
+#   - a private copy of the environment file (--env-file) with operatorEmail
+#     and licenseBundleZipPath
+# Password, first wins:
+#   - --password-stdin: read it from the first line of standard input
+#   - the EDK_OPERATOR_PASSWORD environment variable
+#   - operatorPassword in a private copy of the environment file
+#   - a prompt without echo, when standard input is a terminal
+# There is no flag that takes the password itself, and the script never passes
+# it on a command line, so it does not show up in shell history or the process
+# list.
+#
 # Example:
 #   ./provision.sh
+#   ./provision.sh --operator-email ops@example.com --skip-setup   # asks for the password
+#   printf '%s\n' "$PW" | ./provision.sh --operator-email ops@example.com --password-stdin
 #   ./provision.sh --tenant-name "Acme Corporation" --tenant-slug acme
 #   ./provision.sh --skip-setup            # platform already initialized
 #   ./provision.sh --env-file ../postman/EDK-Enterprise-Deployment.customer.postman_environment.json
@@ -45,15 +63,23 @@ ENV_FILE=""
 TENANT_NAME=""
 TENANT_SLUG=""
 SKIP_SETUP="false"
+ARG_OPERATOR_EMAIL=""
+ARG_LICENSE_BUNDLE=""
+PASSWORD_STDIN="false"
 
 usage() {
-  sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,48p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   cat <<'EOF'
 
 Flags:
   --env-file PATH      Postman customer environment file (default: ../postman/...customer...json)
   --tenant-name NAME   Tenant display name (overrides the env file)
   --tenant-slug SLUG   Tenant slug (overrides the env file)
+  --operator-email E   Platform operator email (or EDK_OPERATOR_EMAIL)
+  --password-stdin     Read the operator password from standard input
+                       (or EDK_OPERATOR_PASSWORD, or a prompt in a terminal)
+  --license-bundle P   Protected license bundle ZIP for first-run setup
+                       (or EDK_LICENSE_BUNDLE_ZIP_PATH)
   --skip-setup         Skip platform setup (platform already initialized)
   --help               Show this help and exit
 EOF
@@ -64,6 +90,9 @@ while [ $# -gt 0 ]; do
     --env-file)    ENV_FILE="$2"; shift 2 ;;
     --tenant-name) TENANT_NAME="$2"; shift 2 ;;
     --tenant-slug) TENANT_SLUG="$2"; shift 2 ;;
+    --operator-email) ARG_OPERATOR_EMAIL="$2"; shift 2 ;;
+    --license-bundle) ARG_LICENSE_BUNDLE="$2"; shift 2 ;;
+    --password-stdin) PASSWORD_STDIN="true"; shift ;;
     --skip-setup)  SKIP_SETUP="true"; shift ;;
     --help|-h)     usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage; exit 1 ;;
@@ -92,7 +121,7 @@ cfg() {
         break;
       }
     }
-  ' "$ENV_FILE" "$1"
+  ' -- "$ENV_FILE" "$1"
 }
 
 # --- Resolve effective config (flags override the environment file) -----------
@@ -100,14 +129,39 @@ PLATFORM_URL="$(cfg platformUrl)"
 TENANT_GATEWAY_URL="$(cfg tenantGatewayUrl)"
 BASE_DOMAIN="$(cfg baseDomain)"
 
-OPERATOR_EMAIL="$(cfg operatorEmail)"
+OPERATOR_EMAIL="${ARG_OPERATOR_EMAIL:-${EDK_OPERATOR_EMAIL:-}}"
+[ -n "$OPERATOR_EMAIL" ] || OPERATOR_EMAIL="$(cfg operatorEmail)"
 OPERATOR_DISPLAY_NAME="$(cfg operatorDisplayName)"
 [ -n "$OPERATOR_DISPLAY_NAME" ] || OPERATOR_DISPLAY_NAME="Platform Operator"
-OPERATOR_PASSWORD="$(cfg operatorPassword)"
+OPERATOR_PASSWORD=""
+if [ "$PASSWORD_STDIN" = "true" ]; then
+  IFS= read -r OPERATOR_PASSWORD || true
+  OPERATOR_PASSWORD="${OPERATOR_PASSWORD%$'\r'}"
+  [ -n "$OPERATOR_PASSWORD" ] || fail "--password-stdin was given, but standard input had no password."
+fi
+[ -n "$OPERATOR_PASSWORD" ] || OPERATOR_PASSWORD="${EDK_OPERATOR_PASSWORD:-}"
+[ -n "$OPERATOR_PASSWORD" ] || OPERATOR_PASSWORD="$(cfg operatorPassword)"
 OPERATOR_REDIRECT_URI="$(cfg operatorRedirectUri)"
 ADMIN_CONSOLE_URL="$(cfg adminConsoleUrl)"
 OPERATOR_CODE_VERIFIER="$(cfg operatorCodeVerifier)"
-LICENSE_BUNDLE_ZIP_PATH="$(cfg licenseBundleZipPath)"
+[ -n "$OPERATOR_CODE_VERIFIER" ] || OPERATOR_CODE_VERIFIER="$(node -e '
+  process.stdout.write(require("crypto").randomBytes(32).toString("base64url"));
+')"
+LICENSE_BUNDLE_ZIP_PATH="${ARG_LICENSE_BUNDLE:-${EDK_LICENSE_BUNDLE_ZIP_PATH:-}}"
+[ -n "$LICENSE_BUNDLE_ZIP_PATH" ] || LICENSE_BUNDLE_ZIP_PATH="$(cfg licenseBundleZipPath)"
+case "$OPERATOR_EMAIL" in PASTE-*) OPERATOR_EMAIL="" ;; esac
+case "$OPERATOR_PASSWORD" in PASTE-*) OPERATOR_PASSWORD="" ;; esac
+
+[ -n "$OPERATOR_EMAIL" ] || \
+  fail "The operator email is not set. Use --operator-email, EDK_OPERATOR_EMAIL, or operatorEmail in a private copy of the environment file."
+if [ -z "$OPERATOR_PASSWORD" ]; then
+  if [ -t 0 ]; then
+    read -r -s -p "Password for $OPERATOR_EMAIL: " OPERATOR_PASSWORD
+    echo
+  fi
+  [ -n "$OPERATOR_PASSWORD" ] || \
+    fail "The operator password is not set. Pipe it in with --password-stdin, set EDK_OPERATOR_PASSWORD, run the script in a terminal to be asked for it, or put operatorPassword in a private copy of the environment file."
+fi
 
 [ -n "$TENANT_NAME" ] || TENANT_NAME="$(cfg tenantName)"
 [ -n "$TENANT_SLUG" ] || TENANT_SLUG="$(cfg tenantSlug)"
@@ -130,7 +184,7 @@ fi
 if [ -z "$TENANT_HOST" ] && [ -n "$TENANT_GATEWAY_URL" ]; then
   TENANT_HOST="$(node -e '
     try { process.stdout.write(new URL(process.argv[1]).hostname); } catch (e) {}
-  ' "$TENANT_GATEWAY_URL")"
+  ' -- "$TENANT_GATEWAY_URL")"
 fi
 if [ -z "$OPERATOR_REDIRECT_URI" ] && [ -n "$PLATFORM_URL" ]; then
   OPERATOR_REDIRECT_URI="${PLATFORM_URL%/}/admin-console/callback"
@@ -165,7 +219,7 @@ json_field() {
       }
       if (cur != null) process.stdout.write(String(cur));
     });
-  ' "$2" <<<"$1"
+  ' -- "$2" <<<"$1"
 }
 
 # --- Step 1: wait for platform gateway reachability ---------------------------
@@ -210,12 +264,12 @@ post_json() {
   local url="$1" body="$2" token="${3:-}" tmp code
   tmp="$(mktemp)"
   if [ -n "$token" ]; then
-    code="$(curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
+    code="$(printf '%s' "$body" | curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
       -H 'Content-Type: application/json' -H "Authorization: Bearer $token" \
-      --data "$body")"
+      --data-binary @-)"
   else
-    code="$(curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
-      -H 'Content-Type: application/json' --data "$body")"
+    code="$(printf '%s' "$body" | curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
+      -H 'Content-Type: application/json' --data-binary @-)"
   fi
   local out; out="$(cat "$tmp")"; rm -f "$tmp"
   case "$code" in
@@ -238,13 +292,10 @@ post_license_bundle() {
 }
 
 if [ "$SETUP_OPEN" = "true" ]; then
-  [ -n "$OPERATOR_EMAIL" ] && [ -n "$OPERATOR_PASSWORD" ] || \
-    fail "operatorEmail and operatorPassword are required to bootstrap the operator."
-
   case "$LICENSE_BUNDLE_ZIP_PATH" in
-    ""|PASTE-*) fail "licenseBundleZipPath is not set in the environment file. Set it before running setup." ;;
+    ""|PASTE-*) fail "The setup gate is open, so a license bundle is required. Use --license-bundle, EDK_LICENSE_BUNDLE_ZIP_PATH, or licenseBundleZipPath in a private copy of the environment file." ;;
   esac
-  [ -f "$LICENSE_BUNDLE_ZIP_PATH" ] || fail "licenseBundleZipPath does not point to a file: $LICENSE_BUNDLE_ZIP_PATH"
+  [ -f "$LICENSE_BUNDLE_ZIP_PATH" ] || fail "The license bundle does not point to a file: $LICENSE_BUNDLE_ZIP_PATH"
 
   echo "Previewing license bundle import..."
   post_license_bundle "$PLATFORM_URL/api/platform/setup/v1/license/import/preview" >/dev/null
@@ -256,26 +307,25 @@ if [ "$SETUP_OPEN" = "true" ]; then
 
   echo "Bootstrapping platform operator..."
   BOOTSTRAP_BODY="$(node -e 'process.stdout.write(JSON.stringify({adminEmail:process.argv[1],adminDisplayName:process.argv[2]}))' \
-    "$OPERATOR_EMAIL" "$OPERATOR_DISPLAY_NAME")"
+    -- "$OPERATOR_EMAIL" "$OPERATOR_DISPLAY_NAME")"
   BOOTSTRAP_RESPONSE="$(post_json "$PLATFORM_URL/api/platform/setup/v1/bootstrap" "$BOOTSTRAP_BODY")"
   ACTIVATION_TOKEN="$(node -e '
     const value = JSON.parse(process.argv[1]);
     const link = value?.activation?.manualActivationLink;
     if (!link || !link.includes("#")) process.exit(2);
     process.stdout.write(link.split("#", 2)[1]);
-  ' "$BOOTSTRAP_RESPONSE")" || \
+  ' -- "$BOOTSTRAP_RESPONSE")" || \
     fail "Platform bootstrap did not return the manual activation link required by unattended provisioning."
-  ACTIVATION_BODY="$(node -e 'process.stdout.write(JSON.stringify({token:process.argv[1],password:process.argv[2]}))' \
-    "$ACTIVATION_TOKEN" "$OPERATOR_PASSWORD")"
+  # The password travels through the environment, never on a command line.
+  ACTIVATION_BODY="$(EDK_PROVISION_SECRET="$OPERATOR_PASSWORD" node -e '
+    process.stdout.write(JSON.stringify({token: process.argv[1], password: process.env.EDK_PROVISION_SECRET}))
+  ' -- "$ACTIVATION_TOKEN")"
   post_json "$PLATFORM_URL/api/account-actions/v1/complete" "$ACTIVATION_BODY" >/dev/null
   echo "  Operator activated; setup gate closed."
 fi
 
 # --- Step 3: operator sign-in (PKCE authorization-code flow) -------------------
-[ -n "$OPERATOR_EMAIL" ] && [ -n "$OPERATOR_PASSWORD" ] || \
-  fail "operatorEmail and operatorPassword are required to sign in."
 [ -n "$OPERATOR_REDIRECT_URI" ]  || fail "operatorRedirectUri is not set."
-[ -n "$OPERATOR_CODE_VERIFIER" ] || fail "operatorCodeVerifier is not set."
 
 echo "Signing in as operator..."
 
@@ -285,18 +335,20 @@ CODE_CHALLENGE="$(node -e '
   const c = crypto.createHash("sha256").update(process.argv[1]).digest("base64")
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   process.stdout.write(c);
-' "$OPERATOR_CODE_VERIFIER")"
+' -- "$OPERATOR_CODE_VERIFIER")"
 [ -n "$CODE_CHALLENGE" ] || fail "Failed to compute PKCE code challenge."
 
 STATE="operator-state-$(node -e 'process.stdout.write(require("crypto").randomBytes(6).toString("hex"))')"
 
-urlencode() { node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$1"; }
-urldecode() { node -e 'process.stdout.write(decodeURIComponent(process.argv[1]))' "$1"; }
+urlencode() { node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$1"; }
+urldecode() { node -e 'process.stdout.write(decodeURIComponent(process.argv[1]))' -- "$1"; }
 
 # Read a response header value (case-insensitive) from a curl -D dump file.
 header_value() {
   # $1 = dump file, $2 = header name
-  awk -v h="$2" 'BEGIN{IGNORECASE=1} $0 ~ "^"h":" {sub(/^[^:]*:[ \t]*/,""); sub(/\r$/,""); val=$0} END{print val}' "$1"
+  # tolower() instead of IGNORECASE: IGNORECASE is GNU awk only, and mawk (the
+  # Debian/Ubuntu default) ignores it. HTTP/2 header names are always lowercase.
+  awk -v h="$2" 'BEGIN{h=tolower(h)} index(tolower($0), h ":") == 1 {sub(/^[^:]*:[ \t]*/,""); sub(/\r$/,""); val=$0} END{print val}' "$1"
 }
 
 abs_url() {
@@ -329,10 +381,12 @@ if [[ "$LOGIN_HTML" =~ name=\"session_code\"[[:space:]]+value=\"([^\"]+)\" ]]; t
 
 # 3.3 Submit credentials with the CSRF tuple; capture the callback redirect.
 HDR="$(mktemp)"
+# The password is read from standard input so it never appears in curl's arguments.
+printf '%s' "$OPERATOR_PASSWORD" | \
 curl -s -o /dev/null -D "$HDR" -c "$COOKIE_JAR" -b "$COOKIE_JAR" -X POST "$PLATFORM_URL/login" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-urlencode "username=$OPERATOR_EMAIL" \
-  --data-urlencode "password=$OPERATOR_PASSWORD" \
+  --data-urlencode "password@-" \
   --data-urlencode "session_id=$SESSION_ID" \
   --data-urlencode "tab_id=$TAB_ID" \
   --data-urlencode "session_code=$SESSION_CODE" \
@@ -373,49 +427,82 @@ TENANTS_URL="$PLATFORM_URL/api/platform/admin/v1/tenants"
 TENANT_BODY="$(node -e '
   const [name, slug] = [process.argv[1], process.argv[2]];
   process.stdout.write(JSON.stringify({
-    tenantType: "organization",
-    name,
-    description: name + " issuing and verification tenant",
-    slug,
-    addIssuer: true,
-    addVerifier: true,
-    owner: { type: "local", email: "admin@" + slug + ".example", displayName: name + " Administrator" },
-    ownerDelivery: { mode: "none" }
+    tenant: {
+      tenantType: "organization",
+      name,
+      description: name + " issuing and verification tenant",
+      slug,
+      initialPlatformSubdomain: true
+    },
+    contacts: {
+      technical: { email: "admin@" + slug + ".example", displayName: name + " administrator" },
+      administrativeSameAsTechnical: true,
+      ownerAdmin: { source: "technical" }
+    },
+    login: { enabled: true, defaultAuthorizationServerRequired: true },
+    provisioning: { issuer: true, verifier: true, keysAndDids: true, sampleData: true }
   }));
-' "$TENANT_NAME" "$TENANT_SLUG")"
+' -- "$TENANT_NAME" "$TENANT_SLUG")"
 
-TMP="$(mktemp)"
-CODE="$(curl -s -o "$TMP" -w '%{http_code}' -X POST "$TENANTS_URL" \
-  -H 'Content-Type: application/json' -H "Authorization: Bearer $OPERATOR_TOKEN" \
-  --data "$TENANT_BODY")"
-BODY="$(cat "$TMP")"; rm -f "$TMP"
+# Look the tenant up first so a re-run continues with the existing tenant.
+LIST="$(curl -s --max-time 30 "$TENANTS_URL?page=0&size=100&slug=$TENANT_SLUG" -H "Authorization: Bearer $OPERATOR_TOKEN" || true)"
+TENANT_ID="$(node -e '
+  let data=""; process.stdin.on("data",c=>data+=c);
+  process.stdin.on("end",()=>{
+    let o; try{o=JSON.parse(data);}catch(e){return;}
+    const items = o.data || o.items || o.tenants || (Array.isArray(o) ? o : []);
+    const m = items.find(t => t && t.slug === process.argv[1]);
+    if (m && m.id) process.stdout.write(String(m.id));
+  });
+' -- "$TENANT_SLUG" <<<"$LIST")"
+ONBOARDING_ID=""
 
-TENANT_ID=""
-case "$CODE" in
-  2*)
-    TENANT_ID="$(json_field "$BODY" tenant.id)"
-    [ -n "$TENANT_ID" ] || TENANT_ID="$(json_field "$BODY" id)"
-    echo "  Tenant registered: $TENANT_ID"
-    ;;
-  409)
-    echo "  Tenant '$TENANT_SLUG' already exists; continuing."
-    LIST="$(curl -s "$TENANTS_URL" -H "Authorization: Bearer $OPERATOR_TOKEN")"
-    TENANT_ID="$(node -e '
-      let data=""; process.stdin.on("data",c=>data+=c);
-      process.stdin.on("end",()=>{
-        let o; try{o=JSON.parse(data);}catch(e){return;}
-        const items = o.items || o.tenants || (Array.isArray(o) ? o : []);
-        const slug = process.argv[1];
-        const m = items.find(t => t && t.slug === slug);
-        if (m && m.id) process.stdout.write(String(m.id));
-      });
-    ' "$TENANT_SLUG" <<<"$LIST")"
-    ;;
-  *)
-    fail "Tenant registration failed ($CODE): $BODY"
-    ;;
-esac
+if [ -n "$TENANT_ID" ]; then
+  echo "  Tenant '$TENANT_SLUG' already exists ($TENANT_ID); continuing."
+else
+  TMP="$(mktemp)"
+  CODE="$(curl -s -o "$TMP" -w '%{http_code}' -X POST "$TENANTS_URL" \
+    -H 'Content-Type: application/json' -H "Authorization: Bearer $OPERATOR_TOKEN" \
+    --data "$TENANT_BODY")"
+  BODY="$(cat "$TMP")"; rm -f "$TMP"
+  case "$CODE" in
+    2*)
+      TENANT_ID="$(json_field "$BODY" tenant.id)"
+      [ -n "$TENANT_ID" ] || TENANT_ID="$(json_field "$BODY" id)"
+      ONBOARDING_ID="$(json_field "$BODY" correlationId)"
+      echo "  Tenant registered: $TENANT_ID"
+      ACTIVATION_LINK="$(json_field "$BODY" delivery.manualActivationLink)"
+      if [ -n "$ACTIVATION_LINK" ]; then
+        echo "  No email transport is configured. Open this link to set the tenant owner's password:"
+        echo "  $ACTIVATION_LINK"
+      fi
+      ;;
+    *)
+      fail "Tenant registration failed ($CODE): $BODY"
+      ;;
+  esac
+fi
 [ -n "$TENANT_ID" ] || fail "Could not determine tenantId; cannot verify tenant gateway endpoint bindings."
+
+# --- Step 4b: wait for tenant onboarding to complete --------------------------
+if [ -n "$ONBOARDING_ID" ]; then
+  echo "Waiting for tenant onboarding to complete..."
+  ONBOARDING_STATUS=""
+  for ((i = 0; i < 60; i++)); do
+    ONBOARDING_BODY="$(curl -s --max-time 15 "$PLATFORM_URL/api/platform/admin/v1/tenant-onboarding/$ONBOARDING_ID" \
+      -H "Authorization: Bearer $OPERATOR_TOKEN" || true)"
+    ONBOARDING_STATUS="$(json_field "$ONBOARDING_BODY" status)"
+    case "$ONBOARDING_STATUS" in
+      COMPLETED) break ;;
+      FAILED|ERROR|CANCELLED|CANCELED|ROLLED_BACK)
+        fail "Tenant onboarding ended with status $ONBOARDING_STATUS: $ONBOARDING_BODY" ;;
+    esac
+    sleep 5
+  done
+  [ "$ONBOARDING_STATUS" = "COMPLETED" ] || \
+    fail "Tenant onboarding did not complete within 5 minutes (last status: ${ONBOARDING_STATUS:-unknown})."
+  echo "  Onboarding completed."
+fi
 
 # --- Step 5: verify tenant setup-created gateway endpoint bindings ------------
 verify_endpoint_bindings() {
@@ -450,7 +537,7 @@ verify_endpoint_bindings() {
         process.exit(1);
       }
     });
-  ' "$2" <<<"$1"
+  ' -- "$2" <<<"$1"
 }
 
 echo "Verifying tenant setup-created gateway protocol routes..."

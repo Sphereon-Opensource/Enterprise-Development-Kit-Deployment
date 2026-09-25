@@ -114,6 +114,9 @@ function writeEnvironment(path, overrides = {}) {
 }
 
 assert.equal(requestCount(collection.item), 257, 'shipped customer collection must contain the current 257-request customer reference')
+// The gate pins the downloadable customer collection separately; keep the pin and the file in step.
+const downloadableCollection = JSON.parse(readFileSync(join(customerRoot, 'postman', 'EDK-Enterprise-Deployment.postman_collection.json'), 'utf8'))
+assert.equal(requestCount(downloadableCollection.item), 122, 'the gate pins the 122-request downloadable customer collection')
 const collectionRequests = requests(collection.item)
 const requestByName = new Map(collectionRequests.map((item) => [item.name, item]))
 
@@ -448,6 +451,13 @@ for (const sourceInvariant of [
   'compose-postman-release-gate-support.mjs',
   "'--pull', 'never'",
   "'E2E finished:\\s+' + [regex]::Escape($enabledRequestCount) + ' requests captured,\\s+exit code 0\\.'",
+  // The shipped customer collection runs unchanged after the automation source, on its own tenant.
+  '$collectionSupplied = -not [string]::IsNullOrWhiteSpace($CollectionPath)',
+  '$DefaultCustomerCollectionRequestCount = 122',
+  "$customerAuthRunner = Join-Path $scriptDir 'run-customer-postman-with-auth.mjs'",
+  "$customerSnapshotDir = Join-Path $customerRoot 'postman\\snapshots-customer-collection'",
+  "' requests executed, \\d+ optional and 0 other requests skipped themselves, exit code 0\\.'",
+  "'--snapshots', $customerSnapshotDir",
   "'pg_dump --schema-only --no-owner --no-privileges",
   "'scan-producer'",
   'finalize-evidence',

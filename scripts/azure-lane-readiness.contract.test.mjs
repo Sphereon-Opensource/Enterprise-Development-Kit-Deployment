@@ -31,3 +31,21 @@ test('external customer BYOK/BYOC cycle requires its distinct existing-key and c
   assert.ok(e2eWrapper.includes("'EDK_AZURE_TEST_EXISTING_KEY_ALIAS'"))
   assert.ok(e2eWrapper.includes("'EDK_AZURE_TEST_CERTIFICATE_DER_BASE64'"))
 })
+
+test('the platform Azure provider environment is set before Compose starts the stack', () => {
+  const normalized = wrapper.replaceAll('\r\n', '\n')
+  const laneFunction = normalized.indexOf('\nfunction Set-AzureKmsLaneEnvironment {')
+  assert.ok(laneFunction >= 0, 'the runner must keep the Azure lane in its own function')
+  const laneBody = normalized.slice(laneFunction, normalized.indexOf('\n}', laneFunction + 1))
+  assert.match(laneBody, /\$env:EDK_PLATFORM_KMS_AZURE_CLIENT_SECRET/u)
+  assert.match(laneBody, /\$env:EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST =/u)
+  const optionalStart = normalized.indexOf('\nfunction Set-OptionalLaneEnvironment {')
+  const optionalBody = normalized.slice(optionalStart, normalized.indexOf('\n}', optionalStart + 1))
+  assert.doesNotMatch(optionalBody, /EDK_PLATFORM_KMS_AZURE|EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST/u,
+    'the platform Azure environment must not wait for the Newman lane values')
+  const call = normalized.indexOf('\nSet-AzureKmsLaneEnvironment\n')
+  const composeUp = normalized.indexOf("Invoke-Compose @('up'")
+  assert.ok(call >= 0, 'the runner must configure the Azure lane at script level')
+  assert.ok(composeUp >= 0, 'the runner must start Compose')
+  assert.ok(call < composeUp, 'the Azure lane must be configured before Compose starts the platform')
+})

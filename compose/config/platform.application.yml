@@ -307,7 +307,7 @@ secret-management:
     # sharing is resolved. The client secret is supplied through the deployment
     # environment manifest and is never persisted in this configuration.
     platform-providers:
-      azure-shared-signing:
+      "[azure-shared-signing]":
         kind: ${env:EDK_PLATFORM_KMS_AZURE_KIND:}
         display-name: ${env:EDK_PLATFORM_KMS_AZURE_DISPLAY_NAME:Platform Azure Key Vault}
         vault-uri: ${env:EDK_PLATFORM_KMS_AZURE_VAULT_URI:}
@@ -320,7 +320,7 @@ secret-management:
           fulfillment: SHARED_INSTANCE
           tenants: ${env:EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS:*}
           suggested-default: false
-      aws-shared-signing:
+      "[aws-shared-signing]":
         kind: ${env:EDK_PLATFORM_KMS_AWS_KIND:}
         display-name: ${env:EDK_PLATFORM_KMS_AWS_DISPLAY_NAME:Platform AWS KMS}
         region: ${env:EDK_PLATFORM_KMS_AWS_REGION:}

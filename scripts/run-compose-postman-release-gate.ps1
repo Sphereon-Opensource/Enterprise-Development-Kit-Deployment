@@ -89,6 +89,9 @@ $behindEdgeComposeTemplate = Join-Path $composeDir 'docker-compose.behind-edge.t
 $behindEdgeStaticTemplate = Join-Path $composeDir 'gateway\traefik\traefik.behind-edge.template.yml'
 $behindEdgeDynamicTemplate = Join-Path $composeDir 'gateway\traefik\dynamic.public-cert.template.yml'
 $edgeRouterTemplate = Join-Path $composeDir 'gateway\traefik\edge-router.template.yml'
+# PowerShell variable names are case-insensitive, so $collectionPath below overwrites the
+# -CollectionPath parameter. Record whether a collection was supplied before that happens.
+$collectionSupplied = -not [string]::IsNullOrWhiteSpace($CollectionPath)
 $collectionPath = if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
     Join-Path $repoRoot 'deploy\edk\e2e\postman\EDK-Enterprise-Deployment.walkthrough-source.postman_collection.json'
 } else {
@@ -100,7 +103,16 @@ if ([string]::IsNullOrWhiteSpace($PostmanEnvironmentFile)) {
     $PostmanEnvironmentFile = Join-Path $repoRoot 'deploy\edk\e2e\postman\EDK-Enterprise-Deployment.automation.postman_environment.json'
 }
 # Pinned size of the automation source. Bump this in the same commit that adds or removes a request.
-$DefaultCollectionRequestCount = 229
+$DefaultCollectionRequestCount = 257
+# The collection customers download. The gate also runs it unchanged after the automation source,
+# on its own tenant, through run-customer-postman-with-auth.mjs (Newman cannot do Postman's
+# interactive OAuth2 sign-ins). Pinned the same way as the automation source.
+$customerCollectionPath = Join-Path $customerRoot 'postman\EDK-Enterprise-Deployment.postman_collection.json'
+$DefaultCustomerCollectionRequestCount = 122
+$customerAuthRunner = Join-Path $scriptDir 'run-customer-postman-with-auth.mjs'
+# Kept outside $snapshotDir: the runner treats every snapshot file below its directory that has no
+# matching request as stale, and the two collections do not share requests.
+$customerSnapshotDir = Join-Path $customerRoot 'postman\snapshots-customer-collection'
 $snapshotDir = Join-Path $customerRoot 'postman\snapshots'
 $runnerPath = Join-Path $repoRoot 'deploy\edk\e2e\runner\run-e2e.js'
 $imageVerifier = Join-Path $repoRoot 'deploy\edk\e2e\scripts\verify-enterprise-image-set.mjs'
@@ -182,6 +194,25 @@ function Publish-NewmanSafeArtifacts([string]$StageDir, [string]$ReportDir) {
     $sourceArtifact = Join-Path $StageDir $safeArtifact
     if (Test-Path -LiteralPath $sourceArtifact -PathType Leaf) {
       Copy-Item -LiteralPath $sourceArtifact -Destination (Join-Path $newmanReportDir $safeArtifact) -Force
+    }
+  }
+}
+function Publish-CustomerCollectionArtifacts([string]$StageReportDir, [string]$ReportDir) {
+  if (-not (Test-Path -LiteralPath $StageReportDir -PathType Container)) { return }
+  $customerReportDir = Join-Path $ReportDir 'newman\customer-collection'
+  New-Item -ItemType Directory -Path $customerReportDir -Force | Out-Null
+  foreach ($safeArtifact in @('junit.xml', 'customer-auth-handoff.json')) {
+    $sourceArtifact = Join-Path $StageReportDir $safeArtifact
+    if (Test-Path -LiteralPath $sourceArtifact -PathType Leaf) {
+      Copy-Item -LiteralPath $sourceArtifact -Destination (Join-Path $customerReportDir $safeArtifact) -Force
+    }
+  }
+  foreach ($phase in @(Get-ChildItem -LiteralPath $StageReportDir -Directory)) {
+    foreach ($safeArtifact in @('failure-summary.json', 'failure-summary.md', 'snapshot-drift.patch')) {
+      $sourceArtifact = Join-Path $phase.FullName $safeArtifact
+      if (Test-Path -LiteralPath $sourceArtifact -PathType Leaf) {
+        Copy-Item -LiteralPath $sourceArtifact -Destination (Join-Path $customerReportDir "$($phase.Name)-$safeArtifact") -Force
+      }
     }
   }
 }
@@ -819,6 +850,10 @@ function Write-Plan {
     removeVolumesOnTeardown = [bool]$RemoveVolumesOnTeardown
     runner = $runnerPath
     snapshotDir = $snapshotDir
+    customerCollection = $customerCollectionPath
+    customerRequestCount = $customerRequestCount
+    customerAuthRunner = $customerAuthRunner
+    customerSnapshotDir = $customerSnapshotDir
   }
   Write-Utf8NoBom `
     (Join-Path $resolvedReportDir 'release-gate-plan.json') `
@@ -843,6 +878,8 @@ $commonRequired = @(
   $collectionPath,
   $PostmanEnvironmentFile,
   $runnerPath,
+  $customerCollectionPath,
+  $customerAuthRunner,
   $imageVerifier,
   $setupHelper,
   $canaryScanner,
@@ -1007,10 +1044,16 @@ $collection = Get-Content -LiteralPath $collectionPath -Raw | ConvertFrom-Json
 $requestCount = Count-Requests @($collection.item)
 $enabledRequestCount = Count-Requests @($collection.item) -EnabledOnly
 Write-Host "Collection inventory: $requestCount requests; enabled execution scope: $enabledRequestCount requests."
+$customerCollection = Get-Content -LiteralPath $customerCollectionPath -Raw | ConvertFrom-Json
+$customerRequestCount = Count-Requests @($customerCollection.item)
+Write-Host "Customer collection inventory: $customerRequestCount requests."
+if ($customerRequestCount -ne $DefaultCustomerCollectionRequestCount) {
+  Fail "The shipped customer collection must contain exactly $DefaultCustomerCollectionRequestCount requests; found $customerRequestCount."
+}
 # The shipped collection is pinned so it cannot silently shrink. An explicitly supplied collection
 # is a deliberate choice -- gating an older release against the collection it shipped with -- so its
 # own size becomes the contract, and the runner must still execute every request in it.
-if ([string]::IsNullOrWhiteSpace($CollectionPath)) {
+if (-not $collectionSupplied) {
   if ($requestCount -ne $DefaultCollectionRequestCount) {
     Fail "Customer collection must contain exactly $DefaultCollectionRequestCount requests; found $requestCount."
   }
@@ -1072,6 +1115,18 @@ if ($AccessMode -eq 'Localtest') {
     Fail "The Localtest gateway overlay must contain an active tenant alias for $($postmanValues['tenantSlug']).$BaseDomain so tenant JWKS resolves inside Compose."
   }
 }
+# The customer collection runs on its own tenant so it never meets the automation source's objects.
+$customerTenantSlug = [string]$postmanValues['customerTenantSlug']
+if ([string]::IsNullOrWhiteSpace($customerTenantSlug)) { $customerTenantSlug = ([string]$postmanValues['tenantSlug']) + '-customer' }
+if ($customerTenantSlug -notmatch '^[a-z][a-z0-9-]{2,62}$') {
+  Fail "The customer collection tenant slug '$customerTenantSlug' is not a valid tenant slug; set customerTenantSlug in the Postman environment."
+}
+if ($AccessMode -eq 'Localtest') {
+  $customerAliasPattern = '(?m)^\s*-\s+' + [regex]::Escape($customerTenantSlug) + '\.' + [regex]::Escape($BaseDomain) + '\s*$'
+  if ($gatewayOverlayText -notmatch $customerAliasPattern) {
+    Fail "The Localtest gateway overlay must contain an active tenant alias for $customerTenantSlug.$BaseDomain, the customer collection's tenant."
+  }
+}
 if ([string]$postmanValues['tenantServiceClientSecret'] -notmatch '^[A-Za-z0-9_-]{16,128}$') {
   Fail "tenantServiceClientSecret must be an encoding-stable 16-128 character ASCII canary using only letters, digits, '_' or '-'."
 }
@@ -1116,6 +1171,7 @@ $projectMutationAttempted = $false
 $workloadPassed = $false
 $primaryError = $null
 $newmanStageDir = Join-Path $resolvedReportDir ('.newman-sensitive-staging-' + [guid]::NewGuid().ToString('N'))
+$customerStageDir = Join-Path $resolvedReportDir ('.customer-collection-sensitive-staging-' + [guid]::NewGuid().ToString('N'))
 $edgeRouterInstalledByRun = $false
 
 try {
@@ -1493,6 +1549,7 @@ try {
   Invoke-LoggedNative $nodeCommand $setupArgs (Join-Path $resolvedReportDir 'setup.log') $false | Out-Null
 
   New-Item -ItemType Directory -Path $newmanStageDir -Force | Out-Null
+  $snapshotUpdateArgs = $(if ($UpdateSnapshots) { @('--update') } else { @() })
   Set-OptionalLaneEnvironment
   $runnerOutput = Invoke-LoggedNative $nodeCommand (@(
     $runnerPath,
@@ -1502,7 +1559,7 @@ try {
     '--report-dir', $newmanStageDir,
     '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
     '--base-domain', $BaseDomain
-  ) + $(if ($UpdateSnapshots) { @('--update') } else { @() })) (Join-Path $resolvedReportDir 'newman.log') $false
+  ) + $snapshotUpdateArgs) (Join-Path $resolvedReportDir 'newman.log') $false
   if ($runnerOutput -notmatch ('E2E finished:\s+' + [regex]::Escape($enabledRequestCount) + ' requests captured,\s+exit code 0\.')) {
     Fail "Newman did not execute and capture exactly all $enabledRequestCount enabled request executions."
   }
@@ -1515,6 +1572,51 @@ try {
   ) (Join-Path $resolvedReportDir 'junit-validation.log') | Out-Null
   Publish-NewmanSafeArtifacts $newmanStageDir $resolvedReportDir
   Remove-Item -LiteralPath $newmanStageDir -Recurse -Force
+
+  # Customer collection stage: the file customers download, unchanged, on its own tenant. The
+  # environment reuses the gate's credentials and its canary as the service client secret, so the
+  # plaintext-canary scans below cover this stage too.
+  New-Item -ItemType Directory -Path $customerStageDir -Force | Out-Null
+  $customerEnvironmentValues = [ordered]@{
+    baseDomain          = $BaseDomain
+    tenantSlug          = $customerTenantSlug
+    tenantName          = "$($postmanValues['tenantName']) customer collection"
+    serviceClientId     = "$($postmanValues['tenantServiceClientId'])-customer"
+    serviceClientSecret = [string]$postmanValues['tenantServiceClientSecret']
+    operatorEmail       = [string]$postmanValues['operatorEmail']
+    operatorPassword    = [string]$postmanValues['operatorPassword']
+    tenantOwnerPassword = [string]$postmanValues['tenantOwnerPassword']
+  }
+  $customerEnvironmentFile = Join-Path $customerStageDir 'customer.postman_environment.json'
+  Write-Utf8NoBom $customerEnvironmentFile "$((@{
+    name = 'Customer collection release gate'
+    values = @($customerEnvironmentValues.GetEnumerator() | ForEach-Object { @{key = $_.Key; value = $_.Value; enabled = $true} })
+  } | ConvertTo-Json -Depth 5))`n"
+  $customerReportDir = Join-Path $customerStageDir 'report'
+  $customerOutput = Invoke-LoggedNative $nodeCommand (@(
+    $customerAuthRunner,
+    '--collection', $customerCollectionPath,
+    '--environment', $customerEnvironmentFile,
+    '--runner', $runnerPath,
+    '--report-dir', $customerReportDir,
+    '--working-dir', (Join-Path $repoRoot 'deploy\edk\e2e'),
+    '--base-domain', $BaseDomain,
+    '--snapshots', $customerSnapshotDir
+  ) + $snapshotUpdateArgs) (Join-Path $resolvedReportDir 'customer-collection.log') $false
+  # Requests may skip themselves only inside optional folders; every other request must run.
+  $customerCompletion = 'Customer collection finished:\s+\d+ of ' + [regex]::Escape($customerRequestCount) +
+    ' requests executed, \d+ optional and 0 other requests skipped themselves, exit code 0\.'
+  if ($customerOutput -notmatch $customerCompletion) {
+    Fail "The customer collection did not run every required request of the $customerRequestCount-request collection."
+  }
+  Invoke-LoggedNative $nodeCommand @(
+    $supportHelper,
+    'validate-junit',
+    '--file', (Join-Path $customerReportDir 'junit.xml'),
+    '--output', (Join-Path $resolvedReportDir 'customer-collection-junit-validation.json')
+  ) (Join-Path $resolvedReportDir 'customer-collection-junit-validation.log') | Out-Null
+  Publish-CustomerCollectionArtifacts $customerReportDir $resolvedReportDir
+  Remove-Item -LiteralPath $customerStageDir -Recurse -Force
 
   Invoke-CapturedNative $dockerCommand ($composeArgs + @('logs', '--no-color', '--timestamps')) (Join-Path $resolvedReportDir 'compose-logs.txt') | Out-Null
   $schemaTargets = if ($Topology -eq 'Monolith') {
@@ -1571,6 +1673,10 @@ try {
     if (Test-Path -LiteralPath $newmanStageDir -PathType Container) {
       Publish-NewmanSafeArtifacts $newmanStageDir $resolvedReportDir
       Remove-Item -LiteralPath $newmanStageDir -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $customerStageDir -PathType Container) {
+      Publish-CustomerCollectionArtifacts (Join-Path $customerStageDir 'report') $resolvedReportDir
+      Remove-Item -LiteralPath $customerStageDir -Recurse -Force
     }
     if ($projectMutationAttempted -and
         -not (Test-Path -LiteralPath (Join-Path $resolvedReportDir 'compose-logs.txt'))) {

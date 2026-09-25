@@ -55,13 +55,12 @@ installation is running:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-Set `baseDomain`, `tenantSubdomain` and `tenantName` in a private environment.
-Follow the [Postman walkthrough](postman/README.md): use Postman's OAuth2 helper
-for platform operator login, create the tenant, activate its owner, register a
-confidential client on the tenant AS, and switch to client credentials for tenant REST calls.
-Platform resource sharing and wallet authorization-code issuance have separate OAuth contexts.
-The optional Azure and Keycloak folders describe the inputs and request order.
-Access tokens are managed by Postman; do not copy them into bearer variables.
+Set `baseDomain` and `tenantSlug`; every URL follows from those two. The
+collection has one folder per identity: the platform operator lists or registers
+tenants, the tenant owner creates a service client, and the tenant APIs run with
+that service client's client-credentials token. Each folder gets its token from
+Postman's OAuth2 dialog. Optional folders cover Azure Key Vault and a Keycloak
+wallet login. See the [Postman guide](postman/README.md).
 
 ## Domain, DNS, and TLS model
 
