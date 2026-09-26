@@ -23,14 +23,6 @@
         "value": "public",
         "source": "tenant"
       },
-      "allowTrustAnchorManagement": {
-        "value": true,
-        "source": "tenant"
-      },
-      "allowTrustDomainDisable": {
-        "value": true,
-        "source": "tenant"
-      },
       "publicBaseUrl": "https://acme.example.com/oid4vp/acme",
       "displayUrl": "https://acme.example.com/testing-console/verifier/acme?publicBaseUrl=https%3A%2F%2Facme.example.com%2Foid4vp%2Facme"
     }
