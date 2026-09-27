@@ -61,6 +61,13 @@ assert_plan "0.25.0-RC4" "0.25.0-RC5" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-r
 assert_plan "0.25.0-RC5" "0.25.0-RC5-build-1" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml 0.25.0-rc4-to-0.25.0-rc5.yaml" "" "0.25.0-rc4-to-0.25.0-rc5.yaml"
 assert_plan "0.25.0-RC2" "0.25.0-RC40" "" "" ""
 
+assert_plan "0.25.0-RC4" "0.25.0" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml 0.25.0-rc4-to-0.25.0-rc5.yaml" "" "0.25.0-rc4-to-0.25.0-rc5.yaml"
+assert_plan "0.25.0-RC5" "0.25.0" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml 0.25.0-rc4-to-0.25.0-rc5.yaml" "" "0.25.0-rc4-to-0.25.0-rc5.yaml"
+assert_plan "0.25.0-RC3" "0.25.0-20261001-1" "" "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml 0.25.0-rc4-to-0.25.0-rc5.yaml" "" "0.25.0-rc4-to-0.25.0-rc5.yaml"
+assert_plan "0.25.0-RC1" "0.25.0" "0.25.0-RC2" \
+  "0.25.0-rc1-to-0.25.0-rc2.yaml 0.25.0-rc2-to-0.25.0-rc3.yaml 0.25.0-rc3-to-0.25.0-rc4.yaml 0.25.0-rc4-to-0.25.0-rc5.yaml" "0.25.0-rc1-to-0.25.0-rc2.yaml" "0.25.0-rc4-to-0.25.0-rc5.yaml"
+assert_plan "0.25.0-RC2" "0.25.0-SNAPSHOT" "" "" ""
+
 if edk_plan_known_upgrade_path "0.25.0-RC4" "0.25.0-RC3" "one" "two" "three"; then
   fail "RC4 -> RC3 downgrade must be rejected"
 fi
@@ -69,6 +76,9 @@ if edk_plan_known_upgrade_path "0.25.0-RC4-20260831-4" "0.25.0-RC3" "one" "two" 
 fi
 if edk_plan_known_upgrade_path "0.25.0-RC5" "0.25.0-RC4" "one" "two" "three" "four"; then
   fail "RC5 -> RC4 downgrade must be rejected"
+fi
+if edk_plan_known_upgrade_path "0.25.0" "0.25.0-RC5" "one" "two" "three" "four"; then
+  fail "0.25.0 -> RC5 downgrade must be rejected"
 fi
 
 extracted="$(printf '%s\n' '{"global": {"imageTag": "0.25.0-RC1"}, "services": {"platform": {"imageTag": "wrong"}}}' | edk_extract_global_image_tag)"

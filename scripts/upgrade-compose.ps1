@@ -33,6 +33,8 @@ function Get-ReleaseNumber([string]$Tag) {
     if ($normalized -match '^0\.25\.0-RC3(?:$|[-._].+)') { return 3 }
     if ($normalized -match '^0\.25\.0-RC4(?:$|[-._].+)') { return 4 }
     if ($normalized -match '^0\.25\.0-RC5(?:$|[-._].+)') { return 5 }
+    # The final release ranks above all release candidates, including future RCs.
+    if ($normalized -match '^0\.25\.0(?:$|[-._][0-9].*)') { return 10 }
     return 0
 }
 

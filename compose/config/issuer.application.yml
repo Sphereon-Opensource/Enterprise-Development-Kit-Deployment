@@ -251,8 +251,8 @@ blob:
       type: kvstore
       kvStoreId: design-assets
 # Pipeline session payloads are sealed with this master KEK before they reach the
-# KV backend. TODO: supply both keys from your secret backend (base64url, 32
-# bytes each); do not reuse keys across deployments.
+# KV backend. The Compose setup generates separate base64url keys for each
+# deployment. Keep them with the deployment's other secrets.
 issuance-pipeline:
   encryption:
     master-kek: ${env:EDK_PIPELINE_MASTER_KEK}

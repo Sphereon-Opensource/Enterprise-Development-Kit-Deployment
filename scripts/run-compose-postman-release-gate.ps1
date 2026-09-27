@@ -75,7 +75,7 @@ if ([string]::IsNullOrWhiteSpace($EdgeRouterDirectory)) {
 }
 $composeDir = Join-Path $customerRoot 'compose'
 $baseCompose = if ($Topology -eq 'Monolith') {
-  Join-Path $composeDir 'docker-compose.monolith-base.yml'
+  Join-Path $repoRoot 'deploy\docker\docker-compose.monolith-base.yml'
 } else {
   Join-Path $composeDir 'docker-compose.yml'
 }
@@ -1158,6 +1158,7 @@ $env:NODE_EXTRA_CA_CERTS = if ($requiresLocalCa) { $localCa } else { $null }
 $composeArgs = @(
   'compose',
   '--project-name', $ProjectName,
+  '--project-directory', $composeDir,
   '--env-file', $runtimeComposeEnv,
   '-f', $composeFiles[0]
 )

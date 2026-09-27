@@ -9,8 +9,8 @@
 #      Set EDK_TAG in .env to select the released image tag. The registry is
 #      intentionally fixed to nexus.sphereon.com/edk-docker here; do not use
 #      sphereon or docker.io/sphereon because that resolves to public Docker Hub.
-#   2. Edit .env (hostnames, database credentials, secrets) and review the per
-#      service templates under config/ for the TODO markers.
+#   2. Set the approved tag and base domain in .env, generate the Compose
+#      secrets, and review the service templates under config/.
 #   3. Start the stack and complete the license setup screen with the protected
 #      license bundle returned by the license operator.
 #
@@ -26,15 +26,13 @@
 #   - Tenant KMS has no public ingress. It is reachable only on the internal
 #     compose network.
 #
-# The platform, tenant KMS, wallet unit, and wallet interaction services run the
-# gRPC server transport (inbound). The other services route KMS and wallet
-# commands over internal gRPC only.
+# The platform and tenant KMS run the gRPC server transport (inbound). Other
+# services route platform configuration and KMS commands over internal gRPC.
 
 name: edk-enterprise
 
 x-edk-public-urls: &edk-public-urls
   platform: &edk-platform-public-url ${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}
-  onboarding: &edk-onboarding-ui-public-url ${EDK_ONBOARDING_UI_EXTERNAL_BASE_URL:-${EDK_PLATFORM_EXTERNAL_BASE_URL:-http://localhost:18080}}
 
 x-edk-common-env: &edk-common-env
   APP_PROFILE: container
@@ -47,34 +45,33 @@ x-edk-common-env: &edk-common-env
   EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
   EDK_PLATFORM_PUBLIC_URL: *edk-platform-public-url
   EDK_TRUST_TENANT_REGISTRY_ISSUERS: ${EDK_TRUST_TENANT_REGISTRY_ISSUERS:-true}
-  EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD}
+  EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
   EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
   EDK_OWNER_INITIAL_CREDENTIAL: ${EDK_OWNER_INITIAL_CREDENTIAL}
-  SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY: ${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Generate the secret-authority key window before starting the stack}
-  SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS: ${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Generate the secret-authority key window before starting the stack}
+  SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY: ${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Run scripts/generate-secret-authority-keys, then scripts/generate-compose-secrets.mjs}
+  SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS: ${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Run scripts/generate-secret-authority-keys, then scripts/generate-compose-secrets.mjs}
 
 # Distinct confidential-client passwords per STS registration. Satellites still
 # consume EDK_INTERNAL_CLIENT_SECRET (one value per container). Platform sees
 # every EDK_INTERNAL_CLIENT_SECRET_<ROLE> for internal-clients interpolation.
 x-edk-platform-sts-secrets: &edk-platform-sts-secrets
-  EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
-  EDK_INTERNAL_CLIENT_SECRET_TENANT_AS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
-  EDK_INTERNAL_CLIENT_SECRET_DID: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
-  EDK_INTERNAL_CLIENT_SECRET_BLOB: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
-  EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
-  EDK_INTERNAL_CLIENT_SECRET_VERIFIER: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
-  EDK_INTERNAL_CLIENT_SECRET_EMAIL: ${EDK_INTERNAL_CLIENT_SECRET_EMAIL:?Set EDK_INTERNAL_CLIENT_SECRET_EMAIL}
+  EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Run scripts/generate-compose-secrets.mjs}
+  EDK_INTERNAL_CLIENT_SECRET_TENANT_AS: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Run scripts/generate-compose-secrets.mjs}
+  EDK_INTERNAL_CLIENT_SECRET_DID: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Run scripts/generate-compose-secrets.mjs}
+  EDK_INTERNAL_CLIENT_SECRET_BLOB: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Run scripts/generate-compose-secrets.mjs}
+  EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Run scripts/generate-compose-secrets.mjs}
+  EDK_INTERNAL_CLIENT_SECRET_VERIFIER: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Run scripts/generate-compose-secrets.mjs}
 
 x-edk-tenant-db-env: &edk-tenant-db-env
   EDK_TENANT_DB_HOST: tenant-postgres
   EDK_TENANT_DB_NAME: ${EDK_TENANT_DB_NAME:-tenant}
   EDK_TENANT_DB_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
-  EDK_TENANT_DB_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
+  EDK_TENANT_DB_PASSWORD: ${EDK_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
   # Every runtime hosts the secret-use broker and uses only the tenant-serving
   # role. Authority-admin persistence credentials are platform-only.
-  EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+  EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
   # Narrow runtime role for the shared replay ledger. It is not an authority-admin credential.
-  EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+  EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
 
 x-edk-runtime-healthcheck-8080: &edk-runtime-healthcheck-8080
   # The runtime image ships no curl or wget; bash /dev/tcp is always available.
@@ -95,24 +92,16 @@ x-edk-runtime-healthcheck-18083: &edk-runtime-healthcheck-18083
   retries: 30
   start_period: 20s
 
-x-edk-runtime-healthcheck-9090: &edk-runtime-healthcheck-9090
-  # Wallet runtimes are intentionally gRPC-only in this stack; REST is disabled.
-  test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090"]
-  interval: 5s
-  timeout: 5s
-  retries: 30
-  start_period: 20s
-
 services:
   platform-postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
-      POSTGRES_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
       POSTGRES_DB: ${EDK_PLATFORM_DB_NAME:-platform}
-      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
-      SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
     volumes:
       - platform-postgres-data:/var/lib/postgresql/data
       - ./postgres-init/10-secret-management-roles.sh:/docker-entrypoint-initdb.d/10-secret-management-roles.sh:ro
@@ -133,11 +122,11 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
-      POSTGRES_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${EDK_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
       POSTGRES_DB: ${EDK_TENANT_DB_NAME:-tenant}
-      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
-      SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
     volumes:
       - tenant-postgres-data:/var/lib/postgresql/data
       - ./postgres-init/10-secret-management-roles.sh:/docker-entrypoint-initdb.d/10-secret-management-roles.sh:ro
@@ -180,7 +169,7 @@ services:
   # platform config. Local licensing authority for the deployment. Runs the gRPC
   # server transport for config routing; REST listens on 18080 in-container.
   enterprise-platform:
-    image: nexus.sphereon.com/edk-docker/enterprise-platform:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/enterprise-platform:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       platform-postgres:
         condition: service_healthy
@@ -195,25 +184,25 @@ services:
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env, *edk-platform-sts-secrets]
       EDK_PLATFORM_DB_HOST: platform-postgres
-      SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY: ${SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY:?Generate the secret-authority key window before starting the stack}
-      SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS: ${SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS:?Generate the secret-authority key window before starting the stack}
+      SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY: ${SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY:?Run scripts/generate-secret-authority-keys, then scripts/generate-compose-secrets.mjs}
+      SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS: ${SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS:?Run scripts/generate-secret-authority-keys, then scripts/generate-compose-secrets.mjs}
       EDK_PLATFORM_DB_NAME: ${EDK_PLATFORM_DB_NAME:-platform}
       EDK_PLATFORM_DB_USERNAME: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
-      EDK_PLATFORM_DB_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
+      EDK_PLATFORM_DB_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
       DATABASE_APP_DEFAULT_DIALECT: postgresql
       DATABASE_APP_DEFAULT_ISOLATION: shared
       DATABASE_APP_DEFAULT_HOST: platform-postgres
       DATABASE_APP_DEFAULT_PORT: "5432"
       DATABASE_APP_DEFAULT_DATABASE: ${EDK_PLATFORM_DB_NAME:-platform}
       DATABASE_APP_DEFAULT_USERNAME: ${EDK_PLATFORM_DB_USERNAME:-edk_platform}
-      DATABASE_APP_DEFAULT_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD}
+      DATABASE_APP_DEFAULT_PASSWORD: ${EDK_PLATFORM_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
       DATABASE_APP_TENANT_MIGRATOR_DIALECT: postgresql
       DATABASE_APP_TENANT_MIGRATOR_ISOLATION: shared
       DATABASE_APP_TENANT_MIGRATOR_HOST: tenant-postgres
       DATABASE_APP_TENANT_MIGRATOR_PORT: "5432"
       DATABASE_APP_TENANT_MIGRATOR_DATABASE: ${EDK_TENANT_DB_NAME:-tenant}
       DATABASE_APP_TENANT_MIGRATOR_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
-      DATABASE_APP_TENANT_MIGRATOR_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
+      DATABASE_APP_TENANT_MIGRATOR_PASSWORD: ${EDK_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
       DATABASE_TENANTS_DEFAULT_DIALECT: postgresql
       DATABASE_TENANTS_DEFAULT_ISOLATION: schema
       DATABASE_TENANTS_DEFAULT_SCHEMA_PATTERN: tenant_{id}
@@ -221,20 +210,17 @@ services:
       DATABASE_TENANTS_DEFAULT_PORT: "5432"
       DATABASE_TENANTS_DEFAULT_DATABASE: ${EDK_TENANT_DB_NAME:-tenant}
       DATABASE_TENANTS_DEFAULT_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
-      DATABASE_TENANTS_DEFAULT_PASSWORD: ${EDK_TENANT_DB_PASSWORD}
-      EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
-      EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
-      EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Set EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
-      # Fail-closed cloud offering gate; Azure/AWS credentials are never copied
-      # into this file and are attached through the typed platform-config API.
-      # The shipped customer Compose stack is also the developer stack: publish the
-      # typed Azure/AWS KMS offerings so the Admin Console exposes the complete
-      # configuration surface. Credentials and provider instances remain explicit
-      # platform-config data; no cloud secret is copied into Compose.
+      DATABASE_TENANTS_DEFAULT_PASSWORD: ${EDK_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      # Lets tenants connect their own Azure Key Vault or AWS KMS through the
+      # platform-config API. Provider instances and credentials are registered
+      # through that API; no cloud secret is stored in this file.
       SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS: ${SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:-true}
-      # Deployment-declared platform-shared Azure Key Vault provider. The
-      # declaration stays inert when KIND is empty; -AzureKms supplies these
-      # coordinates and the manifest resolves the client secret by id.
+      # Optional platform-shared Azure Key Vault, declared at deployment and
+      # offered to tenants. Inert while KIND is empty. The client secret is
+      # resolved by id through the Azure environment manifest; see .env.example.
       EDK_PLATFORM_KMS_AZURE_KIND: ${EDK_PLATFORM_KMS_AZURE_KIND:-}
       EDK_PLATFORM_KMS_AZURE_DISPLAY_NAME: ${EDK_PLATFORM_KMS_AZURE_DISPLAY_NAME:-Platform Azure Key Vault}
       EDK_PLATFORM_KMS_AZURE_VAULT_URI: ${EDK_PLATFORM_KMS_AZURE_VAULT_URI:-}
@@ -243,7 +229,7 @@ services:
       EDK_PLATFORM_KMS_AZURE_CLIENT_SECRET: ${EDK_PLATFORM_KMS_AZURE_CLIENT_SECRET:-}
       EDK_PLATFORM_KMS_AZURE_HSM_TYPE: ${EDK_PLATFORM_KMS_AZURE_HSM_TYPE:-KEYVAULT}
       EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS: ${EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS:-*}
-      # Deployment-declared platform-shared AWS KMS provider, inert while KIND is empty. The secret
+      # Optional platform-shared AWS KMS, inert while KIND is empty. The secret
       # access key is resolved by id through the AWS environment manifest.
       EDK_PLATFORM_KMS_AWS_KIND: ${EDK_PLATFORM_KMS_AWS_KIND:-}
       EDK_PLATFORM_KMS_AWS_DISPLAY_NAME: ${EDK_PLATFORM_KMS_AWS_DISPLAY_NAME:-Platform AWS KMS}
@@ -251,12 +237,13 @@ services:
       EDK_PLATFORM_KMS_AWS_ACCESS_KEY_ID: ${EDK_PLATFORM_KMS_AWS_ACCESS_KEY_ID:-}
       EDK_PLATFORM_KMS_AWS_SECRET_ACCESS_KEY: ${EDK_PLATFORM_KMS_AWS_SECRET_ACCESS_KEY:-}
       EDK_PLATFORM_KMS_AWS_SHARED_TENANTS: ${EDK_PLATFORM_KMS_AWS_SHARED_TENANTS:-*}
-      # Must match the manifest mounted from EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST. The default
-      # is the digest of the shipped manifest; the Azure manifest adds one secret id and has its own.
+      # Digest of the manifest mounted from EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST.
+      # The default matches the shipped manifest; generate-compose-secrets.mjs
+      # writes the digest when .env selects another manifest.
       SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256: ${EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST_SHA256:-sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e}
       EXTERNAL_BASE_URL: *edk-platform-public-url
-      ONBOARDING_UI_BASE_URL: *edk-onboarding-ui-public-url
-      ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
+      ONBOARDING_UI_BASE_URL: *edk-platform-public-url
+      ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Run scripts/generate-compose-secrets.mjs}
       PORT: "18080"
       REST_PORT: "18080"
       REST_ENABLED: "false"
@@ -288,7 +275,7 @@ services:
   # Tenant authorization server: mints the bearer tokens the runtime services
   # validate. REST listens on 18083 in-container so its issuer URL self-resolves.
   enterprise-tenant-as:
-    image: nexus.sphereon.com/edk-docker/enterprise-tenant-as:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/enterprise-tenant-as:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       tenant-postgres:
         condition: service_healthy
@@ -301,8 +288,9 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
-      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
-      EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Run scripts/generate-compose-secrets.mjs}
+      EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Run scripts/generate-compose-secrets.mjs}
+      FEDERATION_SESSION_ENCRYPTION_KEY: ${EDK_FEDERATION_SESSION_ENCRYPTION_KEY:?Run scripts/generate-compose-secrets.mjs}
       PORT: "18083"
       REST_PORT: "18083"
       # Authenticated issuer/verifier workloads call the Trust Domain API on
@@ -325,7 +313,7 @@ services:
   # Key management: holds key material, serves signing/MAC/encryption commands
   # over gRPC. No public ingress. Runs the gRPC server transport (inbound).
   enterprise-tenant-kms:
-    image: nexus.sphereon.com/edk-docker/enterprise-tenant-kms:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/enterprise-tenant-kms:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       tenant-postgres:
         condition: service_healthy
@@ -340,8 +328,8 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
-      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Set EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
-      EXTERNAL_BASE_URL: ${EDK_KMS_INTERNAL_BASE_URL:-http://enterprise-tenant-kms:8080}
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS:?Run scripts/generate-compose-secrets.mjs}
+      EXTERNAL_BASE_URL: http://enterprise-tenant-kms:8080
       REST_ENABLED: "false"
       GRPC_ENABLED: "true"
       GRPC_PORT: "9090"
@@ -358,7 +346,7 @@ services:
 
   # DID resolver and did.json hosting; routes KMS commands to tenant KMS.
   enterprise-did:
-    image: nexus.sphereon.com/edk-docker/enterprise-did:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/enterprise-did:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       tenant-postgres:
         condition: service_healthy
@@ -373,7 +361,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
-      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Set EDK_INTERNAL_CLIENT_SECRET_DID}
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_DID:?Run scripts/generate-compose-secrets.mjs}
       EXTERNAL_BASE_URL: ${EDK_DID_EXTERNAL_BASE_URL:-http://localhost:18082}
     volumes:
       - ./config/did.application.yml:/app/config/application.yml:ro
@@ -386,7 +374,7 @@ services:
   # Dedicated tenant blob and theme-data service. Branding bytes are kept on
   # their own durable volume and are never stored in the platform container.
   enterprise-blob:
-    image: nexus.sphereon.com/edk-docker/service-data:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/service-data:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       tenant-postgres:
         condition: service_healthy
@@ -401,8 +389,8 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
-      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Set EDK_INTERNAL_CLIENT_SECRET_BLOB}
-      EXTERNAL_BASE_URL: ${EDK_BLOB_EXTERNAL_BASE_URL:-http://enterprise-blob:8080}
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Run scripts/generate-compose-secrets.mjs}
+      EXTERNAL_BASE_URL: http://enterprise-blob:8080
       REST_ENABLED: "true"
       GRPC_ENABLED: "false"
     volumes:
@@ -417,7 +405,7 @@ services:
   # OID4VCI issuer: serves the wallet-facing protocol surface, signs credentials
   # by routing KMS commands to tenant KMS.
   enterprise-issuer:
-    image: nexus.sphereon.com/edk-docker/enterprise-issuer:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/enterprise-issuer:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       tenant-postgres:
         condition: service_healthy
@@ -434,10 +422,10 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
-      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Set EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Run scripts/generate-compose-secrets.mjs}
       EXTERNAL_BASE_URL: ${EDK_ISSUER_EXTERNAL_BASE_URL:-http://localhost:18084}
-      EDK_PIPELINE_MASTER_KEK: ${EDK_PIPELINE_MASTER_KEK}
-      EDK_PIPELINE_BLIND_INDEX_KEY: ${EDK_PIPELINE_BLIND_INDEX_KEY}
+      EDK_PIPELINE_MASTER_KEK: ${EDK_PIPELINE_MASTER_KEK:?Run scripts/generate-compose-secrets.mjs}
+      EDK_PIPELINE_BLIND_INDEX_KEY: ${EDK_PIPELINE_BLIND_INDEX_KEY:?Run scripts/generate-compose-secrets.mjs}
     volumes:
       - ./config/issuer.application.yml:/app/config/application.yml:ro
       - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro
@@ -449,7 +437,7 @@ services:
   # OID4VP verifier: serves the wallet-facing presentation surface, routes KMS
   # and DID commands.
   enterprise-verifier:
-    image: nexus.sphereon.com/edk-docker/enterprise-verifier:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/enterprise-verifier:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       tenant-postgres:
         condition: service_healthy
@@ -468,7 +456,7 @@ services:
       - tenant-db-net
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
-      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Set EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Run scripts/generate-compose-secrets.mjs}
       EXTERNAL_BASE_URL: ${EDK_VERIFIER_EXTERNAL_BASE_URL:-http://localhost:18085}
     volumes:
       - ./config/verifier.application.yml:/app/config/application.yml:ro
@@ -485,7 +473,7 @@ services:
   # {host}/admin-console/callback. Reached only through the gateway (no host
   # port by default).
   admin-console:
-    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       enterprise-platform:
         condition: service_healthy
@@ -498,12 +486,12 @@ services:
       NEXT_PUBLIC_BASE_PATH: /admin-console
       ADMIN_CONSOLE_MODE: PLATFORM
       ADMIN_CONSOLE_PLATFORM_BASE_URL: http://enterprise-platform:18080
-      ADMIN_CONSOLE_PUBLIC_ORIGIN: *edk-onboarding-ui-public-url
+      ADMIN_CONSOLE_PUBLIC_ORIGIN: *edk-platform-public-url
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "true"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: DIRECT
       ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-blob:8080
       ADMIN_CONSOLE_WORKLOAD_CLIENT_ID: admin-console-portal-bff
-      ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Set EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET}
+      ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Run scripts/generate-compose-secrets.mjs}
       ADMIN_CONSOLE_AUDIT_BASE_URL: http://enterprise-platform:18080
       ADMIN_CONSOLE_THEME_BASE_URL: http://enterprise-blob:8080
       ADMIN_CONSOLE_TENANT_KMS_BASE_URL: http://enterprise-tenant-kms:8080
@@ -537,7 +525,7 @@ services:
   # platform portal-BFF client id or secret. The trusted request host selects
   # the tenant and its default AS; the application rejects unknown hosts.
   admin-console-tenant:
-    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG:-0.25.0-SNAPSHOT}
+    image: nexus.sphereon.com/edk-docker/admin-console:${EDK_TAG:?Set EDK_TAG to the approved release tag}
     depends_on:
       enterprise-platform:
         condition: service_healthy

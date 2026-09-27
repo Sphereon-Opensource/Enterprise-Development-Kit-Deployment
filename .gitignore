@@ -7,3 +7,4 @@
 /build/
 /compose/.edk-installed-image-tag
 /compose/.env.manual-localtest
+/evidence/

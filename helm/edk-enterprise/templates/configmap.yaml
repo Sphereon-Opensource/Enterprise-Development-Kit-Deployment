@@ -350,6 +350,9 @@ data:
               token-exchange:
                 mode: secret-bootstrap
                 audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+                # Tenant-KMS also serves the platform tenant's own KMS resources, so its bootstrap
+                # token may target the platform tenant it is itself registered in.
+                self: "true"
               {{- end }}
             did:
               client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}

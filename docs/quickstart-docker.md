@@ -43,75 +43,66 @@ values point Compose at public Docker Hub.
 Confirm Docker can pull the published images for the tag you plan to deploy:
 
 ```bash
-docker pull nexus.sphereon.com/edk-docker/enterprise-platform:0.25.0-SNAPSHOT
+docker pull nexus.sphereon.com/edk-docker/enterprise-platform:<approved-release-tag>
 ```
 
 ## 2. Configure the stack
 
-Copy the example environment file in `compose/` and edit it:
+Copy the example environment file in `compose/`:
 
 ```bash
 cd compose
 cp .env.example .env
 ```
 
-Set, at minimum:
+Set `EDK_TAG` to the approved image tag and `EDK_PLATFORM_BASE_DOMAIN` to the
+installation base domain. Everything else is generated or has a working
+default:
 
-- The image tag for the enterprise images. The image repository is pinned to `nexus.sphereon.com/edk-docker` in the Compose file.
-- The platform and tenant database passwords. The default Compose file starts `platform-postgres` and `tenant-postgres`; use external databases only when you intentionally replace those evaluation services. Keep the two databases separate. They may share a PostgreSQL server, but not a database name, credential, or authorization boundary.
-- The required secrets: keystore password, distinct per-satellite internal client secrets, and the issuer pipeline keys.
-- A fresh secret-authority key window. Generate it before the first start and
-  after intentionally rotating the authority keys:
+1. Generate the secret-authority key set:
 
-  ```powershell
-  ..\scripts\generate-secret-authority-keys.ps1 -OutputDirectory .\.secret-authority\current
-  ```
+   ```powershell
+   ..\scripts\generate-secret-authority-keys.ps1 -OutputDirectory .\.secret-authority\current
+   ```
 
-  On Linux or macOS:
+   On Linux or macOS:
 
-  ```bash
-  ../scripts/generate-secret-authority-keys.sh ./.secret-authority/current
-  ```
+   ```bash
+   ../scripts/generate-secret-authority-keys.sh ./.secret-authority/current
+   ```
 
-  Set `EDK_SECRET_AUTHORITY_ROOT=./.secret-authority/current` in `.env`, then
-  copy the four `SECRET_AUTHORITY_*` assignments from
-  `.secret-authority/current/window.env` into `.env`. The platform receives the
-  central private key and workload public keys; each satellite container mounts
-  only its own assertion private key plus the central public key. The generated
-  directory is ignored by Git and must not be copied into release evidence.
-- No external secret provider is required at startup. The baseline uses the
-  persisted platform software KMS. Configure Vault or a cloud provider only
-  through an explicit provider setup after the platform is running.
-- The installation base domain. The platform is published as
-  `https://platform.<base-domain>`. Tenant protocol URLs are created during
-  onboarding from `<tenant-slug>.<base-domain>`.
+   The platform receives the central private key and the workload public keys;
+   each service container mounts only its own assertion private key plus the
+   central public key. The generated directory is ignored by Git.
+
+2. Fill the remaining secrets and copy the secret-authority coordinates into
+   `.env`:
+
+   ```bash
+   node ../scripts/generate-compose-secrets.mjs
+   ```
+
+   The script only fills empty values. Rerunning it never rotates a credential.
+
+No external secret provider is required at startup. The baseline uses the
+persisted platform software KMS. Cloud key providers are optional and are
+configured after the platform is running, or declared in the optional block at
+the end of `.env.example`.
+
+The two bundled PostgreSQL containers are for evaluation. To use external
+databases instead, keep the platform and tenant databases separate. They may
+share a PostgreSQL server, but not a database name, credential, or
+authorization boundary.
 
 When upgrading an older Compose environment, remove the legacy single-database
 keys `EDK_DB_NAME`, `EDK_DB_USERNAME`, `EDK_DB_PASSWORD`, and
-`EDK_POSTGRES_HOST_PORT` from `.env`. Replace them with `EDK_PLATFORM_DB_*` and
-`EDK_TENANT_DB_*`.
-
-RC4 requires eight `.env` variables that RC3 did not. `docker compose config`
-fails with "required variable ... is missing a value" until all eight are set:
-
-| Variable | Read by |
-| --- | --- |
-| `EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS` | platform, and the tenant KMS satellite through `EDK_INTERNAL_CLIENT_SECRET` |
-| `EDK_INTERNAL_CLIENT_SECRET_TENANT_AS` | platform, and the tenant AS satellite through `EDK_INTERNAL_CLIENT_SECRET` |
-| `EDK_INTERNAL_CLIENT_SECRET_DID` | platform, and the DID satellite through `EDK_INTERNAL_CLIENT_SECRET` |
-| `EDK_INTERNAL_CLIENT_SECRET_BLOB` | platform, and the blob satellite through `EDK_INTERNAL_CLIENT_SECRET` |
-| `EDK_INTERNAL_CLIENT_SECRET_ISSUER` | platform, and the issuer satellite through `EDK_INTERNAL_CLIENT_SECRET` |
-| `EDK_INTERNAL_CLIENT_SECRET_VERIFIER` | platform, and the verifier satellite through `EDK_INTERNAL_CLIENT_SECRET` |
-| `EDK_INTERNAL_CLIENT_SECRET_EMAIL` | platform, and the email satellite through `EDK_INTERNAL_CLIENT_SECRET` |
-| `EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD` | platform and every satellite, as the password of the `secret_management_runtime` database role |
-
-The platform reads all seven `EDK_INTERNAL_CLIENT_SECRET_*` values directly;
-each satellite container still reads only its own secret through the single
-`EDK_INTERNAL_CLIENT_SECRET` name, and the seven values may differ. The
-platform no longer reads a single `EDK_INTERNAL_CLIENT_SECRET` value. See the
-required-values table in the repository README and the East-west service
-identity and STS section of [configuration.md](configuration.md) for what
-each value protects.
+`EDK_POSTGRES_HOST_PORT` from `.env`, keep your existing `EDK_PLATFORM_DB_*`
+and `EDK_TENANT_DB_*` values, and run `generate-compose-secrets.mjs` once. It
+adds the secrets that newer releases require, for example the per-service
+`EDK_INTERNAL_CLIENT_SECRET_*` values introduced in RC4 and
+`EDK_FEDERATION_SESSION_ENCRYPTION_KEY`, without changing existing values. It
+also lists values that still come from an earlier published template; rotate
+those in a planned maintenance window.
 
 Each tenant's OID4VCI credential issuer identifier is
 `https://<tenant>.<base-domain>/oid4vci/<tenant>`, not the bare tenant origin.
@@ -133,31 +124,55 @@ the tenant endpoints to the tenant host during onboarding.
 
 Use the upgrade wrapper instead of changing `EDK_TAG` and running `docker
 compose up` yourself. It detects the installed platform image, pulls each
-required release, and waits for the complete stack after every step. A direct
-RC1-to-RC4 request therefore runs RC1-to-RC2-to-RC3-to-RC4 so the application
-database migrations execute in release order. Repeating the command is
+required release, and waits for the complete stack after every step. From any
+0.25.0 release candidate it upgrades directly to 0.25.0; an RC1 installation
+passes through RC2 first. It refuses a downgrade, and repeating the command is
 idempotent.
 
-For an RC4 deployment upgrading to RC5, use:
+Before upgrading, back up both databases and run
+`node ../scripts/generate-compose-secrets.mjs` once. It adds the secrets 0.25.0
+requires without changing existing values.
 
-```powershell
-..\scripts\upgrade-compose.ps1 -ImageTag 0.25.0-RC5 -InstalledImageTag 0.25.0-RC4
-```
+An RC4 `config/platform.application.yml` configures the platform
+authorization server under `oauth2.servers.default` and reads its WebAuthn
+`rp-id` and `allowed-origins` from `EDK_PLATFORM_BASE_DOMAIN` and
+`EXTERNAL_BASE_URL`. The 0.25.0 platform accepts these environment
+references, so the RC4 file needs no edits to upgrade. The 0.25.0-RC5 platform
+image rejects them and stops during authority bootstrap with
+`VDX_CONFIGURATION_INTERPOLATION_DENIED` for
+`oauth2.servers.default.webauthn.rp.id`; upgrade such an installation
+directly from RC4 to 0.25.0 instead of through RC5.
 
-The RC4-to-RC5 compatibility overlay is intentionally empty because RC5
-preserves the RC4 storage contract; it remains explicit so the planner is
-cumulative and repeatable.
+The configuration shipped with this kit names the same server `platform` and
+selects it with `oauth2.servers.default-server: platform`. To move to that
+layout, take the kit's `platform.application.yml` and reapply your own changes
+to it. Replace the `oauth2.servers.default` block rather than keeping it next
+to the new `platform` block.
+
+An RC5 `config/platform.application.yml` declares the optional shared Azure
+and AWS KMS providers under unquoted ids such as `azure-shared-signing`.
+0.25.0 reads provider ids only in bracket-quoted form (`"[azure-shared-signing]"`).
+While `EDK_PLATFORM_KMS_AZURE_KIND` and `EDK_PLATFORM_KMS_AWS_KIND` are unset,
+the RC5 file starts unchanged and declares no provider, exactly as in RC5. To
+activate one of these providers, take the kit's `platform.application.yml`
+first; with an unquoted id and a kind set, startup stops with
+`INVALID_CONFIGURATION`.
+
+When startup refuses a configuration placeholder, the error names the
+property, the property source that supplied it (`yaml.app` for the mounted
+YAML files, `db.postgresql` or `tenant-config-db` for stored configuration),
+and the reason. It never prints the configured value.
 
 Linux/macOS:
 
 ```bash
-bash ../scripts/upgrade-compose.sh --image-tag 0.25.0-RC4
+bash ../scripts/upgrade-compose.sh --image-tag 0.25.0
 ```
 
 Windows PowerShell:
 
 ```powershell
-..\scripts\upgrade-compose.ps1 -ImageTag 0.25.0-RC4
+..\scripts\upgrade-compose.ps1 -ImageTag 0.25.0
 ```
 
 For a gateway deployment, pass both the base file and overlay:
@@ -308,15 +323,11 @@ See [onboarding.md](onboarding.md).
 
 ## Stop the stack
 
-```bash
-docker compose -f docker-compose.yml down -v
-```
-
-Use the same overlay file you used when starting the stack:
+Use the same files you used when starting the stack. This keeps all data:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gateway.yml down -v
-docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml down
 ```
 
-The `-v` flag removes the stack volumes. Omit it to keep data between runs.
+Adding `--volumes` deletes the databases, keystores and blob store. Use it only
+when you intend to destroy the installation.

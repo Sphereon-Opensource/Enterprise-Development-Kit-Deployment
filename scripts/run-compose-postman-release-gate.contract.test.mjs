@@ -416,7 +416,7 @@ assert.doesNotMatch(
 )
 assert.match(
   rootYamlBlock(platformConfig, 'secret-management'),
-  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email\n/u,
+  /\n {2}internal-resolution:\n(?: {4}[^\n]*\n)* {4}workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp\n/u,
   'customer Compose must map authenticated service clients to their authorized secret workload identities',
 )
 assert.ok(
@@ -1022,7 +1022,7 @@ $adopted = Start-ComposeGateMutation -Lifecycle $adopted
   assert.equal(monolithPlan.accessMode, 'Localtest')
   assert.equal(monolithPlan.requestCount, 257)
   assert.equal(monolithPlan.composeFiles.length, 3)
-  assert.equal(monolithPlan.composeFiles[0], join(customerRoot, 'compose', 'docker-compose.monolith-base.yml'))
+  assert.equal(monolithPlan.composeFiles[0], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith-base.yml'))
   assert.equal(monolithPlan.composeFiles[1], join(repoRoot, 'deploy', 'docker', 'docker-compose.monolith.local.yml'))
   assert.match(readFileSync(monolithPlan.composeFiles[1], 'utf8'), /LICENSE_GATE_SERVICE_ROLE: \$\{VDX_LICENSE_GATE_SERVICE_ROLE:-platform\}/u)
   assert.match(readFileSync(monolithPlan.composeFiles[2], 'utf8'), /svc-monolith/u)

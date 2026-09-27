@@ -16,6 +16,8 @@ edk_release_number() {
     0.25.0-RC3|0.25.0-RC3[-._]*) printf '3\n' ;;
     0.25.0-RC4|0.25.0-RC4[-._]*) printf '4\n' ;;
     0.25.0-RC5|0.25.0-RC5[-._]*) printf '5\n' ;;
+    # The final release ranks above all release candidates, including future RCs.
+    0.25.0|0.25.0[-._][0-9]*) printf '10\n' ;;
     *) printf '0\n' ;;
   esac
 }

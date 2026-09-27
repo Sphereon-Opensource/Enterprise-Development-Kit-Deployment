@@ -320,7 +320,8 @@
                       "language": "json"
                     }
                   }
-                }
+                },
+                "description": "Registers a child tenant of `tenantId` with the slug `<tenantSlug>-eu` and provisions it like any other tenant."
               },
               "response": []
             }
@@ -432,7 +433,8 @@
                       "language": "json"
                     }
                   }
-                }
+                },
+                "description": "Registers the Azure Key Vault as a platform KMS resource. The client secret is stored by the next request. Skipped when the vault is already registered."
               },
               "response": []
             },
@@ -529,7 +531,8 @@
               "request": {
                 "method": "POST",
                 "header": [],
-                "url": "https://platform.{{baseDomain}}/api/platform/config/v1/tenants/platform/kms/resources/{{sharedAzureResourceHandle}}/validate"
+                "url": "https://platform.{{baseDomain}}/api/platform/config/v1/tenants/platform/kms/resources/{{sharedAzureResourceHandle}}/validate",
+                "description": "Checks that the platform reaches the vault with the stored credential and reports its state and health."
               },
               "response": []
             },
@@ -1149,7 +1152,8 @@
               "request": {
                 "method": "POST",
                 "header": [],
-                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/kms/resources/{{kmsResourceHandle}}/validate"
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/kms/resources/{{kmsResourceHandle}}/validate",
+                "description": "Checks that the tenant KMS resource is usable and reports its state."
               },
               "response": []
             },
@@ -1212,7 +1216,8 @@
                       "language": "json"
                     }
                   }
-                }
+                },
+                "description": "Creates a P-256 signing key in the tenant KMS. The alias is stored in `keyAlias`."
               },
               "response": []
             },
@@ -1327,7 +1332,8 @@
                       "language": "json"
                     }
                   }
-                }
+                },
+                "description": "Verifies the signature from the previous request with the same key."
               },
               "response": []
             },
@@ -1526,7 +1532,8 @@
                           "language": "json"
                         }
                       }
-                    }
+                    },
+                    "description": "Registers your Azure Key Vault as a tenant KMS resource. The client secret is stored by the next request. Skipped when the vault is already connected."
                   },
                   "response": []
                 },
@@ -1623,7 +1630,8 @@
                   "request": {
                     "method": "POST",
                     "header": [],
-                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/kms/resources/{{azureResourceHandle}}/validate"
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/kms/resources/{{azureResourceHandle}}/validate",
+                    "description": "Checks that the tenant reaches the vault with the stored credential and reports its state and health."
                   },
                   "response": []
                 },
@@ -1713,7 +1721,8 @@
                           "language": "json"
                         }
                       }
-                    }
+                    },
+                    "description": "Registers the existing vault key `azureKeyName`. EDK keeps a reference only: deleting the reference never deletes the key in Azure."
                   },
                   "response": []
                 },
@@ -1803,7 +1812,8 @@
                           "language": "json"
                         }
                       }
-                    }
+                    },
+                    "description": "Registers the certificate chain of that key. Deleting the reference never deletes anything in Azure."
                   },
                   "response": []
                 },
@@ -1893,7 +1903,8 @@
                           "language": "json"
                         }
                       }
-                    }
+                    },
+                    "description": "Creates a new key in the vault. Unlike a registered key, EDK owns this key, so deleting it in EDK can delete it in Azure too."
                   },
                   "response": []
                 }
@@ -1956,7 +1967,8 @@
                   "request": {
                     "method": "POST",
                     "header": [],
-                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/kms/shared-providers/{{sharedProviderId}}:enable"
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/kms/shared-providers/{{sharedProviderId}}:enable",
+                    "description": "Enables the vault that the platform offered to this tenant. The vault credentials stay with the platform."
                   },
                   "response": []
                 },
@@ -2503,7 +2515,8 @@
                       "language": "json"
                     }
                   }
-                }
+                },
+                "description": "Creates the `employee-badge-status` token status list for revocation, signed with the issuer key and published at `/public/statuslists/employee-badge-status`."
               },
               "response": []
             },
@@ -2745,7 +2758,8 @@
                       "language": "json"
                     }
                   }
-                }
+                },
+                "description": "Creates a credential offer from the first issuance template. The template supplies the credential configuration and the grant."
               },
               "response": []
             },
@@ -3086,7 +3100,8 @@
                     "url": "{{nonceEndpoint}}",
                     "auth": {
                       "type": "noauth"
-                    }
+                    },
+                    "description": "Gets a fresh `c_nonce` for the holder proof."
                   },
                   "response": []
                 },
@@ -3454,7 +3469,8 @@
                       "language": "json"
                     }
                   }
-                }
+                },
+                "description": "Makes the `employee-badge` DCQL query available to the verifier."
               },
               "response": []
             },
@@ -3519,7 +3535,8 @@
                       "language": "json"
                     }
                   }
-                }
+                },
+                "description": "Creates an OID4VP authorization request from the first verification template and prints the wallet link."
               },
               "response": []
             },
@@ -3842,7 +3859,8 @@
                           "language": "json"
                         }
                       }
-                    }
+                    },
+                    "description": "Creates a second hosted authorization server at `/as/<walletProxySlug>` that signs users in only through a federated identity provider. The default authorization server of the tenant does not change."
                   },
                   "response": []
                 },
@@ -4041,7 +4059,8 @@
                   "request": {
                     "method": "POST",
                     "header": [],
-                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/authorization-servers/{{keycloakServerId}}/validate"
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/authorization-servers/{{keycloakServerId}}/validate",
+                    "description": "Reads the Keycloak discovery document and checks that it is usable."
                   },
                   "response": []
                 },
@@ -4095,7 +4114,8 @@
                           "language": "json"
                         }
                       }
-                    }
+                    },
+                    "description": "Activates the registered Keycloak server so a federation binding can use it."
                   },
                   "response": []
                 },
@@ -4283,7 +4303,8 @@
                   "request": {
                     "method": "POST",
                     "header": [],
-                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/authorization-servers/{{walletProxyId}}/federation-bindings/{{federationBindingId}}/enable"
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/authorization-servers/{{walletProxyId}}/federation-bindings/{{federationBindingId}}/enable",
+                    "description": "Enables the binding, so the wallet proxy sends wallet users to Keycloak to sign in."
                   },
                   "response": []
                 },
@@ -4597,7 +4618,8 @@
                           "language": "json"
                         }
                       }
-                    }
+                    },
+                    "description": "Creates an EuPid offer with the authorization code grant. The wallet user signs in at Keycloak through the wallet proxy; `issuer_state` ties that login to this offer."
                   },
                   "response": []
                 },
@@ -4874,7 +4896,48 @@
                             "exec": [
                               "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
                               "if ([200].includes(pm.response.code)) {",
-                              "  console.log('Issued credential: ' + String(pm.response.json().credentials[0].credential).slice(0, 80) + '...');",
+                              "  const cryptoJs = require('crypto-js');",
+                              "  pm.test('credential response contains a signed credential', () => {",
+                              "    const credentials = pm.response.json().credentials;",
+                              "    pm.expect(credentials).to.be.an('array').that.is.not.empty;",
+                              "    pm.expect(credentials[0].credential).to.be.a('string').that.is.not.empty;",
+                              "  });",
+                              "  const credential = pm.response.json().credentials[0].credential;",
+                              "  const parts = credential.split('~');",
+                              "  const jwt = parts[0];",
+                              "  const disclosures = parts.slice(1).filter(Boolean);",
+                              "  const decode = segment => {",
+                              "    const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');",
+                              "    const json = cryptoJs.enc.Base64.parse(normalized + '='.repeat((4 - normalized.length % 4) % 4)).toString(cryptoJs.enc.Utf8);",
+                              "    return JSON.parse(json);",
+                              "  };",
+                              "  const header = decode(jwt.split('.')[0]);",
+                              "  const payload = decode(jwt.split('.')[1]);",
+                              "  pm.test('the EuPid is an SD-JWT VC bound to the wallet key', () => {",
+                              "    pm.expect(header.typ).to.be.oneOf(['dc+sd-jwt', 'vc+sd-jwt']);",
+                              "    pm.expect(payload.vct).to.be.a('string').that.is.not.empty;",
+                              "    const holder = JSON.parse(pm.collectionVariables.get('holderPublicJwk'));",
+                              "    pm.expect(payload.cnf.jwk.x).to.eql(holder.x);",
+                              "    pm.expect(payload.cnf.jwk.y).to.eql(holder.y);",
+                              "  });",
+                              "  pm.test('every disclosure is committed in the credential and the names come from the offer', () => {",
+                              "    const digests = payload._sd || [];",
+                              "    const claims = {};",
+                              "    for (const disclosure of disclosures) {",
+                              "      const digest = cryptoJs.enc.Base64.stringify(cryptoJs.SHA256(disclosure)).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                              "      const decoded = decode(disclosure);",
+                              "      if (decoded.length === 3) {",
+                              "        pm.expect(digests).to.include(digest);",
+                              "        claims[decoded[1]] = decoded[2];",
+                              "      }",
+                              "    }",
+                              "    const all = Object.assign({}, payload, claims);",
+                              "    pm.expect(all.given_name).to.eql('Erika');",
+                              "    pm.expect(all.family_name).to.eql('Mustermann');",
+                              "    if (disclosures.length) pm.expect(payload._sd_alg).to.eql('sha-256');",
+                              "  });",
+                              "  pm.collectionVariables.set('walletProxyCredential', credential);",
+                              "  pm.collectionVariables.set('eupidCredential', credential);",
                               "}"
                             ]
                           }
@@ -4897,7 +4960,8 @@
                               "language": "json"
                             }
                           }
-                        }
+                        },
+                        "description": "Requests EuPid with the wallet proxy access token and a holder proof. The folder script fetches a fresh nonce and signs the proof."
                       },
                       "response": []
                     }
@@ -5052,7 +5116,7 @@
     },
     {
       "key": "tenantScopedVariables",
-      "value": "tenantId,onboardingCorrelationId,ownerActivationLink,authorizationServerId,serviceClientExists,kmsResourceHandle,kmsProviderId,keyAlias,signature,azureResourceHandle,azureResourceVersion,azureCredentialSecretRef,sharedProviderId,sharedAzureResourceHandle,sharedAzureResourceVersion,sharedAzureCredentialSecretRef,issuerId,credentialIssuer,designId,statusListId,signingKmsResourceHandle,signingKeyAlias,signingVerificationMethodId,employeeBadgeStatusListId,employeeBadgeDesignId,employeeBadgeResourceId,issuanceTemplateId,offerCorrelationId,credentialOfferUri,txCode,txCodeRequired,preAuthorizedCode,issuerMetadataUrl,credentialEndpoint,nonceEndpoint,walletAuthorizationServer,walletTokenEndpoint,walletAccessToken,credentialIdentifier,cNonce,proofJwt,holderPrivateKey,holderPublicJwk,credentialStatusIndex,credentialStatusListUri,credentialStatusListId,verifierId,employeeBadgeQueryExists,employeeBadgeQueryBound,verificationTemplateId,verificationCorrelationId,requestObjectUri,trustDomainId,walletProxyId,walletClientExists,keycloakServerId,keycloakServerRevision,keycloakServerLifecycle,federationBindingId,federationBindingEnabled,issuerBindingId,euPidAuthorizationServerRevision,issuerState",
+      "value": "tenantId,onboardingCorrelationId,ownerActivationLink,authorizationServerId,serviceClientExists,kmsResourceHandle,kmsProviderId,keyAlias,signature,azureResourceHandle,azureResourceVersion,azureCredentialSecretRef,sharedProviderId,sharedAzureResourceHandle,sharedAzureResourceVersion,sharedAzureCredentialSecretRef,issuerId,credentialIssuer,designId,statusListId,signingKmsResourceHandle,signingKeyAlias,signingVerificationMethodId,employeeBadgeStatusListId,employeeBadgeDesignId,employeeBadgeResourceId,issuanceTemplateId,offerCorrelationId,credentialOfferUri,txCode,txCodeRequired,preAuthorizedCode,walletProxyCredential,eupidCredential,issuerMetadataUrl,credentialEndpoint,nonceEndpoint,walletAuthorizationServer,walletTokenEndpoint,walletAccessToken,credentialIdentifier,cNonce,proofJwt,holderPrivateKey,holderPublicJwk,credentialStatusIndex,credentialStatusListUri,credentialStatusListId,verifierId,employeeBadgeQueryExists,employeeBadgeQueryBound,verificationTemplateId,verificationCorrelationId,requestObjectUri,trustDomainId,walletProxyId,walletClientExists,keycloakServerId,keycloakServerRevision,keycloakServerLifecycle,federationBindingId,federationBindingEnabled,issuerBindingId,euPidAuthorizationServerRevision,issuerState",
       "type": "string",
       "description": "Variables cleared when tenantSlug changes."
     },
@@ -5083,7 +5147,8 @@
     {
       "key": "serviceClientExists",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Whether `serviceClientId` already exists on that authorization server."
     },
     {
       "key": "kmsResourceHandle",
@@ -5106,42 +5171,50 @@
     {
       "key": "signature",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Signature returned by \"Sign data\"."
     },
     {
       "key": "azureResourceHandle",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "KMS resource handle of the tenant's own Azure Key Vault."
     },
     {
       "key": "azureResourceVersion",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Current version of that resource, sent with updates."
     },
     {
       "key": "azureCredentialSecretRef",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Reference of the stored Entra client secret of that resource."
     },
     {
       "key": "sharedProviderId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Provider id of the platform-shared vault offered to this tenant."
     },
     {
       "key": "sharedAzureResourceHandle",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Platform KMS resource handle of the shared Azure Key Vault."
     },
     {
       "key": "sharedAzureResourceVersion",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Current version of that resource, sent with updates."
     },
     {
       "key": "sharedAzureCredentialSecretRef",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Reference of the stored Entra client secret of that resource."
     },
     {
       "key": "issuerId",
@@ -5153,62 +5226,73 @@
       "key": "credentialIssuer",
       "value": "",
       "type": "string",
-      "description": "Credential issuer identifier (URL)."
+      "description": "Credential issuer identifier (URL), the audience of holder proofs."
     },
     {
       "key": "designId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Credential design id read by \"Get a credential design\"."
     },
     {
       "key": "statusListId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Status list id read by \"Get a status list\"."
     },
     {
       "key": "signingKmsResourceHandle",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "KMS resource that signs the issuer's credentials."
     },
     {
       "key": "signingKeyAlias",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Alias of the issuer signing key."
     },
     {
       "key": "signingVerificationMethodId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "DID verification method of the issuer signing key."
     },
     {
       "key": "employeeBadgeStatusListId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Id of the `employee-badge-status` status list."
     },
     {
       "key": "employeeBadgeDesignId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Id of the EmployeeBadge credential design."
     },
     {
       "key": "employeeBadgeResourceId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource id of the EmployeeBadge credential configuration."
     },
     {
       "key": "issuanceTemplateId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Issuance template used by \"Create an offer from a template\"."
     },
     {
       "key": "offerCorrelationId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Correlation id of the last credential offer."
     },
     {
       "key": "credentialOfferUri",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "credential_offer_uri of the last offer, resolved by the wallet folders."
     },
     {
       "key": "txCode",
@@ -5219,37 +5303,56 @@
     {
       "key": "txCodeRequired",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Whether the last offer requires a transaction code."
     },
     {
       "key": "preAuthorizedCode",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Pre-authorized code of the last offer."
+    },
+    {
+      "key": "walletProxyCredential",
+      "value": "",
+      "type": "string",
+      "description": "EuPid credential issued after wallet proxy login."
+    },
+    {
+      "key": "eupidCredential",
+      "value": "",
+      "type": "string",
+      "description": "Latest EuPid credential received by the wallet."
     },
     {
       "key": "issuerMetadataUrl",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Issuer metadata URL derived from the offer."
     },
     {
       "key": "credentialEndpoint",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "credential_endpoint from the issuer metadata."
     },
     {
       "key": "nonceEndpoint",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "nonce_endpoint from the issuer metadata."
     },
     {
       "key": "walletAuthorizationServer",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Authorization server named in the issuer metadata."
     },
     {
       "key": "walletTokenEndpoint",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "token_endpoint of that authorization server."
     },
     {
       "key": "walletAccessToken",
@@ -5260,17 +5363,20 @@
     {
       "key": "credentialIdentifier",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "credential_identifier from the wallet token response."
     },
     {
       "key": "cNonce",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Nonce for the next holder proof."
     },
     {
       "key": "proofJwt",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Holder proof signed by the folder script."
     },
     {
       "key": "holderPrivateKey",
@@ -5281,107 +5387,128 @@
     {
       "key": "holderPublicJwk",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Public JWK of the test wallet key."
     },
     {
       "key": "credentialStatusIndex",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Status list index of the issued credential."
     },
     {
       "key": "credentialStatusListUri",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Status list URI of the issued credential."
     },
     {
       "key": "credentialStatusListId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Status list id of the issued credential."
     },
     {
       "key": "verifierId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Verifier id."
     },
     {
       "key": "employeeBadgeQueryExists",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Whether the `employee-badge` DCQL query exists."
     },
     {
       "key": "employeeBadgeQueryBound",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Whether that query is bound to the verifier."
     },
     {
       "key": "verificationTemplateId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Verification template used by \"Create a request from a template\"."
     },
     {
       "key": "verificationCorrelationId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Correlation id of the last authorization request."
     },
     {
       "key": "requestObjectUri",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "request_uri of the last authorization request."
     },
     {
       "key": "trustDomainId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Trust domain read by the trust domain requests."
     },
     {
       "key": "walletProxyId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Id of the wallet proxy authorization server."
     },
     {
       "key": "walletClientExists",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Whether `walletClientId` is registered on the wallet proxy."
     },
     {
       "key": "keycloakServerId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Id of the registered Keycloak authorization server."
     },
     {
       "key": "keycloakServerRevision",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Revision of that server, sent when activating it."
     },
     {
       "key": "keycloakServerLifecycle",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Lifecycle state of that server."
     },
     {
       "key": "federationBindingId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Federation binding from the wallet proxy to Keycloak."
     },
     {
       "key": "federationBindingEnabled",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Whether that binding is enabled."
     },
     {
       "key": "issuerBindingId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Binding that allows the issuer to use the wallet proxy."
     },
     {
       "key": "euPidAuthorizationServerRevision",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Revision of the EuPid authorization server choice, sent with changes."
     },
     {
       "key": "issuerState",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "issuer_state of the authorization code offer, sent to the wallet proxy."
     }
   ]
 }

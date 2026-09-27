@@ -52,7 +52,7 @@ Options:
   --timeout DURATION            Helm/kubectl timeout (default: 15m).
   --backup-root PATH            Backup parent directory.
   --release-set-evidence PATH   Canonical enterprise-image-set.json for an
-                                immutable RC3 upgrade (required for RC3 tags).
+                                immutable RC3, RC4, RC5, or 0.25.0 upgrade.
   -h, --help                    Show this help.
 
 Rollback contract:
@@ -154,9 +154,9 @@ done
 [[ "$NAMESPACE" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid Kubernetes namespace: $NAMESPACE"
 [[ "$RUNTIME_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid runtime Secret name."
 [[ "$PIPELINE_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid pipeline Secret name."
-if [[ "$IMAGE_TAG" =~ ^0\.25\.0-RC[345]([._-][A-Za-z0-9][A-Za-z0-9._-]*)?$ ]]; then
+if [[ "$IMAGE_TAG" =~ ^(0\.25\.0-RC[345]([._-][A-Za-z0-9][A-Za-z0-9._-]*)?|0\.25\.0($|[-._][0-9].*))$ ]]; then
   [[ -n "$RELEASE_SET_EVIDENCE" ]] ||
-    die "--release-set-evidence is required for immutable RC3, RC4, and RC5 upgrades."
+    die "--release-set-evidence is required for immutable RC3, RC4, RC5, and 0.25.0 upgrades."
 fi
 
 require_command helm
@@ -347,16 +347,21 @@ CLIENT_SECRET_KEYS=(
   blob-service-client-secret
   issuer-service-client-secret
   verifier-service-client-secret
+  trust-domain-service-client-secret
+)
+# Optional wallet workloads are disabled by default. Their keys are created with a
+# new Secret and added to an existing one when absent, so enabling them later
+# needs no manual Secret change.
+OPTIONAL_CLIENT_SECRET_KEYS=(
   wallet-unit-service-client-secret
   wallet-interaction-service-client-secret
-  trust-domain-service-client-secret
 )
 if ! secret_exists "$RUNTIME_SECRET_NAME"; then
   printf 'Creating new runtime Secret/%s.\n' "$RUNTIME_SECRET_NAME"
   KEYSTORE_PASSWORD="$(base64url_secret 48)"
   PORTAL_BFF_SECRET="$(base64url_secret 48)"
   json_fields="\"keystore-password\":\"$KEYSTORE_PASSWORD\",\"admin-console-portal-bff-secret\":\"$PORTAL_BFF_SECRET\""
-  for client_secret_key in "${CLIENT_SECRET_KEYS[@]}"; do
+  for client_secret_key in "${CLIENT_SECRET_KEYS[@]}" "${OPTIONAL_CLIENT_SECRET_KEYS[@]}"; do
     client_secret_value="$(base64url_secret 48)"
     json_fields+=",\"${client_secret_key}\":\"${client_secret_value}\""
     unset client_secret_value
@@ -375,6 +380,14 @@ else
       "\"admin-console-portal-bff-secret\":\"$PORTAL_BFF_SECRET\""
     unset PORTAL_BFF_SECRET
   fi
+  for optional_key in "${OPTIONAL_CLIENT_SECRET_KEYS[@]}"; do
+    if ! secret_has_key "$RUNTIME_SECRET_NAME" "$optional_key"; then
+      printf 'Adding the missing optional key %s without changing existing runtime credentials.\n' "$optional_key"
+      optional_value="$(base64url_secret 48)"
+      apply_secret_fields "$RUNTIME_SECRET_NAME" "\"${optional_key}\":\"${optional_value}\""
+      unset optional_value
+    fi
+  done
 fi
 
 for required_key in keystore-password admin-console-portal-bff-secret "${CLIENT_SECRET_KEYS[@]}"; do

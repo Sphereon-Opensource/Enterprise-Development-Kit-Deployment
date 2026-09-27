@@ -333,10 +333,10 @@ secret-management:
           suggested-default: false
   internal-resolution:
     expected-audience: enterprise-platform
-    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service
     # System credentials are authorized to workload identities, not OAuth client principals.
     # Keep this aligned with each satellite's service identity binding below.
-    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email
+    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp
   deployment:
     environment:
       enabled: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_ENABLED:true}
@@ -380,8 +380,7 @@ tenant:
     # through the tenant-scoped DB source it is still constructing.
     remote: false
     platform:
-      # Tenants resolve by subdomain under this base domain. TODO: set to your
-      # public base domain (for example edk.example.com).
+      # Tenants resolve by subdomain under the deployment's base domain.
       base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
       subdomain:
         enabled: true
@@ -593,6 +592,10 @@ oauth2:
           token-exchange:
             mode: secret-bootstrap
             audiences: enterprise-platform
+            # Tenant-KMS also serves the platform tenant's own KMS resources (validation probes of
+            # platform-owned and deployment-declared providers), so its bootstrap token may target
+            # the platform tenant it is itself registered in.
+            self: true
         did:
           client-id: did-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_DID}
@@ -629,14 +632,6 @@ oauth2:
           token-exchange:
             mode: secret-bootstrap
             audiences: enterprise-platform
-        email:
-          client-id: email-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_EMAIL}
-          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
-          default-access-token-audience: enterprise-platform
-          token-exchange:
-            mode: secret-bootstrap
-            audiences: enterprise-platform
 # Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
 # Holder protocols and testing/catalog wrappers are excluded by the backend projection.
 developer-console:
@@ -662,15 +657,15 @@ application:
       # name as a request-scoped override. Never seed a placeholder customer.
       roles: platform-admin
 app:
-  # TODO: set to prod for a production deployment. dev unlocks the break-glass
-  # operator credential below; prod requires the invitation flow instead.
+  # Dev unlocks the break-glass operator credential below; prod requires the
+  # invitation flow instead.
   deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
 auth:
   login:
     require-application: false
 platform:
   config-distribution:
-    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service
   config:
     mount-path: /app/config
   onboarding:
