@@ -501,7 +501,7 @@ oauth2:
       #  1. the admin console (/admin-console basePath) -> {host}/admin-console/callback;
       #  2. the first-run setup wizard (served at the platform root) -> {host}/onboarding/callback.
       # Both are served same-origin on the platform host, so the redirect_uris use the platform
-      # external URL. Listed explicitly rather than relying on permissive-redirect-uri.
+      # external URL. Listed explicitly.
       redirect-uris:
         - ${env:EXTERNAL_BASE_URL}/admin-console/callback
         - ${env:EXTERNAL_BASE_URL}/onboarding/callback
@@ -513,7 +513,16 @@ oauth2:
       post-logout-redirect-uris: "${env:EXTERNAL_BASE_URL}/admin-console"
       allowed-scopes: openid
       default-access-token-audience: enterprise-platform
+      allowed-access-token-audiences: enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob
       token-endpoint-auth-method: none
+      # Platform STS authority: operators delegate onto descendant tenants and administer the
+      # platform tenant; this is the tenant-registration channel (tenant-provisioning role).
+      token-exchange:
+        mode: operator-delegation
+        audiences: enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob
+        self: true
+        provisioning: true
+        role: platform-admin
     # Interactive documentation playground (docs site). Public client: authorization code +
     # required PKCE (S256) + required PAR. Redirect URIs are one /docs-env/callback per origin.
     # Disable client registration via EDK_DOCS_PLAYGROUND_ENABLED=false (see docs.playground).
@@ -565,9 +574,6 @@ oauth2:
       token-format: JWT
       scopes-supported: "openid,profile,email"
       grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
-      public-clients:
-        allow-any: true
-        permissive-redirect-uri: true
       internal-clients:
         issuer:
           client-id: issuer-service
@@ -575,41 +581,62 @@ oauth2:
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         kms:
           client-id: kms-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         did:
           client-id: did-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_DID}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         blob:
           client-id: blob-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_BLOB}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-blob
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         verifier:
           client-id: verifier-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         tenantas:
           client-id: tenant-as-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         email:
           client-id: email-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_EMAIL}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
 # Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
 # Holder protocols and testing/catalog wrappers are excluded by the backend projection.
 developer-console:
@@ -644,10 +671,6 @@ auth:
 platform:
   config-distribution:
     allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
-  sts:
-    workload-client-id: kms-service
-    secret-bootstrap-workload-client-ids: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
-    allowed-audiences: "enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob"
   config:
     mount-path: /app/config
   onboarding:
