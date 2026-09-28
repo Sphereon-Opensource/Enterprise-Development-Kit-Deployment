@@ -148,6 +148,11 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
             commands:
+              # Public account-action resolution unwraps a customer invitation
+              # before its owner has a subject bearer. Route only this leaf with
+              # the deployment-owned tenant-KMS service token.
+              "[kms.leaf.unwrap]":
+                target: SERVER
               # Validate opens the resource's provider to report its health. The
               # application tenant's own resources would otherwise stay LOCAL,
               # where no provider can be opened, so the probe goes to tenant-KMS
@@ -182,6 +187,10 @@ transport:
         preferServiceTokenOverSessionBearer: false
         services:
           "[signing-key]":
+            target: SERVER
+            transport: HTTP
+            endpoint: http://enterprise-tenant-as:18083
+          "[owner-account-actions]":
             target: SERVER
             transport: HTTP
             endpoint: http://enterprise-tenant-as:18083
