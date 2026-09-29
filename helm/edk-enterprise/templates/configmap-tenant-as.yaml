@@ -96,8 +96,6 @@ data:
     {{- else }}
     oauth2:
     {{- end }}
-      user-provider:
-        mode: local
       # AS bootstrap trust window: while a tenant has no ACTIVE signing key in this AS,
       # the signing-key registration command accepts only platform-STS bearers carrying
       # this role (or the tenant's own internal workload identity). The first registered
