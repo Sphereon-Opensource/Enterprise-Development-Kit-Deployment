@@ -153,6 +153,11 @@ transport:
 # container as EDK_INTERNAL_CLIENT_SECRET_ISSUER so the AS registration matches
 # the issuer satellite.
 oauth2:
+  # Users of the tenant's hosted authorization servers, including a wallet proxy
+  # created through the configuration API, are resolved from the tenant's own
+  # identity store; federated logins are bound per server.
+  user-provider:
+    mode: local
   servers:
     default:
       internal-clients:
