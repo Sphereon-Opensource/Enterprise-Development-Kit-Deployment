@@ -5,10 +5,9 @@ images: `nexus.sphereon.com/edk-docker/enterprise-platform`,
 `nexus.sphereon.com/edk-docker/enterprise-tenant-kms`,
 `nexus.sphereon.com/edk-docker/enterprise-did`,
 `nexus.sphereon.com/edk-docker/enterprise-tenant-as`,
-`nexus.sphereon.com/edk-docker/enterprise-wallet-unit`,
-`nexus.sphereon.com/edk-docker/enterprise-wallet-interaction`,
-`nexus.sphereon.com/edk-docker/enterprise-issuer`, and
-`nexus.sphereon.com/edk-docker/enterprise-verifier`.
+`nexus.sphereon.com/edk-docker/enterprise-issuer`,
+`nexus.sphereon.com/edk-docker/enterprise-verifier`, and
+`nexus.sphereon.com/edk-docker/admin-console`.
 
 ## Image pull and registry auth
 
@@ -183,27 +182,27 @@ Other ingress and TLS symptoms:
   `platform.<base-domain>` and `*.<base-domain>` at the gateway or load
   balancer.
 
-## Platform, KMS, and wallet connectivity between services
+## Platform and KMS connectivity between services
 
 The backing workloads call the platform service for platform configuration and
 control-plane data. Workloads that need key operations route KMS service
 commands to tenant-KMS over internal gRPC with a workload token for the
 `enterprise-tenant-kms` audience; tenant operators manage typed KMS resources
-through tenant-scoped platform-config APIs. Issuer and verifier call
-wallet-interaction, and wallet-interaction calls wallet-unit, over internal
-service DNS for wallet protocol work. If platform-config, signing, or wallet
-operations fail with a connection error:
+through tenant-scoped platform-config APIs. When the optional Helm wallet
+workloads are enabled, issuer and verifier also call wallet-interaction, and
+wallet-interaction calls wallet-unit, over internal service DNS. If
+platform-config, signing, or wallet operations fail with a connection error:
 
 - With the shipped `grpc.enabled=true` default, the chart renders gRPC ports for
-  platform, tenant-KMS, wallet-unit, and wallet-interaction and switches the
-  matching route endpoints to `grpc://`. A port or scheme mismatch between the
+  platform and tenant-KMS, plus wallet-unit and wallet-interaction when they are
+  enabled, and switches the matching route endpoints to `grpc://`. A port or scheme mismatch between the
   caller's route and the peer service breaks the call.
 - Confirm `grpc.authMode` matches how peer traffic is secured. `service-jwt` is
   application JWT on plaintext gRPC; it is not mTLS. With `mesh-mtls`, the mesh
   provides mutual TLS and the sidecar must be injected on both peers; the app
   still uses JWT on the plaintext socket the sidecar presents.
-- NetworkPolicy must allow the caller to reach platform, tenant-KMS,
-  wallet-interaction, and wallet-unit as appropriate. If you enabled
+- NetworkPolicy must allow the caller to reach platform and tenant-KMS, and
+  the enabled wallet workloads. If you enabled
   `networkPolicy`, confirm intra-release traffic to those peers is permitted.
 
 ## Tenant creation fails on a 0.25.0-RC1 install

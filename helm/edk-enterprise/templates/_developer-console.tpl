@@ -10,7 +10,7 @@ Only deployed, gateway-enabled services contribute. Audiences come from the iden
   "tenant-kms" (list "/api/kms/v1")
   "did" (list "/api/did/v1" "/1.0/identifiers")
   "blob" (list "/api/theme/v1" "/api/assets/v1" "/api/connector/v1" "/api/blob-store/v1" "/api/users/v1" "/api/v1/schemas" "/api/v1/tabular-mapping-templates")
-  "tenant-as" (list "/api/identity/v1" "/api/identity-auth/v1/admin" "/api/party/v1" "/api/account-actions")
+  "tenant-as" (list "/api/identity/v1" "/api/identity-auth/v1/admin" "/api/party/v1" "/api/account-actions" "/api/oauth2/v1")
   "issuer" (list "/api/oid4vci/v1" "/api/credential-design/v1" "/api/statuslist/v1" "/api/catalog/v1" "/public/schema" "/public/statuslists")
   "verifier" (list "/api/oid4vp/v1" "/api/dcql/v1" "/oid4vp/backend")
 -}}

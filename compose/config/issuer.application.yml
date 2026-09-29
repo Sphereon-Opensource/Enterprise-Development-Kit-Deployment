@@ -251,8 +251,8 @@ blob:
       type: kvstore
       kvStoreId: design-assets
 # Pipeline session payloads are sealed with this master KEK before they reach the
-# KV backend. TODO: supply both keys from your secret backend (base64url, 32
-# bytes each); do not reuse keys across deployments.
+# KV backend. The Compose setup generates separate base64url keys for each
+# deployment. Keep them with the deployment's other secrets.
 issuance-pipeline:
   encryption:
     master-kek: ${env:EDK_PIPELINE_MASTER_KEK}
@@ -311,14 +311,6 @@ kv:
 # is seeded into platform config during tenant setup and refreshed through the
 # platform-config-remote provider. Use config.overrides.* for explicit local
 # deployment overrides only.
-
-# Task 8 / LiveStack e2e: keep public status-list Cache-Control short so
-# present→revoke→refreshStatus observes the new bit without waiting out the
-# signed token's ttl (JWT ttl remains a publication freshness hint; hosting
-# max-age=0 forces resolvers to re-fetch each decision).
-statuslists:
-  hosting:
-    cache-max-age-seconds: 0
 
 secret:
   authority:

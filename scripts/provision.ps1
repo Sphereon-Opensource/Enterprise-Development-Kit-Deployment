@@ -21,8 +21,9 @@
       or an explicit platformUrl in the environment file. Tenant AS, tenant KMS,
       and DID must be running before tenant registration, because registration
       provisions signing material and the tenant DID through east-west services.
-    - A Sphereon protected license bundle ZIP (set in the environment file as
-      licenseBundleZipPath).
+    - A Sphereon protected license bundle ZIP, needed only while the setup
+      gate is still open (-LicenseBundle, EDK_LICENSE_BUNDLE_ZIP_PATH, or
+      licenseBundleZipPath in the environment file).
     - Node.js installed (used to parse the environment JSON and compute the
       PKCE S256 code challenge).
     - Windows PowerShell 5.1 or later.
@@ -33,8 +34,28 @@
   gateway URL from baseDomain and tenantSlug. Override the tenant gateway only
   for non-standard gateway deployments.
 
+  The operator credentials are not part of the shipped environment file, which
+  is also imported into Postman. Email and license bundle, first wins:
+    - parameters: -OperatorEmail, -LicenseBundle
+    - environment variables: EDK_OPERATOR_EMAIL, EDK_LICENSE_BUNDLE_ZIP_PATH
+    - a private copy of the environment file (-EnvFile) with operatorEmail and
+      licenseBundleZipPath
+  Password, first wins:
+    - -PasswordStdin: read it from the first line of standard input
+    - the EDK_OPERATOR_PASSWORD environment variable
+    - operatorPassword in a private copy of the environment file
+    - a prompt without echo, when the session is interactive
+  There is no parameter that takes the password itself, so it does not show up
+  in command history.
+
 .EXAMPLE
   .\provision.ps1
+
+.EXAMPLE
+  .\provision.ps1 -OperatorEmail ops@example.com -SkipSetup   # asks for the password
+
+.EXAMPLE
+  $pw | .\provision.ps1 -OperatorEmail ops@example.com -PasswordStdin
 
 .EXAMPLE
   .\provision.ps1 -TenantName "Acme Corporation" -TenantSlug acme `
@@ -47,6 +68,9 @@ param(
   [string]$EnvFile,
   [string]$TenantName,
   [string]$TenantSlug,
+  [string]$OperatorEmail,
+  [string]$LicenseBundle,
+  [switch]$PasswordStdin,
   [switch]$SkipSetup,
   [switch]$AllowInsecureTls,
   [switch]$Help
@@ -90,8 +114,11 @@ if (-not (Test-Path $EnvFile)) { Fail "Environment file not found: $EnvFile" }
 # S256 code challenge. Both scripts depend on node for consistency.
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($null -eq $node) { Fail "node is required but was not found on PATH. Install Node.js and retry." }
-$curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-if ($null -eq $curl) { Fail "curl.exe is required but was not found on PATH." }
+# curl.exe on Windows; plain curl where PowerShell runs on Linux or macOS.
+$curl = Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue
+if ($null -eq $curl) { $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue }
+if ($null -eq $curl) { Fail "curl is required but was not found on PATH." }
+$curlPath = @($curl)[0].Source
 
 # --- Load the Postman environment file into a flat hashtable ------------------
 $envFileResolved = (Resolve-Path $EnvFile).Path
@@ -104,7 +131,7 @@ for (const v of (doc.values || [])) {
 }
 process.stdout.write(JSON.stringify(out));
 '@
-$envJson = & node -e $envScript $envFileResolved
+$envJson = & node -e $envScript '--' $envFileResolved
 if ($LASTEXITCODE -ne 0) { Fail "Failed to parse environment file: $envFileResolved" }
 $cfg = $envJson | ConvertFrom-Json
 
@@ -130,14 +157,27 @@ $platformUrl = Cfg 'platformUrl'
 $tenantGatewayUrl = Cfg 'tenantGatewayUrl'
 $baseDomain  = Cfg 'baseDomain'
 
-$operatorEmail        = Cfg 'operatorEmail'
+function First-Value([string[]]$values) {
+  foreach ($v in $values) {
+    if (-not [string]::IsNullOrWhiteSpace($v) -and $v -notlike 'PASTE-*') { return $v }
+  }
+  return $null
+}
+
+$operatorEmail        = First-Value @($OperatorEmail, $env:EDK_OPERATOR_EMAIL, (Cfg 'operatorEmail'))
 $operatorDisplayName  = Cfg 'operatorDisplayName'
 if ([string]::IsNullOrWhiteSpace($operatorDisplayName)) { $operatorDisplayName = 'Platform Operator' }
-$operatorPassword     = Cfg 'operatorPassword'
+$stdinPassword = $null
+if ($PasswordStdin) {
+  $stdinPassword = [Console]::In.ReadLine()
+  if ($null -ne $stdinPassword) { $stdinPassword = $stdinPassword.TrimEnd("`r") }
+  if ([string]::IsNullOrEmpty($stdinPassword)) { Fail "-PasswordStdin was given, but standard input had no password." }
+}
+$operatorPassword     = First-Value @($stdinPassword, $env:EDK_OPERATOR_PASSWORD, (Cfg 'operatorPassword'))
 $operatorRedirectUri  = Cfg 'operatorRedirectUri'
 $adminConsoleUrl      = Cfg 'adminConsoleUrl'
 $operatorCodeVerifier = Cfg 'operatorCodeVerifier'
-$licenseBundleZipPath = Cfg 'licenseBundleZipPath'
+$licenseBundleZipPath = First-Value @($LicenseBundle, $env:EDK_LICENSE_BUNDLE_ZIP_PATH, (Cfg 'licenseBundleZipPath'))
 if ([string]::IsNullOrWhiteSpace($operatorCodeVerifier)) {
   $operatorCodeVerifier = New-Base64UrlSecret 32
 }
@@ -179,6 +219,18 @@ if ([string]::IsNullOrWhiteSpace($tenantHost))  { Fail "tenant gateway host coul
 
 $platformUrl = $platformUrl.TrimEnd('/')
 
+if ([string]::IsNullOrWhiteSpace($operatorEmail)) {
+  Fail "The operator email is not set. Use -OperatorEmail, EDK_OPERATOR_EMAIL, or operatorEmail in a private copy of the environment file."
+}
+if ([string]::IsNullOrWhiteSpace($operatorPassword) -and [Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+  $securePassword = Read-Host -AsSecureString "Password for $operatorEmail"
+  $operatorPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword))
+}
+if ([string]::IsNullOrWhiteSpace($operatorPassword)) {
+  Fail "The operator password is not set. Pipe it in with -PasswordStdin, set EDK_OPERATOR_PASSWORD, run the script interactively to be asked for it, or put operatorPassword in a private copy of the environment file."
+}
+
 # --- HTTP helpers -------------------------------------------------------------
 function Invoke-Json {
   param(
@@ -213,7 +265,7 @@ function Invoke-LicenseBundle {
       '-F', "bundle=@$licenseBundleZipPath;type=application/zip"
     )
     if ($AllowInsecureTls) { $args = @('-k') + $args }
-    $code = & curl.exe @args
+    $code = & $curlPath @args
     $out = Get-Content -Path $tmp -Raw
     if ($LASTEXITCODE -ne 0 -or -not ($code -match '^2')) {
       Fail "POST $Uri failed ($code): $out"
@@ -224,11 +276,25 @@ function Invoke-LicenseBundle {
   }
 }
 
+# Final URL after redirects. Windows PowerShell 5.1 exposes it as
+# BaseResponse.ResponseUri; PowerShell 7 as BaseResponse.RequestMessage.RequestUri.
+function Get-FinalUri($Response) {
+  $base = $Response.BaseResponse
+  if ($null -eq $base) { return $null }
+  if ($base.PSObject.Properties['ResponseUri'] -and $base.ResponseUri) { return $base.ResponseUri.AbsoluteUri }
+  if ($base.PSObject.Properties['RequestMessage'] -and $base.RequestMessage) { return $base.RequestMessage.RequestUri.AbsoluteUri }
+  return $null
+}
+
 function Get-LocationHeader {
   param([object]$Response)
   if ($null -eq $Response) { return $null }
   if ($Response -is [System.Net.HttpWebResponse]) {
     return $Response.GetResponseHeader('Location')
+  }
+  if ($Response -is [System.Net.Http.HttpResponseMessage]) {
+    if ($Response.Headers.Location) { return $Response.Headers.Location.OriginalString }
+    return $null
   }
   return $Response.Headers['Location']
 }
@@ -283,14 +349,11 @@ if ($SkipSetup) {
 }
 
 if ($setupOpen) {
-  if ([string]::IsNullOrWhiteSpace($operatorEmail) -or [string]::IsNullOrWhiteSpace($operatorPassword)) {
-    Fail "operatorEmail and operatorPassword are required to bootstrap the operator."
-  }
-  if ([string]::IsNullOrWhiteSpace($licenseBundleZipPath) -or $licenseBundleZipPath -like 'PASTE-*') {
-    Fail "licenseBundleZipPath is not set in the environment file. Set it before running setup."
+  if ([string]::IsNullOrWhiteSpace($licenseBundleZipPath)) {
+    Fail "The setup gate is open, so a license bundle is required. Use -LicenseBundle, EDK_LICENSE_BUNDLE_ZIP_PATH, or licenseBundleZipPath in a private copy of the environment file."
   }
   if (-not (Test-Path -LiteralPath $licenseBundleZipPath)) {
-    Fail "licenseBundleZipPath does not point to a file: $licenseBundleZipPath"
+    Fail "The license bundle does not point to a file: $licenseBundleZipPath"
   }
   $licenseBundleZipPath = (Resolve-Path -LiteralPath $licenseBundleZipPath).Path
 
@@ -320,9 +383,6 @@ if ($setupOpen) {
 }
 
 # --- Step 3: operator sign-in (PKCE authorization-code flow) -------------------
-if ([string]::IsNullOrWhiteSpace($operatorEmail) -or [string]::IsNullOrWhiteSpace($operatorPassword)) {
-  Fail "operatorEmail and operatorPassword are required to sign in."
-}
 if ([string]::IsNullOrWhiteSpace($operatorRedirectUri))  { Fail "operatorRedirectUri is not set." }
 if ([string]::IsNullOrWhiteSpace($operatorCodeVerifier)) { Fail "operatorCodeVerifier is not set." }
 
@@ -336,7 +396,7 @@ const c = crypto.createHash('sha256').update(v).digest('base64')
   .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 process.stdout.write(c);
 '@
-$codeChallenge = & node -e $challengeScript $operatorCodeVerifier
+$codeChallenge = & node -e $challengeScript '--' $operatorCodeVerifier
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($codeChallenge)) {
   Fail "Failed to compute PKCE code challenge."
 }
@@ -359,7 +419,7 @@ $loginHtml = ""
 try {
   $resp = Invoke-WebRequest -Uri $authorizeUrl -Method Get -MaximumRedirection 5 `
     -SessionVariable opSession -UseBasicParsing -ErrorAction Stop
-  $loginPageUrl = $resp.BaseResponse.ResponseUri.AbsoluteUri
+  $loginPageUrl = (Get-FinalUri $resp)
   $loginHtml = $resp.Content
 } catch {
   Fail "authorize request did not reach the login page: $($_.Exception.Message)"
@@ -401,7 +461,7 @@ $redirectWithCode = $null
 try {
   $resp = Invoke-WebRequest -Uri "$platformUrl/login" -Method Post -Body $loginBody `
     -WebSession $opSession -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
-  $redirectWithCode = $resp.BaseResponse.ResponseUri.AbsoluteUri
+  $redirectWithCode = (Get-FinalUri $resp)
 } catch {
   $r = $_.Exception.Response
   if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
@@ -422,7 +482,7 @@ if ([string]::IsNullOrWhiteSpace($redirectWithCode)) {
   try {
     $resp = Invoke-WebRequest -Uri $callbackUrl -Method Get -WebSession $opSession `
       -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
-    $redirectWithCode = $resp.BaseResponse.ResponseUri.AbsoluteUri
+    $redirectWithCode = (Get-FinalUri $resp)
   } catch {
     $r = $_.Exception.Response
     if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
@@ -433,6 +493,7 @@ if ([string]::IsNullOrWhiteSpace($redirectWithCode)) {
   }
 }
 if ([string]::IsNullOrWhiteSpace($redirectWithCode)) { Fail "Callback did not return a redirect with code." }
+if ($redirectWithCode -match '[?&]error=invalid_credentials') { Fail "Operator login rejected: invalid credentials." }
 $authCode = $null
 if ($redirectWithCode -match '[?&#]code=([^&]+)') { $authCode = [System.Uri]::UnescapeDataString($Matches[1]) }
 if ([string]::IsNullOrWhiteSpace($authCode)) { Fail "Authorization code not found in callback redirect." }
@@ -459,44 +520,79 @@ Write-Host "  Operator signed in." -ForegroundColor Green
 # --- Step 4: register the first production tenant -----------------------------
 Write-Host "Registering tenant '$TenantName' ($TenantSlug)..." -ForegroundColor Cyan
 $tenantBody = @{
-  tenantType    = 'organization'
-  name          = $TenantName
-  description   = "$TenantName issuing and verification tenant"
-  slug          = $TenantSlug
-  addIssuer     = $true
-  addVerifier   = $true
-  owner         = @{
-    type        = 'local'
-    email       = "admin@$TenantSlug.example"
-    displayName = "$TenantName Administrator"
+  tenant       = @{
+    tenantType               = 'organization'
+    name                     = $TenantName
+    description              = "$TenantName issuing and verification tenant"
+    slug                     = $TenantSlug
+    initialPlatformSubdomain = $true
   }
-  ownerDelivery = @{ mode = 'none' }
+  contacts     = @{
+    technical                     = @{
+      email       = "admin@$TenantSlug.example"
+      displayName = "$TenantName administrator"
+    }
+    administrativeSameAsTechnical = $true
+    ownerAdmin                    = @{ source = 'technical' }
+  }
+  login        = @{ enabled = $true; defaultAuthorizationServerRequired = $true }
+  provisioning = @{ issuer = $true; verifier = $true; keysAndDids = $true; sampleData = $true }
 }
 $tenantsUrl = "$platformUrl/api/platform/admin/v1/tenants"
 $tenantId = $null
+$onboardingId = $null
+# Look the tenant up first so a re-run continues with the existing tenant.
 try {
-  $created = Invoke-RestMethod -Method Post -Uri $tenantsUrl -Headers @{ Authorization = "Bearer $operatorToken" } `
-    -ContentType 'application/json' -Body ($tenantBody | ConvertTo-Json -Depth 8)
+  $list = Invoke-RestMethod -Method Get -Uri "$($tenantsUrl)?page=0&size=100&slug=$([System.Uri]::EscapeDataString($TenantSlug))" -Headers @{ Authorization = "Bearer $operatorToken" }
+  $items = if ($list.data) { $list.data } elseif ($list.items) { $list.items } elseif ($list -is [System.Array]) { $list } else { $list.tenants }
+  foreach ($t in $items) { if ($t.slug -eq $TenantSlug) { $tenantId = $t.id; break } }
+} catch { }
+
+if (-not [string]::IsNullOrWhiteSpace($tenantId)) {
+  Write-Host "  Tenant '$TenantSlug' already exists ($tenantId); continuing." -ForegroundColor Yellow
+} else {
+  try {
+    $created = Invoke-RestMethod -Method Post -Uri $tenantsUrl -Headers @{ Authorization = "Bearer $operatorToken" } `
+      -ContentType 'application/json' -Body ($tenantBody | ConvertTo-Json -Depth 8)
+  } catch {
+    $status = 0
+    if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+    $detail = if ($_.ErrorDetails -and $_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }
+    Fail "Tenant registration failed ($status): $detail"
+  }
   if ($created.tenant -and $created.tenant.id) { $tenantId = $created.tenant.id }
   elseif ($created.id) { $tenantId = $created.id }
+  $onboardingId = $created.correlationId
   Write-Host "  Tenant registered: $tenantId" -ForegroundColor Green
-} catch {
-  $status = 0
-  if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
-  if ($status -eq 409) {
-    Write-Host "  Tenant '$TenantSlug' already exists; continuing." -ForegroundColor Yellow
-    # Try to resolve its id from the listing so endpoint verification can proceed.
-    try {
-      $list = Invoke-RestMethod -Method Get -Uri $tenantsUrl -Headers @{ Authorization = "Bearer $operatorToken" }
-      $items = if ($list.items) { $list.items } elseif ($list -is [System.Array]) { $list } else { $list.tenants }
-      foreach ($t in $items) { if ($t.slug -eq $TenantSlug) { $tenantId = $t.id; break } }
-    } catch { }
-  } else {
-    Fail "Tenant registration failed ($status): $($_.Exception.Message)"
+  if ($created.delivery -and $created.delivery.manualActivationLink) {
+    Write-Host "  No email transport is configured. Open this link to set the tenant owner's password:"
+    Write-Host "  $($created.delivery.manualActivationLink)"
   }
 }
 if ([string]::IsNullOrWhiteSpace($tenantId)) {
   Fail "Could not determine tenantId; cannot verify tenant gateway endpoint bindings."
+}
+
+# --- Step 4b: wait for tenant onboarding to complete --------------------------
+if (-not [string]::IsNullOrWhiteSpace($onboardingId)) {
+  Write-Host "Waiting for tenant onboarding to complete..." -ForegroundColor Cyan
+  $onboardingStatus = $null
+  for ($i = 0; $i -lt 60; $i++) {
+    try {
+      $onboarding = Invoke-RestMethod -Method Get -Headers @{ Authorization = "Bearer $operatorToken" } `
+        -Uri "$platformUrl/api/platform/admin/v1/tenant-onboarding/$onboardingId"
+      $onboardingStatus = [string]$onboarding.status
+    } catch { $onboardingStatus = $null }
+    if ($onboardingStatus -eq 'COMPLETED') { break }
+    if ($onboardingStatus -in @('FAILED', 'ERROR', 'CANCELLED', 'CANCELED', 'ROLLED_BACK')) {
+      Fail "Tenant onboarding ended with status $onboardingStatus."
+    }
+    Start-Sleep -Seconds 5
+  }
+  if ($onboardingStatus -ne 'COMPLETED') {
+    Fail "Tenant onboarding did not complete within 5 minutes (last status: $onboardingStatus)."
+  }
+  Write-Host "  Onboarding completed." -ForegroundColor Green
 }
 
 # --- Step 5: verify tenant setup-created gateway endpoint bindings ------------

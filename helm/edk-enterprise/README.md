@@ -109,9 +109,6 @@ kubectl --namespace edk create secret generic edk-runtime-secrets `
   --from-literal=blob-service-client-secret='<independent-secret>' `
   --from-literal=issuer-service-client-secret='<independent-secret>' `
   --from-literal=verifier-service-client-secret='<independent-secret>' `
-  --from-literal=wallet-unit-service-client-secret='<independent-secret>' `
-  --from-literal=wallet-interaction-service-client-secret='<independent-secret>' `
-  --from-literal=wallet-onboarding-service-client-secret='<independent-secret>' `
   --from-literal=trust-domain-service-client-secret='<independent-secret>' `
   --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' `
   --from-literal=keystore-password='<long-random-pkcs12-password>'
@@ -120,7 +117,9 @@ kubectl --namespace edk create secret generic edk-runtime-secrets `
 The command is suitable for an evaluation namespace. For production, have the
 cluster's secret-management mechanism create the same Kubernetes Secret and
 keys; do not commit a rendered Secret or plaintext values to Git. Use at least
-32 random bytes for each value.
+32 random bytes for each value. The optional wallet-unit, wallet-interaction
+and wallet-onboarding workloads are disabled by default; add their
+`*-service-client-secret` keys only when you enable them.
 
 Create the issuer-pipeline Secret separately. Its master KEK and blind-index
 key must be distinct, independently generated 32-byte base64url values:
@@ -129,6 +128,9 @@ key must be distinct, independently generated 32-byte base64url values:
 kubectl --namespace edk create secret generic edk-issuer-pipeline-secrets `
   --from-literal=master-kek='<independent-32-byte-base64url-value>' `
   --from-literal=blind-index-key='<independent-32-byte-base64url-value>'
+
+kubectl --namespace edk create secret generic edk-federation-session `
+  --from-literal=federation-session-encryption-key='<independent-32-byte-standard-base64-value>'
 ```
 
 Then configure all Secret references:
@@ -143,9 +145,6 @@ serviceIdentity:
     blob: blob-service-client-secret
     issuer: issuer-service-client-secret
     verifier: verifier-service-client-secret
-    wallet-unit: wallet-unit-service-client-secret
-    wallet-interaction: wallet-interaction-service-client-secret
-    wallet-onboarding: wallet-onboarding-service-client-secret
     trust-domain-identifier: trust-domain-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
@@ -155,6 +154,8 @@ issuerPipeline:
   existingSecret: edk-issuer-pipeline-secrets
   masterKekKey: master-kek
   blindIndexKey: blind-index-key
+federationSessionEncryption:
+  existingSecret: edk-federation-session
 portalBff:
   existingSecret: edk-runtime-secrets
   clientSecretKey: admin-console-portal-bff-secret
@@ -277,8 +278,9 @@ Default backing components:
 | `tenant-kms` | `true` | `enterprise-tenant-kms` | Tenant key material and KMS command handling |
 | `did` | `true` | `enterprise-did` | DID resolver and `did:web` hosting behind the tenant gateway |
 | `tenant-as` | `true` | `enterprise-tenant-as` | Tenant OAuth2 authorization server behind the tenant gateway |
-| `wallet-unit` | `true` | `enterprise-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
-| `wallet-interaction` | `true` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
+| `blob` | `true` | `service-data` | Tenant blob and theme data behind the tenant gateway |
+| `wallet-unit` | `false` | `enterprise-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
+| `wallet-interaction` | `false` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
 | `wallet-onboarding` | `false` | `enterprise-wallet-onboarding` | Managed wallet IDV, profile activation, readiness, and wallet-unit provisioning |
 | `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |

@@ -265,7 +265,6 @@ app:
         federation:
           session:
             v1: ${env:FEDERATION_SESSION_ENCRYPTION_KEY}
-  # TODO: set to prod for a production deployment.
   deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
 auth:
   login:

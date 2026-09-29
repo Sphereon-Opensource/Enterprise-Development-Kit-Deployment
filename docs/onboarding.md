@@ -201,43 +201,60 @@ The repository also includes scripts and a Postman collection. They are not the
 normal customer setup path; they are useful for validation, demos, and repeatable
 API automation.
 
-Both helpers read `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`.
-The supplied file is a post-setup environment with six values: `baseDomain`,
-`tenantSlug`, `tenantName`, `operatorEmail`, `operatorPassword` and
-`tenantOwnerPassword`. These are Postman/provision variables, not Docker Compose
-or Helm startup variables.
-The collection derives the platform origin, the tenant gateway origin, every
-protocol API root, the tenant KMS and trust-domain API bases and the tenant-scoped
-`did:web` values from `baseDomain` and `tenantSlug` before each request, and keeps
-them in collection scope. Do not add a platform URL, a DID hostname or a
-service-container URL to the environment; changing `baseDomain` or `tenantSlug`
-is enough. The operator OAuth callback is derived from the platform URL and the
-hosted session during sign-in; the PKCE verifiers and the tenant service client
-secret are generated during the run and cleared afterwards. Provider-specific
-values (your Azure Key Vault or AWS KMS, external keys and certificates, a
-published trust list) are collection variables with `replace-with-` placeholders
-next to the disabled folders that use them.
+Both read `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`.
+Its two essential values are `baseDomain` and `tenantSlug`: the platform is at
+`https://platform.<baseDomain>` and the tenant at `https://<tenantSlug>.<baseDomain>`,
+so neither the collection nor the script needs URL variables. These are client-side
+variables, not Docker Compose or Helm startup variables.
+
+The Postman collection does not need sign-in passwords: you sign in through
+Postman's OAuth2 dialog. The provision script signs in by itself, so it needs
+the operator credentials, which are not in the environment file.
 
 ### Provision script
 
 The all-in-one provision script drives the same REST APIs against an
-already-running stack. With the supplied post-setup environment, run it with
+already-running stack. On an installation that is already set up, run it with
 `-SkipSetup` or `--skip-setup`: it signs the operator in, creates the tenant,
-and verifies the tenant gateway endpoint bindings. To automate an installation
-whose setup gate is still open, pass a separate environment file that also
-defines `licenseBundleZipPath`; the script then imports that bundle and creates
-the first operator before tenant onboarding.
+and verifies the tenant gateway endpoint bindings. On an installation whose
+setup gate is still open, also give it the license bundle; the script then
+imports that bundle and creates the first operator before tenant onboarding.
+
+Give the script the operator email with `-OperatorEmail` / `--operator-email`
+or `EDK_OPERATOR_EMAIL`, and the license bundle with `-LicenseBundle` /
+`--license-bundle` or `EDK_LICENSE_BUNDLE_ZIP_PATH`.
+
+For the password, the first of these wins:
+
+- `-PasswordStdin` / `--password-stdin` reads it from the first line of
+  standard input. Use this in CI and other automation.
+- The `EDK_OPERATOR_PASSWORD` environment variable.
+- `operatorPassword` in a private copy of the environment file, passed with
+  `-EnvFile` / `--env-file`. The same copy can hold `operatorEmail` and
+  `licenseBundleZipPath`. Do not import it into a shared Postman workspace.
+- When you run the script in a terminal, it asks for the password without
+  echoing it.
+
+There is deliberately no parameter that takes the password itself, and the
+scripts never pass it on a command line, so it does not end up in shell
+history or the process list.
 
 Windows:
 
 ```powershell
-.\scripts\provision.ps1
+.\scripts\provision.ps1 -OperatorEmail ops@example.com -SkipSetup
 ```
 
 Linux or macOS:
 
 ```bash
-./scripts/provision.sh
+./scripts/provision.sh --operator-email ops@example.com --skip-setup
+```
+
+In automation, pipe the password in:
+
+```bash
+printf '%s\n' "$OPERATOR_PASSWORD" | ./scripts/provision.sh --operator-email ops@example.com --password-stdin --skip-setup
 ```
 
 Useful flags:
@@ -256,36 +273,23 @@ verify that tenant setup created each protocol endpoint binding.
 
 ### Postman collection
 
-The Postman collection walks the same flow request by request, plus later
-issuance and verification examples. Import these files into Postman:
+The Postman collection covers the same flow request by request, and continues with
+what developers do next. Import these files into Postman:
 
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-The supplied collection starts after platform setup. Run its 214 requests in
-folder order:
+It starts after platform setup and has one folder per identity:
 
 | Folder | What it does |
 | --- | --- |
-| `00 Before You Start` | Explains the six environment values, how every URL derives from them, and what each folder covers |
-| `01 Operator Sign-in` | Signs the platform operator in with the authorization-code flow and PKCE and stores the operator token |
-| `02 Tenant Onboarding` | Registers the tenant, waits for onboarding to complete, verifies the tenant public endpoint bindings, checks that the runtime service discovery matches the derived API bases, and resolves the issuer and verifier instance ids |
-| `03 Tenant Owner Activation and Sign-in` | Activates the tenant owner through the one-time link, signs the owner in on the tenant host, and registers the confidential tenant service client |
-| `04 Tenant Service Token` | Obtains the tenant service token with client_credentials |
-| `05 Subtenants` | Registers a subtenant and lists the children of the parent |
-| `06 Tenant Keys and DID` | Lists the KMS offerings and resources the tenant holds, validates the setup KMS, and discovers the activation-created `did:web` and its hosted `did.json` |
-| `07 Bring Your Own KMS` | Registers your own Azure Key Vault or AWS KMS as a tenant KMS resource, registers references to existing external keys and certificate chains, and (for operators) the platform tenant's vault. Disabled until you fill in your provider values |
-| `08 KMS Provider Sharing` | How the platform offers one of its KMSes to a tenant, how the tenant enables it and picks its default provider, and the runtime provider list that joins both planes |
-| `09 Authorization Servers and Federation` | A hosted authorization server with clients and identities, an external authorization server from OIDC discovery, the federation binding that lets holders sign in there, and the issuer bindings and protocol profile |
-| `10 Issuer Settings` and `11 Credential Designs` | Issuer branding and the EuPid (SD-JWT VC) and Mdl (mdoc) designs with render variants and logo assets |
-| `12 Status Lists` | The did:web-signed JWT list, the x5c-signed list, revoke, reactivate and read, then the `CWT mdoc` list and the two-bit `Bitstring VCDM` list with suspension |
-| `13 Credential Configurations` | How a credential configuration expresses its signing key, trust mechanism, validity, scope and status-list binding: reads of the provisioned EuPid and Mdl configurations, the VCDM 1.1 and 2.0 registrations, and binding the CWT list to Mdl |
-| `14 Hosted Branding Verification` | The hosted VCT metadata, issuer well-known metadata and content-addressed assets |
-| `15 Issue SD-JWT VC and mdoc` through `20 Authorization Code Issuance` | Issuance by pre-authorized code with a headless wallet, with a transaction code, of W3C VCDM 1.1 and 2.0 credentials with `BitstringStatusListEntry`, through the pipeline API, and the authorization-code offer with its authorization server metadata |
-| `21 DCQL Queries` and `22 Verification` | DCQL queries and verifier bindings, then a verification request, its signed request object, status polling and cancellation |
-| `23 Trust Domains and Trust Lists` | Trust domains, anchors, admissions, attachments and eligibility grants; the mdoc VICAL source; a trust list you publish (ETSI TS 119 612) and a list of trusted entities (ETSI TS 119 602) registered as sources |
-| `24 KMS Runtime API` | Providers, keys, raw signatures and verification, and certificate chains and references on the tenant KMS API |
-| `25 Developer Console Settings` | The tenant's Developer Console policy |
+| `1. Platform operator` | Lists the tenants and registers a tenant when `tenantSlug` does not exist yet, then follows onboarding. Optional: child tenants, and sharing a platform Azure Key Vault with tenants |
+| `2. Tenant owner: create a service client` | Signed in as the tenant owner, registers the client-credentials service client your application uses |
+| `3. Tenant APIs` | With the service client's token: authorization servers, keys and DIDs, Azure Key Vault, the credential issuer, designs, status lists, defining your own credential, issuing and revoking, DCQL queries and verification, trust domains, and a Keycloak wallet login |
+
+Each folder signs in through its own OAuth2 settings, and every folder lists what
+exists before it creates anything, so you can run it again. See
+[the Postman guide](../postman/README.md) for the details.
 
 ## After onboarding
 

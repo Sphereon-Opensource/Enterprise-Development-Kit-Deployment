@@ -110,7 +110,7 @@ data:
           enabled: false
     oauth2:
       servers:
-        default:
+        platform:
           user-provider:
             mode: {{ .Values.platform.bootstrap.userProviderMode | quote }}
 {{ include "edk-enterprise.platformWebAuthnConfig" . | indent 10 }}
@@ -271,11 +271,10 @@ spec:
             # monolith image's local-config development account fallback.
             - name: OAUTH2_USER_PROVIDER_MODE
               value: {{ .Values.platform.bootstrap.userProviderMode | quote }}
-            # The packaged monolith configuration names its hosted AS instance
-            # `default`. Override that per-instance selector as well; otherwise it
-            # takes precedence over the global mode above and silently selects the
-            # development-only local-config credential provider.
-            - name: OAUTH2_SERVERS_DEFAULT_USER_PROVIDER_MODE
+            # The packaged monolith configuration hosts its AS as the `platform`
+            # instance. Its per-instance selector takes precedence over the global
+            # mode above, so set it too.
+            - name: OAUTH2_SERVERS_PLATFORM_USER_PROVIDER_MODE
               value: {{ .Values.platform.bootstrap.userProviderMode | quote }}
             {{- if and $bootstrap.automatic $bootstrap.ownerInitialCredential }}
             - name: EDK_OWNER_INITIAL_CREDENTIAL
@@ -392,7 +391,7 @@ spec:
                 path: public/central-permit.pub.pem
               - key: {{ .Values.secretAuthority.keys.centralPermitPrivateKey | quote }}
                 path: central/permit-signing.pem
-              {{- range $workloadId, $key := .Values.secretAuthority.keys.assertionPublicKeys }}
+              {{- range $workloadId, $key := include "edk-enterprise.secretAuthority.assertionPublicKeys" (dict "root" . "secretName" .Values.secretAuthority.existingSecrets.platform) | fromYaml }}
               - key: {{ $key | quote }}
                 path: {{ printf "public/%s-assertion.pub.pem" $workloadId | quote }}
               {{- end }}
@@ -875,4 +874,3 @@ spec:
           port: {{ .Values.monolith.restPort }}
 {{- end }}
 {{- end }}
-

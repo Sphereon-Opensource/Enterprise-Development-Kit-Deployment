@@ -33,6 +33,11 @@ server:
       # the internal pre-auth registration channel. Everything else requires an
       # operator bearer.
       anonymous-path-prefixes: /,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**
+  # Platform subjects whose own client has no token-exchange authority, such as a
+  # client-credentials client granted platform-admin, exchange through the operator
+  # delegation channel, whose authority decides from the subject's roles.
+  sts:
+    provisioning-client-id: platform-operator-cli
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
     token-endpoint-allow-http: true
@@ -148,6 +153,11 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
             commands:
+              # Public account-action resolution unwraps a customer invitation
+              # before its owner has a subject bearer. Route only this leaf with
+              # the deployment-owned tenant-KMS service token.
+              "[kms.leaf.unwrap]":
+                target: SERVER
               # Validate opens the resource's provider to report its health. The
               # application tenant's own resources would otherwise stay LOCAL,
               # where no provider can be opened, so the probe goes to tenant-KMS
@@ -182,6 +192,10 @@ transport:
         preferServiceTokenOverSessionBearer: false
         services:
           "[signing-key]":
+            target: SERVER
+            transport: HTTP
+            endpoint: http://enterprise-tenant-as:18083
+          "[owner-account-actions]":
             target: SERVER
             transport: HTTP
             endpoint: http://enterprise-tenant-as:18083
@@ -307,7 +321,7 @@ secret-management:
     # sharing is resolved. The client secret is supplied through the deployment
     # environment manifest and is never persisted in this configuration.
     platform-providers:
-      azure-shared-signing:
+      "[azure-shared-signing]":
         kind: ${env:EDK_PLATFORM_KMS_AZURE_KIND:}
         display-name: ${env:EDK_PLATFORM_KMS_AZURE_DISPLAY_NAME:Platform Azure Key Vault}
         vault-uri: ${env:EDK_PLATFORM_KMS_AZURE_VAULT_URI:}
@@ -320,7 +334,7 @@ secret-management:
           fulfillment: SHARED_INSTANCE
           tenants: ${env:EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS:*}
           suggested-default: false
-      aws-shared-signing:
+      "[aws-shared-signing]":
         kind: ${env:EDK_PLATFORM_KMS_AWS_KIND:}
         display-name: ${env:EDK_PLATFORM_KMS_AWS_DISPLAY_NAME:Platform AWS KMS}
         region: ${env:EDK_PLATFORM_KMS_AWS_REGION:}
@@ -333,10 +347,10 @@ secret-management:
           suggested-default: false
   internal-resolution:
     expected-audience: enterprise-platform
-    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service
     # System credentials are authorized to workload identities, not OAuth client principals.
     # Keep this aligned with each satellite's service identity binding below.
-    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp,email-service=service-email
+    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp
   deployment:
     environment:
       enabled: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_ENABLED:true}
@@ -380,8 +394,7 @@ tenant:
     # through the tenant-scoped DB source it is still constructing.
     remote: false
     platform:
-      # Tenants resolve by subdomain under this base domain. TODO: set to your
-      # public base domain (for example edk.example.com).
+      # Tenants resolve by subdomain under the deployment's base domain.
       base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
       subdomain:
         enabled: true
@@ -501,7 +514,7 @@ oauth2:
       #  1. the admin console (/admin-console basePath) -> {host}/admin-console/callback;
       #  2. the first-run setup wizard (served at the platform root) -> {host}/onboarding/callback.
       # Both are served same-origin on the platform host, so the redirect_uris use the platform
-      # external URL. Listed explicitly rather than relying on permissive-redirect-uri.
+      # external URL. Listed explicitly.
       redirect-uris:
         - ${env:EXTERNAL_BASE_URL}/admin-console/callback
         - ${env:EXTERNAL_BASE_URL}/onboarding/callback
@@ -513,7 +526,16 @@ oauth2:
       post-logout-redirect-uris: "${env:EXTERNAL_BASE_URL}/admin-console"
       allowed-scopes: openid
       default-access-token-audience: enterprise-platform
+      allowed-access-token-audiences: enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob
       token-endpoint-auth-method: none
+      # Platform STS authority: operators delegate onto descendant tenants and administer the
+      # platform tenant; this is the tenant-registration channel (tenant-provisioning role).
+      token-exchange:
+        mode: operator-delegation
+        audiences: enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob
+        self: true
+        provisioning: true
+        role: platform-admin
     # Interactive documentation playground (docs site). Public client: authorization code +
     # required PKCE (S256) + required PAR. Redirect URIs are one /docs-env/callback per origin.
     # Disable client registration via EDK_DOCS_PLAYGROUND_ENABLED=false (see docs.playground).
@@ -565,9 +587,6 @@ oauth2:
       token-format: JWT
       scopes-supported: "openid,profile,email"
       grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
-      public-clients:
-        allow-any: true
-        permissive-redirect-uri: true
       internal-clients:
         issuer:
           client-id: issuer-service
@@ -575,45 +594,62 @@ oauth2:
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         kms:
           client-id: kms-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
+            # Tenant-KMS also serves the platform tenant's own KMS resources (validation probes of
+            # platform-owned and deployment-declared providers), so its bootstrap token may target
+            # the platform tenant it is itself registered in.
+            self: true
         did:
           client-id: did-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_DID}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         blob:
           client-id: blob-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_BLOB}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-blob
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         verifier:
           client-id: verifier-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
         tenantas:
           client-id: tenant-as-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
           allowed-access-token-audiences: enterprise-tenant-kms
-        email:
-          client-id: email-service
-          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_EMAIL}
-          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
-          default-access-token-audience: enterprise-platform
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
 # Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
 # Holder protocols and testing/catalog wrappers are excluded by the backend projection.
 developer-console:
-  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/v1/tabular-mapping-templates"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/v1","/public/schema","/public/statuslists"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
+  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/v1/tabular-mapping-templates"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1","/api/oauth2/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/v1","/public/schema","/public/statuslists"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
 application:
   bff:
     oauth-client:
@@ -635,19 +671,15 @@ application:
       # name as a request-scoped override. Never seed a placeholder customer.
       roles: platform-admin
 app:
-  # TODO: set to prod for a production deployment. dev unlocks the break-glass
-  # operator credential below; prod requires the invitation flow instead.
+  # Dev unlocks the break-glass operator credential below; prod requires the
+  # invitation flow instead.
   deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
 auth:
   login:
     require-application: false
 platform:
   config-distribution:
-    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
-  sts:
-    workload-client-id: kms-service
-    secret-bootstrap-workload-client-ids: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service,email-service
-    allowed-audiences: "enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob"
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service
   config:
     mount-path: /app/config
   onboarding:

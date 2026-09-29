@@ -55,13 +55,12 @@ installation is running:
 - `postman/EDK-Enterprise-Deployment.postman_collection.json`
 - `postman/EDK-Enterprise-Deployment.customer.postman_environment.json`
 
-Set `baseDomain`, `tenantSubdomain` and `tenantName` in a private environment.
-Follow the [Postman walkthrough](postman/README.md): use Postman's OAuth2 helper
-for platform operator login, create the tenant, activate its owner, register a
-confidential client on the tenant AS, and switch to client credentials for tenant REST calls.
-Platform resource sharing and wallet authorization-code issuance have separate OAuth contexts.
-The optional Azure and Keycloak folders describe the inputs and request order.
-Access tokens are managed by Postman; do not copy them into bearer variables.
+Set `baseDomain` and `tenantSlug`; every URL follows from those two. The
+collection has one folder per identity: the platform operator lists or registers
+tenants, the tenant owner creates a service client, and the tenant APIs run with
+that service client's client-credentials token. Each folder gets its token from
+Postman's OAuth2 dialog. Optional folders cover Azure Key Vault and a wallet login
+through your own Keycloak. See the [Postman guide](postman/README.md).
 
 ## Domain, DNS, and TLS model
 
@@ -120,7 +119,7 @@ boundary.
 - Make enough memory available for the six backend services, two admin-console
   processes, two PostgreSQL containers, Traefik, and the telemetry containers.
 
-### 1. Create and complete the environment file
+### 1. Create the environment file
 
 On Windows PowerShell, copy the template with:
 
@@ -134,33 +133,22 @@ On Linux or macOS, copy it with:
 cp ./compose/.env.example ./compose/.env
 ```
 
-Set every required value in `compose/.env` before rendering the stack.
+Set the two values that only you can choose:
 
-| Variable | Required value |
+| Variable | Value |
 | --- | --- |
-| `EDK_TAG` | Set the exact approved image tag. Do not use `latest` or an unrelated snapshot tag. |
-| `EDK_PLATFORM_BASE_DOMAIN` | Set the customer-controlled base domain. Use `saas.localtest.me` only for the documented local evaluation path. |
-| `EDK_PLATFORM_DB_PASSWORD` | Set the platform database owner password. |
-| `EDK_TENANT_DB_PASSWORD` | Set a different tenant database owner password. |
-| `EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD` | Set the password for the fixed `secret_management_admin` database role. |
-| `EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD` | Set a different password for the fixed `secret_management_tenant_serving` database role. |
-| `EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD` | Set a third password for the narrow `secret_management_runtime` replay-ledger role used by satellite services. |
-| `EDK_KEYSTORE_PASSWORD` | Set the password that protects the platform and tenant KMS keystores. |
-| `EDK_INTERNAL_CLIENT_SECRET_<ROLE>` | Distinct confidential-client secret per STS registration (`TENANT_KMS`, `TENANT_AS`, `DID`, `BLOB`, `ISSUER`, `VERIFIER`, `EMAIL`). Satellites still read `EDK_INTERNAL_CLIENT_SECRET` (one value per container). Platform interpolates every role-specific env. |
-| `EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET` | Set an independent secret for the admin-console portal BFF client. |
-| `EDK_PIPELINE_MASTER_KEK` | Replace the example value with a new 32-byte base64url value. |
-| `EDK_PIPELINE_BLIND_INDEX_KEY` | Replace the example value with a different 32-byte base64url value. |
-| `EDK_DEPLOYMENT_MODE` | Keep `prod` for a customer installation. Use `dev` only for a local evaluation that needs the break-glass owner credential. |
-| `EDK_OWNER_INITIAL_CREDENTIAL` | Leave this empty in `prod`. The normal setup and invitation flow creates the operator account. |
+| `EDK_TAG` | The exact approved image tag. Do not use `latest` or a snapshot tag. |
+| `EDK_PLATFORM_BASE_DOMAIN` | The customer-controlled base domain. Use `saas.localtest.me` only for the local evaluation path. |
 
-Use a password manager, a secret manager, or a cryptographically secure random
-generator. The example issuer pipeline values in `.env.example` are not
-deployment secrets and must be replaced.
+Keep `EDK_DEPLOYMENT_MODE=prod` and leave `EDK_OWNER_INITIAL_CREDENTIAL` empty
+for a customer installation. First-run setup creates the operator account.
+Every other value in the template is either generated in the next step or has a
+working default. The comments in `compose/.env.example` describe each one.
 
-### 2. Generate the Compose secret-authority key set
+### 2. Generate the keys and secrets
 
-The platform signs secret-use permits. Each workload signs its own execution
-assertions. Generate a fresh key set before the first start.
+The platform signs secret-use permits and each workload signs its own execution
+assertions. Generate this secret-authority key set first.
 
 On Windows PowerShell, run:
 
@@ -176,22 +164,25 @@ On Linux or macOS, run:
   ./compose/.secret-authority/current
 ```
 
-The generator writes private keys, public keys, and `window.env` below the
-ignored `compose/.secret-authority/current` directory. Copy these four complete
-assignments from `window.env` into `compose/.env`:
+Then complete `compose/.env`. Node.js 20 or later is required:
 
-- `SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY`
-- `SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS`
-- `SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY`
-- `SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS`
+```text
+node ./scripts/generate-compose-secrets.mjs
+```
 
-Keep `EDK_SECRET_AUTHORITY_ROOT=./.secret-authority/current`. The coordinate
-strings contain key identifiers, validity windows, and in-container paths. Do
-not edit them.
+The script fills every empty secret with an independent random value: database
+and role passwords, the keystore password, internal service client secrets,
+the admin console client secret, the issuer pipeline keys, and the federation
+session key. It also copies
+the four `SECRET_AUTHORITY_*` coordinates from
+`compose/.secret-authority/current/window.env`. It never changes a value that
+is already set, so it is safe to run again, and you may enter values from your
+own secret manager before running it.
 
-The generator replaces its target directory. Do not run it again against an
-active installation unless you are performing a planned authority-key rotation
-and have a complete rotation procedure.
+Keep `compose/.env` and `compose/.secret-authority/` private and back them up
+together with the databases and keystore volumes. Do not run the
+secret-authority generator again against an active installation unless you are
+performing a planned key rotation.
 
 ### 3. Choose one Compose gateway mode
 
@@ -249,8 +240,11 @@ docker compose --project-directory ./compose -f ./compose/docker-compose.yml -f 
 
 Use the install and upgrade wrapper. The wrapper validates the model, pulls the
 published images, starts the services, waits for health checks, and records the
-installed tag. It also preserves the required RC1 to RC2 to RC3 to RC4 to RC5
-migration order when an older release is detected.
+installed tag. When it finds an earlier 0.25.0 release candidate, it upgrades
+directly to 0.25.0 (an RC1 installation passes through RC2 first) and refuses
+a downgrade. Before upgrading an existing installation, run
+`node ./scripts/generate-compose-secrets.mjs` once and follow
+[Upgrading a Docker Compose installation to 0.25.0](docs/upgrade-0.25.0.md).
 
 On Windows PowerShell, run:
 
@@ -297,7 +291,18 @@ On a new installation, workload health responses can report
 `licenseStatus: MISSING` until first-run setup imports the protected license.
 The containers must still be running.
 
-### 5. Stop or remove the Compose stack
+### 5. Complete setup and use Postman
+
+Open `https://platform.<base-domain>/setup-license`, import the protected
+license bundle, and create the first platform operator account. Then import
+the collection and environment named [above](#use-the-customer-postman-collection).
+Set `baseDomain` to the same value as `EDK_PLATFORM_BASE_DOMAIN` and set
+`tenantSlug` to the tenant you want to use. Run **1. Platform operator > Tenants**
+to find or register that tenant, **2. Tenant owner** to create its service
+client, and **3. Tenant APIs** to call the tenant services. The collection
+generates a service client secret when it creates the client.
+
+### 6. Stop or remove the Compose stack
 
 Stop containers while keeping them and all data:
 
@@ -317,10 +322,11 @@ Use it only when intentionally destroying the installation.
 The detailed Compose guide is in
 [docs/quickstart-docker.md](docs/quickstart-docker.md).
 
-The customer Compose baseline creates no example operator and publishes no
-Azure or AWS KMS offering. First-run setup creates only the administrator that
-the installer enters. Cloud-provider offerings require an explicit, validated
-integration.
+The customer Compose baseline creates no example operator and holds no cloud
+credential. First-run setup creates only the administrator that the installer
+enters. Tenants can connect their own Azure Key Vault or AWS KMS through the
+platform configuration API, and the operator can declare one platform-shared
+vault in the optional block at the end of `compose/.env.example`.
 
 ## Install with Helm
 
@@ -344,8 +350,8 @@ required only when the installation deliberately selects that integration.
 - Install OpenSSL, Node.js, and Bash on the administration host when using
   `scripts/upgrade-helm.sh`.
 - Obtain `enterprise-image-set.json` with the release when the selected release
-  requires immutable image provenance. The current wrapper requires it for
-  RC3-named tags.
+  requires immutable image provenance. The wrapper requires it for RC3, RC4,
+  RC5 and 0.25.0 tags.
 
 ### 1. Create a maintained values file
 
@@ -401,8 +407,6 @@ serviceIdentity:
     blob: blob-service-client-secret
     issuer: issuer-service-client-secret
     verifier: verifier-service-client-secret
-    wallet-unit: wallet-unit-service-client-secret
-    wallet-interaction: wallet-interaction-service-client-secret
     trust-domain-identifier: trust-domain-service-client-secret
 
 keystore:
@@ -418,12 +422,17 @@ issuerPipeline:
   masterKekKey: master-kek
   blindIndexKey: blind-index-key
 
+federationSessionEncryption:
+  existingSecret: edk-federation-session
+  key: federation-session-encryption-key
+
 secretAuthority:
   existingSecrets:
     platform: edk-secret-authority-platform
     tenant-kms: edk-secret-authority-tenant-kms
     tenant-as: edk-secret-authority-tenant-as
     did: edk-secret-authority-did
+    blob: edk-secret-authority-blob
     issuer: edk-secret-authority-issuer
     verifier: edk-secret-authority-verifier
 
@@ -509,11 +518,12 @@ The two passwords in `edk-secret-management-database` must match the fixed role
 passwords in both databases. See
 [secret management](docs/secret-management.md) for the runtime trust boundary.
 
-### 4. Prepare runtime and issuer pipeline Secrets
+### 4. Prepare runtime, issuer pipeline and federation session Secrets
 
 `scripts/upgrade-helm.sh` creates `edk-runtime-secrets` and
 `edk-issuer-pipeline-secrets` when they do not exist. It preserves existing
-values and refuses partial or unsafe replacement during an upgrade.
+values and refuses partial or unsafe replacement during an upgrade. Create
+`edk-federation-session` yourself in both cases.
 
 When installing directly with Helm, create these objects before rendering:
 
@@ -525,8 +535,6 @@ kubectl -n edk create secret generic edk-runtime-secrets \
   --from-literal=blob-service-client-secret='<independent-random-secret>' \
   --from-literal=issuer-service-client-secret='<independent-random-secret>' \
   --from-literal=verifier-service-client-secret='<independent-random-secret>' \
-  --from-literal=wallet-unit-service-client-secret='<independent-random-secret>' \
-  --from-literal=wallet-interaction-service-client-secret='<independent-random-secret>' \
   --from-literal=trust-domain-service-client-secret='<independent-random-secret>' \
   --from-literal=admin-console-portal-bff-secret='<independent-random-secret>' \
   --from-literal=keystore-password='<independent-random-password>'
@@ -534,7 +542,16 @@ kubectl -n edk create secret generic edk-runtime-secrets \
 kubectl -n edk create secret generic edk-issuer-pipeline-secrets \
   --from-literal=master-kek='<32-byte-base64url-value>' \
   --from-literal=blind-index-key='<different-32-byte-base64url-value>'
+
+kubectl -n edk create secret generic edk-federation-session \
+  --from-literal=federation-session-encryption-key='<32-byte-standard-base64-value>'
 ```
+
+The wallet-unit and wallet-interaction workloads are disabled by default and
+need no keys. When you enable them, add
+`wallet-unit-service-client-secret` and
+`wallet-interaction-service-client-secret` to `edk-runtime-secrets`;
+`scripts/upgrade-helm.sh` adds both automatically.
 
 Do not rotate any of these values by deleting a Secret during an upgrade.
 Coordinate credential and key rotation as a separate operation.
@@ -546,40 +563,25 @@ platform Secret contains the central permit private key and all assertion public
 keys. Each satellite Secret contains only that workload's assertion private key
 and the central permit public key.
 
-Generate all defined workload keys, including the optional wallet keys required
-by the platform Secret projection.
+Generate the key set for the default workloads.
 
 On Windows PowerShell, run:
 
 ```powershell
 .\scripts\generate-secret-authority-keys.ps1 `
-  -OutputDirectory .\compose\.secret-authority\helm-current `
-  -Workload @(
-    'service-platform',
-    'service-crypto',
-    'service-data',
-    'service-tenant-as',
-    'service-oid4vci',
-    'service-oid4vp',
-    'service-wallet-unit',
-    'service-wallet-interaction'
-  )
+  -OutputDirectory .\compose\.secret-authority\helm-current
 ```
 
 On Linux or macOS, run:
 
 ```bash
 ./scripts/generate-secret-authority-keys.sh \
-  ./compose/.secret-authority/helm-current \
-  service-platform \
-  service-crypto \
-  service-data \
-  service-tenant-as \
-  service-oid4vci \
-  service-oid4vp \
-  service-wallet-unit \
-  service-wallet-interaction
+  ./compose/.secret-authority/helm-current
 ```
+
+The default workloads are `service-platform`, `service-crypto`,
+`service-data`, `service-blob`, `service-tenant-as`, `service-oid4vci`,
+and `service-oid4vp`.
 
 Use an approved secret operator or deployment pipeline to create the following
 Secret data. Keep the key names exactly as shown in
@@ -591,6 +593,7 @@ Secret data. Keep the key names exactly as shown in
 | `edk-secret-authority-tenant-kms` | Store the two satellite coordinate values, `workload/service-crypto/assertion.pem` as `assertion.pem`, and `public/central-permit.pub.pem` as `central-permit.pub.pem`. |
 | `edk-secret-authority-tenant-as` | Store the two satellite coordinate values, `workload/service-tenant-as/assertion.pem` as `assertion.pem`, and `public/central-permit.pub.pem` as `central-permit.pub.pem`. |
 | `edk-secret-authority-did` | Store the two satellite coordinate values, `workload/service-data/assertion.pem` as `assertion.pem`, and `public/central-permit.pub.pem` as `central-permit.pub.pem`. |
+| `edk-secret-authority-blob` | Store the two satellite coordinate values, `workload/service-blob/assertion.pem` as `assertion.pem`, and `public/central-permit.pub.pem` as `central-permit.pub.pem`. |
 | `edk-secret-authority-issuer` | Store the two satellite coordinate values, `workload/service-oid4vci/assertion.pem` as `assertion.pem`, and `public/central-permit.pub.pem` as `central-permit.pub.pem`. |
 | `edk-secret-authority-verifier` | Store the two satellite coordinate values, `workload/service-oid4vp/assertion.pem` as `assertion.pem`, and `public/central-permit.pub.pem` as `central-permit.pub.pem`. |
 
@@ -600,9 +603,12 @@ The two satellite coordinate values are
 their complete values under `satellite-assertion-signing-key` and
 `satellite-permit-verification-keys`.
 
-If wallet-unit or wallet-interaction is enabled, create equivalent isolated
-Secrets from `service-wallet-unit` and `service-wallet-interaction`, then set
-their names under `secretAuthority.existingSecrets`.
+To enable wallet-unit or wallet-interaction, generate the key set with
+`service-wallet-unit` and `service-wallet-interaction` added to the default
+workloads, add their public keys to the platform Secret, create their isolated
+Secrets the same way, and set the names under `secretAuthority.existingSecrets`.
+The chart mounts wallet public keys only for enabled wallet workloads, or when
+the installed platform Secret already holds them.
 
 Do not commit the generated directory. Preserve the installed Kubernetes
 Secrets through upgrades, and do not generate a new authority window as a
@@ -640,7 +646,7 @@ bash ./scripts/upgrade-helm.sh \
   --release-set-evidence ./enterprise-image-set.json
 ```
 
-The current wrapper requires `--release-set-evidence` for RC3-named tags. The
+The wrapper requires `--release-set-evidence` for RC3, RC4, RC5 and 0.25.0 tags. The
 file must match the selected tag and bind all seven default images to immutable
 content and release provenance. Omit the option only when the selected release
 does not require it.
@@ -659,8 +665,9 @@ helm upgrade --install sphereon-edk-enterprise ./helm/edk-enterprise --namespace
 ```
 
 Do not use the direct command to skip release-transition steps during an
-upgrade. The wrapper handles the known RC1 to RC2 to RC3 to RC4 to RC5 order and the one-time
-Deployment strategy conversion. See
+upgrade. The wrapper applies the release transitions from any 0.25.0 release
+candidate to 0.25.0 in order, including the one-time Deployment strategy
+conversion, and refuses a downgrade. See
 [the Kubernetes quickstart](docs/quickstart-kubernetes.md) for release-specific
 upgrade details.
 
@@ -677,7 +684,8 @@ kubectl -n edk get events --sort-by=.lastTimestamp
 
 A render-time error that names an empty `secretAuthority.existingSecrets`,
 `serviceIdentity.internalClientExistingSecret`, `keystore.existingSecret`,
-`portalBff.existingSecret`, or `issuerPipeline.existingSecret` means the values
+`portalBff.existingSecret`, `issuerPipeline.existingSecret`, or
+`federationSessionEncryption.existingSecret` means the values
 file is incomplete. A pod in `CreateContainerConfigError` usually means the
 referenced Secret object or key does not exist in the release namespace.
 
@@ -722,7 +730,15 @@ and are optional validation tools. See
   release.
 - Preserve existing runtime, pipeline, TLS, database, and secret-authority
   Secrets. Do not regenerate missing credentials during an upgrade.
+- Before a Compose upgrade, run `node ./scripts/generate-compose-secrets.mjs`
+  once. It adds the secrets a newer release requires, such as
+  `EDK_FEDERATION_SESSION_ENCRYPTION_KEY`, and leaves existing values
+  unchanged. It also names any value copied from an earlier published
+  template, such as the former example issuer pipeline keys; rotate those in a
+  planned maintenance window.
 - Use the Compose or Helm wrapper so known release transitions run in order.
+  Upgrade an RC4 Compose installation directly to 0.25.0, not through RC5; see
+  [Upgrading a Docker Compose installation to 0.25.0](docs/upgrade-0.25.0.md).
 - Do not treat a Helm manifest backup as a database backup.
 - If a Helm upgrade fails after database migration starts, keep the workloads
   stopped. Restore both pre-upgrade database snapshots before an explicit Helm
@@ -736,6 +752,7 @@ start fresh at RC3 and have no earlier supported upgrade lineage.
 | Document | Purpose |
 | --- | --- |
 | [Docker Compose quickstart](docs/quickstart-docker.md) | This document provides the detailed Compose setup and gateway procedure. |
+| [Compose upgrade to 0.25.0](docs/upgrade-0.25.0.md) | This document lists the changes and manual steps for upgrading an RC4 or RC5 Compose installation. |
 | [Kubernetes quickstart](docs/quickstart-kubernetes.md) | This document provides chart examples and release-specific Helm upgrade details. |
 | [Helm chart reference](helm/edk-enterprise/README.md) | This document describes chart values, services, security controls, and render checks. |
 | [TLS and gateway configuration](docs/tls-and-gateway.md) | This document explains local certificates, public certificates, Let's Encrypt, Gateway API, and host routing. |

@@ -31,10 +31,11 @@ section described here. Use it as the reference for the YAML keys; the Helm
 chart binds the same keys through environment variables.
 
 The shipped config keeps REST on port `8080` with REST auth enabled for the
-native service containers. The admin console listens on port `3000`. Platform,
-tenant-KMS, wallet-unit, and wallet-interaction enable the inbound gRPC command
-receiver; DID, tenant-AS, issuer, and verifier use routed outbound clients for
-their internal command hops. These are container/service ports only. The
+native service containers. The admin console listens on port `3000`. Platform
+and tenant-KMS enable the inbound gRPC command receiver; DID, tenant-AS, issuer,
+and verifier use routed outbound clients for their internal command hops. The
+optional Helm wallet-unit and wallet-interaction workloads, disabled by default,
+also receive gRPC when enabled. These are container/service ports only. The
 customer-facing TLS connection terminates at the gateway or ingress front door,
 which then routes internally by host and path.
 
@@ -341,6 +342,52 @@ surface, discovery and JWKS, and the in-network command transport. The platform
 config template lists them under
 `server.rest.auth.anonymous-path-prefixes`. Everything else requires a bearer.
 
+## Wallet login through your own Keycloak
+
+The kit does not ship an identity provider. When wallet users must sign in
+before a credential is issued, the tenant runs a second hosted authorization
+server, the wallet proxy, that federates the login to an OpenID Connect
+provider you operate. The examples use Keycloak; any provider with OpenID
+Connect discovery and the authorization code flow works the same way.
+
+Your Keycloak must be reachable from the EDK services over HTTPS at its issuer
+URL, because the tenant authorization server reads its discovery document and
+exchanges codes at its token endpoint. Keycloak itself needs no OID4VCI support.
+
+In the realm you use, create:
+
+| Item | Setting |
+| --- | --- |
+| Client | OpenID Connect, client authentication on (confidential), standard flow enabled. Other flows can stay off. |
+| Valid redirect URI | `https://<tenant>.<baseDomain>/as/wallet-proxy/federation/callback`, where `wallet-proxy` is the wallet proxy's slug. |
+| Client scopes | `openid`, `profile` and `email` available to the client. |
+| Test user | A user with a password, an email address and a name. The wallet proxy maps `sub`, `email` and `name` into its own session. |
+
+Note the realm's issuer URL (for example
+`https://idp.example.com/realms/acme`), the client id, and the client secret
+from the client's **Credentials** tab.
+
+The tenant then connects the two through the tenant configuration API under
+`/api/platform/config/v1/tenants/{tenantId}/authorization-servers`:
+
+1. Create a hosted authorization server with slug `wallet-proxy`,
+   authentication mode `FEDERATED_ONLY` and the purposes
+   `CREDENTIAL_ISSUANCE` and `WALLET_LOGIN`.
+2. Register the wallet clients that may use it.
+3. Register Keycloak as an `EXTERNAL` authorization server with its issuer
+   URL, the purpose `WALLET_LOGIN` and the usage `HOSTED_LOGIN_UPSTREAM`,
+   validate its discovery, and activate it.
+4. Create a federation binding on the wallet proxy that points at the
+   registered Keycloak, with the scopes, the claim mapping, and the client id and
+   secret using `client_secret_basic`. Validate the binding, then enable it.
+5. Bind the wallet proxy to the credential issuer for the
+   `authorization_code` grant, and select it for each credential
+   configuration that requires a login.
+
+The tenant's default authorization server is not changed. The Postman
+collection performs these steps in its *Keycloak wallet login* folder; see the
+[Postman guide](../postman/README.md#keycloak-wallet-login).
+
 ## KMS provider
 
 The KMS service holds signing key material and serves signing operations to the
@@ -355,6 +402,38 @@ other services. Select the provider that backs key storage:
 - A managed vault or cloud KMS. Configure it as a candidate in the Secrets
   control-plane resource, stage credentials through write-only fields, and
   preflight a fenced migration before assignment.
+
+### Platform-shared Azure Key Vault and AWS KMS
+
+The platform can declare an Azure Key Vault, an AWS KMS, or both from its
+environment and offer them to every tenant. A tenant then enables one by its
+provider id (`azure-shared-signing` or `aws-shared-signing`) and creates keys in
+it; it never sees or supplies the cloud credentials. With Docker Compose, set
+these variables in `.env` and rerun `generate-compose-secrets.mjs`, which writes
+`EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST_SHA256` for the selected manifest.
+
+| Cloud | Variables | `EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST` |
+|---|---|---|
+| Azure | `EDK_PLATFORM_KMS_AZURE_KIND=AZURE_KEY_VAULT`, `EDK_PLATFORM_KMS_AZURE_VAULT_URI`, `EDK_PLATFORM_KMS_AZURE_TENANT_ID`, `EDK_PLATFORM_KMS_AZURE_CLIENT_ID`, `EDK_PLATFORM_KMS_AZURE_CLIENT_SECRET` | `./config/secret-management-environment.azure.manifest` |
+| AWS | `EDK_PLATFORM_KMS_AWS_KIND=AWS_KMS`, `EDK_PLATFORM_KMS_AWS_REGION`, `EDK_PLATFORM_KMS_AWS_ACCESS_KEY_ID`, `EDK_PLATFORM_KMS_AWS_SECRET_ACCESS_KEY` | `./config/secret-management-environment.aws.manifest` |
+| Both | all variables of both rows | `./config/secret-management-environment.azure-aws.manifest` |
+
+The Azure client id and secret belong to an Entra app registration with key and
+certificate permissions on the vault. The AWS access key belongs to an IAM
+identity that may create, describe, tag, sign with, and schedule deletion of KMS
+keys in the region. `EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS` and
+`EDK_PLATFORM_KMS_AWS_SHARED_TENANTS` limit the offer to a comma-separated list
+of tenant ids; the default `*` offers it to all tenants. Leaving a `*_KIND`
+variable empty turns that declaration off.
+
+The platform refuses to start when the selected manifest names a variable that
+is empty, so select the manifest that matches the clouds you configured. The
+secrets stay in the environment and are never written to the database.
+
+To register an existing cloud object through a shared provider (an Azure key or
+certificate, or an AWS key), tag it with `sphereon-tenant-id` set to the tenant
+id first. Deleting such a registration removes only the VDX
+reference; the key or certificate stays in the vault.
 
 See [Secret management](secret-management.md) for storage tiers, database-role
 prerequisites, provider offerings, opaque handles, and migration behavior.
@@ -498,10 +577,10 @@ KMS and wallet routing are intentionally two-token trust flows whenever the
 inbound bearer is addressed to a route-only service. DID, tenant-AS, issuer, and
 verifier validate and terminate the inbound JWT addressed to their own receiver
 audience, then call tenant-KMS with their own workload JWT for the
-`enterprise-tenant-kms` audience. Issuer and verifier use the same pattern for
-wallet operations by calling wallet-interaction with an
-`enterprise-wallet-interaction` token; wallet-interaction calls wallet-unit with
-an `enterprise-wallet-unit` token. Tenant-AS signing-key provisioning is the
+`enterprise-tenant-kms` audience. When the optional Helm wallet workloads are
+enabled, issuer and verifier use the same pattern to call wallet-interaction
+with an `enterprise-wallet-interaction` token, and wallet-interaction calls
+wallet-unit with an `enterprise-wallet-unit` token. Tenant-AS signing-key provisioning is the
 strictest example: the platform calls tenant-AS with a short-lived provisioning
 JWT whose audience is the tenant provisioning endpoint, and that provisioning
 JWT must not be forwarded to tenant-KMS.
@@ -515,15 +594,16 @@ requirement; a partially configured identity is always a configuration error.
 
 ## gRPC routing between services
 
-DID, tenant-AS, issuer, verifier, tenant-KMS, wallet-unit, and
-wallet-interaction call the platform service for platform configuration and
-control-plane data. DID, tenant-AS, issuer, and verifier call the KMS service
-for key generation, signing, verification, and public-key lookup. Issuer and
-verifier call wallet-interaction for headless wallet protocol operations, and
-wallet-interaction calls wallet-unit for policy-gated wallet-key commands.
-Platform, tenant-KMS, wallet-unit, and wallet-interaction run the inbound gRPC
-command receiver; the other runtime services use a routing-aware command client
-for outbound calls and do not listen on an inbound gRPC port.
+DID, tenant-AS, issuer, verifier, and tenant-KMS call the platform service for
+platform configuration and control-plane data. DID, tenant-AS, issuer, and
+verifier call the KMS service for key generation, signing, verification, and
+public-key lookup. Platform and tenant-KMS run the inbound gRPC command
+receiver; the other runtime services use a routing-aware command client for
+outbound calls and do not listen on an inbound gRPC port. When the optional
+Helm wallet workloads are enabled, issuer and verifier also call
+wallet-interaction for headless wallet protocol operations, wallet-interaction
+calls wallet-unit for policy-gated wallet-key commands, and both run the inbound
+gRPC receiver.
 
 Set the transport globally in Helm under `grpc`:
 

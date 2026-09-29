@@ -212,9 +212,11 @@ set. The default `serviceIdentity.clientSecretKeys` values are:
 - `blob-service-client-secret`
 - `issuer-service-client-secret`
 - `verifier-service-client-secret`
-- `wallet-unit-service-client-secret`
-- `wallet-interaction-service-client-secret`
 - `trust-domain-service-client-secret`
+
+`wallet-unit-service-client-secret` and
+`wallet-interaction-service-client-secret` are needed only when those optional
+workloads are enabled.
 
 Add a `federation-session-encryption-key` entry for
 `federationSessionEncryption.key`. Nothing creates these keys on an upgrade:

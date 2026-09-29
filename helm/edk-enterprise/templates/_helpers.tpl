@@ -460,6 +460,37 @@ may use `latest`, but only with an Always pull policy.
 {{- end -}}
 
 {{/*
+Workload assertion public keys the platform mounts. The wallet workloads are
+optional and disabled by default: their keys are projected when the workload is
+enabled, or when the installed platform Secret already holds them because its
+key set was generated with those workloads. Requires dict root + secretName.
+*/}}
+{{- define "edk-enterprise.secretAuthority.assertionPublicKeys" -}}
+{{- $root := .root -}}
+{{- $installed := dict -}}
+{{- with lookup "v1" "Secret" $root.Release.Namespace .secretName -}}
+{{- $installed = default dict .data -}}
+{{- end -}}
+{{- $optional := dict -}}
+{{- range $role := list "wallet-unit" "wallet-interaction" "wallet-onboarding" -}}
+{{- $enabled := false -}}
+{{- if eq $role "wallet-onboarding" -}}
+{{- $enabled = eq (include "edk-enterprise.walletOnboardingEnabled" $root) "true" -}}
+{{- else -}}
+{{- $enabled = (index $root.Values.services $role).enabled -}}
+{{- end -}}
+{{- $_ := set $optional (index $root.Values.serviceIdentity.serviceIds $role) $enabled -}}
+{{- end -}}
+{{- $keys := dict -}}
+{{- range $workloadId, $key := $root.Values.secretAuthority.keys.assertionPublicKeys -}}
+{{- if or (not (hasKey $optional $workloadId)) (index $optional $workloadId) (hasKey $installed $key) -}}
+{{- $_ := set $keys $workloadId $key -}}
+{{- end -}}
+{{- end -}}
+{{- toYaml $keys -}}
+{{- end -}}
+
+{{/*
 The chart does not generate runtime credentials. Requiring existing Secret
 references here prevents otherwise healthy-looking pods from starting without
 east-west Authorization headers or software-keystore access.

@@ -8,8 +8,12 @@ server:
     port: 8080
     auth:
       enabled: true
+      # Platform-issued operator and service tokens are verified against the platform JWKS.
       platform-issuer: ${env:EDK_PLATFORM_PUBLIC_URL}
       platform-jwks-uri: http://enterprise-platform:18080/.well-known/jwks.json
+      # Tenant AS issuers keep their public URL as the JWT issuer; their keys are fetched
+      # through the in-network tenant AS route selected by the tenant-registry binding.
+      self-jwks-base-url: http://enterprise-tenant-as:18083
       expected-audience: enterprise-blob
       trust-tenant-registry-issuers: ${env:EDK_TRUST_TENANT_REGISTRY_ISSUERS:true}
       anonymous-path-prefixes: /health,/public/assets
@@ -169,3 +173,69 @@ secret:
         issuer: enterprise-platform
         audience: sphereon-secret-use
         verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+
+security:
+  # 0.25.0 posture: keep AuthZEN/PDP enforced, but run password/AAL1 login.
+  # Native AAL2/passkey step-up is deferred to post-0.25.0.
+  "profiles.default-required-aal": "aal1"
+  "profiles.default-cross-border-policy": "allow"
+  "commands.default-required-aal": "aal1"
+
+# Tenant branding and asset-library writes require a tenant or platform administrator.
+authz:
+  policy:
+    default-engine: blob-roles
+    engines:
+      blob-roles:
+        type: roles
+        role-rules:
+          - pattern: theme.rest-brand.set
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-brand.set-application
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-brand.delete-application
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-stylesheet.set
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-stylesheet.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-stylesheet.set-application
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-stylesheet.delete-application
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-application.register
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-application.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-application.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-element.set
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-element.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-definition.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-definition.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-definition.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-definition.undo
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-definition.restore
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-token.patch
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-feature.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-feature.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-feature.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-seed.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-cache.purge
+            any-of: [tenant-admin, platform-admin]
+          - pattern: asset.rest-library.upload
+            any-of: [tenant-admin, platform-admin]
+          - pattern: asset.rest-library.delete
+            any-of: [tenant-admin, platform-admin]

@@ -1069,7 +1069,7 @@ spec:
         - name: secret-authority
           secret:
             secretName: {{ $secretAuthoritySecret | quote }}
-            defaultMode: 0400
+            defaultMode: 0440
             items:
               - key: {{ $.Values.secretAuthority.keys.satelliteAssertionPrivateKey | quote }}
                 path: workload/assertion.pem
@@ -1078,7 +1078,7 @@ spec:
               {{- if eq $name "platform" }}
               - key: {{ $.Values.secretAuthority.keys.centralPermitPrivateKey | quote }}
                 path: central/permit-signing.pem
-              {{- range $workloadId, $key := $.Values.secretAuthority.keys.assertionPublicKeys }}
+              {{- range $workloadId, $key := include "edk-enterprise.secretAuthority.assertionPublicKeys" (dict "root" $ "secretName" $secretAuthoritySecret) | fromYaml }}
               - key: {{ $key | quote }}
                 path: {{ printf "public/%s-assertion.pub.pem" $workloadId | quote }}
               {{- end }}

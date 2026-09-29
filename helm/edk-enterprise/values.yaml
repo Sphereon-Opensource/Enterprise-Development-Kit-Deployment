@@ -388,13 +388,6 @@ platform:
     # Stable installation/deployment handle used by onboarding-owned secrets
     # and operator material. Keep it stable across upgrades.
     deploymentId: deployment-1
-  sts:
-    # Clients whose exchanged tenant tokens carry the dedicated tenant-provisioning role
-    # the tenant AS bootstrap trust window requires. null (default) applies the built-in
-    # sanction list: the operator CLI plus the secret-bootstrap workload client ids. An
-    # explicit "" sanctions nobody; a comma-separated list sanctions exactly those clients.
-    # The admin console is deliberately not sanctioned by default.
-    provisioningRoleClientIds: null
   bootstrap:
     # true provisions the configured owner automatically during application
     # startup. Set false for setup-API-driven first installation: the setup API

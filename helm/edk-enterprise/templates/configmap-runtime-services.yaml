@@ -173,6 +173,64 @@ data:
         missing-descriptor-mode: warn
       gate:
         service-role: service-data
+    # Tenant branding and asset-library writes require a tenant or platform administrator.
+    authz:
+      policy:
+        default-engine: blob-roles
+        engines:
+          blob-roles:
+            type: roles
+            role-rules:
+              - pattern: theme.rest-brand.set
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-brand.set-application
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-brand.delete-application
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-stylesheet.set
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-stylesheet.delete
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-stylesheet.set-application
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-stylesheet.delete-application
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-application.register
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-application.update
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-application.delete
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-element.set
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-element.delete
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-definition.create
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-definition.update
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-definition.delete
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-definition.undo
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-definition.restore
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-token.patch
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-feature.create
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-feature.update
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-feature.delete
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-seed.create
+                any-of: [tenant-admin, platform-admin]
+              - pattern: theme.rest-cache.purge
+                any-of: [tenant-admin, platform-admin]
+              - pattern: asset.rest-library.upload
+                any-of: [tenant-admin, platform-admin]
+              - pattern: asset.rest-library.delete
+                any-of: [tenant-admin, platform-admin]
 ---
 {{- end }}
 {{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") .Values.services.issuer.enabled }}
