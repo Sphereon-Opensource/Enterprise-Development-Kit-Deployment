@@ -337,7 +337,7 @@ __LE_TLS_DOMAINS__
     tenant-as-identity-admin:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        PathRegexp(`^/api/(identity/v1|identity-auth/v1/admin|party/v1)(/.*)?$`)
+        PathRegexp(`^/api/(identity/v1|identity-auth/v1/admin|party/v1|oauth2/v1)(/.*)?$`)
       entryPoints: ["websecure"]
       service: svc-as
       priority: 220

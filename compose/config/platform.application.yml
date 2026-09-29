@@ -33,6 +33,11 @@ server:
       # the internal pre-auth registration channel. Everything else requires an
       # operator bearer.
       anonymous-path-prefixes: /,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**
+  # Platform subjects whose own client has no token-exchange authority, such as a
+  # client-credentials client granted platform-admin, exchange through the operator
+  # delegation channel, whose authority decides from the subject's roles.
+  sts:
+    provisioning-client-id: platform-operator-cli
   service-identity:
     token-endpoint: http://enterprise-platform:18080/token
     token-endpoint-allow-http: true
@@ -644,7 +649,7 @@ oauth2:
 # Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
 # Holder protocols and testing/catalog wrappers are excluded by the backend projection.
 developer-console:
-  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/v1/tabular-mapping-templates"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/v1","/public/schema","/public/statuslists"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
+  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/v1/tabular-mapping-templates"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1","/api/oauth2/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/v1","/public/schema","/public/statuslists"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
 application:
   bff:
     oauth-client:

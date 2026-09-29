@@ -342,6 +342,52 @@ surface, discovery and JWKS, and the in-network command transport. The platform
 config template lists them under
 `server.rest.auth.anonymous-path-prefixes`. Everything else requires a bearer.
 
+## Wallet login through your own Keycloak
+
+The kit does not ship an identity provider. When wallet users must sign in
+before a credential is issued, the tenant runs a second hosted authorization
+server, the wallet proxy, that federates the login to an OpenID Connect
+provider you operate. The examples use Keycloak; any provider with OpenID
+Connect discovery and the authorization code flow works the same way.
+
+Your Keycloak must be reachable from the EDK services over HTTPS at its issuer
+URL, because the tenant authorization server reads its discovery document and
+exchanges codes at its token endpoint. Keycloak itself needs no OID4VCI support.
+
+In the realm you use, create:
+
+| Item | Setting |
+| --- | --- |
+| Client | OpenID Connect, client authentication on (confidential), standard flow enabled. Other flows can stay off. |
+| Valid redirect URI | `https://<tenant>.<baseDomain>/as/wallet-proxy/federation/callback`, where `wallet-proxy` is the wallet proxy's slug. |
+| Client scopes | `openid`, `profile` and `email` available to the client. |
+| Test user | A user with a password, an email address and a name. The wallet proxy maps `sub`, `email` and `name` into its own session. |
+
+Note the realm's issuer URL (for example
+`https://idp.example.com/realms/acme`), the client id, and the client secret
+from the client's **Credentials** tab.
+
+The tenant then connects the two through the tenant configuration API under
+`/api/platform/config/v1/tenants/{tenantId}/authorization-servers`:
+
+1. Create a hosted authorization server with slug `wallet-proxy`,
+   authentication mode `FEDERATED_ONLY` and the purposes
+   `CREDENTIAL_ISSUANCE` and `WALLET_LOGIN`.
+2. Register the wallet clients that may use it.
+3. Register Keycloak as an `EXTERNAL` authorization server with its issuer
+   URL, the purpose `WALLET_LOGIN` and the usage `HOSTED_LOGIN_UPSTREAM`,
+   validate its discovery, and activate it.
+4. Create a federation binding on the wallet proxy that points at the
+   registered Keycloak, with the scopes, the claim mapping, and the client id and
+   secret using `client_secret_basic`. Validate the binding, then enable it.
+5. Bind the wallet proxy to the credential issuer for the
+   `authorization_code` grant, and select it for each credential
+   configuration that requires a login.
+
+The tenant's default authorization server is not changed. The Postman
+collection performs these steps in its *Keycloak wallet login* folder; see the
+[Postman guide](../postman/README.md#keycloak-wallet-login).
+
 ## KMS provider
 
 The KMS service holds signing key material and serves signing operations to the
