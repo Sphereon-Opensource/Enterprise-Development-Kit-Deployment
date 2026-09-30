@@ -224,7 +224,7 @@
             "scopes": [],
             "endpoints": {
               "api": {
-                "path": "/api/catalog/v1",
+                "path": "/api/catalog/attestation/v1",
                 "description": "Catalog management API root"
               },
               "public": {

@@ -97,6 +97,21 @@ security:
       "[service-data]": did-service
       "[service-oid4vci]": issuer-service
       "[service-oid4vp]": verifier-service
+# Catalog write permissions. The catalog commands (attestation and attribute APIs) ask the policy
+# engine for catalog.manage (create, update, delete, link, import, validate) and catalog.publish
+# (publish, disable). Tenant and platform administrators hold both; every other command follows the
+# roles engine default and is permitted. Catalog reads are not routed through these rules.
+authz:
+  policy:
+    default-engine: issuer-roles
+    engines:
+      issuer-roles:
+        type: roles
+        role-rules:
+          - pattern: catalog.manage
+            any-of: [tenant-admin, platform-admin]
+          - pattern: catalog.publish
+            any-of: [tenant-admin, platform-admin]
 transport:
   grpc:
     enabled: false
