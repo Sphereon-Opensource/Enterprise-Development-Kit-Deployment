@@ -59,8 +59,8 @@ Set `baseDomain` and `tenantSlug`; every URL follows from those two. The
 collection has one folder per identity: the platform operator lists or registers
 tenants, the tenant owner creates a service client, and the tenant APIs run with
 that service client's client-credentials token. Each folder gets its token from
-Postman's OAuth2 dialog. Optional folders cover Azure Key Vault and a Keycloak
-wallet login. See the [Postman guide](postman/README.md).
+Postman's OAuth2 dialog. Optional folders cover Azure Key Vault and a wallet login
+through your own Keycloak. See the [Postman guide](postman/README.md).
 
 ## Domain, DNS, and TLS model
 
@@ -172,8 +172,8 @@ node ./scripts/generate-compose-secrets.mjs
 
 The script fills every empty secret with an independent random value: database
 and role passwords, the keystore password, internal service client secrets,
-the admin console client secret, the issuer pipeline keys, the federation
-session key, and the passwords of the optional Keycloak overlay. It also copies
+the admin console client secret, the issuer pipeline keys, and the federation
+session key. It also copies
 the four `SECRET_AUTHORITY_*` coordinates from
 `compose/.secret-authority/current/window.env`. It never changes a value that
 is already set, so it is safe to run again, and you may enter values from your
@@ -243,8 +243,8 @@ published images, starts the services, waits for health checks, and records the
 installed tag. When it finds an earlier 0.25.0 release candidate, it upgrades
 directly to 0.25.0 (an RC1 installation passes through RC2 first) and refuses
 a downgrade. Before upgrading an existing installation, run
-`node ./scripts/generate-compose-secrets.mjs` once and read the RC4 and RC5
-notes in [the Compose quickstart](docs/quickstart-docker.md#installing-and-upgrading-released-images).
+`node ./scripts/generate-compose-secrets.mjs` once and follow
+[Upgrading a Docker Compose installation to 0.25.0](docs/upgrade-0.25.0.md).
 
 On Windows PowerShell, run:
 
@@ -738,8 +738,7 @@ and are optional validation tools. See
   planned maintenance window.
 - Use the Compose or Helm wrapper so known release transitions run in order.
   Upgrade an RC4 Compose installation directly to 0.25.0, not through RC5; see
-  the RC4 and RC5 configuration notes in
-  [the Compose quickstart](docs/quickstart-docker.md#installing-and-upgrading-released-images).
+  [Upgrading a Docker Compose installation to 0.25.0](docs/upgrade-0.25.0.md).
 - Do not treat a Helm manifest backup as a database backup.
 - If a Helm upgrade fails after database migration starts, keep the workloads
   stopped. Restore both pre-upgrade database snapshots before an explicit Helm
@@ -753,6 +752,7 @@ start fresh at RC3 and have no earlier supported upgrade lineage.
 | Document | Purpose |
 | --- | --- |
 | [Docker Compose quickstart](docs/quickstart-docker.md) | This document provides the detailed Compose setup and gateway procedure. |
+| [Compose upgrade to 0.25.0](docs/upgrade-0.25.0.md) | This document lists the changes and manual steps for upgrading an RC4 or RC5 Compose installation. |
 | [Kubernetes quickstart](docs/quickstart-kubernetes.md) | This document provides chart examples and release-specific Helm upgrade details. |
 | [Helm chart reference](helm/edk-enterprise/README.md) | This document describes chart values, services, security controls, and render checks. |
 | [TLS and gateway configuration](docs/tls-and-gateway.md) | This document explains local certificates, public certificates, Let's Encrypt, Gateway API, and host routing. |

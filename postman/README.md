@@ -130,6 +130,10 @@ offers it to the tenant `tenantSlug` (run *List tenants* first). The tenant then
 APIs > Azure Key Vault > Use a vault shared by the platform* to enable it and generate a key in
 it. Tenants never see the vault credentials or each other's keys.
 
+*Offer the vault to the tenant* sets the complete list of tenants the vault is offered to, so
+running it for another `tenantSlug` withdraws the offer from the tenant before. To keep several
+tenants, edit its `tenantIds` to list all of them.
+
 ## Keycloak wallet login
 
 With the OID4VCI authorization code flow, the wallet user signs in before the credential is
@@ -137,14 +141,34 @@ issued. The collection sets up a second authorization server on the tenant, the 
 at `https://<tenantSlug>.<baseDomain>/as/wallet-proxy`, which sends users to Keycloak. The
 tenant's default authorization server is not changed.
 
-1. In Keycloak, create a confidential OpenID Connect client with the standard flow and the redirect
-   URI `https://<tenantSlug>.<baseDomain>/as/wallet-proxy/federation/callback`. Keycloak needs no
-   OID4VCI support, but it must be reachable from the EDK installation.
-2. Set `keycloakIssuer` (for example `https://idp.example.com/realms/acme`), `keycloakClientId`
-   and `keycloakClientSecret`.
-3. Run *3. Tenant APIs > Keycloak wallet login > Set up the wallet proxy*. It creates the wallet
-   proxy and a public Postman wallet client, registers Keycloak, connects the two with a
-   federation binding, and allows the issuer to use the wallet proxy.
+The kit does not include Keycloak. Use a Keycloak you operate; it needs no OID4VCI support, but
+the EDK services must reach its issuer URL over HTTPS.
+[Wallet login through your own Keycloak](../docs/configuration.md#wallet-login-through-your-own-keycloak)
+describes the realm setup in more detail.
+
+1. In a Keycloak realm, create an OpenID Connect client with client authentication on
+   (confidential) and the standard flow enabled. Add the valid redirect URI
+   `https://<tenantSlug>.<baseDomain>/as/wallet-proxy/federation/callback` and make the
+   `openid`, `profile` and `email` scopes available to it. Create a test user with a password,
+   an email address and a name; you sign in as this user in step 5.
+2. Set these environment variables:
+
+   | Variable | Value |
+   | --- | --- |
+   | `keycloakIssuer` | The realm's issuer URL, for example `https://idp.example.com/realms/acme`. |
+   | `keycloakClientId` | The client id from step 1. |
+   | `keycloakClientSecret` | The secret from the client's **Credentials** tab. |
+
+   The test user's credentials are not stored in Postman; you type them on the Keycloak login
+   page.
+3. Run *3. Tenant APIs > Keycloak wallet login > Set up the wallet proxy*. It:
+   - creates the hosted wallet proxy with slug `wallet-proxy` in `FEDERATED_ONLY` mode;
+   - registers the public `postman-wallet` client with PKCE and the Postman callback;
+   - registers Keycloak as an external authorization server, validates its discovery document and
+     activates it;
+   - creates a federation binding from the wallet proxy to Keycloak with the scopes, the claim
+     mapping (`sub`, `email`, `name`) and your client id and secret, validates it and enables it;
+   - allows the credential issuer to use the wallet proxy for the authorization code grant.
 4. Run *Issue EuPid with a Keycloak login* up to the **6. Wallet: request the credential** folder.
    The first request points EuPid at the wallet proxy and the next ones create and resolve an
    authorization code offer.

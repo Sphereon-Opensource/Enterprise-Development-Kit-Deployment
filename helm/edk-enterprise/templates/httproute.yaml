@@ -593,7 +593,7 @@ spec:
       matches:
         - path:
             type: RegularExpression
-            value: "^/api/(identity/v1|identity-auth/v1/admin|party/v1)(/.*)?$"
+            value: "^/api/(identity/v1|identity-auth/v1/admin|party/v1|oauth2/v1)(/.*)?$"
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as") }}
           port: {{ (index .Values.services "tenant-as").restPort }}
