@@ -3,7 +3,7 @@
 # Pass this after the customer's maintained values file. An RC3 values export pins the ingress path
 # lists below, which would otherwise override RC4 chart defaults.
 #
-#   platform: /api/catalog/v1 and /public/catalogs are new tenant-host projections.
+#   platform: /api/catalog/attestation/v1 and /public/catalogs are new tenant-host projections.
 #   did:      the universal registrar moved off the bare /1.0/* prefix, which collided with the
 #             resolver's /1.0/identifiers.
 #   issuer:   /public/schema and /public/catalogs are new public read surfaces.
@@ -27,7 +27,8 @@ services:
         - /api/platform/setup/v1
         - /api/platform/bootstrap/v1
         - /api/platform/admin/v1
-        - /api/catalog/v1
+        - /api/catalog/attestation/v1
+        - /api/catalog/attribute/v1
         - /public/catalogs
   did:
     publicIngress:

@@ -84,6 +84,11 @@ otel:
         endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
         protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
 security:
+  # 0.25.0 posture: keep AuthZEN/PDP enforced, but run password/AAL1 login.
+  # Native AAL2/passkey step-up is deferred to post-0.25.0.
+  "profiles.default-required-aal": "aal1"
+  "profiles.default-cross-border-policy": "allow"
+  "commands.default-required-aal": "aal1"
   workload-trust-policy:
     trusted_service_ids:
       - service-crypto
@@ -97,6 +102,21 @@ security:
       "[service-data]": did-service
       "[service-oid4vci]": issuer-service
       "[service-oid4vp]": verifier-service
+# Catalog write permissions. The catalog commands (attestation and attribute APIs) ask the policy
+# engine for catalog.manage (create, update, delete, link, import, validate) and catalog.publish
+# (publish, disable). Tenant and platform administrators hold both; every other command follows the
+# roles engine default and is permitted. Catalog reads are not routed through these rules.
+authz:
+  policy:
+    default-engine: issuer-roles
+    engines:
+      issuer-roles:
+        type: roles
+        role-rules:
+          - pattern: catalog.manage
+            any-of: [tenant-admin, platform-admin]
+          - pattern: catalog.publish
+            any-of: [tenant-admin, platform-admin]
 transport:
   grpc:
     enabled: false
