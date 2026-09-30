@@ -278,6 +278,18 @@ data:
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+    # Catalog write permissions: tenant and platform administrators hold catalog.manage and catalog.publish.
+    authz:
+      policy:
+        default-engine: issuer-roles
+        engines:
+          issuer-roles:
+            type: roles
+            role-rules:
+              - pattern: catalog.manage
+                any-of: [tenant-admin, platform-admin]
+              - pattern: catalog.publish
+                any-of: [tenant-admin, platform-admin]
     applications:
       admin-console:
         public-base-path: /admin-console

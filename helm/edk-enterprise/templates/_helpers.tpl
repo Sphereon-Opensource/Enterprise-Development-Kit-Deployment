@@ -320,7 +320,8 @@ name, or an empty list for services that are not tenant-routed.
 - /api/oid4vci/v1
 - /api/credential-design/v1
 - /api/statuslist/v1
-- /api/catalog/v1
+- /api/catalog/attestation/v1
+- /api/catalog/attribute/v1
 {{- else if eq $name "verifier" -}}
 - /oid4vp
 - /request_uri

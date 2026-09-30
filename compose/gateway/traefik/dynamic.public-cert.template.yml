@@ -372,7 +372,7 @@ http:
     platform-host-catalogs:
       rule: >-
         Host(`platform.__BASE_DOMAIN__`) &&
-        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/attestation/v1`) || PathPrefix(`/api/catalog/attribute/v1`))
       entryPoints: ["websecure"]
       service: svc-issuer
       priority: 1050
@@ -381,7 +381,7 @@ http:
     tenant-catalogs:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/attestation/v1`) || PathPrefix(`/api/catalog/attribute/v1`))
       entryPoints: ["websecure"]
       service: svc-issuer
       priority: 220

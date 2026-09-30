@@ -194,10 +194,31 @@ async function configureEu(config) {
   return response;
 }
 
+async function read(config, action, requestPath) {
+  let response;
+  try {
+    response = await fetch(`${config.apiBaseUrl}${requestPath}`, {
+      method: "GET",
+      headers: { accept: "application/json", authorization: `Bearer ${config.token}` },
+    });
+  } catch {
+    throw new TrustDomainRequestError(`${action} request could not be completed`);
+  }
+  if (!response.ok) {
+    throw new TrustDomainRequestError(`${action} request was rejected with HTTP ${response.status}`);
+  }
+  const etag = response.headers.get("etag")?.trim();
+  try {
+    return { body: JSON.parse(await response.text()), etag };
+  } catch {
+    throw new TrustDomainRequestError(`${action} response was not valid JSON`);
+  }
+}
+
 async function configureCustom(config) {
   const custom = config.custom;
-  const base = `/domains/${encodeURIComponent(config.domainId)}/trust-sources/custom/${encodeURIComponent(custom.sourceId)}`;
-  const candidate = await mutation(config, "WeBuild candidate creation", "PUT", base, custom.ifMatch, {
+  const sourcePath = `/domains/${encodeURIComponent(config.domainId)}/trust-sources/${encodeURIComponent(custom.sourceId)}`;
+  const upserted = await mutation(config, "WeBuild source upsert", "PUT", sourcePath, custom.ifMatch, {
     url: custom.url,
     format: CUSTOM_LOTL_FORMAT,
     schemeIdentity: custom.schemeIdentity,
@@ -205,18 +226,28 @@ async function configureCustom(config) {
     egressPolicy: { allowedHosts: [custom.allowedHost] },
     enabled: custom.enabled,
   });
-  const revision = candidate.body?.revision;
-  if (!Number.isInteger(revision) || revision < 1) {
-    throw new TrustDomainRequestError("WeBuild candidate response did not contain a valid revision");
+  if (upserted.body?.sourceId !== custom.sourceId) {
+    throw new TrustDomainRequestError("WeBuild source upsert response did not describe the requested source");
   }
-  const revisionBase = `/domains/${encodeURIComponent(config.domainId)}/trust-sources/${encodeURIComponent(custom.sourceId)}/revisions/${revision}`;
-  const validated = await mutation(config, "WeBuild candidate validation", "POST", `${revisionBase}/validate`, candidate.etag);
-  if (validated.body?.state !== "VALIDATED") {
+  const revisions = await read(config, "WeBuild revision listing", `${sourcePath}/revisions`);
+  const candidates = (Array.isArray(revisions.body?.items) ? revisions.body.items : [])
+    .filter((item) => item?.status === "CANDIDATE" && Number.isInteger(item.revision) && item.revision >= 1);
+  if (candidates.length === 0) {
+    throw new TrustDomainRequestError("WeBuild source upsert did not produce a CANDIDATE revision");
+  }
+  const revision = Math.max(...candidates.map((item) => item.revision));
+  const revisionPath = `${sourcePath}/revisions/${revision}`;
+  const validated = await mutation(config, "WeBuild candidate validation", "POST", `${revisionPath}/validate`, upserted.etag);
+  if (validated.body?.status !== "VALIDATED" || validated.body?.revision !== revision) {
     throw new TrustDomainRequestError("WeBuild candidate validation did not produce a VALIDATED revision");
   }
-  const activated = await mutation(config, "WeBuild candidate activation", "POST", `${revisionBase}/activate`, validated.etag);
-  if (activated.body?.revision?.state !== "ACTIVE") {
-    throw new TrustDomainRequestError("WeBuild activation did not produce an ACTIVE revision");
+  const current = await read(config, "WeBuild source read", sourcePath);
+  if (!current.etag || !/^"(?:[^"\\]|\\.)+"$/u.test(current.etag)) {
+    throw new TrustDomainRequestError("WeBuild source read response did not include a valid ETag");
+  }
+  const activated = await mutation(config, "WeBuild candidate activation", "POST", `${revisionPath}/activate`, current.etag);
+  if (activated.body?.source?.activeRevision !== revision || activated.body?.snapshot?.revision !== revision) {
+    throw new TrustDomainRequestError("WeBuild activation did not make the validated revision active");
   }
   return { revision, etag: activated.etag };
 }
