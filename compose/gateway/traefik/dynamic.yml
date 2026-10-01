@@ -361,7 +361,7 @@ http:
     tenant-as-identity-admin:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        PathRegexp(`^/api/(identity/v1|identity-auth/v1/admin|party/v1)(/.*)?$`)
+        PathRegexp(`^/api/(identity/v1|identity-auth/v1/admin|party/v1|oauth2/v1)(/.*)?$`)
       entryPoints: ["websecure"]
       service: svc-as
       priority: 220
@@ -379,7 +379,7 @@ http:
       tls: {}
 
     # TS 11 catalogs are issuer-owned. Public SchemaMeta stays anonymous
-    # under /public/catalogs; management is /api/catalog/v1.
+    # under /public/catalogs; management is /api/catalog/attestation/v1.
     # A catalog slug is unique within its tenant, not across the install, so the
     # platform host cannot resolve which tenant owns one and must never guess.
     # Catalog paths that reach the platform host go to the issuer anyway, so the
@@ -389,7 +389,7 @@ http:
     platform-host-catalogs:
       rule: >-
         Host(`platform.saas.localtest.me`) &&
-        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/attestation/v1`) || PathPrefix(`/api/catalog/attribute/v1`))
       entryPoints: ["websecure"]
       service: svc-issuer
       priority: 1050
@@ -398,7 +398,7 @@ http:
     tenant-catalogs:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/v1`))
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/attestation/v1`) || PathPrefix(`/api/catalog/attribute/v1`))
       entryPoints: ["websecure"]
       service: svc-issuer
       priority: 220

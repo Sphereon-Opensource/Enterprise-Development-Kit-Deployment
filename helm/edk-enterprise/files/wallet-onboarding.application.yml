@@ -7,7 +7,6 @@
 "server.rest.auth.expected-audience": "enterprise-wallet-onboarding"
 "wallet.browser.session.issuer": "${env:WALLET_BROWSER_SESSION_ISSUER:https://wallet.example.invalid/wallet}"
 "wallet.browser.session.jwks-uri": "${env:WALLET_BROWSER_SESSION_JWKS_URI:http://enterprise-wallet-browser:8080/wallet/.well-known/session-jwks.json}"
-"tenant.resolution.fallback.tenant-id": "${env:TENANT_ID:default}"
 
 server:
   service-identity:

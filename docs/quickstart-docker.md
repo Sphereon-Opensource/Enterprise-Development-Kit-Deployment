@@ -131,7 +131,9 @@ idempotent.
 
 Before upgrading, back up both databases and run
 `node ../scripts/generate-compose-secrets.mjs` once. It adds the secrets 0.25.0
-requires without changing existing values.
+requires without changing existing values. For the complete list of changes and
+manual steps from RC4 or RC5, see
+[Upgrading a Docker Compose installation to 0.25.0](upgrade-0.25.0.md).
 
 An RC4 `config/platform.application.yml` configures the platform
 authorization server under `oauth2.servers.default` and reads its WebAuthn
