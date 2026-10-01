@@ -81,11 +81,6 @@ data:
           trust-tenant-registry-issuers: true
           # The registry adds the tenant and AS UUID to this in-cluster base.
           self-jwks-base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
-      # Platform subjects whose own client has no token-exchange authority, such as a
-      # client-credentials client granted platform-admin, exchange through the operator
-      # delegation channel, whose authority decides from the subject's roles.
-      sts:
-        provisioning-client-id: platform-operator-cli
       {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "tenant-kms").enabled }}
       service-identity:
         # The platform uses the tenant-bound KMS client registered during
