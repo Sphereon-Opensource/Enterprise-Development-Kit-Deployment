@@ -606,7 +606,12 @@ Write-Host "Verifying tenant setup-created gateway protocol routes..." -Foregrou
 $bound = Invoke-Json -Method Get -BearerToken $operatorToken `
   -Uri "$platformUrl/api/platform/admin/v1/tenants/$tenantId/public-endpoints"
 $bindingJson = $bound | ConvertTo-Json -Depth 20
-foreach ($kind in @('OID4VCI_ISSUER', 'OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER')) {
+$requiredEndpointKinds = if ($VerifierOnly) {
+  @('OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER')
+} else {
+  @('OID4VCI_ISSUER', 'OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER')
+}
+foreach ($kind in $requiredEndpointKinds) {
   if ($bindingJson -notmatch [regex]::Escape($kind)) {
     Fail "Tenant setup did not create required gateway endpoint binding '$kind'."
   }
@@ -625,7 +630,9 @@ Write-Host "Tenant gateway   : $tenantGatewayUrl"
 Write-Host ""
 if (-not [string]::IsNullOrWhiteSpace($tenantGatewayUrl)) {
   $tenantGatewayBase = $tenantGatewayUrl.TrimEnd('/')
-  Write-Host "OID4VCI metadata : $tenantGatewayBase/.well-known/openid-credential-issuer"
+  if (-not $VerifierOnly) {
+    Write-Host "OID4VCI metadata : $tenantGatewayBase/.well-known/openid-credential-issuer"
+  }
   Write-Host "OAuth metadata   : $tenantGatewayBase/.well-known/oauth-authorization-server"
   Write-Host "DID document     : $tenantGatewayBase/.well-known/did.json"
 }

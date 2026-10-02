@@ -46,6 +46,33 @@ if (-not $body) { throw 'Cannot locate tenant request constructor' }
 $script:ProvisionBody = [ScriptBlock]::Create($provisionAst.ParamBlock.Extent.Text + "`n" +
   $body.Extent.Text + "`n" + '$tenantBody | ConvertTo-Json -Depth 8 -Compress')
 
+# Execute the real endpoint checks and final summary, with only transport/output stubbed.
+$provisionText = $provisionAst.Extent.Text
+$verificationStart = $provisionText.IndexOf('# --- Step 5:')
+$summaryStart = $provisionText.IndexOf('# --- Step 6:')
+$verificationStatements = @($provisionAst.EndBlock.Statements | Where-Object {
+  $_.Extent.StartOffset -gt $verificationStart -and $_.Extent.StartOffset -lt $summaryStart
+})
+$summaryStatements = @($provisionAst.EndBlock.Statements | Where-Object {
+  $_.Extent.StartOffset -gt $summaryStart -and $_ -isnot [Management.Automation.Language.ExitStatementAst]
+})
+if (-not $verificationStatements.Count -or -not $summaryStatements.Count) { throw 'Cannot locate provisioning verification/summary blocks' }
+$fixtureBindings = @'
+$platformUrl = 'https://platform.example.invalid'
+$operatorToken = 'fixture-token'
+$tenantId = 'fixture-tenant'
+$tenantHost = 'owned.example.invalid'
+$tenantGatewayUrl = 'https://owned.example.invalid'
+$adminConsoleUrl = 'https://console.example.invalid'
+function Invoke-Json { return $script:BoundEndpoints }
+function Fail([string]$Message) { throw $Message }
+function Write-Host { param([object]$Object, [object]$ForegroundColor) $script:ProvisionOutput.Add([string]$Object) }
+'@
+$script:ProvisionVerification = [ScriptBlock]::Create($provisionAst.ParamBlock.Extent.Text + "`n" + $fixtureBindings + "`n" +
+  (($verificationStatements | ForEach-Object { $_.Extent.Text }) -join "`n"))
+$script:ProvisionSummary = [ScriptBlock]::Create($provisionAst.ParamBlock.Extent.Text + "`n" + $fixtureBindings + "`n" +
+  (($summaryStatements | ForEach-Object { $_.Extent.Text }) -join "`n"))
+
 function Assert-True($Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 function Assert-Throws([ScriptBlock]$Action, [string]$Pattern) {
   try { & $Action | Out-Null } catch {
@@ -142,6 +169,41 @@ try {
     Assert-True ($request.provisioning.issuer -eq $false -and $request.provisioning.verifier -eq $true -and
       $request.provisioning.keysAndDids -eq $true -and $request.provisioning.sampleData -eq $false) 'Verifier-only request is not exact'
     Assert-True ($request.login.enabled -eq $true -and $request.login.defaultAuthorizationServerRequired -eq $true) 'Hosted AS disabled'
+  }
+  Test 'Verifier-only actual endpoint verification accepts verifier and OAuth without issuer' {
+    $script:ProvisionOutput = [Collections.Generic.List[string]]::new()
+    $script:BoundEndpoints = @{ host = 'owned.example.invalid'; kinds = @('OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER') }
+    & $script:ProvisionVerification -VerifierOnly
+  }
+  Test 'Default actual endpoint verification still rejects missing issuer' {
+    $script:ProvisionOutput = [Collections.Generic.List[string]]::new()
+    $script:BoundEndpoints = @{ host = 'owned.example.invalid'; kinds = @('OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER') }
+    Assert-Throws { & $script:ProvisionVerification } 'OID4VCI_ISSUER'
+  }
+  Test 'Default actual endpoint verification retains all three required kinds' {
+    $script:ProvisionOutput = [Collections.Generic.List[string]]::new()
+    $script:BoundEndpoints = @{ host = 'owned.example.invalid'; kinds = @('OID4VCI_ISSUER', 'OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER') }
+    & $script:ProvisionVerification
+  }
+  Test 'Verifier-only still requires verifier and OAuth endpoint bindings' {
+    $script:ProvisionOutput = [Collections.Generic.List[string]]::new()
+    foreach ($kind in @('OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER')) {
+      $script:BoundEndpoints = @{ host = 'owned.example.invalid'; kinds = @('OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER') | Where-Object { $_ -ne $kind } }
+      Assert-Throws { & $script:ProvisionVerification -VerifierOnly } $kind
+    }
+  }
+  Test 'Verifier-only summary does not advertise an unprovisioned issuer' {
+    $script:ProvisionOutput = [Collections.Generic.List[string]]::new()
+    & $script:ProvisionSummary -VerifierOnly
+    $summary = $script:ProvisionOutput -join "`n"
+    Assert-True ($summary -notmatch 'OID4VCI|openid-credential-issuer') 'Verifier-only summary advertised issuer metadata'
+    Assert-True ($summary -match 'oauth-authorization-server' -and $summary -match 'did.json') 'Verifier-only summary lost OAuth/DID metadata'
+  }
+  Test 'Default summary still advertises issuer OAuth and DID metadata' {
+    $script:ProvisionOutput = [Collections.Generic.List[string]]::new()
+    & $script:ProvisionSummary
+    $summary = $script:ProvisionOutput -join "`n"
+    Assert-True ($summary -match 'openid-credential-issuer' -and $summary -match 'oauth-authorization-server' -and $summary -match 'did.json') 'Default metadata summary changed'
   }
 } finally {
   if (-not $root.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath()), [StringComparison]::OrdinalIgnoreCase)) {
