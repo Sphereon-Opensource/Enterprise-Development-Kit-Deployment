@@ -48,6 +48,11 @@
   There is no parameter that takes the password itself, so it does not show up
   in command history.
 
+  -VerifierOnly provisions a diagnostic tenant with a hosted authorization
+  server, keys/DID and verifier, without an issuer or sample data. Its platform,
+  tenant AS, tenant KMS, DID and verifier must already be running. The ordinary
+  customer provisioning defaults remain unchanged.
+
 .EXAMPLE
   .\provision.ps1
 
@@ -72,6 +77,7 @@ param(
   [string]$LicenseBundle,
   [switch]$PasswordStdin,
   [switch]$SkipSetup,
+  [switch]$VerifierOnly,
   [switch]$AllowInsecureTls,
   [switch]$Help
 )
@@ -536,7 +542,7 @@ $tenantBody = @{
     ownerAdmin                    = @{ source = 'technical' }
   }
   login        = @{ enabled = $true; defaultAuthorizationServerRequired = $true }
-  provisioning = @{ issuer = $true; verifier = $true; keysAndDids = $true; sampleData = $true }
+  provisioning = @{ issuer = (-not $VerifierOnly); verifier = $true; keysAndDids = $true; sampleData = (-not $VerifierOnly) }
 }
 $tenantsUrl = "$platformUrl/api/platform/admin/v1/tenants"
 $tenantId = $null
