@@ -305,6 +305,47 @@ function Get-LocationHeader {
   return $Response.Headers['Location']
 }
 
+# HttpWebRequest preserves the existing WebSession CookieContainer while returning
+# redirect headers in both Windows PowerShell 5.1 and PowerShell 7. Invoke-WebRequest
+# with MaximumRedirection=0 has incompatible exception behavior between those hosts.
+function Invoke-OperatorRedirect {
+  param(
+    [string]$Uri,
+    [string]$Method,
+    [hashtable]$Body,
+    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession
+  )
+  $request = [System.Net.HttpWebRequest]::CreateHttp([Uri]$Uri)
+  $request.Method = $Method
+  $request.AllowAutoRedirect = $false
+  $request.CookieContainer = $WebSession.Cookies
+  $request.Timeout = 30000
+  $request.ReadWriteTimeout = 30000
+  if ($null -ne $Body) {
+    $form = ($Body.Keys | ForEach-Object {
+      [Uri]::EscapeDataString([string]$_) + '=' + [Uri]::EscapeDataString([string]$Body[$_])
+    }) -join '&'
+    $bytes = [Text.Encoding]::UTF8.GetBytes($form)
+    $request.ContentType = 'application/x-www-form-urlencoded; charset=utf-8'
+    $request.ContentLength = $bytes.Length
+    $stream = $request.GetRequestStream()
+    try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+  }
+  $response = $null
+  try {
+    $response = $request.GetResponse()
+    if ([int]$response.StatusCode -notin @(301, 302, 303)) {
+      throw "Expected authorization redirect, received HTTP $([int]$response.StatusCode)."
+    }
+    return Get-LocationHeader $response
+  } catch {
+    if ($_.Exception.Response) { $_.Exception.Response.Close() }
+    throw
+  } finally {
+    if ($null -ne $response) { $response.Close() }
+  }
+}
+
 # --- Step 1: wait for platform gateway reachability ---------------------------
 function Wait-PlatformGateway {
   param([string]$Url, [int]$Retries = 30, [int]$DelaySeconds = 4)
@@ -465,9 +506,8 @@ if ($returnUrl)   { $loginBody['return_url']    = $returnUrl }
 $callbackUrl = $null
 $redirectWithCode = $null
 try {
-  $resp = Invoke-WebRequest -Uri "$platformUrl/login" -Method Post -Body $loginBody `
-    -WebSession $opSession -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
-  $redirectWithCode = (Get-FinalUri $resp)
+  $callbackUrl = Invoke-OperatorRedirect -Uri "$platformUrl/login" -Method Post -Body $loginBody `
+    -WebSession $opSession
 } catch {
   $r = $_.Exception.Response
   if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
@@ -479,16 +519,15 @@ try {
 if ([string]::IsNullOrWhiteSpace($redirectWithCode)) {
   if ([string]::IsNullOrWhiteSpace($callbackUrl)) { Fail "Login did not return a callback Location." }
   if ($callbackUrl -match 'error=invalid_credentials') { Fail "Operator login rejected: invalid credentials." }
-  if ($callbackUrl -notmatch '^https?://') { $callbackUrl = "$platformUrl$callbackUrl" }
+  $callbackUrl = [Uri]::new([Uri]"$platformUrl/", $callbackUrl).AbsoluteUri
+  if ($callbackUrl -match '[?&#]code=') { $redirectWithCode = $callbackUrl }
 }
 
-# 3.4 Resume the authorization callback to obtain the authorization code when
-# the login POST did not already follow through to the final redirect URI.
+# 3.4 Resume an intermediate authorization callback only when the login redirect
+# does not yet contain a code. The registered callback UI need not be deployed.
 if ([string]::IsNullOrWhiteSpace($redirectWithCode)) {
   try {
-    $resp = Invoke-WebRequest -Uri $callbackUrl -Method Get -WebSession $opSession `
-      -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
-    $redirectWithCode = (Get-FinalUri $resp)
+    $redirectWithCode = Invoke-OperatorRedirect -Uri $callbackUrl -Method Get -WebSession $opSession
   } catch {
     $r = $_.Exception.Response
     if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {

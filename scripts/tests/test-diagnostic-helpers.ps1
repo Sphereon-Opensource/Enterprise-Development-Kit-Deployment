@@ -1,4 +1,4 @@
-# Exercises real destination preparation and request construction without OpenSSL or HTTP.
+# Exercises real boundaries without OpenSSL or customer HTTP; login uses an owned loopback fixture.
 $ErrorActionPreference = 'Stop'
 $scripts = Split-Path -Parent $PSScriptRoot
 $root = Join-Path ([IO.Path]::GetTempPath()) ('customer-diagnostics-' + [guid]::NewGuid().ToString('N'))
@@ -10,6 +10,7 @@ $owned = Join-Path $root 'owned'
 $null = New-Item -ItemType Directory -Path $owned
 $passed = 0
 $failed = 0
+$script:LoginFixtureServer = $null
 
 function Read-ScriptAst([string]$Path) {
   $tokens = $null; $parseErrors = $null
@@ -73,6 +74,82 @@ $script:ProvisionVerification = [ScriptBlock]::Create($provisionAst.ParamBlock.E
 $script:ProvisionSummary = [ScriptBlock]::Create($provisionAst.ParamBlock.Extent.Text + "`n" + $fixtureBindings + "`n" +
   (($summaryStatements | ForEach-Object { $_.Extent.Text }) -join "`n"))
 
+# Execute the actual login/callback block against a real isolated redirect server.
+# The optional callback deliberately 404s, as in the headless customer topology.
+$loginStart = $provisionText.IndexOf('# 3.3 Submit credentials')
+$loginEnd = $provisionText.IndexOf('# 3.5 Exchange the code')
+if ($loginStart -lt 0 -or $loginEnd -le $loginStart) { throw 'Cannot locate operator login block' }
+$loginFunctions = @($provisionAst.EndBlock.Statements | Where-Object {
+  $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and
+    $_.Name -in @('Get-FinalUri', 'Get-LocationHeader', 'Invoke-OperatorRedirect')
+})
+$script:ProvisionLogin = [ScriptBlock]::Create(@'
+param([string]$FixtureUrl, [string]$FixtureUser = 'fixture')
+$platformUrl = $FixtureUrl
+$operatorEmail = $FixtureUser
+$operatorPassword = 'fixture-password + unicode-' + [char]0xe9
+$sessionId = 'fixture-session'
+$tabId = 'fixture-tab'
+$sessionCode = 'fixture-code-csrf'
+$returnUrl = '/authorize/resume'
+$opSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$opSession.Cookies.Add([Uri]$platformUrl, [Net.Cookie]::new('fixture-csrf', 'fixture-cookie', '/'))
+function Fail([string]$Message) { throw $Message }
+'@ + "`n" + (($loginFunctions | ForEach-Object { $_.Extent.Text }) -join "`n") + "`n" +
+  $provisionText.Substring($loginStart, $loginEnd - $loginStart) + "`n" +
+  '[pscustomobject]@{ code = $authCode; cookies = $opSession.Cookies.GetCookieHeader([Uri]$platformUrl) }')
+
+function Start-LoginFixture {
+  $serverPath = Join-Path $root 'login-fixture.js'
+  $readyPath = Join-Path $root 'login-fixture-port.txt'
+  $script:LoginRequestsPath = Join-Path $root 'login-fixture-requests.jsonl'
+  [IO.File]::WriteAllText($serverPath, @'
+const http = require('http');
+const fs = require('fs');
+const [ready, requests] = process.argv.slice(2);
+const server = http.createServer((req, res) => {
+  let body = '';
+  req.on('data', chunk => { body += chunk; });
+  req.on('end', () => {
+    const path = new URL(req.url, 'http://127.0.0.1').pathname;
+    const form = Object.fromEntries(new URLSearchParams(body));
+    fs.appendFileSync(requests, JSON.stringify({method:req.method,path,cookie:req.headers.cookie || '',form}) + '\n');
+    if (path === '/login' && req.method === 'POST') {
+      if (form.username === 'http-failure') { res.writeHead(401); res.end('Unauthorized'); return; }
+      if (form.username === 'not-redirect') { res.writeHead(200); res.end('Not authorized'); return; }
+      if (form.username === 'missing-location') { res.writeHead(302); res.end(); return; }
+      const location = form.username === 'invalid' ? '/onboarding/callback?error=invalid_credentials' :
+        form.username === 'intermediate' ? '/authorize/resume' : '/onboarding/callback?code=fixture-auth-code&state=fixture-state';
+      res.writeHead(302, {'Location':location,'Set-Cookie':'fixture-auth=authenticated; Path=/'});
+      res.end(); return;
+    }
+    if (path === '/authorize/resume') {
+      res.writeHead(302, {'Location':'/onboarding/callback?code=fixture-auth-code&state=fixture-state'});
+      res.end(); return;
+    }
+    res.writeHead(404); res.end('Optional callback UI is absent');
+  });
+});
+server.listen(0,'127.0.0.1',() => fs.writeFileSync(ready, String(server.address().port)));
+'@, [Text.UTF8Encoding]::new($false))
+  $nodePath = @(Get-Command node -CommandType Application)[0].Source
+  $script:LoginFixtureServer = Start-Process -FilePath $nodePath `
+    -ArgumentList @(('"' + $serverPath + '"'), ('"' + $readyPath + '"'), ('"' + $script:LoginRequestsPath + '"')) `
+    -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'fixture-stdout.txt') `
+    -RedirectStandardError (Join-Path $root 'fixture-stderr.txt')
+  $deadline = [DateTime]::UtcNow.AddSeconds(10)
+  while (-not (Test-Path -LiteralPath $readyPath)) {
+    if ($script:LoginFixtureServer.HasExited -or [DateTime]::UtcNow -ge $deadline) { throw 'Owned loopback fixture did not start' }
+    Start-Sleep -Milliseconds 50
+  }
+  $script:LoginFixtureUrl = 'http://127.0.0.1:' + ([IO.File]::ReadAllText($readyPath)).Trim()
+}
+
+function Read-LoginRequests {
+  if (-not (Test-Path -LiteralPath $script:LoginRequestsPath)) { return @() }
+  return @(Get-Content -LiteralPath $script:LoginRequestsPath -Encoding UTF8 | ForEach-Object { $_ | ConvertFrom-Json })
+}
+
 function Assert-True($Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 function Assert-Throws([ScriptBlock]$Action, [string]$Pattern) {
   try { & $Action | Out-Null } catch {
@@ -87,6 +164,39 @@ function Test([string]$Name, [ScriptBlock]$Action) {
 }
 
 try {
+  Start-LoginFixture
+  Test 'Login redirect code succeeds without fetching an absent optional callback UI' {
+    $before = @(Read-LoginRequests).Count
+    $actual = & $script:ProvisionLogin -FixtureUrl $script:LoginFixtureUrl
+    $requests = @(Read-LoginRequests | Select-Object -Skip $before)
+    Assert-True ($actual.code -eq 'fixture-auth-code') 'Successful login code was lost'
+    Assert-True ($requests.Count -eq 1 -and $requests[0].path -eq '/login' -and $requests[0].method -eq 'POST') 'Optional callback was fetched'
+    Assert-True ($requests[0].cookie -match 'fixture-csrf=fixture-cookie') 'CSRF session cookie was dropped'
+    Assert-True ($actual.cookies -match 'fixture-auth=authenticated') 'Response session cookie was dropped'
+    Assert-True ($requests[0].form.password -eq ('fixture-password + unicode-' + [char]0xe9) -and
+      $requests[0].form.session_code -eq 'fixture-code-csrf' -and $requests[0].form.tab_id -eq 'fixture-tab') 'Credential/CSRF form encoding changed'
+  }
+  Test 'Intermediate authorization callback retains cookies and stops at final code Location' {
+    $before = @(Read-LoginRequests).Count
+    $actual = & $script:ProvisionLogin -FixtureUrl $script:LoginFixtureUrl -FixtureUser 'intermediate'
+    $requests = @(Read-LoginRequests | Select-Object -Skip $before)
+    Assert-True ($actual.code -eq 'fixture-auth-code') 'Intermediate callback code was lost'
+    Assert-True ($requests.Count -eq 2 -and $requests[1].path -eq '/authorize/resume' -and $requests[1].method -eq 'GET') 'Intermediate callback flow changed'
+    Assert-True ($requests[1].cookie -match 'fixture-auth=authenticated') 'Authenticated cookie was not retained on callback'
+    Assert-True (@($requests | Where-Object { $_.path -eq '/onboarding/callback' }).Count -eq 0) 'Optional UI was fetched'
+  }
+  Test 'Invalid credentials redirect is rejected without fetching callback UI' {
+    $before = @(Read-LoginRequests).Count
+    Assert-Throws { & $script:ProvisionLogin -FixtureUrl $script:LoginFixtureUrl -FixtureUser 'invalid' } 'invalid credentials'
+    Assert-True (@(Read-LoginRequests).Count -eq $before + 1) 'Rejected credential redirect was followed'
+  }
+  Test 'Real login HTTP failures remain failures' {
+    Assert-Throws { & $script:ProvisionLogin -FixtureUrl $script:LoginFixtureUrl -FixtureUser 'http-failure' } 'Operator login failed.*401'
+  }
+  Test 'Missing redirect Location and nonredirect login responses remain failures' {
+    Assert-Throws { & $script:ProvisionLogin -FixtureUrl $script:LoginFixtureUrl -FixtureUser 'missing-location' } 'Location'
+    Assert-Throws { & $script:ProvisionLogin -FixtureUrl $script:LoginFixtureUrl -FixtureUser 'not-redirect' } 'redirect|authorization code'
+  }
   Test 'External fresh destination creates authority directories within explicit owned root' {
     $target = Join-Path $owned 'fresh'
     $actual = & $script:AuthorityInit -OutputDirectory $target -ExternalOutputRoot $owned
@@ -206,6 +316,10 @@ try {
     Assert-True ($summary -match 'openid-credential-issuer' -and $summary -match 'oauth-authorization-server' -and $summary -match 'did.json') 'Default metadata summary changed'
   }
 } finally {
+  if ($script:LoginFixtureServer -and -not $script:LoginFixtureServer.HasExited) {
+    Stop-Process -Id $script:LoginFixtureServer.Id -Force
+    $script:LoginFixtureServer.WaitForExit()
+  }
   if (-not $root.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath()), [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Refusing cleanup outside test temporary root'
   }
