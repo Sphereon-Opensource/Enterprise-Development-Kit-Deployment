@@ -5,12 +5,17 @@
 .DESCRIPTION
   The platform receives the central permit-signing private key and every
   workload assertion public key. Each satellite receives only its own
-  assertion private key and the central permit public key. Output is confined
-  to compose/.secret-authority, which is ignored and must never be committed.
+  assertion private key and the central permit public key. Ordinary output is
+  confined to compose/.secret-authority. For an independently owned diagnostic
+  environment, -ExternalOutputRoot selects an explicit existing owned root;
+  -OutputDirectory must be an absolute, nonexistent child of that root.
+  External mode never deletes or adopts an existing destination.
+  Private key material must never be committed.
 #>
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][string]$OutputDirectory,
+  [string]$ExternalOutputRoot,
   [string[]]$Workload = @(
     'service-platform',
     'service-crypto',
@@ -37,14 +42,49 @@ if ([string]::IsNullOrWhiteSpace($openssl)) {
 }
 
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
-$allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\compose\.secret-authority'))
+$externalOutput = $PSBoundParameters.ContainsKey('ExternalOutputRoot')
+if ($externalOutput) {
+  $absolutePath = '^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+(?:[\\/]|$))'
+  if ($OutputDirectory -notmatch $absolutePath -or $ExternalOutputRoot -notmatch $absolutePath) {
+    throw 'External authority output and its owned root must be absolute filesystem paths.'
+  }
+  $allowedRoot = [System.IO.Path]::GetFullPath($ExternalOutputRoot).TrimEnd('\', '/')
+  if ($allowedRoot -eq [System.IO.Path]::GetPathRoot($allowedRoot).TrimEnd('\', '/')) {
+    throw 'External authority owned root cannot be a filesystem root.'
+  }
+  if (-not (Test-Path -LiteralPath $allowedRoot -PathType Container)) {
+    throw 'External authority output requires an existing owned root directory.'
+  }
+} else {
+  $allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\compose\.secret-authority'))
+}
 if (-not $resolvedOutput.StartsWith(
     $allowedRoot + [System.IO.Path]::DirectorySeparatorChar,
     [System.StringComparison]::OrdinalIgnoreCase
   )) {
   throw "Secret-authority output must be contained by ${allowedRoot}: $resolvedOutput"
 }
-if (Test-Path -LiteralPath $resolvedOutput) {
+# Check every existing ancestor before creating output or removing an ordinary
+# customer window. A junction must not redirect either operation outside its root.
+$scanPath = $resolvedOutput
+while ($scanPath) {
+  if (Test-Path -LiteralPath $scanPath) {
+    $entry = Get-Item -LiteralPath $scanPath -Force
+    if ($entry.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+      throw "Secret-authority output cannot traverse a reparse point: $scanPath"
+    }
+  }
+  $parentPath = Split-Path -Parent $scanPath
+  if ($parentPath -eq $scanPath) { break }
+  $scanPath = $parentPath
+}
+if ($externalOutput) {
+  if (Test-Path -LiteralPath $resolvedOutput) {
+    throw 'External authority output requires a fresh nonexistent destination.'
+  }
+  # Do not use Force: a concurrent creator must not turn this into adoption.
+  New-Item -ItemType Directory -Path $resolvedOutput -ErrorAction Stop | Out-Null
+} elseif (Test-Path -LiteralPath $resolvedOutput) {
   Remove-Item -LiteralPath $resolvedOutput -Recurse -Force
 }
 foreach ($directory in @('central', 'public', 'workload')) {
