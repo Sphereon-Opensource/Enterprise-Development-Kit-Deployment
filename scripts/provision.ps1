@@ -48,6 +48,11 @@
   There is no parameter that takes the password itself, so it does not show up
   in command history.
 
+  -VerifierOnly provisions a diagnostic tenant with a hosted authorization
+  server, keys/DID and verifier, without an issuer or sample data. Its platform,
+  tenant AS, tenant KMS, DID and verifier must already be running. The ordinary
+  customer provisioning defaults remain unchanged.
+
 .EXAMPLE
   .\provision.ps1
 
@@ -72,6 +77,7 @@ param(
   [string]$LicenseBundle,
   [switch]$PasswordStdin,
   [switch]$SkipSetup,
+  [switch]$VerifierOnly,
   [switch]$AllowInsecureTls,
   [switch]$Help
 )
@@ -299,6 +305,47 @@ function Get-LocationHeader {
   return $Response.Headers['Location']
 }
 
+# HttpWebRequest preserves the existing WebSession CookieContainer while returning
+# redirect headers in both Windows PowerShell 5.1 and PowerShell 7. Invoke-WebRequest
+# with MaximumRedirection=0 has incompatible exception behavior between those hosts.
+function Invoke-OperatorRedirect {
+  param(
+    [string]$Uri,
+    [string]$Method,
+    [hashtable]$Body,
+    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession
+  )
+  $request = [System.Net.HttpWebRequest]::CreateHttp([Uri]$Uri)
+  $request.Method = $Method
+  $request.AllowAutoRedirect = $false
+  $request.CookieContainer = $WebSession.Cookies
+  $request.Timeout = 30000
+  $request.ReadWriteTimeout = 30000
+  if ($null -ne $Body) {
+    $form = ($Body.Keys | ForEach-Object {
+      [Uri]::EscapeDataString([string]$_) + '=' + [Uri]::EscapeDataString([string]$Body[$_])
+    }) -join '&'
+    $bytes = [Text.Encoding]::UTF8.GetBytes($form)
+    $request.ContentType = 'application/x-www-form-urlencoded; charset=utf-8'
+    $request.ContentLength = $bytes.Length
+    $stream = $request.GetRequestStream()
+    try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+  }
+  $response = $null
+  try {
+    $response = $request.GetResponse()
+    if ([int]$response.StatusCode -notin @(301, 302, 303)) {
+      throw "Expected authorization redirect, received HTTP $([int]$response.StatusCode)."
+    }
+    return Get-LocationHeader $response
+  } catch {
+    if ($_.Exception.Response) { $_.Exception.Response.Close() }
+    throw
+  } finally {
+    if ($null -ne $response) { $response.Close() }
+  }
+}
+
 # --- Step 1: wait for platform gateway reachability ---------------------------
 function Wait-PlatformGateway {
   param([string]$Url, [int]$Retries = 30, [int]$DelaySeconds = 4)
@@ -459,9 +506,8 @@ if ($returnUrl)   { $loginBody['return_url']    = $returnUrl }
 $callbackUrl = $null
 $redirectWithCode = $null
 try {
-  $resp = Invoke-WebRequest -Uri "$platformUrl/login" -Method Post -Body $loginBody `
-    -WebSession $opSession -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
-  $redirectWithCode = (Get-FinalUri $resp)
+  $callbackUrl = Invoke-OperatorRedirect -Uri "$platformUrl/login" -Method Post -Body $loginBody `
+    -WebSession $opSession
 } catch {
   $r = $_.Exception.Response
   if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
@@ -473,16 +519,15 @@ try {
 if ([string]::IsNullOrWhiteSpace($redirectWithCode)) {
   if ([string]::IsNullOrWhiteSpace($callbackUrl)) { Fail "Login did not return a callback Location." }
   if ($callbackUrl -match 'error=invalid_credentials') { Fail "Operator login rejected: invalid credentials." }
-  if ($callbackUrl -notmatch '^https?://') { $callbackUrl = "$platformUrl$callbackUrl" }
+  $callbackUrl = [Uri]::new([Uri]"$platformUrl/", $callbackUrl).AbsoluteUri
+  if ($callbackUrl -match '[?&#]code=') { $redirectWithCode = $callbackUrl }
 }
 
-# 3.4 Resume the authorization callback to obtain the authorization code when
-# the login POST did not already follow through to the final redirect URI.
+# 3.4 Resume an intermediate authorization callback only when the login redirect
+# does not yet contain a code. The registered callback UI need not be deployed.
 if ([string]::IsNullOrWhiteSpace($redirectWithCode)) {
   try {
-    $resp = Invoke-WebRequest -Uri $callbackUrl -Method Get -WebSession $opSession `
-      -MaximumRedirection 5 -UseBasicParsing -ErrorAction Stop
-    $redirectWithCode = (Get-FinalUri $resp)
+    $redirectWithCode = Invoke-OperatorRedirect -Uri $callbackUrl -Method Get -WebSession $opSession
   } catch {
     $r = $_.Exception.Response
     if ($r -and ([int]$r.StatusCode -eq 302 -or [int]$r.StatusCode -eq 301)) {
@@ -536,7 +581,7 @@ $tenantBody = @{
     ownerAdmin                    = @{ source = 'technical' }
   }
   login        = @{ enabled = $true; defaultAuthorizationServerRequired = $true }
-  provisioning = @{ issuer = $true; verifier = $true; keysAndDids = $true; sampleData = $true }
+  provisioning = @{ issuer = (-not $VerifierOnly); verifier = $true; keysAndDids = $true; sampleData = (-not $VerifierOnly) }
 }
 $tenantsUrl = "$platformUrl/api/platform/admin/v1/tenants"
 $tenantId = $null
@@ -600,7 +645,12 @@ Write-Host "Verifying tenant setup-created gateway protocol routes..." -Foregrou
 $bound = Invoke-Json -Method Get -BearerToken $operatorToken `
   -Uri "$platformUrl/api/platform/admin/v1/tenants/$tenantId/public-endpoints"
 $bindingJson = $bound | ConvertTo-Json -Depth 20
-foreach ($kind in @('OID4VCI_ISSUER', 'OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER')) {
+$requiredEndpointKinds = if ($VerifierOnly) {
+  @('OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER')
+} else {
+  @('OID4VCI_ISSUER', 'OID4VP_VERIFIER', 'OAUTH2_AUTHORIZATION_SERVER')
+}
+foreach ($kind in $requiredEndpointKinds) {
   if ($bindingJson -notmatch [regex]::Escape($kind)) {
     Fail "Tenant setup did not create required gateway endpoint binding '$kind'."
   }
@@ -619,7 +669,9 @@ Write-Host "Tenant gateway   : $tenantGatewayUrl"
 Write-Host ""
 if (-not [string]::IsNullOrWhiteSpace($tenantGatewayUrl)) {
   $tenantGatewayBase = $tenantGatewayUrl.TrimEnd('/')
-  Write-Host "OID4VCI metadata : $tenantGatewayBase/.well-known/openid-credential-issuer"
+  if (-not $VerifierOnly) {
+    Write-Host "OID4VCI metadata : $tenantGatewayBase/.well-known/openid-credential-issuer"
+  }
   Write-Host "OAuth metadata   : $tenantGatewayBase/.well-known/oauth-authorization-server"
   Write-Host "DID document     : $tenantGatewayBase/.well-known/did.json"
 }
