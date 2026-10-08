@@ -24,7 +24,7 @@ public contract is the platform host plus registered tenant hosts.
 
 ## Default services
 
-The standard installation uses seven published images. The admin console image
+The standard installation uses eight published images. The admin console image
 runs as separate platform and tenant processes, but it is still one image.
 
 | Image | Responsibility |
@@ -32,6 +32,7 @@ runs as separate platform and tenant processes, but it is still one image.
 | `nexus.sphereon.com/edk-docker/enterprise-platform` | This image runs the control plane, first-run setup, license activation, platform administration, platform configuration, and the platform authorization server. |
 | `nexus.sphereon.com/edk-docker/enterprise-tenant-kms` | This image owns tenant key-management operations. |
 | `nexus.sphereon.com/edk-docker/enterprise-did` | This image resolves DIDs and serves tenant `did:web` documents. |
+| `nexus.sphereon.com/edk-docker/service-data` | This image stores tenant blobs and branding data on a separate durable volume. |
 | `nexus.sphereon.com/edk-docker/enterprise-tenant-as` | This image runs tenant OAuth 2.0 and OpenID Connect authorization servers. |
 | `nexus.sphereon.com/edk-docker/enterprise-issuer` | This image runs OID4VCI credential issuers. |
 | `nexus.sphereon.com/edk-docker/enterprise-verifier` | This image runs OID4VP verifiers. |
@@ -116,7 +117,7 @@ boundary.
 - Install a Windows-native `openssl.exe` on Windows, or OpenSSL on Linux or
   macOS.
 - Make TCP ports `80` and `443` available when using a gateway overlay.
-- Make enough memory available for the six backend services, two admin-console
+- Make enough memory available for the seven backend services, two admin-console
   processes, two PostgreSQL containers, Traefik, and the telemetry containers.
 
 ### 1. Create the environment file
@@ -647,7 +648,7 @@ bash ./scripts/upgrade-helm.sh \
 ```
 
 The wrapper requires `--release-set-evidence` for RC3, RC4, RC5 and 0.25.0 tags. The
-file must match the selected tag and bind all seven default images to immutable
+file must match the selected tag and bind all eight default images to immutable
 content and release provenance. Omit the option only when the selected release
 does not require it.
 

@@ -428,8 +428,8 @@ http:
         replacement: "/admin-console/$1"
     developer-console-page-rewrite:
       replacePathRegex:
-        regex: "^/developer-console(?:/(.*))?$"
-        replacement: "/admin-console/developer-console/$1"
+        regex: "^/developer-console(/.*)?$"
+        replacement: "/admin-console/developer-console$1"
     developer-journeys-artifact-rewrite:
       replacePathRegex:
         regex: "^/developer-journeys/index\\.json$"
