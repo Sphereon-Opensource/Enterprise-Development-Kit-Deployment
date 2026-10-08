@@ -290,6 +290,23 @@ spec:
             - name: THEME_CLIENT_BASE_URL
               value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "blob")) (index $.Values.services "blob").restPort | quote }}
             {{- end }}
+            {{- if or (eq $name "platform") (eq $name "tenant-as") }}
+            {{- $oidfedDb := $.Values.oidfed.database }}
+            - name: OIDF_DATASOURCE_URL
+              value: {{ printf "jdbc:postgresql://%s:%v/%s" (default $.Values.database.tenant.host $oidfedDb.host) $oidfedDb.port $oidfedDb.name | quote }}
+            - name: OIDF_DATASOURCE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidfedDb.existingSecret | quote }}
+                  key: {{ $oidfedDb.usernameKey | quote }}
+            - name: OIDF_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidfedDb.existingSecret | quote }}
+                  key: {{ $oidfedDb.passwordKey | quote }}
+            - name: OIDF_FEDERATION_STATEMENT_LIFETIME_SECONDS
+              value: {{ $.Values.oidfed.statementLifetimeSeconds | quote }}
+            {{- end }}
             {{- if eq $name "wallet-onboarding" }}
             # Wallet onboarding is a chart-owned satellite. Keep all east-west
             # targets release-local; tenant routing and activation policy remain

@@ -746,6 +746,77 @@ spec:
 ---
 {{- end }}
 {{- end }}
+{{- if and .Values.services.platform.enabled (index .Values.services "tenant-as").enabled }}
+# OpenID Federation endpoints of entities identified by the bare tenant origin. The
+# platform serves Entity Configurations and authority endpoints; the tenant AS serves
+# Explicit Registration. Entities under a service path reach that service by prefix.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" . }}-tenant-oidfed
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: platform
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: Exact
+            value: /.well-known/openid-federation
+        - path:
+            type: Exact
+            value: /federation_fetch
+        - path:
+            type: Exact
+            value: /federation_list
+        - path:
+            type: Exact
+            value: /federation_resolve
+        - path:
+            type: Exact
+            value: /federation_trust_mark_status
+        - path:
+            type: Exact
+            value: /federation_trust_mark_list
+        - path:
+            type: Exact
+            value: /federation_trust_mark
+        - path:
+            type: Exact
+            value: /federation_historical_keys
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}
+          port: {{ .Values.services.platform.restPort }}
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: Exact
+            value: /federation_registration
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as") }}
+          port: {{ (index .Values.services "tenant-as").restPort }}
+---
+{{- end }}
 {{- if and .Values.gateway.httpRedirect (ne .Values.gateway.tls.mode "external") }}
 {{- /* With tls.mode=external the external front owns the http->https redirect
        and the Gateway has no `http` listener, so the redirect route is
