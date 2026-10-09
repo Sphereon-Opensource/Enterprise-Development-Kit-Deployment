@@ -3,4 +3,4 @@ name: edk-enterprise
 description: EDK enterprise container deployment for KMS, DID, AS, Issuer, Verifier, Wallet Unit, and Wallet Interaction
 type: application
 version: 0.2.1
-appVersion: "0.25.0-SNAPSHOT"
+appVersion: "0.26.0-SNAPSHOT"

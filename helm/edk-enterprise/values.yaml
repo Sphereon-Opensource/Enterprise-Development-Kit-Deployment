@@ -4,7 +4,7 @@ global:
   imageRegistry: nexus.sphereon.com/edk-docker
   # Pin the approved enterprise release tag in production. `latest` is rejected
   # in prod and requires imagePullPolicy=Always in non-production testing.
-  imageTag: "0.25.0-SNAPSHOT"
+  imageTag: "0.26.0-SNAPSHOT"
   # IfNotPresent is appropriate for immutable/versioned tags. Use Always only
   # when deliberately testing the mutable `latest` tag outside production.
   imagePullPolicy: IfNotPresent
