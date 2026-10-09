@@ -292,18 +292,22 @@ spec:
             {{- end }}
             {{- if or (eq $name "platform") (eq $name "tenant-as") }}
             {{- $oidfedDb := $.Values.oidfed.database }}
+            {{- $oidfedOwner := eq $name "platform" }}
             - name: OIDF_DATASOURCE_URL
               value: {{ printf "jdbc:postgresql://%s:%v/%s" (default $.Values.database.tenant.host $oidfedDb.host) $oidfedDb.port $oidfedDb.name | quote }}
             - name: OIDF_DATASOURCE_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ $oidfedDb.existingSecret | quote }}
-                  key: {{ $oidfedDb.usernameKey | quote }}
+                  name: {{ ternary $oidfedDb.existingSecret $oidfedDb.runtimeSecret $oidfedOwner | quote }}
+                  key: {{ ternary $oidfedDb.usernameKey $oidfedDb.runtimeUsernameKey $oidfedOwner | quote }}
             - name: OIDF_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ $oidfedDb.existingSecret | quote }}
-                  key: {{ $oidfedDb.passwordKey | quote }}
+                  name: {{ ternary $oidfedDb.existingSecret $oidfedDb.runtimeSecret $oidfedOwner | quote }}
+                  key: {{ ternary $oidfedDb.passwordKey $oidfedDb.runtimePasswordKey $oidfedOwner | quote }}
+            # The platform owns the schema; the tenant authorization server only verifies it.
+            - name: OIDF_DATASOURCE_SCHEMA_MANAGEMENT
+              value: {{ ternary "migrate" "verify" $oidfedOwner | quote }}
             - name: OIDF_FEDERATION_STATEMENT_LIFETIME_SECONDS
               value: {{ $.Values.oidfed.statementLifetimeSeconds | quote }}
             {{- end }}
