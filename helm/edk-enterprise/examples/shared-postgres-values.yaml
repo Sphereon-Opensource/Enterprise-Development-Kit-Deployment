@@ -1,5 +1,5 @@
 global:
-  imageTag: 0.25.0-SNAPSHOT
+  imageTag: 0.26.0-SNAPSHOT
   imagePullSecrets:
     - edk-registry-credentials
   platformBaseDomain: example.com

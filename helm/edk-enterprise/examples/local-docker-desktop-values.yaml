@@ -10,7 +10,7 @@
 #   edk-license-root-ca  : { license-root-ca.pem }   (evaluation license root)
 
 global:
-  imageTag: 0.25.0-SNAPSHOT
+  imageTag: 0.26.0-SNAPSHOT
   platformBaseDomain: saas.localtest.me
 
 database:
