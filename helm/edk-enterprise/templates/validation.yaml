@@ -45,3 +45,9 @@
 {{- end -}}
 {{- end -}}
 {{- end -}}
+{{- if not .Values.oidfed.database.existingSecret }}
+{{- fail "oidfed.database.existingSecret is required: the OpenID Federation database credentials" }}
+{{- end }}
+{{- if lt (int .Values.oidfed.statementLifetimeSeconds) 60 }}
+{{- fail "oidfed.statementLifetimeSeconds must be at least 60" }}
+{{- end }}
