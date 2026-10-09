@@ -46,7 +46,13 @@
 {{- end -}}
 {{- end -}}
 {{- if not .Values.oidfed.database.existingSecret }}
-{{- fail "oidfed.database.existingSecret is required: the OpenID Federation database credentials" }}
+{{- fail "oidfed.database.existingSecret is required: the OpenID Federation database owner credentials" }}
+{{- end }}
+{{- if not .Values.oidfed.database.runtimeSecret }}
+{{- fail "oidfed.database.runtimeSecret is required: the data-only OpenID Federation database credentials of the tenant authorization server" }}
+{{- end }}
+{{- if eq .Values.oidfed.database.runtimeSecret .Values.oidfed.database.existingSecret }}
+{{- fail "oidfed.database.runtimeSecret must name a different secret than oidfed.database.existingSecret" }}
 {{- end }}
 {{- if lt (int .Values.oidfed.statementLifetimeSeconds) 60 }}
 {{- fail "oidfed.statementLifetimeSeconds must be at least 60" }}

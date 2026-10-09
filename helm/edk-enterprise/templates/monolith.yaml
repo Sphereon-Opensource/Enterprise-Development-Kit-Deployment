@@ -276,6 +276,8 @@ spec:
                 secretKeyRef:
                   name: {{ $oidfedDb.existingSecret | quote }}
                   key: {{ $oidfedDb.passwordKey | quote }}
+            - name: OIDF_DATASOURCE_SCHEMA_MANAGEMENT
+              value: "migrate"
             - name: OIDF_FEDERATION_STATEMENT_LIFETIME_SECONDS
               value: {{ .Values.oidfed.statementLifetimeSeconds | quote }}
             - name: OAUTH2_AS_ISSUER
