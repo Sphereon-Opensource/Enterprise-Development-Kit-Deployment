@@ -110,6 +110,31 @@ database:
           app.kubernetes.io/name: edk-tenant-postgres
       namespaceSelector: {}
       ipBlock: {}
+# OpenID Federation. The federation library keeps its accounts, Federation Entity Keys and Trust Marks in its own
+# PostgreSQL database. The platform service administers and publishes federation entities and the tenant
+# authorization server signs Explicit Registration responses, so both connect to it. By default the database lives
+# on the tenant PostgreSQL server, which both services already reach; set `host` to place it elsewhere and allow
+# that egress in the network policies.
+#
+# The platform (and the monolith) connect with the owner credential in `existingSecret` and apply the library's
+# schema migrations. The tenant authorization server connects with `runtimeSecret`, a role that may only read and
+# write data (SELECT, INSERT, UPDATE and DELETE on the tables, USAGE and SELECT on the sequences, also granted by
+# default for tables the owner creates later), and verifies the schema instead of migrating it.
+oidfed:
+  database:
+    # Empty uses database.tenant.host.
+    host: ""
+    port: 5432
+    name: oidfed
+    existingSecret: edk-oidfed-postgres
+    usernameKey: username
+    passwordKey: password
+    runtimeSecret: edk-oidfed-runtime-postgres
+    runtimeUsernameKey: username
+    runtimePasswordKey: password
+  # Lifetime in seconds of signed Entity Configurations and Subordinate Statements. Statements are renewed before
+  # they expire; a shorter lifetime makes key and policy changes reach relying parties sooner.
+  statementLifetimeSeconds: 3600
 # Metadata for the explicit post-provision WeBuild TS 119 612 operator command.
 # Helm never performs this authenticated mutation and never renders the token.
 # Leave these values empty until the operator has the real domain, URL, scheme,

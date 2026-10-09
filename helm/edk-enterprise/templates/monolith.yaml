@@ -263,6 +263,23 @@ spec:
             - name: EXTERNAL_BASE_URL
               value: {{ .Values.platform.externalBaseUrl | quote }}
             {{- include "edk-enterprise.emailEnv" . | nindent 12 }}
+            {{- $oidfedDb := .Values.oidfed.database }}
+            - name: OIDF_DATASOURCE_URL
+              value: {{ printf "jdbc:postgresql://%s:%v/%s" (default .Values.database.tenant.host $oidfedDb.host) $oidfedDb.port $oidfedDb.name | quote }}
+            - name: OIDF_DATASOURCE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidfedDb.existingSecret | quote }}
+                  key: {{ $oidfedDb.usernameKey | quote }}
+            - name: OIDF_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidfedDb.existingSecret | quote }}
+                  key: {{ $oidfedDb.passwordKey | quote }}
+            - name: OIDF_DATASOURCE_SCHEMA_MANAGEMENT
+              value: "migrate"
+            - name: OIDF_FEDERATION_STATEMENT_LIFETIME_SECONDS
+              value: {{ .Values.oidfed.statementLifetimeSeconds | quote }}
             - name: OAUTH2_AS_ISSUER
               value: {{ .Values.platform.externalBaseUrl | quote }}
             # Keep the platform's configured operator-store mode identical in

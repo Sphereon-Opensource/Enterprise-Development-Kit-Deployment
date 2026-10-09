@@ -137,6 +137,30 @@
         }
       }
     },
+    "oidfed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database", "statementLifetimeSeconds"],
+      "properties": {
+        "database": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["port", "name", "existingSecret", "usernameKey", "passwordKey", "runtimeSecret", "runtimeUsernameKey", "runtimePasswordKey"],
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "name": { "type": "string", "minLength": 1 },
+            "existingSecret": { "type": "string", "minLength": 1 },
+            "usernameKey": { "type": "string", "minLength": 1 },
+            "passwordKey": { "type": "string", "minLength": 1 },
+            "runtimeSecret": { "type": "string", "minLength": 1 },
+            "runtimeUsernameKey": { "type": "string", "minLength": 1 },
+            "runtimePasswordKey": { "type": "string", "minLength": 1 }
+          }
+        },
+        "statementLifetimeSeconds": { "type": "integer", "minimum": 60 }
+      }
+    },
     "trustDomainBootstrap": {
       "type": "object",
       "additionalProperties": false,
