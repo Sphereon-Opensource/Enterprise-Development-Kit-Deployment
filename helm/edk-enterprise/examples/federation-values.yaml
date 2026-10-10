@@ -1,12 +1,18 @@
-# OpenID Federation standalone product: platform, tenant-kms, tenant-as and
-# federation-console. External issuers and verifiers are registered in the
+# OpenID Federation standalone product: platform, tenant-kms, tenant-as and the
+# federation console. External issuers and verifiers are registered in the
 # federation console, not hosted by this deployment.
+#
+# The console runs as two least-privilege runtimes from one image, like the admin
+# console: federation-console (operator host, platform sign-in) and
+# federation-console-tenant (tenant hosts, tenant sign-in, no operator
+# coordinates). Each has its own session secret.
 # Apply after customer-values.yaml in the distributed topology.
 #
 # Before rendering, create the oidfed database owner and runtime credential
 # Secrets (edk-oidfed-postgres and edk-oidfed-runtime-postgres), the independently
-# generated 32-byte base64url session-encryption secret in edk-federation-console
-# under federation-console-session-secret, and the usual platform/tenant-kms/
+# generated 32-byte base64url session-encryption secrets in edk-federation-console
+# (key federation-console-session-secret) and edk-federation-console-tenant (key
+# federation-console-tenant-session-secret), and the usual platform/tenant-kms/
 # tenant-as database, runtime, keystore, federation-session and isolated
 # secret-authority Secrets described in the customer README.
 #
@@ -26,6 +32,8 @@ services:
   tenant-as:
     enabled: true
   federation-console:
+    enabled: true
+  federation-console-tenant:
     enabled: true
   did:
     enabled: false
@@ -54,6 +62,7 @@ secretManagement:
 
 federationConsole:
   existingSecret: edk-federation-console
+  tenantExistingSecret: edk-federation-console-tenant
 
 oidfed:
   database:

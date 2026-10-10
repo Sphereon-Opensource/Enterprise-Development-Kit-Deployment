@@ -135,8 +135,8 @@ spec:
           port: {{ $svc.restPort }}
 ---
 {{- else if eq $name "federation-console" }}
-# Keep the Next.js base path on both hosts. The operator prefix takes precedence
-# over the platform catch-all without a path rewrite.
+# Operator (PLATFORM) federation console on the operator host only. The prefix
+# takes precedence over the platform catch-all; keep the Next.js base path.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -166,10 +166,14 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
 ---
+{{- else if eq $name "federation-console-tenant" }}
+# Tenant (TENANT) federation console on tenant hosts only. This runtime has no
+# operator coordinates or platform client and validates the exact tenant host,
+# so the operator runtime is never reachable from a tenant host.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: {{ include "edk-enterprise.fullname" $ }}-federation-console-tenant
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
   labels:
     {{- include "edk-enterprise.labels" $ | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}

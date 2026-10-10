@@ -507,6 +507,15 @@ east-west Authorization headers or software-keystore access.
 {{- if and (index .Values.services "federation-console").enabled (eq (trim .Values.federationConsole.existingSecret) "") -}}
 {{- fail "federationConsole.existingSecret is required when federation-console is enabled. Create a Kubernetes Secret containing an independently generated session-encryption secret under federationConsole.sessionSecretKey, then reference that Secret by name." -}}
 {{- end -}}
+{{- $federationConsoleTenant := index .Values.services "federation-console-tenant" -}}
+{{- if and $federationConsoleTenant $federationConsoleTenant.enabled -}}
+{{- if eq (trim (default "" .Values.federationConsole.tenantExistingSecret)) "" -}}
+{{- fail "federationConsole.tenantExistingSecret is required when federation-console-tenant is enabled. Create a Kubernetes Secret containing an independently generated session-encryption secret under federationConsole.tenantSessionSecretKey, then reference that Secret by name." -}}
+{{- end -}}
+{{- if and (eq (trim .Values.federationConsole.tenantExistingSecret) (trim .Values.federationConsole.existingSecret)) (eq .Values.federationConsole.tenantSessionSecretKey .Values.federationConsole.sessionSecretKey) -}}
+{{- fail "federationConsole.tenantExistingSecret/tenantSessionSecretKey must not reference the operator console's session secret: the tenant runtime needs its own independently generated secret." -}}
+{{- end -}}
+{{- end -}}
 {{- $issuerPipelineSecret := trim (default "" .Values.issuerPipeline.existingSecret) -}}
 {{- $federationSessionSecret := trim (default "" .Values.federationSessionEncryption.existingSecret) -}}
 {{- $tenantAsEnabled := index .Values.services "tenant-as" -}}
@@ -559,8 +568,11 @@ east-west Authorization headers or software-keystore access.
 
 {{- define "edk-enterprise.validateTopology" -}}
 {{- $mode := include "edk-enterprise.topologyMode" . -}}
-{{- if and (index .Values.services "federation-console").enabled (ne $mode "distributed") -}}
-{{- fail "services.federation-console.enabled is supported only with topology.mode=distributed; federation-console cannot run in monolith mode." -}}
+{{- range $console := list "federation-console" "federation-console-tenant" -}}
+{{- $consoleSvc := index $.Values.services $console -}}
+{{- if and $consoleSvc $consoleSvc.enabled (ne $mode "distributed") -}}
+{{- fail (printf "services.%s.enabled is supported only with topology.mode=distributed; the federation console cannot run in monolith mode." $console) -}}
+{{- end -}}
 {{- end -}}
 {{- if not (has $mode (list "distributed" "monolith")) -}}
 {{- fail (printf "topology.mode must be distributed or monolith (got %q)" $mode) -}}
@@ -754,12 +766,15 @@ would create endpoints that can never provision or use tenant keys.
 {{/* Validate the service graph represented by the service-specific routes. */}}
 {{- define "edk-enterprise.validateRuntimeDependencies" -}}
 {{- if eq (include "edk-enterprise.topologyMode" .) "distributed" -}}
-{{- if (index .Values.services "federation-console").enabled -}}
-{{- if not .Values.services.platform.enabled -}}
-{{- fail "services.platform.enabled must be true while federation-console is enabled: the console requires the platform management API and authorization server." -}}
+{{- range $console := list "federation-console" "federation-console-tenant" -}}
+{{- $consoleSvc := index $.Values.services $console -}}
+{{- if and $consoleSvc $consoleSvc.enabled -}}
+{{- if not $.Values.services.platform.enabled -}}
+{{- fail (printf "services.platform.enabled must be true while %s is enabled: the console requires the platform management API." $console) -}}
 {{- end -}}
-{{- if not (index .Values.services "tenant-as").enabled -}}
-{{- fail "services.tenant-as.enabled must be true while federation-console is enabled: the console requires the tenant authorization server." -}}
+{{- if not (index $.Values.services "tenant-as").enabled -}}
+{{- fail (printf "services.tenant-as.enabled must be true while %s is enabled: tenant sign-in and Explicit Registration run on the tenant authorization server." $console) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- if and .Values.services.issuer.enabled (not (index .Values.services "tenant-as").enabled) -}}

@@ -570,12 +570,18 @@ portalBff:
     mode: X_FORWARDED
     hops: 1
 
-# Independent session-encryption secret for the Federation Console BFF.
-# Generate it separately from other runtime secrets; the chart never generates it.
+# Federation Console BFF secrets. The operator runtime (federation-console) and
+# the tenant runtime (federation-console-tenant) each encrypt their sessions with
+# their own independently generated secret; the chart never generates them and
+# refuses one shared secret. clientId is the operator runtime's public PKCE
+# client at the platform authorization server; the tenant runtime signs in at
+# the tenant authorization server resolved for the request host.
 federationConsole:
   clientId: federation-console
   existingSecret: ""
   sessionSecretKey: federation-console-session-secret
+  tenantExistingSecret: ""
+  tenantSessionSecretKey: federation-console-tenant-session-secret
 
 # Keystore password for the software KMS providers. Provide it through a Secret;
 # the platform and tenant-kms read it as EDK_KEYSTORE_PASSWORD.
@@ -1207,9 +1213,40 @@ services:
       - name: PORT
         value: "3000"
 
-  # OpenID Federation management UI and BFF, served under /federation-console
-  # on the operator host and on tenant hosts. Keep the Next.js base path intact.
+  # OpenID Federation management UI and BFF in operator (PLATFORM) mode, served
+  # under /federation-console on the operator host only. It holds the operator
+  # sign-in coordinates. Keep the Next.js base path intact.
   federation-console:
+    enabled: false
+    image: federation-console
+    replicas: 1
+    restPort: 3000
+    publicIngress:
+      enabled: false
+      className: public
+      host: "*.example.com"
+      paths:
+        - /federation-console
+      annotations: {}
+    internalIngress:
+      enabled: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    env:
+      - name: NEXT_PUBLIC_BASE_PATH
+        value: /federation-console
+      - name: PORT
+        value: "3000"
+
+  # The same image in tenant (TENANT) mode, served under /federation-console on
+  # tenant hosts only. Least-privilege runtime: no operator coordinates, no
+  # platform client, its own session secret; the tenant comes from the request host.
+  federation-console-tenant:
     enabled: false
     image: federation-console
     replicas: 1

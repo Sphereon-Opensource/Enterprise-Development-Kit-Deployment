@@ -785,7 +785,9 @@
       "properties": {
         "clientId": { "type": "string", "minLength": 1 },
         "existingSecret": { "type": "string" },
-        "sessionSecretKey": { "type": "string", "minLength": 1 }
+        "sessionSecretKey": { "type": "string", "minLength": 1 },
+        "tenantExistingSecret": { "type": "string" },
+        "tenantSessionSecretKey": { "type": "string", "minLength": 1 }
       }
     },
     "keystore": {
@@ -1036,7 +1038,7 @@
       "additionalProperties": false,
           "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "wallet-onboarding", "issuer", "verifier"],
           "patternProperties": {
-        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|wallet-onboarding|issuer|verifier|admin-console|admin-console-tenant|federation-console|business-wallet)$": {
+        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|wallet-onboarding|issuer|verifier|admin-console|admin-console-tenant|federation-console|federation-console-tenant|business-wallet)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {

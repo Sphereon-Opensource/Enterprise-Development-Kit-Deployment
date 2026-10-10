@@ -7,7 +7,8 @@
        /admin-console/health route rather than the EDK /health endpoint. */}}
 {{- $isAdminConsole := or (eq $name "admin-console") (eq $name "admin-console-tenant") }}
 {{- $isBusinessWallet := eq $name "business-wallet" }}
-{{- $isFederationConsole := eq $name "federation-console" }}
+{{- $isFederationConsoleTenant := eq $name "federation-console-tenant" }}
+{{- $isFederationConsole := or (eq $name "federation-console") $isFederationConsoleTenant }}
 {{- $isFrontend := or $isAdminConsole $isBusinessWallet $isFederationConsole }}
 {{- $imageTag := $svc.imageTag | default $.Values.global.imageTag | default $.Chart.AppVersion }}
 {{- $secretAuthoritySecret := "" }}
@@ -927,29 +928,44 @@ spec:
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "verifier") | quote }}
             {{- end }}
             {{- if $isFederationConsole }}
+            {{- /* Two runtimes from one image, split like admin-console. PLATFORM
+                   (operator host) holds the operator sign-in coordinates; TENANT
+                   (tenant hosts) holds none of them, only the narrow host-to-tenant
+                   bootstrap and the tenant AS, and its own session secret. Neither
+                   receives the platform root URL: the management API upstream is
+                   path-scoped. */}}
             {{- $platformBase := printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort }}
-            - name: FEDERATION_CONSOLE_PUBLIC_ORIGIN
-              value: {{ $.Values.platform.externalBaseUrl | quote }}
+            - name: FEDERATION_CONSOLE_MODE
+              value: {{ $isFederationConsoleTenant | ternary "TENANT" "PLATFORM" | quote }}
             - name: FEDERATION_CONSOLE_TRUSTED_INGRESS_MODE
               value: {{ $.Values.portalBff.trustedIngress.mode | quote }}
             - name: FEDERATION_CONSOLE_TRUSTED_INGRESS_HOPS
               value: {{ $.Values.portalBff.trustedIngress.hops | quote }}
             - name: FEDERATION_CONSOLE_COOKIE_SECURE
               value: "true"
+            - name: FEDERATION_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL
+              value: {{ printf "%s/api/platform/bootstrap/v1" $platformBase | quote }}
+            - name: FEDERATION_API_UPSTREAM
+              value: {{ printf "%s/api/platform/config/v1" $platformBase | quote }}
+            {{- if $isFederationConsoleTenant }}
+            - name: FEDERATION_CONSOLE_TENANT_AS_BASE_URL
+              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort | quote }}
+            - name: FEDERATION_CONSOLE_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.federationConsole.tenantExistingSecret | quote }}
+                  key: {{ $.Values.federationConsole.tenantSessionSecretKey | quote }}
+            {{- else }}
+            - name: FEDERATION_CONSOLE_PUBLIC_ORIGIN
+              value: {{ $.Values.platform.externalBaseUrl | quote }}
             - name: FEDERATION_CONSOLE_PLATFORM_ISSUER
               value: {{ $.Values.platform.bootstrap.issuer | quote }}
             - name: FEDERATION_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL
               value: {{ $.Values.platform.externalBaseUrl | quote }}
-            - name: FEDERATION_CONSOLE_PLATFORM_BASE_URL
-              value: {{ $platformBase | quote }}
-            - name: FEDERATION_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL
-              value: {{ printf "%s/api/platform/bootstrap/v1" $platformBase | quote }}
             - name: FEDERATION_CONSOLE_PLATFORM_TOKEN_URL
               value: {{ printf "%s/token" $platformBase | quote }}
             - name: FEDERATION_CONSOLE_PLATFORM_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
-            - name: FEDERATION_CONSOLE_TENANT_AS_BASE_URL
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort | quote }}
             - name: FEDERATION_CONSOLE_CLIENT_ID
               value: {{ $.Values.federationConsole.clientId | quote }}
             - name: FEDERATION_CONSOLE_SESSION_SECRET
@@ -957,8 +973,7 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.federationConsole.existingSecret | quote }}
                   key: {{ $.Values.federationConsole.sessionSecretKey | quote }}
-            - name: FEDERATION_API_UPSTREAM
-              value: {{ $platformBase | quote }}
+            {{- end }}
             {{- end }}
             {{- range $env := $svc.env }}
             {{- if not (and (eq $name "platform") (has (get $env "name") (list "EXTERNAL_BASE_URL" "ONBOARDING_UI_BASE_URL"))) }}
