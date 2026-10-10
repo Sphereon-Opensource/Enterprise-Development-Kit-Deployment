@@ -1,6 +1,7 @@
-# Local deployment secrets and generated material — never commit.
+# Local deployment secrets and generated material; never commit.
 .env
 config/license-token.txt
 config/license-recipient.jwk.json
 config/license-root-ca.pem
 .secret-authority/
+gateway/traefik/dynamic.federation.generated.yml

@@ -1,0 +1,156 @@
+# OpenID Federation overlay. Requires Docker Compose v2.24.4+ for !override.
+# Use after docker-compose.gateway.yml or a rendered behind-edge overlay.
+# Init scripts run only on a fresh tenant database volume. For an existing volume:
+# docker compose -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml exec tenant-postgres sh /docker-entrypoint-initdb.d/20-oidfed-database.sh
+
+x-edk-oidfed-env: &edk-oidfed-env
+  OIDF_DATASOURCE_URL: jdbc:postgresql://tenant-postgres:5432/oidfed
+  OIDF_DATASOURCE_USER: oidfed
+  OIDF_DATASOURCE_PASSWORD: ${EDK_OIDFED_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+  OIDF_DATASOURCE_SCHEMA_MANAGEMENT: migrate
+  OIDF_FEDERATION_STATEMENT_LIFETIME_SECONDS: ${EDK_OIDFED_STATEMENT_LIFETIME_SECONDS:-3600}
+
+services:
+  enterprise-did:
+    profiles: ["vdx-services"]
+  enterprise-blob:
+    profiles: ["vdx-services"]
+  enterprise-issuer:
+    profiles: ["vdx-services"]
+  enterprise-verifier:
+    profiles: ["vdx-services"]
+
+  # Themes and DID/issuer/verifier admin screens need the VDX services.
+  admin-console:
+    profiles: ["admin-console"]
+    depends_on: !override
+      enterprise-platform:
+        condition: service_healthy
+  admin-console-tenant:
+    profiles: ["admin-console"]
+    depends_on: !override
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-tenant-as:
+        condition: service_healthy
+
+  tenant-postgres:
+    environment:
+      OIDFED_DB_PASSWORD: ${EDK_OIDFED_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      OIDFED_RUNTIME_DB_PASSWORD: ${EDK_OIDFED_RUNTIME_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+    volumes:
+      - ./postgres-init/20-oidfed-database.sh:/docker-entrypoint-initdb.d/20-oidfed-database.sh:ro
+
+  enterprise-platform:
+    environment:
+      <<: *edk-oidfed-env
+
+  enterprise-tenant-as:
+    # Replace the map to remove THEME_CLIENT_BASE_URL across a three-file merge.
+    # A nested !reset is not reliably applied across all overlays by Compose.
+    environment: !override
+      APP_PROFILE: container
+      PORT: "18083"
+      REST_PORT: "18083"
+      GRPC_AUTH_MODE: service-jwt
+      SPHEREON_CONFIG_LOCATION: /app/config
+      EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      EDK_PLATFORM_PUBLIC_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EDK_KEYSTORE_PASSWORD: ${EDK_KEYSTORE_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_DEPLOYMENT_MODE: ${EDK_DEPLOYMENT_MODE:-prod}
+      EDK_OWNER_INITIAL_CREDENTIAL: ${EDK_OWNER_INITIAL_CREDENTIAL}
+      SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY: ${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Run scripts/generate-secret-authority-keys, then scripts/generate-compose-secrets.mjs}
+      SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS: ${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Run scripts/generate-secret-authority-keys, then scripts/generate-compose-secrets.mjs}
+      EDK_TENANT_DB_HOST: tenant-postgres
+      EDK_TENANT_DB_NAME: ${EDK_TENANT_DB_NAME:-tenant}
+      EDK_TENANT_DB_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      EDK_TENANT_DB_PASSWORD: ${EDK_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Run scripts/generate-compose-secrets.mjs}
+      # The static tenant-as.application.yml still interpolates the issuer secret.
+      EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Run scripts/generate-compose-secrets.mjs}
+      FEDERATION_SESSION_ENCRYPTION_KEY: ${EDK_FEDERATION_SESSION_ENCRYPTION_KEY:?Run scripts/generate-compose-secrets.mjs}
+      SERVER_REST_AUTH_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      # Optional local CA trust for the certificate gateway. Empty behind a
+      # publicly trusted edge, where /app/certs is deliberately not mounted.
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:-}
+      OIDF_DATASOURCE_URL: jdbc:postgresql://tenant-postgres:5432/oidfed
+      OIDF_DATASOURCE_USER: oidfed_runtime
+      OIDF_DATASOURCE_PASSWORD: ${EDK_OIDFED_RUNTIME_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      OIDF_DATASOURCE_SCHEMA_MANAGEMENT: verify
+      OIDF_FEDERATION_STATEMENT_LIFETIME_SECONDS: ${EDK_OIDFED_STATEMENT_LIFETIME_SECONDS:-3600}
+      # THEME_CLIENT_BASE_URL is absent so hosted login uses the neutral page.
+
+  # Two runtimes from one image, split like the admin console. The operator
+  # runtime is routed only on platform.<base> and holds the operator sign-in
+  # coordinates. The tenant runtime is routed only on tenant hosts and holds none
+  # of them; it resolves the tenant from the validated host. Each has its own
+  # session secret. Neither receives the platform root URL.
+  federation-console:
+    image: nexus.sphereon.com/edk-docker/federation-console:${EDK_FEDERATION_CONSOLE_TAG:-${EDK_TAG:?Set EDK_TAG to the approved release tag}}
+    networks:
+      - appnet
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      # Informational only. The image must be built with this base path,
+      # NEXT_PUBLIC_FEDERATION_API_MODE=live and
+      # NEXT_PUBLIC_FEDERATION_API_BASE_URL=/federation-console/api/federation.
+      NEXT_PUBLIC_BASE_PATH: /federation-console
+      FEDERATION_CONSOLE_MODE: PLATFORM
+      FEDERATION_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
+      FEDERATION_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
+      FEDERATION_CONSOLE_COOKIE_SECURE: "true"
+      FEDERATION_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1
+      FEDERATION_API_UPSTREAM: http://enterprise-platform:18080/api/platform/config/v1
+      FEDERATION_CONSOLE_PUBLIC_ORIGIN: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      FEDERATION_CONSOLE_PLATFORM_ISSUER: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      FEDERATION_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      FEDERATION_CONSOLE_PLATFORM_TOKEN_URL: http://enterprise-platform:18080/token
+      FEDERATION_CONSOLE_PLATFORM_AUDIENCE: enterprise-platform
+      FEDERATION_CONSOLE_CLIENT_ID: federation-console
+      FEDERATION_CONSOLE_SESSION_SECRET: ${EDK_FEDERATION_CONSOLE_SESSION_SECRET:?Run scripts/generate-compose-secrets.mjs}
+    # No host port: the gateway routes /federation-console on platform.<base> here.
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/federation-console/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  federation-console-tenant:
+    image: nexus.sphereon.com/edk-docker/federation-console:${EDK_FEDERATION_CONSOLE_TAG:-${EDK_TAG:?Set EDK_TAG to the approved release tag}}
+    networks:
+      - appnet
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+      enterprise-tenant-as:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      NEXT_PUBLIC_BASE_PATH: /federation-console
+      FEDERATION_CONSOLE_MODE: TENANT
+      FEDERATION_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
+      FEDERATION_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
+      FEDERATION_CONSOLE_COOKIE_SECURE: "true"
+      FEDERATION_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1
+      FEDERATION_API_UPSTREAM: http://enterprise-platform:18080/api/platform/config/v1
+      FEDERATION_CONSOLE_TENANT_AS_BASE_URL: http://enterprise-tenant-as:18083
+      FEDERATION_CONSOLE_SESSION_SECRET: ${EDK_FEDERATION_CONSOLE_TENANT_SESSION_SECRET:?Run scripts/generate-compose-secrets.mjs}
+    # No host port: the gateway routes /federation-console on tenant hosts here.
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/federation-console/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  traefik:
+    volumes:
+      # Compose replaces the earlier mount with the same container target.
+      - ${EDK_FEDERATION_GATEWAY_DYNAMIC:-./gateway/traefik/dynamic.federation.generated.yml}:/etc/traefik/dynamic/dynamic.yml:ro
