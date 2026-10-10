@@ -154,15 +154,19 @@ http:
       priority: 230
       tls: {}
 
-    # BEGIN admin-console
-    # Keep the internal Secrets delegation issuer shadowed from public requests.
+    # Always rendered, never inside an optional block: the internal Secrets
+    # delegation issuer is east-west/BFF-only and must never be publicly
+    # reachable on any host. The deny middleware answers 403 before any backend,
+    # and the service is Traefik's no-op, never the platform or a console.
     platform-secret-delegation-hidden:
-      rule: "Host(`platform.__BASE_DOMAIN__`) && Path(`/api/platform/admin/v1/application/secrets/internal/delegated-token`)"
+      rule: "Path(`/api/platform/admin/v1/application/secrets/internal/delegated-token`)"
       entryPoints: ["websecure"]
-      service: svc-admin-console
-      priority: 1200
+      middlewares: ["deny-internal"]
+      service: noop@internal
+      priority: 5000
       tls: {}
 
+    # BEGIN admin-console
     # The optional operator admin console owns its browser paths.
     platform-admin-console:
       rule: "Host(`platform.__BASE_DOMAIN__`) && (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))"
@@ -192,6 +196,12 @@ http:
       tls: {}
 
     # END admin-console
+
+  middlewares:
+    # Rejects every client: no source address matches the broadcast /32.
+    deny-internal:
+      ipAllowList:
+        sourceRange: ["255.255.255.255/32"]
 
   services:
     svc-platform:
