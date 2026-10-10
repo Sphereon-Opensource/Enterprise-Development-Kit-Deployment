@@ -504,6 +504,9 @@ east-west Authorization headers or software-keystore access.
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
+{{- if and (index .Values.services "federation-console").enabled (eq (trim .Values.federationConsole.existingSecret) "") -}}
+{{- fail "federationConsole.existingSecret is required when federation-console is enabled. Create a Kubernetes Secret containing an independently generated session-encryption secret under federationConsole.sessionSecretKey, then reference that Secret by name." -}}
+{{- end -}}
 {{- $issuerPipelineSecret := trim (default "" .Values.issuerPipeline.existingSecret) -}}
 {{- $federationSessionSecret := trim (default "" .Values.federationSessionEncryption.existingSecret) -}}
 {{- $tenantAsEnabled := index .Values.services "tenant-as" -}}
@@ -556,6 +559,9 @@ east-west Authorization headers or software-keystore access.
 
 {{- define "edk-enterprise.validateTopology" -}}
 {{- $mode := include "edk-enterprise.topologyMode" . -}}
+{{- if and (index .Values.services "federation-console").enabled (ne $mode "distributed") -}}
+{{- fail "services.federation-console.enabled is supported only with topology.mode=distributed; federation-console cannot run in monolith mode." -}}
+{{- end -}}
 {{- if not (has $mode (list "distributed" "monolith")) -}}
 {{- fail (printf "topology.mode must be distributed or monolith (got %q)" $mode) -}}
 {{- end -}}
@@ -748,6 +754,14 @@ would create endpoints that can never provision or use tenant keys.
 {{/* Validate the service graph represented by the service-specific routes. */}}
 {{- define "edk-enterprise.validateRuntimeDependencies" -}}
 {{- if eq (include "edk-enterprise.topologyMode" .) "distributed" -}}
+{{- if (index .Values.services "federation-console").enabled -}}
+{{- if not .Values.services.platform.enabled -}}
+{{- fail "services.platform.enabled must be true while federation-console is enabled: the console requires the platform management API and authorization server." -}}
+{{- end -}}
+{{- if not (index .Values.services "tenant-as").enabled -}}
+{{- fail "services.tenant-as.enabled must be true while federation-console is enabled: the console requires the tenant authorization server." -}}
+{{- end -}}
+{{- end -}}
 {{- if and .Values.services.issuer.enabled (not (index .Values.services "tenant-as").enabled) -}}
 {{- fail "services.tenant-as.enabled must be true while issuer is enabled: the issuer routes OAuth2 commands to tenant-as." -}}
 {{- end -}}

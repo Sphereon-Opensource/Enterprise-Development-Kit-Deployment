@@ -28,6 +28,39 @@ at the same database in an enterprise deployment. Separate schemas inside one
 database are not sufficient; tenant schemas belong inside the tenant workload
 database, while platform state must live in its own logical database.
 
+## Federation profile
+
+Apply `examples/federation-values.yaml` after your customer values to run the
+standalone OpenID Federation product: platform, tenant-KMS, tenant-AS and
+federation-console. External issuers and verifiers are registered in the console.
+This profile supports `topology.mode=distributed` only.
+
+Create the usual platform, tenant-KMS and tenant-AS database, runtime, keystore,
+federation-session and workload-isolated secret-authority Secrets. Also create
+`edk-oidfed-postgres` for the federation database owner and
+`edk-oidfed-runtime-postgres` for its data-only runtime credentials. Create
+`edk-federation-console` with an independently generated 32-byte base64url value
+under `federation-console-session-secret`. The chart never generates that secret.
+
+The profile adds `/federation-console` on the operator and tenant wildcard hosts,
+keeping the prefix intact. The existing `tenant-oidfed` route serves federation
+discovery and authority endpoints through platform and explicit registration
+through tenant-AS. The console image must be built with
+`NEXT_PUBLIC_BASE_PATH=/federation-console`,
+`NEXT_PUBLIC_FEDERATION_API_MODE=live` and
+`NEXT_PUBLIC_FEDERATION_API_BASE_URL=/federation-console/api/federation`.
+
+Onboard tenants with `provisioning.issuer=false`, `provisioning.verifier=false`
+and `provisioning.sampleData=false`. Otherwise onboarding provisions an issuer
+and verifier and tries to publish their DID documents through the absent DID
+service, which fails. To restore the admin consoles, enable `admin-console` and
+`admin-console-tenant` and set `portalBff.existingSecret`.
+
+```bash
+helm template edk ./helm/edk-enterprise --namespace edk \
+  -f customer-values.yaml -f ./helm/edk-enterprise/examples/federation-values.yaml
+```
+
 ## Install
 
 ### One-shot install or upgrade
@@ -214,6 +247,10 @@ fails chart render.
 | `config.providers.platformConfigRemote.enabled` | `true` | Enables platform-owned remote config reads for every satellite/workload service. |
 | `config.providers.tenantConfigDb.enabled` | `false` | Disables direct tenant-config DB reads on satellites so platform remains the config authority. |
 | `issuerPipeline.existingSecret` | `""` | Required Secret name for issuer pipeline encryption and blind-index keys. |
+| `services.federation-console.enabled` | `false` | Enables the Federation Console UI and BFF in the distributed topology. |
+| `federationConsole.clientId` | `federation-console` | Public authorization-code client with required PKCE. |
+| `federationConsole.existingSecret` | `""` | Required when the console is enabled; holds its independent session-encryption secret. |
+| `federationConsole.sessionSecretKey` | `federation-console-session-secret` | Key in the console session Secret. |
 | `license.installationId` | `""` | Optional explicit runtime pin to a known installation id. Leave empty for first-run setup; the protected bundle supplies the installation id. If set, it must match the installed license claims. |
 | `networkPolicy.enabled` | `true` | Renders service ingress/egress NetworkPolicies. |
 | `networkPolicy.secretProviderEgress.enabled` | `true` | Enables platform-only egress to the mandatory Tier-0 KMS and provider endpoints. Pin in-cluster providers with selectors or external services with CIDRs where possible; an empty peer set permits only the configured ports and still relies on the runtime HTTPS/DNS/IP policy. |
@@ -286,6 +323,7 @@ Default backing components:
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
 | `admin-console` | `true` | `admin-console` | Platform operator UI on the platform host |
 | `admin-console-tenant` | `true` | `admin-console` | Tenant-only UI and testing console on registered tenant hosts |
+| `federation-console` | `false` | `federation-console` | Federation UI and BFF at `/federation-console` on operator and tenant hosts |
 
 Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
 wallet-unit, wallet-interaction, wallet-onboarding, issuer, and verifier remain

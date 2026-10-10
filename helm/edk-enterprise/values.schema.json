@@ -778,6 +778,16 @@
         }
       }
     },
+    "federationConsole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clientId", "existingSecret", "sessionSecretKey"],
+      "properties": {
+        "clientId": { "type": "string", "minLength": 1 },
+        "existingSecret": { "type": "string" },
+        "sessionSecretKey": { "type": "string", "minLength": 1 }
+      }
+    },
     "keystore": {
       "type": "object",
       "additionalProperties": true,
@@ -1026,7 +1036,7 @@
       "additionalProperties": false,
           "required": ["platform", "tenant-kms", "did", "blob", "tenant-as", "wallet-unit", "wallet-interaction", "wallet-onboarding", "issuer", "verifier"],
           "patternProperties": {
-        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|wallet-onboarding|issuer|verifier|admin-console|admin-console-tenant|business-wallet)$": {
+        "^(platform|tenant-kms|did|blob|tenant-as|wallet-unit|wallet-interaction|wallet-onboarding|issuer|verifier|admin-console|admin-console-tenant|federation-console|business-wallet)$": {
           "type": "object",
           "additionalProperties": true,
           "properties": {

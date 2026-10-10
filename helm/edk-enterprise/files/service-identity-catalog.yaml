@@ -22,6 +22,7 @@ roles:
       - wallet-onboarding
       - admin-console
       - admin-console-tenant
+      - federation-console
     peersOut:
       - tenant-as
       - tenant-kms
@@ -70,6 +71,7 @@ roles:
       - issuer
       - verifier
       - admin-console-tenant
+      - federation-console
     peersOut:
       - platform
       - tenant-kms
@@ -236,6 +238,18 @@ roles:
       - issuer
       - verifier
       - wallet-onboarding
+  federation-console:
+    kind: bff
+    clientId: federation-console
+    serviceId: null
+    receiverAudience: null
+    defaultStsAudience: platform
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn: []
+    peersOut:
+      - platform
+      - tenant-as
   business-wallet:
     kind: frontend
     clientId: null

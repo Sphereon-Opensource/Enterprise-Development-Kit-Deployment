@@ -134,6 +134,68 @@ spec:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}
 ---
+{{- else if eq $name "federation-console" }}
+# Keep the Next.js base path on both hosts. The operator prefix takes precedence
+# over the platform catch-all without a path rewrite.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" $ }}-federation-console
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - timeouts:
+        request: {{ $.Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /federation-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" $ }}-federation-console-tenant
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /federation-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
 {{- else if eq $name "admin-console-tenant" }}
 # Tenant administration and the existing instance testing console share the
 # tenant-mode runtime. The full /admin-console prefix is safe here because this

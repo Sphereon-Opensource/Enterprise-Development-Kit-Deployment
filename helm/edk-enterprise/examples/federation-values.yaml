@@ -1,0 +1,61 @@
+# OpenID Federation standalone product: platform, tenant-kms, tenant-as and
+# federation-console. External issuers and verifiers are registered in the
+# federation console, not hosted by this deployment.
+# Apply after customer-values.yaml in the distributed topology.
+#
+# Before rendering, create the oidfed database owner and runtime credential
+# Secrets (edk-oidfed-postgres and edk-oidfed-runtime-postgres), the independently
+# generated 32-byte base64url session-encryption secret in edk-federation-console
+# under federation-console-session-secret, and the usual platform/tenant-kms/
+# tenant-as database, runtime, keystore, federation-session and isolated
+# secret-authority Secrets described in the customer README.
+#
+# To add administration back, enable admin-console and admin-console-tenant and
+# set portalBff.existingSecret to the Secret containing the portal-BFF credential.
+#
+# Onboard tenants with provisioning.issuer=false, provisioning.verifier=false
+# and provisioning.sampleData=false. Otherwise onboarding provisions an issuer
+# and verifier and publishes their DID documents through the absent DID service,
+# and fails.
+
+services:
+  platform:
+    enabled: true
+  tenant-kms:
+    enabled: true
+  tenant-as:
+    enabled: true
+  federation-console:
+    enabled: true
+  did:
+    enabled: false
+  blob:
+    enabled: false
+  issuer:
+    enabled: false
+  verifier:
+    enabled: false
+  wallet-unit:
+    enabled: false
+  wallet-interaction:
+    enabled: false
+  wallet-onboarding:
+    enabled: false
+  business-wallet:
+    enabled: false
+  admin-console:
+    enabled: false
+  admin-console-tenant:
+    enabled: false
+
+secretManagement:
+  internalResolution:
+    allowedServiceActors: [tenant-as-service, kms-service]
+
+federationConsole:
+  existingSecret: edk-federation-console
+
+oidfed:
+  database:
+    existingSecret: edk-oidfed-postgres
+    runtimeSecret: edk-oidfed-runtime-postgres

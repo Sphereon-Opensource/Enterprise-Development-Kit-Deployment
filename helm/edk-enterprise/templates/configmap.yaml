@@ -452,6 +452,21 @@ data:
             {{- end }}
           {{- end }}
       clients:
+        {{- if (index .Values.services "federation-console").enabled }}
+        federation-console:
+          client-id: {{ .Values.federationConsole.clientId | quote }}
+          client-name: Federation Console
+          client-type: public
+          grant-types: "authorization_code,refresh_token"
+          response-types: code
+          redirect-uris:
+            - ${env:ONBOARDING_UI_BASE_URL}/federation-console/api/auth/callback
+          post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/federation-console"
+          allowed-scopes: openid,profile,email
+          require-pkce: true
+          token-endpoint-auth-method: none
+          default-access-token-audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+        {{- end }}
         {{- if .Values.portalBff.existingSecret }}
         admin-console-portal-bff:
           client-id: {{ .Values.portalBff.clientId | quote }}
