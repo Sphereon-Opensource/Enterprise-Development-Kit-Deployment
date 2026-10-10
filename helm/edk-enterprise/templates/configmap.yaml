@@ -334,6 +334,7 @@ data:
           grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
           {{- if .Values.serviceIdentity.internalClientExistingSecret }}
           internal-clients:
+            {{- if (index .Values.services "issuer").enabled }}
             issuer:
               client-id: {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "issuer" }}
@@ -345,6 +346,7 @@ data:
                 mode: secret-bootstrap
                 audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
               {{- end }}
+            {{- end }}
             kms:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "tenant-kms" }}
@@ -359,6 +361,7 @@ data:
                 # token may target the platform tenant it is itself registered in.
                 self: "true"
               {{- end }}
+            {{- if (index .Values.services "did").enabled }}
             did:
               client-id: {{ index .Values.serviceIdentity.clientIds "did" | quote }}
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "did" }}
@@ -370,6 +373,7 @@ data:
                 mode: secret-bootstrap
                 audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
               {{- end }}
+            {{- end }}
             {{- if (index .Values.services "blob").enabled }}
             blob:
               client-id: {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
@@ -383,6 +387,7 @@ data:
                 audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
               {{- end }}
             {{- end }}
+            {{- if (index .Values.services "verifier").enabled }}
             verifier:
               client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "verifier" }}
@@ -394,6 +399,7 @@ data:
                 mode: secret-bootstrap
                 audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
               {{- end }}
+            {{- end }}
             tenantas:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "tenant-as" }}
@@ -472,7 +478,11 @@ data:
           token-endpoint-auth-method: none
           # Platform STS authority: operators delegate onto descendant tenants and administer the
           # platform tenant; this is the tenant-registration channel (tenant-provisioning role).
-          {{- $operatorAudiences := list (include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-as")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier")) -}}
+          {{- $operatorAudiences := list (include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) -}}
+          {{- if (index .Values.services "did").enabled }}{{- $operatorAudiences = append $operatorAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) -}}{{- end }}
+          {{- $operatorAudiences = append $operatorAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-as")) -}}
+          {{- if (index .Values.services "issuer").enabled }}{{- $operatorAudiences = append $operatorAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer")) -}}{{- end }}
+          {{- if (index .Values.services "verifier").enabled }}{{- $operatorAudiences = append $operatorAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier")) -}}{{- end }}
           {{- if (index .Values.services "blob").enabled }}{{- $operatorAudiences = append $operatorAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob")) -}}{{- end }}
           {{- if (eq (include "edk-enterprise.walletOnboardingEnabled" .) "true") }}{{- $operatorAudiences = append $operatorAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "wallet-onboarding")) -}}{{- end }}
           token-exchange:
@@ -525,12 +535,18 @@ data:
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          {{- if (index .Values.services "did").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          {{- end }}
           {{- if (index .Values.services "blob").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "blob" | quote }}
           {{- end }}
+          {{- if (index .Values.services "issuer").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "verifier").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          {{- end }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
           {{- if (index .Values.services "wallet-unit").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-unit" | quote }}
@@ -543,12 +559,18 @@ data:
           {{- end }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          {{- if (index .Values.services "did").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          {{- end }}
           {{- if (index .Values.services "blob").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "blob" }}]": {{ index .Values.serviceIdentity.clientIds "blob" | quote }}
           {{- end }}
+          {{- if (index .Values.services "issuer").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "verifier").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          {{- end }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
           {{- if (index .Values.services "wallet-unit").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-unit" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-unit" | quote }}

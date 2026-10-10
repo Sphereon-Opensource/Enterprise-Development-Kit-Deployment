@@ -47,9 +47,15 @@ data:
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          {{- if (index .Values.services "did").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "issuer").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "verifier").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          {{- end }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
           {{- if (index .Values.services "wallet-interaction").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
@@ -59,9 +65,15 @@ data:
           {{- end }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          {{- if (index .Values.services "did").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "issuer").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "verifier").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          {{- end }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
           {{- if (index .Values.services "wallet-interaction").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "wallet-interaction" }}]": {{ index .Values.serviceIdentity.clientIds "wallet-interaction" | quote }}

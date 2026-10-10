@@ -69,17 +69,30 @@ data:
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
+          {{- if (index .Values.services "did").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "issuer").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "verifier").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          {{- end }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          {{- if (index .Values.services "did").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "issuer").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
+          {{- end }}
+          {{- if (index .Values.services "verifier").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          {{- end }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
-    {{- if .Values.serviceIdentity.internalClientExistingSecret }}
+    {{- /* Only registered when the issuer runs: the chart injects EDK_INTERNAL_CLIENT_SECRET_ISSUER only then. */}}
+    {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "issuer").enabled }}
     # Resource servers allowed full RFC 7662 introspection of tenant tokens. The
     # issuer validates wallet access tokens against this AS; without this
     # registration the introspection response withholds authorization_details

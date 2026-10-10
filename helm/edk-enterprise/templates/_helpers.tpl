@@ -462,9 +462,11 @@ may use `latest`, but only with an Always pull policy.
 
 {{/*
 Workload assertion public keys the platform mounts. The wallet workloads are
-optional and disabled by default: their keys are projected when the workload is
-enabled, or when the installed platform Secret already holds them because its
-key set was generated with those workloads. Requires dict root + secretName.
+optional and disabled by default; did, blob, issuer and verifier are optional
+too (the federation profile runs without them). An optional workload's key is
+projected when the workload is enabled, or when the installed platform Secret
+already holds it because its key set was generated with that workload.
+Requires dict root + secretName.
 */}}
 {{- define "edk-enterprise.secretAuthority.assertionPublicKeys" -}}
 {{- $root := .root -}}
@@ -473,7 +475,7 @@ key set was generated with those workloads. Requires dict root + secretName.
 {{- $installed = default dict .data -}}
 {{- end -}}
 {{- $optional := dict -}}
-{{- range $role := list "wallet-unit" "wallet-interaction" "wallet-onboarding" -}}
+{{- range $role := list "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" "wallet-onboarding" -}}
 {{- $enabled := false -}}
 {{- if eq $role "wallet-onboarding" -}}
 {{- $enabled = eq (include "edk-enterprise.walletOnboardingEnabled" $root) "true" -}}
