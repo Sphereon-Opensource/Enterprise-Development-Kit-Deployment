@@ -462,9 +462,11 @@ may use `latest`, but only with an Always pull policy.
 
 {{/*
 Workload assertion public keys the platform mounts. The wallet workloads are
-optional and disabled by default: their keys are projected when the workload is
-enabled, or when the installed platform Secret already holds them because its
-key set was generated with those workloads. Requires dict root + secretName.
+optional and disabled by default; did, blob, issuer and verifier are optional
+too (the federation profile runs without them). An optional workload's key is
+projected when the workload is enabled, or when the installed platform Secret
+already holds it because its key set was generated with that workload.
+Requires dict root + secretName.
 */}}
 {{- define "edk-enterprise.secretAuthority.assertionPublicKeys" -}}
 {{- $root := .root -}}
@@ -473,7 +475,7 @@ key set was generated with those workloads. Requires dict root + secretName.
 {{- $installed = default dict .data -}}
 {{- end -}}
 {{- $optional := dict -}}
-{{- range $role := list "wallet-unit" "wallet-interaction" "wallet-onboarding" -}}
+{{- range $role := list "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" "wallet-onboarding" -}}
 {{- $enabled := false -}}
 {{- if eq $role "wallet-onboarding" -}}
 {{- $enabled = eq (include "edk-enterprise.walletOnboardingEnabled" $root) "true" -}}
@@ -502,6 +504,18 @@ east-west Authorization headers or software-keystore access.
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
+{{- if and (index .Values.services "federation-console").enabled (eq (trim .Values.federationConsole.existingSecret) "") -}}
+{{- fail "federationConsole.existingSecret is required when federation-console is enabled. Create a Kubernetes Secret containing an independently generated session-encryption secret under federationConsole.sessionSecretKey, then reference that Secret by name." -}}
+{{- end -}}
+{{- $federationConsoleTenant := index .Values.services "federation-console-tenant" -}}
+{{- if and $federationConsoleTenant $federationConsoleTenant.enabled -}}
+{{- if eq (trim (default "" .Values.federationConsole.tenantExistingSecret)) "" -}}
+{{- fail "federationConsole.tenantExistingSecret is required when federation-console-tenant is enabled. Create a Kubernetes Secret containing an independently generated session-encryption secret under federationConsole.tenantSessionSecretKey, then reference that Secret by name." -}}
+{{- end -}}
+{{- if and (eq (trim .Values.federationConsole.tenantExistingSecret) (trim .Values.federationConsole.existingSecret)) (eq .Values.federationConsole.tenantSessionSecretKey .Values.federationConsole.sessionSecretKey) -}}
+{{- fail "federationConsole.tenantExistingSecret/tenantSessionSecretKey must not reference the operator console's session secret: the tenant runtime needs its own independently generated secret." -}}
+{{- end -}}
+{{- end -}}
 {{- $issuerPipelineSecret := trim (default "" .Values.issuerPipeline.existingSecret) -}}
 {{- $federationSessionSecret := trim (default "" .Values.federationSessionEncryption.existingSecret) -}}
 {{- $tenantAsEnabled := index .Values.services "tenant-as" -}}
@@ -554,6 +568,12 @@ east-west Authorization headers or software-keystore access.
 
 {{- define "edk-enterprise.validateTopology" -}}
 {{- $mode := include "edk-enterprise.topologyMode" . -}}
+{{- range $console := list "federation-console" "federation-console-tenant" -}}
+{{- $consoleSvc := index $.Values.services $console -}}
+{{- if and $consoleSvc $consoleSvc.enabled (ne $mode "distributed") -}}
+{{- fail (printf "services.%s.enabled is supported only with topology.mode=distributed; the federation console cannot run in monolith mode." $console) -}}
+{{- end -}}
+{{- end -}}
 {{- if not (has $mode (list "distributed" "monolith")) -}}
 {{- fail (printf "topology.mode must be distributed or monolith (got %q)" $mode) -}}
 {{- end -}}
@@ -746,6 +766,17 @@ would create endpoints that can never provision or use tenant keys.
 {{/* Validate the service graph represented by the service-specific routes. */}}
 {{- define "edk-enterprise.validateRuntimeDependencies" -}}
 {{- if eq (include "edk-enterprise.topologyMode" .) "distributed" -}}
+{{- range $console := list "federation-console" "federation-console-tenant" -}}
+{{- $consoleSvc := index $.Values.services $console -}}
+{{- if and $consoleSvc $consoleSvc.enabled -}}
+{{- if not $.Values.services.platform.enabled -}}
+{{- fail (printf "services.platform.enabled must be true while %s is enabled: the console requires the platform management API." $console) -}}
+{{- end -}}
+{{- if not (index $.Values.services "tenant-as").enabled -}}
+{{- fail (printf "services.tenant-as.enabled must be true while %s is enabled: tenant sign-in and Explicit Registration run on the tenant authorization server." $console) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- if and .Values.services.issuer.enabled (not (index .Values.services "tenant-as").enabled) -}}
 {{- fail "services.tenant-as.enabled must be true while issuer is enabled: the issuer routes OAuth2 commands to tenant-as." -}}
 {{- end -}}

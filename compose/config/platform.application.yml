@@ -492,6 +492,20 @@ oauth2:
   user-provider:
     mode: local
   clients:
+    # Used only when the federation console runs. Public PKCE client without delegation.
+    federation-console:
+      client-id: federation-console
+      client-name: Federation Console
+      client-type: public
+      grant-types: "authorization_code,refresh_token"
+      response-types: code
+      redirect-uris:
+        - ${env:ONBOARDING_UI_BASE_URL}/federation-console/api/auth/callback
+      post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/federation-console"
+      allowed-scopes: openid,profile,email
+      require-pkce: true
+      token-endpoint-auth-method: none
+      default-access-token-audience: enterprise-platform
     admin-console-portal-bff:
       client-id: admin-console-portal-bff
       client-name: Admin Console Portal BFF
@@ -521,7 +535,7 @@ oauth2:
       # OIDC RP-Initiated Logout target: where the AS may redirect after revoking the login session.
       # The admin console sign-out calls the AS /logout end-session endpoint with this as
       # post_logout_redirect_uri (unregistered values are ignored), landing the operator back on sign-in.
-      # Comma-separated string (NOT a YAML list — the client config binder reads these via
+      # Comma-separated string (NOT a YAML list; the client config binder reads these via
       # readStringList, which resolves a delimited string here, not block-sequence items).
       post-logout-redirect-uris: "${env:EXTERNAL_BASE_URL}/admin-console"
       allowed-scopes: openid

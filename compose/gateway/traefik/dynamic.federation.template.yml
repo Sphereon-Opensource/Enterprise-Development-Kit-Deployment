@@ -1,0 +1,243 @@
+# Complete OpenID Federation gateway routing table.
+# Render with scripts/render-federation-gateway.mjs. Preserve Host and all path prefixes.
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/wildcard.crt
+        keyFile: /etc/traefik/certs/wildcard.key
+  certificates:
+    - certFile: /etc/traefik/certs/wildcard.crt
+      keyFile: /etc/traefik/certs/wildcard.key
+
+http:
+  routers:
+    # The operator host owns setup, onboarding and platform authorization.
+    platform:
+      rule: "Host(`platform.__BASE_DOMAIN__`)"
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 1000
+      tls: {}
+
+    # KMS management requests reach tenant KMS.
+    api-kms:
+      rule: "PathPrefix(`/api/kms/v1`)"
+      entryPoints: ["websecure"]
+      service: svc-kms
+      priority: 1100
+      tls: {}
+
+    # The platform owns tenant wallet entitlement state.
+    tenant-platform-wallet-entitlement:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/wallet-entitlement/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 300
+      tls: {}
+
+    # Tenant AS serves hosted account actions.
+    tenant-account-actions:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/account-actions/v1`)
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 310
+      tls: {}
+
+    # Platform-owned tenant APIs retain their tenant host context.
+    tenant-backend-platform:
+
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/api/audit/v1`) ||
+         PathPrefix(`/api/forms/v1`) ||
+         PathPrefix(`/api/workflow/v1`) ||
+         PathPrefix(`/api/lifecycle/v1`) ||
+         PathPrefix(`/api/services/v1`) ||
+         PathPrefix(`/api/v1/config`) ||
+         PathPrefix(`/api/invitation/v1/invitations`))
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 310
+      tls: {}
+
+    # The platform owns tenant configuration and secret-authority state.
+    tenant-platform-config:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/platform/config/v1/tenants`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 300
+      tls: {}
+
+    # Tenant AS owns tenant identities and OAuth administration.
+    tenant-as-identity-admin:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathRegexp(`^/api/(identity/v1|identity-auth/v1/admin|party/v1|oauth2/v1)(/.*)?$`)
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 220
+      tls: {}
+
+    # The platform owns tenant trust-domain policy.
+    tenant-trust-domain:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/trust-domain/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 220
+      tls: {}
+
+    # Tenant AS serves discovery and hosted authorization paths.
+    tenant-as:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/as`) || PathPrefix(`/par`) || PathPrefix(`/logout`) ||
+         PathPrefix(`/.well-known/oauth-authorization-server`) ||
+         PathPrefix(`/.well-known/openid-configuration`) ||
+         PathPrefix(`/.well-known/jwks.json`))
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 100
+      tls: {}
+
+    # Operator console runtime, operator host only; above the platform catch-all.
+    platform-federation-console:
+      rule: >-
+        Host(`platform.__BASE_DOMAIN__`) && PathPrefix(`/federation-console`)
+      entryPoints: ["websecure"]
+      service: svc-federation-console
+      priority: 1100
+      tls: {}
+
+    # Tenant hosts reach only the tenant runtime, never the operator console.
+    tenant-federation-console:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) && PathPrefix(`/federation-console`)
+      entryPoints: ["websecure"]
+      service: svc-federation-console-tenant
+      priority: 270
+      tls: {}
+
+    # The platform publishes tenant federation entities and authority endpoints.
+    tenant-oidfed:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (Path(`/.well-known/openid-federation`) ||
+         Path(`/federation_fetch`) ||
+         Path(`/federation_list`) ||
+         Path(`/federation_resolve`) ||
+         Path(`/federation_trust_mark_status`) ||
+         Path(`/federation_trust_mark_list`) ||
+         Path(`/federation_trust_mark`) ||
+         Path(`/federation_historical_keys`) ||
+         PathPrefix(`/oidfed/entities/`))
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 230
+      tls: {}
+
+    # Tenant AS handles OpenID Federation Explicit Registration.
+    tenant-federation-registration:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) && Path(`/federation_registration`)
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 230
+      tls: {}
+
+    # Always rendered, never inside an optional block: the internal Secrets
+    # delegation issuer is east-west/BFF-only and must never be publicly
+    # reachable on any host. The deny middleware answers 403 before any backend,
+    # and the service is Traefik's no-op, never the platform or a console.
+    platform-secret-delegation-hidden:
+      rule: "Path(`/api/platform/admin/v1/application/secrets/internal/delegated-token`)"
+      entryPoints: ["websecure"]
+      middlewares: ["deny-internal"]
+      service: noop@internal
+      priority: 5000
+      tls: {}
+
+    # BEGIN admin-console
+    # The optional operator admin console owns its browser paths.
+    platform-admin-console:
+      rule: "Host(`platform.__BASE_DOMAIN__`) && (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))"
+      entryPoints: ["websecure"]
+      service: svc-admin-console
+      priority: 1100   # above platform catch-all (1000)
+      tls: {}
+
+    # Expose only the browser-safe tenant admin runtime projection.
+    tenant-admin-console-runtime-config:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        Path(`/api/platform/bootstrap/v1/runtime-config/admin-console`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 280
+      tls: {}
+
+    # The optional tenant admin runtime resolves the tenant from the trusted host.
+    tenant-admin-console:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/admin-console`) || Path(`/admin`) || PathPrefix(`/admin/`) || Path(`/api/platform/bootstrap/v1/admin-console-context`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      priority: 270
+      tls: {}
+
+    # END admin-console
+
+  middlewares:
+    # Rejects every client: no source address matches the broadcast /32.
+    deny-internal:
+      ipAllowList:
+        sourceRange: ["255.255.255.255/32"]
+
+  services:
+    svc-platform:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-platform:18080"
+    svc-as:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-as:18083"
+    svc-kms:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-tenant-kms:8080"
+    svc-federation-console:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://federation-console:3000"
+    svc-federation-console-tenant:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://federation-console-tenant:3000"
+    # BEGIN admin-console
+    svc-admin-console:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://admin-console:3000"
+    svc-admin-console-tenant:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://admin-console-tenant:3000"
+    # END admin-console

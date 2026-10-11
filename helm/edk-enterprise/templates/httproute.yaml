@@ -24,6 +24,67 @@ spec:
     appendXForwardedHost: false
 ---
 {{- end }}
+{{- if .Values.services.platform.enabled }}
+{{- $adminConsole := index .Values.services "admin-console" }}
+# The one-request Secrets delegation issuer is east-west/BFF-only; the BFF calls
+# the platform service directly over the cluster network. Its exact public path
+# is always shadowed, whichever consoles run, so the operator-host catch-all can
+# never forward it to the platform. With the admin console it resolves to Next's
+# intentional 404 outside the /admin-console basePath; without it, to a deny
+# Service that has no endpoints, so the gateway answers 503.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "secret-delegation-hidden") }}
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $adminConsole.enabled | ternary "admin-console" "internal-deny" }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /api/platform/admin/v1/application/secrets/internal/delegated-token
+      backendRefs:
+        {{- if $adminConsole.enabled }}
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "admin-console") }}
+          port: {{ $adminConsole.restPort }}
+        {{- else }}
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "internal-deny") }}
+          port: 80
+        {{- end }}
+---
+{{- if not $adminConsole.enabled }}
+# Deny backend for shadowed internal paths. Its selector matches no pod, so it
+# never has endpoints and nothing behind it can answer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "internal-deny") }}
+  labels:
+    {{- include "edk-enterprise.labels" . | nindent 4 }}
+    app.kubernetes.io/component: internal-deny
+spec:
+  type: ClusterIP
+  selector:
+    edk.sphereon.com/internal-deny-no-endpoints: "true"
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+---
+{{- end }}
+{{- end }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
 {{- if eq $name "platform" }}
@@ -57,36 +118,6 @@ spec:
           port: {{ $svc.restPort }}
 ---
 {{- else if eq $name "admin-console" }}
-# The one-request Secrets delegation issuer is east-west/BFF-only. Shadow its
-# exact public path to the admin-console service without Next's /admin-console
-# basePath, which deliberately returns 404. The BFF itself calls the platform
-# service directly over the cluster network.
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" "secret-delegation-hidden") }}
-  {{- with $platformRouteAnnotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-  labels:
-    {{- include "edk-enterprise.labels" $ | nindent 4 }}
-    app.kubernetes.io/component: {{ $name }}
-spec:
-  parentRefs:
-    - name: {{ $gatewayName }}
-      sectionName: https-platform
-  hostnames:
-    - {{ $operatorHost | quote }}
-  rules:
-    - matches:
-        - path:
-            type: Exact
-            value: /api/platform/admin/v1/application/secrets/internal/delegated-token
-      backendRefs:
-        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
-          port: {{ $svc.restPort }}
----
 # Operator/admin console on the operator host. The explicit /admin-console PathPrefix is
 # more specific than the platform route's / catch-all, so Gateway API path
 # precedence (longest prefix wins) routes /admin-console/* here while everything
@@ -130,6 +161,72 @@ spec:
         - path:
             type: Exact
             value: /api/platform/bootstrap/v1/admin-console-context
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+{{- else if eq $name "federation-console" }}
+# Operator (PLATFORM) federation console on the operator host only. The prefix
+# takes precedence over the platform catch-all; keep the Next.js base path.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.fullname" $ }}-federation-console
+  {{- with $platformRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https-platform
+  hostnames:
+    - {{ $operatorHost | quote }}
+  rules:
+    - timeouts:
+        request: {{ $.Values.gateway.requestTimeout | quote }}
+        backendRequest: {{ $.Values.gateway.backendRequestTimeout | quote }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /federation-console
+      backendRefs:
+        - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+          port: {{ $svc.restPort }}
+---
+{{- else if eq $name "federation-console-tenant" }}
+# Tenant (TENANT) federation console on tenant hosts only. This runtime has no
+# operator coordinates or platform client and validates the exact tenant host,
+# so the operator runtime is never reachable from a tenant host.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "edk-enterprise.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      sectionName: https
+  hostnames:
+    - {{ $wildcard | quote }}
+  rules:
+    - {{ if $preserveOriginalHost }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $edgeHostFilterName }}
+      {{ end }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /federation-console
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" $ "name" $name) }}
           port: {{ $svc.restPort }}

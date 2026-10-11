@@ -9,8 +9,8 @@ There are two run modes:
 - Base Compose plus the gateway overlay. A Traefik reverse proxy fronts the services on a single TLS port and routes by host and path. This is the customer walkthrough model and matches the production single-port gateway model.
 - Base Compose alone. Each service is published on its own host port over plain HTTP. Use this only as a local developer diagnostic mode; it is not a customer URL model.
 
-The platform is the configuration authority for tenant workloads. A clean
-first-run installation starts the platform and all workload containers together:
+The platform is the configuration authority for tenant workloads. In the full
+enterprise mode, a clean first-run installation starts all workload containers together:
 tenant AS, tenant KMS, DID, issuer, and verifier must already be present when
 tenant registration later provisions signing material and tenant DID state
 through east-west services. Before the license is imported those workload
@@ -263,6 +263,89 @@ workloads have not received an activated license yet. They should nevertheless
 be running. Direct workload `/health` probes may show `503` with
 `licenseStatus: MISSING` until first-run setup imports the protected license
 bundle and bootstraps the operator account.
+
+## Federation profile
+
+The federation overlay runs `enterprise-platform`, `enterprise-tenant-kms`,
+`enterprise-tenant-as`, `federation-console`, `federation-console-tenant`, both PostgreSQL containers, the
+telemetry services and Traefik. DID, blob, issuer and verifier are assigned to
+the `vdx-services` profile. The two admin consoles are optional under the
+`admin-console` profile; themes and their DID/issuer/verifier screens need the
+VDX services. Use Docker Compose v2.24.4 or newer for the dependency overrides.
+
+From `compose/`, run the secret generator after setting the approved `EDK_TAG`
+and `EDK_PLATFORM_BASE_DOMAIN` in `.env`:
+
+```bash
+node ../scripts/generate-compose-secrets.mjs
+node ../scripts/render-federation-gateway.mjs --base-domain fed.example.com
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml up -d
+```
+
+Use your installation domain in the renderer. The generator adds four
+independent 32-byte base64url secrets: `EDK_OIDFED_DB_PASSWORD` for the database
+owner, `EDK_OIDFED_RUNTIME_DB_PASSWORD` for the data-only tenant AS role, and
+`EDK_FEDERATION_CONSOLE_SESSION_SECRET` and
+`EDK_FEDERATION_CONSOLE_TENANT_SESSION_SECRET` for the two console runtimes. It
+keeps existing values. `EDK_FEDERATION_CONSOLE_TAG` defaults to `EDK_TAG`; the
+image must be built for `/federation-console` with the live API at
+`/federation-console/api/federation`.
+
+The console runs as two runtimes from that image, like the admin console.
+`federation-console` (`FEDERATION_CONSOLE_MODE=PLATFORM`) is routed only on
+`platform.<base-domain>` and holds the operator sign-in coordinates.
+`federation-console-tenant` (`FEDERATION_CONSOLE_MODE=TENANT`) is routed only on
+tenant hosts, has no operator coordinates or platform client, and resolves the
+tenant from the validated request host. Both are served at `/federation-console`;
+the gateway never strips the prefix.
+
+To include the admin consoles, keep their routes when rendering and enable
+their Compose profile:
+
+```bash
+node ../scripts/render-federation-gateway.mjs --base-domain fed.example.com --with-admin-console
+docker compose --profile admin-console -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml up -d
+```
+
+The commands above use the gateway's certificate files and static configuration
+described in section 3b. With an existing shared TLS edge, render with
+`--behind-edge` and use the rendered behind-edge Compose overlay in place of
+`docker-compose.gateway.yml`. That switches the routing table to `web` and
+removes TLS configuration because the edge terminates TLS. You can select a
+different output using `--output <path>` and set
+`EDK_FEDERATION_GATEWAY_DYNAMIC` to that file's path, relative to `compose/`.
+Render with `--with-admin-console` in this mode too if the profile is enabled.
+
+For the local certificate gateway, set this in `.env` so tenant AS trusts the
+evaluation CA after its environment map is replaced by the overlay:
+
+```dotenv
+JAVA_TOOL_OPTIONS=-Djavax.net.ssl.trustStore=/app/certs/local-truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit -Djavax.net.ssl.trustStoreType=PKCS12
+```
+
+Leave it unset with a publicly trusted certificate or shared edge.
+
+The `oidfed` database is separate from the tenant workload database but lives
+on `tenant-postgres`. The platform owns its schema and migrates it; tenant AS
+connects as `oidfed_runtime` and verifies it. PostgreSQL init scripts run only
+on a fresh tenant database volume. For an existing volume, start only the
+database with the overlay so it receives the new passwords and script mount,
+then create the database and roles before starting the platform:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml up -d tenant-postgres
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml exec tenant-postgres sh /docker-entrypoint-initdb.d/20-oidfed-database.sh
+docker compose -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml up -d
+```
+
+Use the same overlay filenames and optional profile as your installation. The
+script is idempotent and does not rotate existing role passwords.
+
+When onboarding federation tenants, set `provisioning.issuer=false`,
+`provisioning.verifier=false` and `provisioning.sampleData=false`. Otherwise
+onboarding provisions an issuer and verifier and publishes their DID documents
+through the absent DID service, and fails. This rule replaces the full stack
+provisioning requirement in section 6 for federation deployments.
 
 ## 4. Gateway Public Routes
 
