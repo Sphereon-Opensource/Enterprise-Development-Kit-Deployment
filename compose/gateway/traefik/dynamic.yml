@@ -376,6 +376,16 @@ http:
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 220
+
+    # Anonymous delivery of hosted LoTE artifacts. Preserve the tenant host: the platform serves
+    # only the lists the resolved tenant explicitly enabled, never another tenant's.
+    tenant-trust-domain-public:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
+        PathPrefix(`/public/trust-domain/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 220
       tls: {}
 
     # TS 11 catalogs are issuer-owned. Public SchemaMeta stays anonymous
