@@ -260,22 +260,36 @@ fi
 
 # POST a JSON body and fail on a non-2xx response. Echoes the body to stdout.
 post_json() {
-  # $1 = url, $2 = json body, $3 = optional bearer token
-  local url="$1" body="$2" token="${3:-}" tmp code
+  # $1 = url, $2 = json body, $3 = optional bearer token, $4 = optional cookie jar
+  local url="$1" body="$2" token="${3:-}" jar="${4:-}" tmp code
+  local cookie_args=()
+  [ -z "$jar" ] || cookie_args=(-b "$jar" -c "$jar")
   tmp="$(mktemp)"
   if [ -n "$token" ]; then
     code="$(printf '%s' "$body" | curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
       -H 'Content-Type: application/json' -H "Authorization: Bearer $token" \
-      --data-binary @-)"
+      --data-binary @- "${cookie_args[@]}")"
   else
     code="$(printf '%s' "$body" | curl -s -o "$tmp" -w '%{http_code}' -X POST "$url" \
-      -H 'Content-Type: application/json' --data-binary @-)"
+      -H 'Content-Type: application/json' --data-binary @- "${cookie_args[@]}")"
   fi
   local out; out="$(cat "$tmp")"; rm -f "$tmp"
   case "$code" in
     2*) printf '%s' "$out"; return 0 ;;
     *)  fail "POST $url failed ($code): $out" ;;
   esac
+}
+
+resume_administrator_activation() {
+  local headers code location
+  headers="$(mktemp)"
+  code="$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" -D "$headers" -o /dev/null \
+    -w '%{http_code}' --max-time 30 "$PLATFORM_URL/api/platform/setup/v1/administrator-activation")"
+  location="$(awk 'index(tolower($0), "location:") == 1 {sub(/^[^:]*:[ \t]*/, ""); sub(/\r$/, ""); val=$0} END{print val}' "$headers")"
+  rm -f "$headers"
+  [ "$code" = "302" ] && [ -n "$location" ] || \
+    fail "Administrator activation continuation failed; stage=setup-continuation; HTTP $code."
+  printf '%s' "$location"
 }
 
 post_license_bundle() {
@@ -308,14 +322,16 @@ if [ "$SETUP_OPEN" = "true" ]; then
   echo "Bootstrapping platform operator..."
   BOOTSTRAP_BODY="$(node -e 'process.stdout.write(JSON.stringify({adminEmail:process.argv[1],adminDisplayName:process.argv[2]}))' \
     -- "$OPERATOR_EMAIL" "$OPERATOR_DISPLAY_NAME")"
-  BOOTSTRAP_RESPONSE="$(post_json "$PLATFORM_URL/api/platform/setup/v1/bootstrap" "$BOOTSTRAP_BODY")"
-  ACTIVATION_TOKEN="$(node -e '
+  BOOTSTRAP_RESPONSE="$(post_json "$PLATFORM_URL/api/platform/setup/v1/bootstrap" "$BOOTSTRAP_BODY" "" "$COOKIE_JAR")"
+  ACTIVATION_LINK="$(node -e '
     const value = JSON.parse(process.argv[1]);
     const link = value?.activation?.manualActivationLink;
-    if (!link || !link.includes("#")) process.exit(2);
-    process.stdout.write(link.split("#", 2)[1]);
-  ' -- "$BOOTSTRAP_RESPONSE")" || \
+    process.stdout.write(link || "");
+  ' -- "$BOOTSTRAP_RESPONSE")"
+  [ -n "$ACTIVATION_LINK" ] || ACTIVATION_LINK="$(resume_administrator_activation)"
+  [[ "$ACTIVATION_LINK" == *'#'* ]] || \
     fail "Platform bootstrap did not return the manual activation link required by unattended provisioning."
+  ACTIVATION_TOKEN="${ACTIVATION_LINK#*#}"
   # The password travels through the environment, never on a command line.
   ACTIVATION_BODY="$(EDK_PROVISION_SECRET="$OPERATOR_PASSWORD" node -e '
     process.stdout.write(JSON.stringify({token: process.argv[1], password: process.env.EDK_PROVISION_SECRET}))
