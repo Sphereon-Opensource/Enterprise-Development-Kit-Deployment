@@ -9,6 +9,11 @@ Helm installations use `scripts/upgrade-helm.sh` and the values files under
 `helm/edk-enterprise/examples/upgrades/`; see the
 [Kubernetes quickstart](quickstart-kubernetes.md).
 
+For Developer Console redirects, tenant registration errors after successful
+creation, or Azure KMS startup/runtime failures, see the
+[0.25.0 troubleshooting procedure](troubleshooting-0.25.0.md). It includes a
+Developer Console rewrite correction needed even with the tagged final kit.
+
 ## What stays the same
 
 - The Compose project name (`edk-enterprise`), the service names and the named
@@ -42,7 +47,7 @@ Helm installations use `scripts/upgrade-helm.sh` and the values files under
 | `EDK_ONBOARDING_UI_EXTERNAL_BASE_URL` | Optional | Removed. The onboarding UI always uses the platform URL. |
 | `EDK_KMS_INTERNAL_BASE_URL`, `EDK_BLOB_EXTERNAL_BASE_URL` | Optional | Removed. Both services use fixed internal addresses. |
 | `EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST`, `EDK_SECRET_MANAGEMENT_ENVIRONMENT_MANIFEST_SHA256` | RC5 only, optional | Unchanged. The digest is now written by `generate-compose-secrets.mjs`. |
-| `EDK_PLATFORM_KMS_AZURE_*`, `EDK_PLATFORM_KMS_AWS_*` | RC5 only, optional | Unchanged. See [Shared cloud KMS providers](#shared-cloud-kms-providers-rc5). |
+| `EDK_PLATFORM_KMS_AZURE_*`, `EDK_PLATFORM_KMS_AWS_*` | RC5 only, optional | Unchanged. See [Shared cloud KMS providers](configuration.md#platform-shared-azure-key-vault-and-aws-kms). |
 
 RC4 and RC5 shipped the same `.env.example`. Both contained placeholder values
 that are public:

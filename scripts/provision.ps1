@@ -243,17 +243,20 @@ function Invoke-Json {
     [string]$Method,
     [string]$Uri,
     [object]$Body,
-    [string]$BearerToken
+    [string]$BearerToken,
+    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession
   )
   $headers = @{}
+  $sessionArgs = @{}
+  if ($null -ne $WebSession) { $sessionArgs.WebSession = $WebSession }
   if ($BearerToken) { $headers['Authorization'] = "Bearer $BearerToken" }
   try {
     if ($null -ne $Body) {
       $raw = if ($Body -is [string]) { $Body } else { $Body | ConvertTo-Json -Depth 12 }
       return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers `
-        -ContentType 'application/json' -Body $raw
+        -ContentType 'application/json' -Body $raw @sessionArgs
     } else {
-      return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
+      return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers @sessionArgs
     }
   } catch {
     $status = ""
@@ -346,6 +349,22 @@ function Invoke-OperatorRedirect {
   }
 }
 
+function Resolve-SetupAdministratorActivationLink {
+  param(
+    [object]$Bootstrap,
+    [string]$PlatformUrl,
+    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession
+  )
+  $link = [string]$Bootstrap.activation.manualActivationLink
+  if (-not [string]::IsNullOrWhiteSpace($link)) { return $link }
+  # The bootstrap capability travels only in its HttpOnly continuation cookie.
+  try {
+    return Invoke-OperatorRedirect -Uri "$PlatformUrl/api/platform/setup/v1/administrator-activation" -Method Get -WebSession $WebSession
+  } catch {
+    Fail "Administrator activation continuation failed; stage=setup-continuation."
+  }
+}
+
 # --- Step 1: wait for platform gateway reachability ---------------------------
 function Wait-PlatformGateway {
   param([string]$Url, [int]$Retries = 30, [int]$DelaySeconds = 4)
@@ -413,11 +432,12 @@ if ($setupOpen) {
   Write-Host "  License bundle imported." -ForegroundColor Green
 
   Write-Host "Bootstrapping platform operator..." -ForegroundColor Cyan
-  $bootstrap = Invoke-Json -Method Post -Uri "$platformUrl/api/platform/setup/v1/bootstrap" -Body @{
+  $setupSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+  $bootstrap = Invoke-Json -Method Post -Uri "$platformUrl/api/platform/setup/v1/bootstrap" -WebSession $setupSession -Body @{
     adminEmail       = $operatorEmail
     adminDisplayName = $operatorDisplayName
   }
-  $activationLink = [string]$bootstrap.activation.manualActivationLink
+  $activationLink = Resolve-SetupAdministratorActivationLink -Bootstrap $bootstrap -PlatformUrl $platformUrl -WebSession $setupSession
   if ([string]::IsNullOrWhiteSpace($activationLink) -or -not $activationLink.Contains('#')) {
     Fail "Platform bootstrap did not return the manual activation link required by unattended provisioning (deliveryState=$($bootstrap.activation.deliveryState))."
   }
