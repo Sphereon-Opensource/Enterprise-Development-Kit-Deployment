@@ -94,6 +94,16 @@ http:
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 220
+
+    # Anonymous delivery of hosted LoTE artifacts. Preserve the tenant host: the platform serves
+    # only the lists the resolved tenant explicitly enabled, never another tenant's.
+    tenant-trust-domain-public:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/public/trust-domain/v1`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 220
       tls: {}
 
     # Tenant AS serves discovery and hosted authorization paths.
