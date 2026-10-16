@@ -1,0 +1,567 @@
+{
+  "federation_publication_policy": {
+    "worker_id": "oidfed-enrollment-verification-worker",
+    "role_rules": {
+      "oidfed.capabilities.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.connection-contexts.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.connection-contexts.end": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.connection-contexts.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.control.graph": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.control.initialize": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.diagnostics.inspect-entity-configuration": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.diagnostics.resolve": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollment-invitations.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollment-invitations.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollment-invitations.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollment-invitations.revoke": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.accept-keys": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.admit": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.approve": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.get-report": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.reinstate": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.reject": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.remove": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.request-changes": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.suspend": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.update-assignment": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.enrollments.verify": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entities.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entities.decommission": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entities.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entities.get-publication": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entities.publish": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entities.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entities.verify-origin": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entity-keys.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entity-keys.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entity-keys.list-historical": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entity-keys.revoke": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.entity-keys.select": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-events.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-events.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-services.discover": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-services.end": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-services.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-services.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-services.list-hosted-resources": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-services.register": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-services.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.federation-services.verify-publication": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.export-package": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.refresh": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.respond": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.submit": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.verify-chain": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.join-requests.withdraw": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.key-rollovers.add-key": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.key-rollovers.cancel": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.key-rollovers.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.key-rollovers.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.key-rollovers.plan": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.key-rollovers.propagate": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.key-rollovers.retire": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.key-rollovers.switch": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.memberships.compare-anchor-keys": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.memberships.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.memberships.end": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.memberships.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.memberships.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.memberships.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.memberships.verify": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.metadata-policies.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.metadata-policies.set": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.activate": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.attach-intermediate": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.detach-intermediate": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.export-anchor-keys": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.health": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.retire": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.set-trust-mark-issuers": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.set-trust-mark-owners": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-federations.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.end-owner": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.get-owner": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.issue": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.list-issuances": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.list-owners": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.register-owner": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.renew": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.replace-delegation": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.operated-issuance.revoke": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.participations.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.participations.end": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.participations.replace-edges": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.participations.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.policy-templates.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.policy-templates.remove": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.policy-templates.set": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.publications.refresh": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.received-trust-marks.add": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.received-trust-marks.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.received-trust-marks.remove": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.renewal-schedules.cancel": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.renewal-schedules.ensure": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.renewal-schedules.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.resource-bindings.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.resource-bindings.end": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.resource-bindings.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.superior-intents.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.superior-intents.end": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.superior-intents.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.superior-statements.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.superior-statements.preview": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.superior-statements.publish": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.superiors.verify": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-applications.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-applications.issue": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-applications.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-applications.reject": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-applications.request-changes": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-applications.verify": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-delegations.issue": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.authorize-issuer": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.define": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.remove": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.remove-owner": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.review-owner": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.set-delegation": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.set-owner": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.update": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-mark-types.withdraw-issuer": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-marks.issue": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-marks.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.trust-marks.revoke": [
+        "tenant-admin",
+        "platform-admin"
+      ]
+    }
+  }
+}
