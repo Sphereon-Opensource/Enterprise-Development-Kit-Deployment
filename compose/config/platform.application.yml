@@ -492,20 +492,28 @@ oauth2:
   user-provider:
     mode: local
   clients:
-    # Used only when the federation console runs. Public PKCE client without delegation.
+    # Public PKCE client for federation-console platform administration.
     federation-console:
       client-id: federation-console
       client-name: Federation Console
       client-type: public
-      grant-types: "authorization_code,refresh_token"
+      grant-types: "authorization_code,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
       response-types: code
       redirect-uris:
         - ${env:ONBOARDING_UI_BASE_URL}/federation-console/api/auth/callback
-      post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/federation-console"
+      post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/federation-console/"
       allowed-scopes: openid,profile,email
       require-pkce: true
       token-endpoint-auth-method: none
       default-access-token-audience: enterprise-platform
+      allowed-access-token-audiences: enterprise-platform
+      # Console operators administer the platform; this client cannot provision tenants.
+      token-exchange:
+        mode: operator-delegation
+        audiences: enterprise-platform
+        self: true
+        provisioning: false
+        role: platform-admin
     admin-console-portal-bff:
       client-id: admin-console-portal-bff
       client-name: Admin Console Portal BFF
@@ -782,3 +790,440 @@ secret:
         issuer: enterprise-platform
         audience: sphereon-secret-use
         verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+
+authz:
+  # Required federation management authorization uses the built-in role engine.
+  # Selection and rules are finite and identical; public protocol operations are not selected.
+  # Receiving commands retain their authenticated same-tenant and license checks.
+  policy:
+    default-engine: federationadmin
+    default-fallback: deny
+    authzen:
+      enabled: true
+      enforcement-mode: enforced
+      fallback-policy: deny
+      include-patterns:
+        - oidfed.capabilities.get
+        - oidfed.connection-contexts.create
+        - oidfed.connection-contexts.end
+        - oidfed.connection-contexts.update
+        - oidfed.control.graph
+        - oidfed.control.initialize
+        - oidfed.diagnostics.inspect-entity-configuration
+        - oidfed.diagnostics.resolve
+        - oidfed.enrollment-invitations.create
+        - oidfed.enrollment-invitations.get
+        - oidfed.enrollment-invitations.list
+        - oidfed.enrollment-invitations.revoke
+        - oidfed.enrollments.accept-keys
+        - oidfed.enrollments.admit
+        - oidfed.enrollments.approve
+        - oidfed.enrollments.create
+        - oidfed.enrollments.get
+        - oidfed.enrollments.get-report
+        - oidfed.enrollments.list
+        - oidfed.enrollments.reinstate
+        - oidfed.enrollments.reject
+        - oidfed.enrollments.remove
+        - oidfed.enrollments.request-changes
+        - oidfed.enrollments.suspend
+        - oidfed.enrollments.update-assignment
+        - oidfed.enrollments.verify
+        - oidfed.entities.create
+        - oidfed.entities.decommission
+        - oidfed.entities.get
+        - oidfed.entities.get-publication
+        - oidfed.entities.publish
+        - oidfed.entities.update
+        - oidfed.entities.verify-origin
+        - oidfed.entity-keys.create
+        - oidfed.entity-keys.list
+        - oidfed.entity-keys.list-historical
+        - oidfed.entity-keys.revoke
+        - oidfed.entity-keys.select
+        - oidfed.federation-events.get
+        - oidfed.federation-events.list
+        - oidfed.federation-services.discover
+        - oidfed.federation-services.end
+        - oidfed.federation-services.get
+        - oidfed.federation-services.list
+        - oidfed.federation-services.list-hosted-resources
+        - oidfed.federation-services.register
+        - oidfed.federation-services.update
+        - oidfed.federation-services.verify-publication
+        - oidfed.join-requests.create
+        - oidfed.join-requests.export-package
+        - oidfed.join-requests.get
+        - oidfed.join-requests.list
+        - oidfed.join-requests.refresh
+        - oidfed.join-requests.respond
+        - oidfed.join-requests.submit
+        - oidfed.join-requests.verify-chain
+        - oidfed.join-requests.withdraw
+        - oidfed.key-rollovers.add-key
+        - oidfed.key-rollovers.cancel
+        - oidfed.key-rollovers.get
+        - oidfed.key-rollovers.list
+        - oidfed.key-rollovers.plan
+        - oidfed.key-rollovers.propagate
+        - oidfed.key-rollovers.retire
+        - oidfed.key-rollovers.switch
+        - oidfed.memberships.compare-anchor-keys
+        - oidfed.memberships.create
+        - oidfed.memberships.end
+        - oidfed.memberships.get
+        - oidfed.memberships.list
+        - oidfed.memberships.update
+        - oidfed.memberships.verify
+        - oidfed.metadata-policies.get
+        - oidfed.metadata-policies.set
+        - oidfed.operated-federations.activate
+        - oidfed.operated-federations.attach-intermediate
+        - oidfed.operated-federations.create
+        - oidfed.operated-federations.detach-intermediate
+        - oidfed.operated-federations.export-anchor-keys
+        - oidfed.operated-federations.get
+        - oidfed.operated-federations.health
+        - oidfed.operated-federations.list
+        - oidfed.operated-federations.retire
+        - oidfed.operated-federations.set-trust-mark-issuers
+        - oidfed.operated-federations.set-trust-mark-owners
+        - oidfed.operated-federations.update
+        - oidfed.operated-issuance.end-owner
+        - oidfed.operated-issuance.get-owner
+        - oidfed.operated-issuance.issue
+        - oidfed.operated-issuance.list-issuances
+        - oidfed.operated-issuance.list-owners
+        - oidfed.operated-issuance.register-owner
+        - oidfed.operated-issuance.renew
+        - oidfed.operated-issuance.replace-delegation
+        - oidfed.operated-issuance.revoke
+        - oidfed.participations.create
+        - oidfed.participations.end
+        - oidfed.participations.replace-edges
+        - oidfed.participations.update
+        - oidfed.policy-templates.list
+        - oidfed.policy-templates.remove
+        - oidfed.policy-templates.set
+        - oidfed.publications.refresh
+        - oidfed.received-trust-marks.add
+        - oidfed.received-trust-marks.list
+        - oidfed.received-trust-marks.remove
+        - oidfed.renewal-schedules.cancel
+        - oidfed.renewal-schedules.ensure
+        - oidfed.renewal-schedules.get
+        - oidfed.resource-bindings.create
+        - oidfed.resource-bindings.end
+        - oidfed.resource-bindings.update
+        - oidfed.superior-intents.create
+        - oidfed.superior-intents.end
+        - oidfed.superior-intents.update
+        - oidfed.superior-statements.list
+        - oidfed.superior-statements.preview
+        - oidfed.superior-statements.publish
+        - oidfed.superiors.verify
+        - oidfed.trust-mark-applications.get
+        - oidfed.trust-mark-applications.issue
+        - oidfed.trust-mark-applications.list
+        - oidfed.trust-mark-applications.reject
+        - oidfed.trust-mark-applications.request-changes
+        - oidfed.trust-mark-applications.verify
+        - oidfed.trust-mark-delegations.issue
+        - oidfed.trust-mark-types.authorize-issuer
+        - oidfed.trust-mark-types.define
+        - oidfed.trust-mark-types.get
+        - oidfed.trust-mark-types.list
+        - oidfed.trust-mark-types.remove
+        - oidfed.trust-mark-types.remove-owner
+        - oidfed.trust-mark-types.review-owner
+        - oidfed.trust-mark-types.set-delegation
+        - oidfed.trust-mark-types.set-owner
+        - oidfed.trust-mark-types.update
+        - oidfed.trust-mark-types.withdraw-issuer
+        - oidfed.trust-marks.issue
+        - oidfed.trust-marks.list
+        - oidfed.trust-marks.revoke
+    engines:
+      federationadmin:
+        type: roles
+        role-rules:
+          - pattern: oidfed.capabilities.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.connection-contexts.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.connection-contexts.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.connection-contexts.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.control.graph
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.control.initialize
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.diagnostics.inspect-entity-configuration
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.diagnostics.resolve
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollment-invitations.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollment-invitations.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollment-invitations.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollment-invitations.revoke
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.accept-keys
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.admit
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.approve
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.get-report
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.reinstate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.reject
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.request-changes
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.suspend
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.update-assignment
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.decommission
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.get-publication
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.publish
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.verify-origin
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.list-historical
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.revoke
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.select
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-events.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-events.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.discover
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.list-hosted-resources
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.register
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.verify-publication
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.export-package
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.refresh
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.respond
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.submit
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.verify-chain
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.withdraw
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.add-key
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.cancel
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.plan
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.propagate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.retire
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.switch
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.compare-anchor-keys
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.metadata-policies.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.metadata-policies.set
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.activate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.attach-intermediate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.detach-intermediate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.export-anchor-keys
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.health
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.retire
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.set-trust-mark-issuers
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.set-trust-mark-owners
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.end-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.get-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.issue
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.list-issuances
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.list-owners
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.register-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.renew
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.replace-delegation
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.revoke
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.participations.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.participations.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.participations.replace-edges
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.participations.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.policy-templates.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.policy-templates.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.policy-templates.set
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.publications.refresh
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.received-trust-marks.add
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.received-trust-marks.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.received-trust-marks.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-schedules.cancel
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-schedules.ensure
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-schedules.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.resource-bindings.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.resource-bindings.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.resource-bindings.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-intents.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-intents.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-intents.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-statements.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-statements.preview
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-statements.publish
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superiors.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.issue
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.reject
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.request-changes
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-delegations.issue
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.authorize-issuer
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.define
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.remove-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.review-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.set-delegation
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.set-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.withdraw-issuer
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-marks.issue
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-marks.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-marks.revoke
+            any-of: [tenant-admin, platform-admin]

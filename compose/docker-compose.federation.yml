@@ -86,8 +86,8 @@ services:
   # Two runtimes from one image, split like the admin console. The operator
   # runtime is routed only on platform.<base> and holds the operator sign-in
   # coordinates. The tenant runtime is routed only on tenant hosts and holds none
-  # of them; it resolves the tenant from the validated host. Each has its own
-  # session secret. Neither receives the platform root URL.
+  # of them; it resolves the tenant UUID through the verified host registry. Each has its own
+  # process-local session store and host-bound cookies.
   federation-console:
     image: nexus.sphereon.com/edk-docker/federation-console:${EDK_FEDERATION_CONSOLE_TAG:-${EDK_TAG:?Set EDK_TAG to the approved release tag}}
     networks:
@@ -102,18 +102,15 @@ services:
       # NEXT_PUBLIC_FEDERATION_API_BASE_URL=/federation-console/api/federation.
       NEXT_PUBLIC_BASE_PATH: /federation-console
       FEDERATION_CONSOLE_MODE: PLATFORM
-      FEDERATION_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
-      FEDERATION_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
-      FEDERATION_CONSOLE_COOKIE_SECURE: "true"
-      FEDERATION_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1
-      FEDERATION_API_UPSTREAM: http://enterprise-platform:18080/api/platform/config/v1
-      FEDERATION_CONSOLE_PUBLIC_ORIGIN: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
-      FEDERATION_CONSOLE_PLATFORM_ISSUER: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
-      FEDERATION_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
-      FEDERATION_CONSOLE_PLATFORM_TOKEN_URL: http://enterprise-platform:18080/token
-      FEDERATION_CONSOLE_PLATFORM_AUDIENCE: enterprise-platform
-      FEDERATION_CONSOLE_CLIENT_ID: federation-console
-      FEDERATION_CONSOLE_SESSION_SECRET: ${EDK_FEDERATION_CONSOLE_SESSION_SECRET:?Run scripts/generate-compose-secrets.mjs}
+      FEDERATION_TRUSTED_INGRESS_MODE: X_FORWARDED
+      FEDERATION_TRUSTED_INGRESS_HOPS: "1"
+      FEDERATION_COOKIE_SECURE: "true"
+      FEDERATION_API_URL: http://enterprise-platform:18080
+      FEDERATION_OPERATOR_ORIGIN: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      FEDERATION_PLATFORM_AS_ISSUER: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      FEDERATION_PLATFORM_AS_URL: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      FEDERATION_API_AUDIENCE: enterprise-platform
+      FEDERATION_PLATFORM_CLIENT_ID: federation-console
     # No host port: the gateway routes /federation-console on platform.<base> here.
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/federation-console/health"]
@@ -135,13 +132,12 @@ services:
       PORT: "3000"
       NEXT_PUBLIC_BASE_PATH: /federation-console
       FEDERATION_CONSOLE_MODE: TENANT
-      FEDERATION_CONSOLE_TRUSTED_INGRESS_MODE: X_FORWARDED
-      FEDERATION_CONSOLE_TRUSTED_INGRESS_HOPS: "1"
-      FEDERATION_CONSOLE_COOKIE_SECURE: "true"
-      FEDERATION_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1
-      FEDERATION_API_UPSTREAM: http://enterprise-platform:18080/api/platform/config/v1
-      FEDERATION_CONSOLE_TENANT_AS_BASE_URL: http://enterprise-tenant-as:18083
-      FEDERATION_CONSOLE_SESSION_SECRET: ${EDK_FEDERATION_CONSOLE_TENANT_SESSION_SECRET:?Run scripts/generate-compose-secrets.mjs}
+      FEDERATION_TRUSTED_INGRESS_MODE: X_FORWARDED
+      FEDERATION_TRUSTED_INGRESS_HOPS: "1"
+      FEDERATION_COOKIE_SECURE: "true"
+      FEDERATION_API_URL: http://enterprise-platform:18080
+      FEDERATION_TENANT_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      FEDERATION_TENANT_CONTEXT_URL: http://enterprise-platform:18080/api/platform/bootstrap/v1/admin-console-context
     # No host port: the gateway routes /federation-console on tenant hosts here.
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/federation-console/health"]

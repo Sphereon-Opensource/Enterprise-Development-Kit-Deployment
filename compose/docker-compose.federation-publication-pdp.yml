@@ -1,0 +1,26 @@
+# Explicit normal-policy overlay. No host ports and no changes to the TLS edge.
+services:
+  federation-publication-pdp:
+    restart: unless-stopped
+    image: openpolicyagent/opa@sha256:9e0010512cf405e66bfd7b89394f514e56fe0464822df0527e780344ab151450
+    command:
+      - run
+      - --server
+      - --addr=0.0.0.0:8181
+      - --authorization=basic
+      - --log-level=error
+      - /policy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [appnet]
+    volumes:
+      - ./federation-publication-pdp/federation-publication-policy.rego:/policy/policy.rego:ro
+      - ./federation-publication-pdp/federation-publication-policy-data.json:/policy/data.json:ro
+      - ./federation-publication-pdp/federation-publication-pdp-api.rego:/policy/api.rego:ro
+  enterprise-platform:
+    volumes:
+      - ./federation-publication-pdp/platform.application.yml:/app/config/application.yml:ro
+    depends_on:
+      federation-publication-pdp:
+        condition: service_started

@@ -1,0 +1,1232 @@
+# enterprise-platform runtime config.
+#
+# The platform service owns the control-plane authorization server, first-run
+# setup, platform admin, and platform config surfaces. It is the local licensing
+# authority for the deployment and is exempt from the deployment license gate.
+#
+# Public surface: OAuth/OIDC discovery and protocol endpoints plus the operator
+# login UI. The platform admin and setup APIs are internal and require an
+# operator bearer; expose them only through an internal ingress or service mesh.
+edk:
+  tenant:
+    invalidation:
+      database-route: tenant-invalidation
+server:
+  rest:
+    port: 18080
+    auth:
+      enabled: true
+      # The platform AS issues tokens with the public gateway issuer, but
+      # validates its own tokens over loopback. This avoids making
+      # self-validation depend on the customer gateway's TLS trust path or
+      # compose service DNS/hairpin routing; tenant workload services below
+      # still use the compose hostname for cross-container validation.
+      issuer: ${env:EXTERNAL_BASE_URL}
+      jwks-uri: http://localhost:18080/.well-known/jwks.json
+      # Tenant-scoped platform-config APIs accept only issuers that resolve to an
+      # active OAUTH2_AUTHORIZATION_SERVER binding in the server-owned registry.
+      trust-tenant-registry-issuers: true
+      # Registry-selected tenant/AS identities select the internal JWKS route;
+      # public tenant domains need not be reachable from service containers.
+      self-jwks-base-url: http://enterprise-tenant-as:18083
+      # Open paths: first-run setup UI/API, OAuth protocol surface, discovery/JWKS,
+      # the internal pre-auth registration channel. Everything else requires an
+      # operator bearer.
+      anonymous-path-prefixes: /,/index.html,/index.txt,/setup-license,/admin-console,/_next/**,/platform-config.js,/onboarding/callback,/favicon.ico,/icon.svg,/apple-icon.png,/manifest.json,/api/platform/setup/v1,/api/platform/bootstrap/v1,/api/account-actions/v1,/authorize,/login,/logout,/token,/.well-known,/internal/preauth,/introspect,/public/**
+  # Platform subjects whose own client has no token-exchange authority, such as a
+  # client-credentials client granted platform-admin, exchange through the operator
+  # delegation channel, whose authority decides from the subject's roles.
+  sts:
+    provisioning-client-id: platform-operator-cli
+  service-identity:
+    token-endpoint: http://enterprise-platform:18080/token
+    token-endpoint-allow-http: true
+    token-endpoint-source: configured
+    active-as-client-role: kms
+    client-id: kms-service
+    client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
+    tenant-bound-client-id: true
+    audience: enterprise-platform
+    allowed-audiences: enterprise-tenant-kms
+# Browser CORS allow-list for the setup/admin UI and optional documentation sites.
+# ONBOARDING_UI_BASE_URL is the platform operator UI origin. EDK_DOCS_SITE_ORIGINS is a
+# comma-separated list of interactive docs origins (Sphereon hosted docs, local lab,
+# customer-hosted docs mirrors). Leave EDK_DOCS_SITE_ORIGINS empty to skip docs CORS.
+cors:
+  origins: ${env:ONBOARDING_UI_BASE_URL},${env:EDK_DOCS_SITE_ORIGINS:https://docs.sphereon.com,http://127.0.0.1:3000,http://localhost:3000}
+account-action:
+  # The browser page is served by the same admin-console deployment. Tokens are
+  # appended as a fragment by the account-action service and never reach access logs.
+  public-base-url: ${env:ONBOARDING_UI_BASE_URL}/admin-console
+sphereon:
+  # The platform is both the central permit issuer and a local secret-bound workload. Its
+  # deployment attestor fails closed unless this identity matches secret.authority.satellite.
+  service:
+    id: service-platform
+  telemetry:
+    enabled: true
+    tracing:
+      enabled: true
+    metrics:
+      enabled: true
+    sampling:
+      rate: 1.0
+    export:
+      preset: otlp-all
+otel:
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+  exporter:
+    otlp:
+      endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4317}
+      protocol: ${env:EDK_OTEL_EXPORTER_OTLP_PROTOCOL:grpc}
+      traces:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL:grpc}
+      metrics:
+        endpoint: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector:4317}
+        protocol: ${env:EDK_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL:grpc}
+security:
+  # 0.25.0 posture: keep AuthZEN/PDP enforced, but run password/AAL1 login.
+  # Native AAL2/passkey step-up is deferred to post-0.25.0.
+  "profiles.default-required-aal": "aal1"
+  "profiles.default-cross-border-policy": "allow"
+  "commands.default-required-aal": "aal1"
+  commands:
+    commands:
+      "[account-action.http.dispatch]":
+        required-aal: aal1
+      "[account-action.token.resolve]":
+        required-aal: aal1
+      "[account-action.token.complete]":
+        required-aal: aal1
+      "[account-action.passkey.begin]":
+        required-aal: aal1
+      "[account-action.password-change.initiate]":
+        required-aal: aal1
+      "[theme.resolution.resolve]":
+        required-aal: aal1
+      "[auth.sessions.get]":
+        required-aal: aal1
+      "[kms.encryption.decrypt]":
+        required-aal: aal1
+  workload-trust-policy:
+    trusted_service_ids:
+      - service-crypto
+      - service-data
+      - service-blob
+      - service-oid4vci
+      - service-oid4vp
+      - service-eidas
+      - service-monolith
+      - service-tenant-as
+    service_client_bindings:
+      "[service-crypto]": kms-service
+      "[service-data]": did-service
+      "[service-blob]": blob-service
+      "[service-oid4vci]": issuer-service
+      "[service-oid4vp]": verifier-service
+      "[service-tenant-as]": tenant-as-service
+transport:
+  grpc:
+    enabled: true
+    port: 9090
+  routing:
+    modules:
+      # Deployment coordinates only. Tenant provisioning selects SERVER for
+      # customer-tenant sessions; platform/anonymous sessions remain LOCAL.
+      kms:
+        serviceTokenAudience: enterprise-tenant-kms
+        # Tenant KMS accepts the platform's dedicated workload identity. Never forward the
+        # incoming operator or tenant-AS STS bearer across this trust boundary.
+        preferServiceTokenOverSessionBearer: true
+        services:
+          key:
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+          # Typed key-resource operations are a separate service namespace.
+          # Customer tenant sessions route them to tenant-KMS while the
+          # application tenant continues to select LOCAL.
+          leaf:
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+            commands:
+              # Public account-action resolution unwraps a customer invitation
+              # before its owner has a subject bearer. Route only this leaf with
+              # the deployment-owned tenant-KMS service token.
+              "[kms.leaf.unwrap]":
+                target: SERVER
+              # Validate opens the resource's provider to report its health. The
+              # application tenant's own resources would otherwise stay LOCAL,
+              # where no provider can be opened, so the probe goes to tenant-KMS
+              # for every session.
+              "[kms.leaf.probe-resource]":
+                target: SERVER
+          # Raw signature creation over a tenant key. Every JWS the platform builds
+          # for a customer tenant (LoTE publications among them) ends in
+          # kms.signature.create, which is a separate routing service from the typed
+          # leaves. Customer tenant sessions route it to tenant-KMS while the
+          # application tenant continues to select LOCAL. Verification is keyless and
+          # stays in process for every session.
+          signature:
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+            commands:
+              "[kms.signature.verify]":
+                target: LOCAL
+          mac:
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+          encryption:
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-kms:9090
+      # Tenant registration creates the key through tenant KMS, then registers its descriptor
+      # with the tenant authorization server that owns the tenant signing-key store. The STS
+      # session already carries the addressed tenant, so preserve it instead of replacing it
+      # with a workload token. Literal bracket syntax keeps the hyphenated route keys intact.
+      "[oauth2-as-admin]":
+        target: SERVER
+        serviceTokenAudience: enterprise-tenant-as
+        preferServiceTokenOverSessionBearer: false
+        services:
+          "[signing-key]":
+            target: SERVER
+            transport: HTTP
+            endpoint: http://enterprise-tenant-as:18083
+          "[owner-account-actions]":
+            target: SERVER
+            transport: HTTP
+            endpoint: http://enterprise-tenant-as:18083
+database:
+  app:
+    default:
+      dialect: postgresql
+      host: ${env:EDK_PLATFORM_DB_HOST}
+      port: 5432
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: ${env:EDK_PLATFORM_DB_USERNAME}
+      password: ${env:EDK_PLATFORM_DB_PASSWORD}
+    # Deployment-only owner route. It performs the greenfield legacy guard,
+    # schema migration, hardening and grants before either runtime pool opens.
+    secret-management-migrator:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_PLATFORM_DB_HOST}
+      port: 5432
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: ${env:EDK_PLATFORM_DB_USERNAME}
+      password: ${env:EDK_PLATFORM_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-admin:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_PLATFORM_DB_HOST}
+      port: 5432
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: secret_management_admin
+      password: ${env:EDK_SECRET_MANAGEMENT_ADMIN_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-tenant:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_PLATFORM_DB_HOST}
+      port: 5432
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: secret_management_tenant_serving
+      password: ${env:EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    secret-management-runtime:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_PLATFORM_DB_HOST}
+      port: 5432
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: secret_management_runtime
+      password: ${env:EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD}
+      pool:
+        dedicated-pool: true
+    tenant-migrator:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+    # Shared LISTEN/NOTIFY route for satellite enterprise images. The platform
+    # APP database remains authoritative for platform routing/configuration.
+    tenant-invalidation:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: ${env:EDK_TENANT_DB_PORT:5432}
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+  tenants:
+    # The platform owns customer-tenant schema creation and migration.
+    default:
+      dialect: postgresql
+      isolation: schema
+      schema-pattern: tenant_{id}
+      host: ${env:EDK_TENANT_DB_HOST}
+      port: 5432
+      database: ${env:EDK_TENANT_DB_NAME}
+      username: ${env:EDK_TENANT_DB_USERNAME}
+      password: ${env:EDK_TENANT_DB_PASSWORD}
+    platform:
+      dialect: postgresql
+      isolation: shared
+      host: ${env:EDK_PLATFORM_DB_HOST}
+      port: 5432
+      database: ${env:EDK_PLATFORM_DB_NAME}
+      username: ${env:EDK_PLATFORM_DB_USERNAME}
+      password: ${env:EDK_PLATFORM_DB_PASSWORD}
+secret-management:
+  egress:
+    # Provider connections are HTTPS-only. Private endpoints remain denied unless
+    # their resolved address matches both a hostname and CIDR in this platform-owned manifest.
+    allowed-https-ports: 443
+    private-allowlist-path: /app/secret-management/egress/private-endpoints.manifest
+  # Self-contained platform bootstrap. The persisted software KMS is the baseline;
+  # external KMS and Vault providers are configured later as explicit integrations.
+  bootstrap:
+    kek:
+      mode: SOFTWARE_KMS
+      identity: secret-management-bootstrap-kek
+      version: 1
+      kms-provider-id: software
+      idempotency-mac-key: secret-management-idempotency-mac
+  authority:
+    platform-storage:
+      kms-provider-id: software
+      kms-binding-key: platform-secret-storage
+    default-tenant-offering:
+      kms-provider-id: software
+      kms-binding-template: isolated-tenant-secret-storage
+    tenant-policy:
+      # Cloud offerings are opt-in. A deployment may publish the typed Azure/AWS
+      # tenant offerings only after explicitly enabling this policy; provider
+      # instances and credentials are still registered through platform-config.
+      allow-tenant-managed-providers: ${env:SECRET_MANAGEMENT_AUTHORITY_TENANT_POLICY_ALLOW_TENANT_MANAGED_PROVIDERS:true}
+      # Publishes only the self-contained, per-tenant software-KMS offering.
+      allow-platform-offerings: true
+      retention-days: 30
+    # Deployment-declared shared providers are materialized before tenant
+    # sharing is resolved. The client secret is supplied through the deployment
+    # environment manifest and is never persisted in this configuration.
+    platform-providers:
+      "[azure-shared-signing]":
+        kind: ${env:EDK_PLATFORM_KMS_AZURE_KIND:}
+        display-name: ${env:EDK_PLATFORM_KMS_AZURE_DISPLAY_NAME:Platform Azure Key Vault}
+        vault-uri: ${env:EDK_PLATFORM_KMS_AZURE_VAULT_URI:}
+        tenant-id: ${env:EDK_PLATFORM_KMS_AZURE_TENANT_ID:}
+        client-id: ${env:EDK_PLATFORM_KMS_AZURE_CLIENT_ID:}
+        hsm-type: ${env:EDK_PLATFORM_KMS_AZURE_HSM_TYPE:KEYVAULT}
+        credential:
+          secret-id: sec_platform_azure_kms_client_secret_01
+        sharing:
+          fulfillment: SHARED_INSTANCE
+          tenants: ${env:EDK_PLATFORM_KMS_AZURE_SHARED_TENANTS:*}
+          suggested-default: false
+      "[aws-shared-signing]":
+        kind: ${env:EDK_PLATFORM_KMS_AWS_KIND:}
+        display-name: ${env:EDK_PLATFORM_KMS_AWS_DISPLAY_NAME:Platform AWS KMS}
+        region: ${env:EDK_PLATFORM_KMS_AWS_REGION:}
+        access-key-id: ${env:EDK_PLATFORM_KMS_AWS_ACCESS_KEY_ID:}
+        credential:
+          secret-id: sec_platform_aws_kms_secret_access_key_01
+        sharing:
+          fulfillment: SHARED_INSTANCE
+          tenants: ${env:EDK_PLATFORM_KMS_AWS_SHARED_TENANTS:*}
+          suggested-default: false
+  internal-resolution:
+    expected-audience: enterprise-platform
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service
+    # System credentials are authorized to workload identities, not OAuth client principals.
+    # Keep this aligned with each satellite's service identity binding below.
+    workload-actor-ids: tenant-as-service=service-tenant-as,issuer-service=service-oid4vci,kms-service=service-crypto,did-service=service-data,blob-service=service-blob,verifier-service=service-oid4vp
+  deployment:
+    environment:
+      enabled: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_ENABLED:true}
+      manifest-path: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_PATH:/app/secret-management/deployment/environment.manifest}
+      manifest-sha256: ${env:SECRET_MANAGEMENT_DEPLOYMENT_ENVIRONMENT_MANIFEST_SHA256:sha256:ad0ecf8dfd8fb6d55280e4a32438de20961499ee0eb833d047af34dc603ca30e}
+    kubernetes-mount:
+      enabled: false
+# Trust-domain anchor -> identifier materialization source. The platform executes the routed trust
+# resolve LOCAL (it owns the trust-domain store below), but the identity identifiers the anchors
+# reference live in the tenant DB, not co-located with that store, so the platform reads them over
+# HTTP from enterprise-tenant-as's identity-manager API. This fixes the same-database -> null
+# incoherence a direct in-process repository call would hit in this split topology (the verifier now
+# routes all trust reads here over gRPC; see the verifier's transport.routing.modules.trust).
+trust-domain:
+  identifier-source:
+    # rest (default): read identifiers from the tenant AS identity-manager API. same-database: only
+    # correct when the trust-domain store and tenant identity store share one database.
+    mode: ${env:TRUST_DOMAIN_IDENTIFIER_SOURCE_MODE:rest}
+  identifier-source-rest:
+    # In-network base URL of the tenant AS whose identity-manager API this platform reads identifiers
+    # from. Only consulted when identifier-source.mode=rest above.
+    internal-url: http://enterprise-tenant-as:18083
+    # Dedicated least-privilege identity for platform -> tenant-AS identifier reads. The client
+    # secret remains opaque and is selected through the tenant-bound secret-use binding.
+    service-identity:
+      token-endpoint: http://enterprise-platform:18080/token
+      token-endpoint-allow-http: true
+      client-id: trust-domain-service
+      tenant-bound-client-id: true
+      audience: enterprise-tenant-as
+kv-stores:
+  # Email catalog templates share one durable platform store. The catalog
+  # namespaces per-tenant published state inside it using the resolved tenant id.
+  vdx.template:
+    type: database
+    scope-binding: APP
+tenant:
+  resolution:
+    # The platform owns the tenant authority database. State this explicitly so
+    # startup never has to infer LOCAL routing by enumerating configuration
+    # through the tenant-scoped DB source it is still constructing.
+    remote: false
+    platform:
+      # Tenants resolve by subdomain under the deployment's base domain.
+      base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+      subdomain:
+        enabled: true
+    custom-domain:
+      enabled: true
+    self:
+      tenant-id: "platform"
+      hosts: "enterprise-platform,localhost,platform.${env:EDK_PLATFORM_BASE_DOMAIN}"
+  platform:
+    owner:
+      initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+  registration:
+    # Customer instance identifiers are server-issued at registration time, so per-instance
+    # `signing-key.auto-generate` rows cannot exist in deployment configuration. This is the one
+    # deployment decision that registration provisions product keys; a deployment bringing
+    # externally provisioned keys leaves it unset and registration fails closed instead.
+    signing-key:
+      auto-generate: true
+  onboarding:
+    operator:
+      enabled: true
+kms:
+  enterprise:
+    lifecycle:
+      enabled: ${env:EDK_KMS_LIFECYCLE_ENABLED:true}
+      interval: ${env:EDK_KMS_LIFECYCLE_INTERVAL:PT1H}
+      run-on-startup: ${env:EDK_KMS_LIFECYCLE_RUN_ON_STARTUP:true}
+  providers:
+    software:
+      id: software
+      type: software
+      enabled: true
+      exposePrivateKeysDuringGeneration: false
+      persistKeysDuringGeneration: true
+      autoCreateCertificate: true
+      keystore:
+        type: pkcs12
+        id: software
+        password: ${env:EDK_KEYSTORE_PASSWORD}
+        # The platform keeps its own keystore in the platform-keystore volume
+        # mounted at /keystore. The file path is derived as
+        # /keystore/<tenantId>/<providerId>.p12.
+        keystoreRoot: /keystore
+    softwaresym:
+      id: softwaresym
+      type: software
+      enabled: true
+      exposePrivateKeysDuringGeneration: false
+      persistKeysDuringGeneration: true
+      autoCreateCertificate: false
+      keystore:
+        type: pkcs12
+        id: softwaresym
+        path: ${env:EDK_SOFTWARESYM_KEYSTORE_PATH:/keystore/softwaresym.p12}
+        password: ${env:EDK_KEYSTORE_PASSWORD}
+    license:
+      id: license
+      type: software
+      enabled: true
+      autoCreateCertificate: true
+      keystore:
+        type: pkcs12
+        id: license
+        password: ${env:EDK_KEYSTORE_PASSWORD}
+    platform:
+      id: platform
+      type: software
+      enabled: true
+      autoCreateCertificate: true
+      keystore:
+        type: pkcs12
+        id: platform
+        password: ${env:EDK_KEYSTORE_PASSWORD}
+crypto:
+  kms:
+    roles:
+      invitation:
+        hmac-kek:
+          # Invitation tokens must survive platform restarts. Keep the wrapping key in
+          # the persisted platform PKCS12 provider; never fall back to an in-memory key.
+          provider: platform
+      oauth2-as:
+        algorithm: ES256
+        # Customer-hosted tenant AS instances use the tenant KMS. The platform's
+        # own AS uses the base oauth2-as role above.
+        default:
+          algorithm: ES256
+      issuer-signing:
+        algorithm: ES256
+      issuer-request-decryption:
+        algorithm: ES256
+      verifier-request-object-signing:
+        algorithm: ES256
+oauth2:
+  user-provider:
+    mode: local
+  clients:
+    # Public PKCE client for federation-console platform administration.
+    federation-console:
+      client-id: federation-console
+      client-name: Federation Console
+      client-type: public
+      grant-types: "authorization_code,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
+      response-types: code
+      redirect-uris:
+        - ${env:ONBOARDING_UI_BASE_URL}/federation-console/api/auth/callback
+      post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/federation-console/"
+      allowed-scopes: openid,profile,email
+      require-pkce: true
+      token-endpoint-auth-method: none
+      default-access-token-audience: enterprise-platform
+      allowed-access-token-audiences: enterprise-platform
+      # Console operators administer the platform; this client cannot provision tenants.
+      token-exchange:
+        mode: operator-delegation
+        audiences: enterprise-platform
+        self: true
+        provisioning: false
+        role: platform-admin
+    admin-console-portal-bff:
+      client-id: admin-console-portal-bff
+      client-name: Admin Console Portal BFF
+      client-secret-id: sec_admin_console_portal_bff_01
+      client-type: confidential
+      grant-types: client_credentials
+      allowed-scopes: bff.oauth
+      default-access-token-audience: application-bff-oauth-client
+      token-endpoint-auth-method: client_secret_basic
+    platform-operator-cli:
+      client-id: platform-operator-cli
+      client-name: Platform Operator CLI
+      client-type: public
+      # authorization_code for operator sign-in; token-exchange for the admin
+      # console's operator->tenant STS exchange (RFC 8693) onto the tenant KMS
+      # and DID resource APIs.
+      grant-types: "authorization_code,urn:ietf:params:oauth:grant-type:token-exchange"
+      # Two same-origin apps share this operator client, each owning its own callback and running
+      # the code->token exchange itself against the anonymous /token endpoint:
+      #  1. the admin console (/admin-console basePath) -> {host}/admin-console/callback;
+      #  2. the first-run setup wizard (served at the platform root) -> {host}/onboarding/callback.
+      # Both are served same-origin on the platform host, so the redirect_uris use the platform
+      # external URL. Listed explicitly.
+      redirect-uris:
+        - ${env:EXTERNAL_BASE_URL}/admin-console/callback
+        - ${env:EXTERNAL_BASE_URL}/onboarding/callback
+      # OIDC RP-Initiated Logout target: where the AS may redirect after revoking the login session.
+      # The admin console sign-out calls the AS /logout end-session endpoint with this as
+      # post_logout_redirect_uri (unregistered values are ignored), landing the operator back on sign-in.
+      # Comma-separated string (NOT a YAML list; the client config binder reads these via
+      # readStringList, which resolves a delimited string here, not block-sequence items).
+      post-logout-redirect-uris: "${env:EXTERNAL_BASE_URL}/admin-console"
+      allowed-scopes: openid
+      default-access-token-audience: enterprise-platform
+      allowed-access-token-audiences: enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob
+      token-endpoint-auth-method: none
+      # Platform STS authority: operators delegate onto descendant tenants and administer the
+      # platform tenant; this is the tenant-registration channel (tenant-provisioning role).
+      token-exchange:
+        mode: operator-delegation
+        audiences: enterprise-platform,enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as,enterprise-issuer,enterprise-verifier,enterprise-blob
+        self: true
+        provisioning: true
+        role: platform-admin
+    # Interactive documentation playground (docs site). Public client: authorization code +
+    # required PKCE (S256) + required PAR. Redirect URIs are one /docs-env/callback per origin.
+    # Disable client registration via EDK_DOCS_PLAYGROUND_ENABLED=false (see docs.playground).
+    docs-playground:
+      client-id: docs-playground
+      client-name: Documentation site playground
+      client-type: public
+      grant-types: "authorization_code,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
+      response-types: code
+      redirect-uris: "${env:EDK_DOCS_PLAYGROUND_REDIRECT_URIS:https://docs.sphereon.com/docs-env/callback,http://127.0.0.1:3000/docs-env/callback,http://localhost:3000/docs-env/callback}"
+      post-logout-redirect-uris: "${env:EDK_DOCS_SITE_ORIGINS:https://docs.sphereon.com,http://127.0.0.1:3000,http://localhost:3000}"
+      allowed-scopes: openid,profile,email
+      require-pkce: true
+      require-pushed-authorization-requests: true
+      token-endpoint-auth-method: none
+  servers:
+    default-server: platform
+    platform:
+      mode: HOSTED
+      # The platform AS is provisioned entirely from this shipped configuration, so
+      # configuration is authoritative for its client registry and persisted
+      # registrations are secondary. Set statically so it holds from the first request.
+      client-registry-source-precedence: configuration-primary
+      signing-key:
+        auto-generate: true
+      issuer: ${env:EXTERNAL_BASE_URL}
+      oidc: SUPPORTED
+      # Enable the OIDC RP-Initiated Logout end-session endpoint (/logout); default is DISABLED. The
+      # admin console needs it so sign-out ends the operator's SSO login session instead of silently
+      # re-authenticating on the next /authorize.
+      logout: SUPPORTED
+      pkce: REQUIRED
+      # Native platform passkey login uses the same public platform origin in
+      # every deployment topology. A verified WebAuthn assertion is the AAL2
+      # factor; device biometrics, device PIN, or screen lock stay inside the
+      # authenticator and never enter platform state.
+      webauthn:
+        enabled: true
+        rp-id: "platform.${env:EDK_PLATFORM_BASE_DOMAIN}"
+        rp-id-policy: "${env:EDK_PLATFORM_WEBAUTHN_RP_ID_POLICY:exact-host}"
+        allowed-origins: "${env:EXTERNAL_BASE_URL}"
+        attestation-policy: none
+        user-verification: required
+        allowed-transports: "internal,hybrid"
+        backup-state-policy: allow-any
+        challenge-ttl-seconds: 300
+        level3-prf-enabled: false
+      par: SUPPORTED
+      token-format: JWT
+      scopes-supported: "openid,profile,email"
+      grant-types-enabled: "authorization_code,urn:ietf:params:oauth:grant-type:pre-authorized_code,client_credentials,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
+      internal-clients:
+        issuer:
+          client-id: issuer-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_ISSUER}
+          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-tenant-as
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
+        kms:
+          client-id: kms-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
+          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
+            # Tenant-KMS also serves the platform tenant's own KMS resources (validation probes of
+            # platform-owned and deployment-declared providers), so its bootstrap token may target
+            # the platform tenant it is itself registered in.
+            self: true
+        did:
+          client-id: did-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_DID}
+          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
+        blob:
+          client-id: blob-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_BLOB}
+          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-blob
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
+        verifier:
+          client-id: verifier-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
+          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
+        tenantas:
+          client-id: tenant-as-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
+          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
+# Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
+# Holder protocols and testing/catalog wrappers are excluded by the backend projection.
+developer-console:
+  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/v1/tabular-mapping-templates"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1","/api/oauth2/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/attestation/v1","/api/catalog/attribute/v1","/public/schema","/public/statuslists"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
+application:
+  bff:
+    oauth-client:
+      workload-audience: application-bff-oauth-client
+      workload-scope: bff.oauth
+      workload-client-id: admin-console-portal-bff
+      kms:
+        provider-id: platform
+        encryption-key-id: application-bff-oauth-client-aead
+        handle-hmac-key-id: application-bff-oauth-client-owner-hmac
+  tenant:
+    # Canonical application control-plane tenant. Platform-admin secret transitions require the
+    # authenticated tenant to match this value and fail closed on a missing/mismatched identity.
+    id: "platform"
+    hosted-as:
+      issuer: ${env:EXTERNAL_BASE_URL}
+    owner:
+      # Interactive first-run setup supplies the real operator email and display
+      # name as a request-scoped override. Never seed a placeholder customer.
+      roles: platform-admin
+app:
+  # Dev unlocks the break-glass operator credential below; prod requires the
+  # invitation flow instead.
+  deployment-mode: ${env:EDK_DEPLOYMENT_MODE:prod}
+auth:
+  login:
+    require-application: false
+platform:
+  config-distribution:
+    allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service
+  config:
+    mount-path: /app/config
+  onboarding:
+    installation-base-domain: ${env:EDK_PLATFORM_BASE_DOMAIN}
+    # Interactive setup-screen mode. The anonymous setup surface remains open
+    # until the operator imports a protected license bundle and completes
+    # bootstrap. The setup service creates the license recipient key in the
+    # platform license system KMS on first license-request generation.
+    trust-bundle-path: /app/license/license-root-ca.pem
+    operator:
+      # Interactive first-run setup supplies the real operator identity. The
+      # customer deployment contains no fallback or example account.
+      initial-credential: ${env:EDK_OWNER_INITIAL_CREDENTIAL}
+  setup:
+    kms:
+      tenant-id: "platform"
+      principal-id: platform-setup
+    license-request:
+      default-alias: platform-license-request
+      default-algorithm: ECDSA_SHA256
+      default-use: sig
+# Documentation site playground. When enabled, every new tenant AS also receives a
+# docs-playground public client at bootstrap. Tenant onboarding that selects sample
+# data also registers that client for the tenant (same origins), independent of this flag.
+docs:
+  playground:
+    enabled: ${env:EDK_DOCS_PLAYGROUND_ENABLED:true}
+    client-id: docs-playground
+    origins: ${env:EDK_DOCS_SITE_ORIGINS:https://docs.sphereon.com,http://127.0.0.1:3000,http://localhost:3000}
+east-west:
+  platform:
+    base-url: http://enterprise-platform:18080
+  tenant-as:
+    base-url: http://enterprise-tenant-as:18083
+  tenant-kms:
+    base-url: http://enterprise-tenant-kms:8080
+  tenant-did:
+    base-url: http://enterprise-did:8080
+  # Sample-data provisioning (tenant onboarding `sample-data-provisioned` step) seeds credential
+  # designs / render variants / offers on the issuer and DCQL queries / verifier bindings on the
+  # verifier, over east-west REST with a tenant-scoped impersonation bearer.
+  tenant-issuer:
+    base-url: http://enterprise-issuer:8080
+  tenant-verifier:
+    base-url: http://enterprise-verifier:8080
+license:
+  # This is the local licensing authority: it owns the deployment and is exempt
+  # from the deployment license gate.
+  command-enforcement:
+    enabled: true
+    missing-descriptor-mode: warn
+  deployment-role: platform
+  recipient:
+    key-id: ${env:EDK_LICENSE_RECIPIENT_KEY_ID:license-recipient}
+    kms:
+      enabled: true
+      alias: license-recipient
+  trust:
+    # Trust the compiled-in durable root. A license bound to this deployment
+    # chains leaf -> intermediate -> embedded root, so no trust file is mounted.
+    embedded:
+      enabled: ${env:EDK_LICENSE_TRUST_EMBEDDED:true}
+    root-ca-bundle-path: /app/license/license-root-ca.pem
+
+secret:
+  authority:
+    allowed-clock-skew-millis: 5000
+    central:
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        signing-key: ${env:SECRET_AUTHORITY_CENTRAL_PERMIT_SIGNING_KEY}
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        verification-keys: ${env:SECRET_AUTHORITY_CENTRAL_ASSERTION_VERIFICATION_KEYS}
+    satellite:
+      workload-id: service-platform
+      workload-hosting-revision: 1
+      assertion:
+        issuer: sphereon-secret-workload
+        audience: enterprise-platform
+        ttl-millis: 30000
+        signing-key: ${env:SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY}
+      permit:
+        issuer: enterprise-platform
+        audience: sphereon-secret-use
+        verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+
+authz:
+  # Required federation management authorization uses the built-in role engine.
+  # Selection and rules are finite and identical; public protocol operations are not selected.
+  # Receiving commands retain their authenticated same-tenant and license checks.
+  policy:
+    default-engine: federation-publication-opa
+    default-fallback: deny
+    authzen:
+      enabled: true
+      enforcement-mode: enforced
+      fallback-policy: deny
+      include-patterns:
+        - oidfed.capabilities.get
+        - oidfed.connection-contexts.create
+        - oidfed.connection-contexts.end
+        - oidfed.connection-contexts.update
+        - oidfed.control.graph
+        - oidfed.control.initialize
+        - oidfed.diagnostics.inspect-entity-configuration
+        - oidfed.diagnostics.resolve
+        - oidfed.enrollment-invitations.create
+        - oidfed.enrollment-invitations.get
+        - oidfed.enrollment-invitations.list
+        - oidfed.enrollment-invitations.revoke
+        - oidfed.enrollments.accept-keys
+        - oidfed.enrollments.admit
+        - oidfed.enrollments.approve
+        - oidfed.enrollments.create
+        - oidfed.enrollments.get
+        - oidfed.enrollments.get-report
+        - oidfed.enrollments.list
+        - oidfed.enrollments.reinstate
+        - oidfed.enrollments.reject
+        - oidfed.enrollments.remove
+        - oidfed.enrollments.request-changes
+        - oidfed.enrollments.suspend
+        - oidfed.enrollments.update-assignment
+        - oidfed.enrollments.verify
+        - oidfed.entities.create
+        - oidfed.entities.decommission
+        - oidfed.entities.get
+        - oidfed.entities.get-publication
+        - oidfed.entities.publish
+        - oidfed.entity-publication-work.run
+        - oidfed.entities.update
+        - oidfed.entities.verify-origin
+        - oidfed.entity-keys.create
+        - oidfed.entity-keys.list
+        - oidfed.entity-keys.list-historical
+        - oidfed.entity-keys.revoke
+        - oidfed.entity-keys.select
+        - oidfed.federation-events.get
+        - oidfed.federation-events.list
+        - oidfed.federation-services.discover
+        - oidfed.federation-services.end
+        - oidfed.federation-services.get
+        - oidfed.federation-services.list
+        - oidfed.federation-services.register
+        - oidfed.federation-services.update
+        - oidfed.federation-services.verify-publication
+        - oidfed.join-requests.create
+        - oidfed.join-requests.export-package
+        - oidfed.join-requests.get
+        - oidfed.join-requests.list
+        - oidfed.join-requests.refresh
+        - oidfed.join-requests.respond
+        - oidfed.join-requests.submit
+        - oidfed.join-requests.verify-chain
+        - oidfed.join-requests.withdraw
+        - oidfed.key-rollovers.add-key
+        - oidfed.key-rollovers.cancel
+        - oidfed.key-rollovers.get
+        - oidfed.key-rollovers.list
+        - oidfed.key-rollovers.plan
+        - oidfed.key-rollovers.propagate
+        - oidfed.key-rollovers.retire
+        - oidfed.key-rollovers.switch
+        - oidfed.memberships.compare-anchor-keys
+        - oidfed.memberships.create
+        - oidfed.memberships.end
+        - oidfed.memberships.get
+        - oidfed.memberships.list
+        - oidfed.memberships.update
+        - oidfed.memberships.verify
+        - oidfed.metadata-policies.get
+        - oidfed.metadata-policies.set
+        - oidfed.operated-federations.activate
+        - oidfed.operated-federations.attach-intermediate
+        - oidfed.operated-federations.create
+        - oidfed.operated-federations.detach-intermediate
+        - oidfed.operated-federations.export-anchor-keys
+        - oidfed.operated-federations.get
+        - oidfed.operated-federations.health
+        - oidfed.operated-federations.list
+        - oidfed.operated-federations.retire
+        - oidfed.operated-federations.set-trust-mark-issuers
+        - oidfed.operated-federations.set-trust-mark-owners
+        - oidfed.operated-federations.update
+        - oidfed.operated-issuance.end-owner
+        - oidfed.operated-issuance.get-owner
+        - oidfed.operated-issuance.issue
+        - oidfed.operated-issuance.list-issuances
+        - oidfed.operated-issuance.list-owners
+        - oidfed.operated-issuance.register-owner
+        - oidfed.operated-issuance.renew
+        - oidfed.operated-issuance.replace-delegation
+        - oidfed.operated-issuance.revoke
+        - oidfed.participations.create
+        - oidfed.participations.end
+        - oidfed.participations.replace-edges
+        - oidfed.participations.update
+        - oidfed.policy-templates.list
+        - oidfed.policy-templates.remove
+        - oidfed.policy-templates.set
+        - oidfed.publications.refresh
+        - oidfed.received-trust-marks.add
+        - oidfed.received-trust-marks.list
+        - oidfed.received-trust-marks.remove
+        - oidfed.renewal-schedules.cancel
+        - oidfed.renewal-schedules.ensure
+        - oidfed.renewal-schedules.get
+        - oidfed.resource-bindings.create
+        - oidfed.resource-bindings.end
+        - oidfed.resource-bindings.update
+        - oidfed.superior-intents.create
+        - oidfed.superior-intents.end
+        - oidfed.superior-intents.update
+        - oidfed.superior-statements.list
+        - oidfed.superior-statements.preview
+        - oidfed.superior-statements.publish
+        - oidfed.superiors.verify
+        - oidfed.trust-mark-applications.get
+        - oidfed.trust-mark-applications.issue
+        - oidfed.trust-mark-applications.list
+        - oidfed.trust-mark-applications.reject
+        - oidfed.trust-mark-applications.request-changes
+        - oidfed.trust-mark-applications.verify
+        - oidfed.trust-mark-delegations.issue
+        - oidfed.trust-mark-types.authorize-issuer
+        - oidfed.trust-mark-types.define
+        - oidfed.trust-mark-types.get
+        - oidfed.trust-mark-types.list
+        - oidfed.trust-mark-types.remove
+        - oidfed.trust-mark-types.remove-owner
+        - oidfed.trust-mark-types.review-owner
+        - oidfed.trust-mark-types.set-delegation
+        - oidfed.trust-mark-types.set-owner
+        - oidfed.trust-mark-types.update
+        - oidfed.trust-mark-types.withdraw-issuer
+        - oidfed.trust-marks.issue
+        - oidfed.trust-marks.list
+        - oidfed.trust-marks.revoke
+    engines:
+      federation-publication-opa:
+        type: opa
+        endpoint: http://federation-publication-pdp:8181
+        policy-path: /v1/data/sphereon/authz
+        health-path: /health
+      federationadmin:
+        type: roles
+        role-rules:
+          - pattern: oidfed.capabilities.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.connection-contexts.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.connection-contexts.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.connection-contexts.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.control.graph
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.control.initialize
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.diagnostics.inspect-entity-configuration
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.diagnostics.resolve
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollment-invitations.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollment-invitations.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollment-invitations.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollment-invitations.revoke
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.accept-keys
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.admit
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.approve
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.get-report
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.reinstate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.reject
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.request-changes
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.suspend
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.update-assignment
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.enrollments.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.decommission
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.get-publication
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.publish
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.verify-origin
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.list-historical
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.revoke
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-keys.select
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-events.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-events.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.discover
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.register
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.verify-publication
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.export-package
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.refresh
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.respond
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.submit
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.verify-chain
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.join-requests.withdraw
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.add-key
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.cancel
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.plan
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.propagate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.retire
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.key-rollovers.switch
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.compare-anchor-keys
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.memberships.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.metadata-policies.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.metadata-policies.set
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.activate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.attach-intermediate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.detach-intermediate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.export-anchor-keys
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.health
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.retire
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.set-trust-mark-issuers
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.set-trust-mark-owners
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-federations.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.end-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.get-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.issue
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.list-issuances
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.list-owners
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.register-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.renew
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.replace-delegation
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.operated-issuance.revoke
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.participations.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.participations.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.participations.replace-edges
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.participations.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.policy-templates.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.policy-templates.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.policy-templates.set
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.publications.refresh
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.received-trust-marks.add
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.received-trust-marks.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.received-trust-marks.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-schedules.cancel
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-schedules.ensure
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-schedules.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.resource-bindings.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.resource-bindings.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.resource-bindings.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-intents.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-intents.end
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-intents.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-statements.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-statements.preview
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superior-statements.publish
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.superiors.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.issue
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.reject
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.request-changes
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-applications.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-delegations.issue
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.authorize-issuer
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.define
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.remove-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.review-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.set-delegation
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.set-owner
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-mark-types.withdraw-issuer
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-marks.issue
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-marks.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.trust-marks.revoke
+            any-of: [tenant-admin, platform-admin]
