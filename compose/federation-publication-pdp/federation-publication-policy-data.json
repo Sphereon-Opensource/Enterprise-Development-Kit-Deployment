@@ -178,6 +178,10 @@
         "tenant-admin",
         "platform-admin"
       ],
+      "oidfed.federation-services.list-hosted-resources": [
+        "tenant-admin",
+        "platform-admin"
+      ],
       "oidfed.federation-services.register": [
         "tenant-admin",
         "platform-admin"
@@ -558,7 +562,6 @@
         "tenant-admin",
         "platform-admin"
       ]
-    },
-    "legacy_unmatched_default_permit": true
+    }
   }
 }

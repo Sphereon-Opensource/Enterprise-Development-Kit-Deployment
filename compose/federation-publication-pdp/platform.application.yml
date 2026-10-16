@@ -848,6 +848,7 @@ authz:
         - oidfed.federation-services.end
         - oidfed.federation-services.get
         - oidfed.federation-services.list
+        - oidfed.federation-services.list-hosted-resources
         - oidfed.federation-services.register
         - oidfed.federation-services.update
         - oidfed.federation-services.verify-publication
@@ -1039,6 +1040,8 @@ authz:
           - pattern: oidfed.federation-services.get
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.federation-services.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.federation-services.list-hosted-resources
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.federation-services.register
             any-of: [tenant-admin, platform-admin]

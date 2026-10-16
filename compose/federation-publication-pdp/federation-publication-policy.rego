@@ -11,13 +11,8 @@ allow if {
     role == required[_]
 }
 
-# The prior configured roles engine permits unmatched commands. Preserve that
-# existing transport behavior, while explicitly excluding the new internal drain.
-allow if {
-    data.federation_publication_policy.legacy_unmatched_default_permit
-    input.action.name != "oidfed.entity-publication-work.run"
-    not data.federation_publication_policy.role_rules[input.action.name]
-}
+# A command without an exact role rule is denied. The only other permits are the
+# process-owned SERVICE dispatcher rules for oidfed.entity-publication-work.run below.
 
 # Normal AuthZen/OPA decision for the process-owned SERVICE dispatcher only.
 # PolicyRequestNormalizer has replaced the typed resource identity with command
