@@ -126,6 +126,38 @@
         "tenant-admin",
         "platform-admin"
       ],
+      "oidfed.entities.resync": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.service-metadata.approve": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.service-metadata.discard-draft": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.service-metadata.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.service-metadata.preview": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.service-metadata.save-draft": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.service-metadata.set-mode": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.service-metadata.sync": [
+        "tenant-admin",
+        "platform-admin"
+      ],
       "oidfed.entities.update": [
         "tenant-admin",
         "platform-admin"

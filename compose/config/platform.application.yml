@@ -834,6 +834,14 @@ authz:
         - oidfed.entities.get
         - oidfed.entities.get-publication
         - oidfed.entities.publish
+        - oidfed.entities.resync
+        - oidfed.service-metadata.approve
+        - oidfed.service-metadata.discard-draft
+        - oidfed.service-metadata.get
+        - oidfed.service-metadata.preview
+        - oidfed.service-metadata.save-draft
+        - oidfed.service-metadata.set-mode
+        - oidfed.service-metadata.sync
         - oidfed.entities.update
         - oidfed.entities.verify-origin
         - oidfed.entity-keys.create
@@ -1008,6 +1016,22 @@ authz:
           - pattern: oidfed.entities.get-publication
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.entities.publish
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.resync
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.approve
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.discard-draft
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.preview
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.save-draft
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.set-mode
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.sync
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.entities.update
             any-of: [tenant-admin, platform-admin]
