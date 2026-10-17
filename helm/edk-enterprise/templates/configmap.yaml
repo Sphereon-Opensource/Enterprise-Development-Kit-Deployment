@@ -457,15 +457,24 @@ data:
           client-id: {{ .Values.federationConsole.clientId | quote }}
           client-name: Federation Console
           client-type: public
-          grant-types: "authorization_code,refresh_token"
+          # The console BFF exchanges the operator's token (RFC 8693) for an enterprise-platform
+          # token per upstream call; it cannot provision tenants or reach other audiences.
+          grant-types: "authorization_code,refresh_token,urn:ietf:params:oauth:grant-type:token-exchange"
           response-types: code
           redirect-uris:
             - ${env:ONBOARDING_UI_BASE_URL}/federation-console/api/auth/callback
-          post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/federation-console"
+          post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/federation-console/"
           allowed-scopes: openid,profile,email
           require-pkce: true
           token-endpoint-auth-method: none
           default-access-token-audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+          allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+          token-exchange:
+            mode: operator-delegation
+            audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+            self: "true"
+            provisioning: "false"
+            role: platform-admin
         {{- end }}
         {{- if .Values.portalBff.existingSecret }}
         admin-console-portal-bff:

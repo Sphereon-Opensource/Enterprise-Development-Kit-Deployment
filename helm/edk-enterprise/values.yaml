@@ -570,18 +570,13 @@ portalBff:
     mode: X_FORWARDED
     hops: 1
 
-# Federation Console BFF secrets. The operator runtime (federation-console) and
-# the tenant runtime (federation-console-tenant) each encrypt their sessions with
-# their own independently generated secret; the chart never generates them and
-# refuses one shared secret. clientId is the operator runtime's public PKCE
-# client at the platform authorization server; the tenant runtime signs in at
-# the tenant authorization server resolved for the request host.
+# Federation Console. clientId is the operator runtime's public PKCE client at the
+# platform authorization server; it exchanges the operator's token for an
+# enterprise-platform token per upstream call. The tenant runtime signs in at the
+# tenant authorization server resolved for the request host. Both runtimes keep
+# their own process-local session store and need no secret.
 federationConsole:
   clientId: federation-console
-  existingSecret: ""
-  sessionSecretKey: federation-console-session-secret
-  tenantExistingSecret: ""
-  tenantSessionSecretKey: federation-console-tenant-session-secret
 
 # Keystore password for the software KMS providers. Provide it through a Secret;
 # the platform and tenant-kms read it as EDK_KEYSTORE_PASSWORD.

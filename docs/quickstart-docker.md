@@ -282,12 +282,11 @@ node ../scripts/render-federation-gateway.mjs --base-domain fed.example.com
 docker compose -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml up -d
 ```
 
-Use your installation domain in the renderer. The generator adds four
+Use your installation domain in the renderer. The generator adds two
 independent 32-byte base64url secrets: `EDK_OIDFED_DB_PASSWORD` for the database
-owner, `EDK_OIDFED_RUNTIME_DB_PASSWORD` for the data-only tenant AS role, and
-`EDK_FEDERATION_CONSOLE_SESSION_SECRET` and
-`EDK_FEDERATION_CONSOLE_TENANT_SESSION_SECRET` for the two console runtimes. It
-keeps existing values. `EDK_FEDERATION_CONSOLE_TAG` defaults to `EDK_TAG`; the
+owner and `EDK_OIDFED_RUNTIME_DB_PASSWORD` for the data-only tenant AS role. It
+keeps existing values. The console runtimes need no secret: each keeps its own
+process-local session store. `EDK_FEDERATION_CONSOLE_TAG` defaults to `EDK_TAG`; the
 image must be built for `/federation-console` with the live API at
 `/federation-console/api/federation`.
 
