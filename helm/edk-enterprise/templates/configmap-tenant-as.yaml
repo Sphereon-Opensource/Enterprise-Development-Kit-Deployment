@@ -79,6 +79,8 @@ data:
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           {{- end }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+          # The platform's per-tenant signing workload keeps its workload identity here.
+          - {{ index .Values.serviceIdentity.clientIds "as-signing-management" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           {{- if (index .Values.services "did").enabled }}
@@ -122,6 +124,10 @@ data:
         signing-key:
           rotation-role: {{ . | quote }}
         {{- end }}
+      # Only the platform's per-tenant signing workload may manage this tenant AS's signing keys.
+      as:
+        signing-management:
+          allowed-service-actors: {{ index .Values.serviceIdentity.clientIds "as-signing-management" | quote }}
     # Local, keyless software provider for in-process signature verification.
     # Signing/MAC/encryption route to the tenant KMS over gRPC; this provider only
     # backs the LOCAL verify route below, with an ephemeral keystore under temp.

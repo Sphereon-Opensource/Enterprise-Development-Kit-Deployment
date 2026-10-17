@@ -701,6 +701,7 @@
           "additionalProperties": true,
           "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction", "wallet-onboarding"],
           "properties": {
+            "as-signing-management": { "type": "string", "minLength": 1 },
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
             "did": { "type": "string", "minLength": 1 },

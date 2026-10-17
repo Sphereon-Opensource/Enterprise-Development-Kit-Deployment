@@ -498,6 +498,8 @@ serviceIdentity:
     issuer: issuer-service
     verifier: verifier-service
     trust-domain-identifier: trust-domain-service
+    # The platform's per-tenant hosted-AS signing workload, registered as `<id>:<tenant>`.
+    as-signing-management: as-signing-service
     wallet-unit: wallet-unit-service
     wallet-interaction: wallet-interaction-service
     wallet-onboarding: wallet-onboarding-service

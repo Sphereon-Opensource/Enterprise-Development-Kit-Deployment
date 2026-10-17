@@ -794,6 +794,18 @@ data:
       onboarding:
         operator:
           enabled: true
+      {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "tenant-as").enabled }}
+      # The platform manages each tenant AS's signing keys as the per-tenant workload
+      # `<client-id>:<tenant>`, whose client may address only the tenant AS. Its opaque
+      # secret is resolved by the secret broker and is never rendered into this ConfigMap.
+      as-signing-management:
+        service-identity:
+          token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          token-endpoint-allow-http: true
+          client-id: {{ index .Values.serviceIdentity.clientIds "as-signing-management" | quote }}
+          tenant-bound-client-id: true
+          audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-as") | quote }}
+      {{- end }}
       registration:
         # Customer instance identifiers are server-issued at registration time, so per-instance
         # `signing-key.auto-generate` rows cannot exist in deployment configuration. This is the

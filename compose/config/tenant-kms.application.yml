@@ -201,6 +201,10 @@ tenant:
     custom-domain:
       enabled: true
 kms:
+  # Only the tenant AS (its tenant-bound `tenant-as-service:<tenant>` client) may prove and read the
+  # managed keys it signs with.
+  hosted-as-signing:
+    allowed-service-actors: tenant-as-service
   # Internal-only software provider used before tenant platform config has been
   # pulled. It gives tenant-KMS local crypto support for validating platform
   # bearer signatures; REST discovery hides providers marked system=true.
