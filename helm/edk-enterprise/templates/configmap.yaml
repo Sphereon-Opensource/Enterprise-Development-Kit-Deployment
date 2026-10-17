@@ -682,6 +682,10 @@ data:
     app:
       deployment-mode: {{ $bootstrap.deploymentMode | quote }}
     platform:
+      # Workloads that read hosted AS authority: the tenant AS signing runtime and the tenant KMS
+      # custody checks for hosted AS signing keys.
+      authorization-server-authority:
+        allowed-service-actors: {{ printf "%s,%s" (index .Values.serviceIdentity.clientIds "tenant-as") (index .Values.serviceIdentity.clientIds "tenant-kms") | quote }}
       # Every satellite that consumes the remote platform configuration source must
       # be authorized from the same canonical actor list as secret resolution.
       config-distribution:
