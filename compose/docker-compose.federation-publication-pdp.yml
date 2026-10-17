@@ -21,6 +21,9 @@ services:
   enterprise-platform:
     volumes:
       - ./federation-publication-pdp/platform.application.yml:/app/config/application.yml:ro
+    # The pinned OPA image has no shell or HTTP client for a container healthcheck. The platform gates on
+    # readiness itself: while the PDP restarts, requests wait (authz.policy.authzen.resilience.readiness_wait_ms,
+    # default 10 s) for OPA's /health, which answers only once the policy files are loaded.
     depends_on:
       federation-publication-pdp:
         condition: service_started
