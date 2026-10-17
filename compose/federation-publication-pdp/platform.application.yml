@@ -710,6 +710,10 @@ auth:
   login:
     require-application: false
 platform:
+  # Workloads that read hosted AS authority: the tenant AS signing runtime and the tenant KMS
+  # custody checks for hosted AS signing keys.
+  authorization-server-authority:
+    allowed-service-actors: tenant-as-service,kms-service
   config-distribution:
     allowed-service-actors: tenant-as-service,issuer-service,kms-service,did-service,blob-service,verifier-service
   config:

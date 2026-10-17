@@ -99,6 +99,10 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
             serviceTokenAudience: enterprise-platform
+          # The managed hosted-AS custody check reads central signing authority with the tenant-KMS
+          # workload token and refuses a route that would forward the inbound session bearer.
+          "[authorization-server-signing-authority]":
+            preferServiceTokenOverSessionBearer: true
       application:
         target: SERVER
         transport: GRPC
