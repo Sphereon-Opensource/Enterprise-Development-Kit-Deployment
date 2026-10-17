@@ -693,7 +693,8 @@
             "wallet-unit": { "type": "string", "minLength": 1 },
             "wallet-interaction": { "type": "string", "minLength": 1 },
             "wallet-onboarding": { "type": "string", "minLength": 1 },
-            "trust-domain-identifier": { "type": "string", "minLength": 1 }
+            "trust-domain-identifier": { "type": "string", "minLength": 1 },
+            "as-signing-management": { "type": "string", "minLength": 1 }
           }
         },
         "clientIds": {

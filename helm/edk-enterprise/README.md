@@ -150,6 +150,7 @@ kubectl --namespace edk create secret generic edk-runtime-secrets `
   --from-literal=issuer-service-client-secret='<independent-secret>' `
   --from-literal=verifier-service-client-secret='<independent-secret>' `
   --from-literal=trust-domain-service-client-secret='<independent-secret>' `
+  --from-literal=as-signing-service-client-secret='<independent-secret>' `
   --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' `
   --from-literal=keystore-password='<long-random-pkcs12-password>'
 ```
@@ -186,6 +187,7 @@ serviceIdentity:
     issuer: issuer-service-client-secret
     verifier: verifier-service-client-secret
     trust-domain-identifier: trust-domain-service-client-secret
+    as-signing-management: as-signing-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
   passwordKey: keystore-password

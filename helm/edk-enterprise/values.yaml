@@ -487,6 +487,8 @@ serviceIdentity:
     wallet-interaction: wallet-interaction-service-client-secret
     wallet-onboarding: wallet-onboarding-service-client-secret
     trust-domain-identifier: trust-domain-service-client-secret
+    # Platform per-tenant AS signing workload (`as-signing-service:<tenant>`).
+    as-signing-management: as-signing-service-client-secret
   # Per-service client_credentials client id each satellite presents to the
   # platform AS to mint its east-west service token. These match the platform's
   # registered internal clients.

@@ -699,6 +699,10 @@ platform:
       transport: GRPC
       endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
       serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+    # The tenant-AS managed-signing central read binds its own workload token and refuses a
+    # route that would forward the inbound session bearer instead.
+    "[authorization-server-signing-authority]":
+      preferServiceTokenOverSessionBearer: true
 application:
   target: SERVER
   transport: GRPC
