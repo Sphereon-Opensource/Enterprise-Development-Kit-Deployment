@@ -645,34 +645,52 @@
         "verifier-service"
       ],
       "secret.authority.issue-permit": [
-        "kms-service"
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service"
       ],
       "secret.kms-authority.list-active-resources": [
-        "kms-service"
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service"
       ],
       "secret.kms-authority.register-managed-key": [
-        "kms-service"
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service"
       ],
       "secret.kms-authority.resolve-address": [
-        "kms-service"
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service"
       ],
       "secret.kms-authority.resolve-binding": [
-        "kms-service"
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service"
       ],
       "secret.kms-authority.resolve-execution-plan": [
-        "kms-service"
+        "kms-service",
+        "tenant-as-service"
       ],
       "secret.kms-authority.resolve-operation": [
+        "issuer-service",
         "kms-service"
       ],
       "secret.kms-authority.resolve-provider": [
-        "kms-service"
+        "kms-service",
+        "tenant-as-service"
       ],
       "secret.kms-authority.resolve-resource": [
-        "kms-service"
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service",
+        "verifier-service"
       ],
       "secret.value.resolve": [
-        "kms-service"
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service"
       ],
       "trust.domains.get": [
         "issuer-service",
