@@ -647,7 +647,8 @@
       "secret.authority.issue-permit": [
         "issuer-service",
         "kms-service",
-        "tenant-as-service"
+        "tenant-as-service",
+        "verifier-service"
       ],
       "secret.kms-authority.list-active-resources": [
         "issuer-service",
@@ -690,7 +691,8 @@
       "secret.value.resolve": [
         "issuer-service",
         "kms-service",
-        "tenant-as-service"
+        "tenant-as-service",
+        "verifier-service"
       ],
       "trust.domains.get": [
         "issuer-service",
