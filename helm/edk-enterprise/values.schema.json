@@ -781,13 +781,13 @@
     "federationConsole": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["clientId", "existingSecret", "sessionSecretKey"],
+      "required": ["clientId"],
       "properties": {
         "clientId": { "type": "string", "minLength": 1 },
-        "existingSecret": { "type": "string" },
-        "sessionSecretKey": { "type": "string", "minLength": 1 },
-        "tenantExistingSecret": { "type": "string" },
-        "tenantSessionSecretKey": { "type": "string", "minLength": 1 }
+        "existingSecret": { "type": "string", "deprecated": true, "description": "Ignored: the console keeps a process-local session store and needs no secret." },
+        "sessionSecretKey": { "type": "string", "deprecated": true, "description": "Ignored." },
+        "tenantExistingSecret": { "type": "string", "deprecated": true, "description": "Ignored." },
+        "tenantSessionSecretKey": { "type": "string", "deprecated": true, "description": "Ignored." }
       }
     },
     "keystore": {

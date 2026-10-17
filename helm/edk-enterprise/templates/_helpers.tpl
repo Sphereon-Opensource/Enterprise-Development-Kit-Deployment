@@ -504,18 +504,6 @@ east-west Authorization headers or software-keystore access.
 {{- $identitySecret := trim (default "" .Values.serviceIdentity.internalClientExistingSecret) -}}
 {{- $keystoreSecret := trim (default "" .Values.keystore.existingSecret) -}}
 {{- $portalBffSecret := trim (default "" .Values.portalBff.existingSecret) -}}
-{{- if and (index .Values.services "federation-console").enabled (eq (trim .Values.federationConsole.existingSecret) "") -}}
-{{- fail "federationConsole.existingSecret is required when federation-console is enabled. Create a Kubernetes Secret containing an independently generated session-encryption secret under federationConsole.sessionSecretKey, then reference that Secret by name." -}}
-{{- end -}}
-{{- $federationConsoleTenant := index .Values.services "federation-console-tenant" -}}
-{{- if and $federationConsoleTenant $federationConsoleTenant.enabled -}}
-{{- if eq (trim (default "" .Values.federationConsole.tenantExistingSecret)) "" -}}
-{{- fail "federationConsole.tenantExistingSecret is required when federation-console-tenant is enabled. Create a Kubernetes Secret containing an independently generated session-encryption secret under federationConsole.tenantSessionSecretKey, then reference that Secret by name." -}}
-{{- end -}}
-{{- if and (eq (trim .Values.federationConsole.tenantExistingSecret) (trim .Values.federationConsole.existingSecret)) (eq .Values.federationConsole.tenantSessionSecretKey .Values.federationConsole.sessionSecretKey) -}}
-{{- fail "federationConsole.tenantExistingSecret/tenantSessionSecretKey must not reference the operator console's session secret: the tenant runtime needs its own independently generated secret." -}}
-{{- end -}}
-{{- end -}}
 {{- $issuerPipelineSecret := trim (default "" .Values.issuerPipeline.existingSecret) -}}
 {{- $federationSessionSecret := trim (default "" .Values.federationSessionEncryption.existingSecret) -}}
 {{- $tenantAsEnabled := index .Values.services "tenant-as" -}}

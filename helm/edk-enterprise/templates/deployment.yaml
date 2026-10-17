@@ -929,50 +929,37 @@ spec:
             {{- end }}
             {{- if $isFederationConsole }}
             {{- /* Two runtimes from one image, split like admin-console. PLATFORM
-                   (operator host) holds the operator sign-in coordinates; TENANT
-                   (tenant hosts) holds none of them, only the narrow host-to-tenant
-                   bootstrap and the tenant AS, and its own session secret. Neither
-                   receives the platform root URL: the management API upstream is
-                   path-scoped. */}}
+                   (operator host) holds the operator sign-in coordinates and the
+                   platform client; TENANT (tenant hosts) holds none of them and
+                   resolves the tenant from the validated request host. Each keeps
+                   its own process-local session store, so neither needs a secret. */}}
             {{- $platformBase := printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "platform")) (index $.Values.services "platform").restPort }}
             - name: FEDERATION_CONSOLE_MODE
               value: {{ $isFederationConsoleTenant | ternary "TENANT" "PLATFORM" | quote }}
-            - name: FEDERATION_CONSOLE_TRUSTED_INGRESS_MODE
+            - name: FEDERATION_TRUSTED_INGRESS_MODE
               value: {{ $.Values.portalBff.trustedIngress.mode | quote }}
-            - name: FEDERATION_CONSOLE_TRUSTED_INGRESS_HOPS
+            - name: FEDERATION_TRUSTED_INGRESS_HOPS
               value: {{ $.Values.portalBff.trustedIngress.hops | quote }}
-            - name: FEDERATION_CONSOLE_COOKIE_SECURE
+            - name: FEDERATION_COOKIE_SECURE
               value: "true"
-            - name: FEDERATION_CONSOLE_PLATFORM_BOOTSTRAP_BASE_URL
-              value: {{ printf "%s/api/platform/bootstrap/v1" $platformBase | quote }}
-            - name: FEDERATION_API_UPSTREAM
-              value: {{ printf "%s/api/platform/config/v1" $platformBase | quote }}
+            - name: FEDERATION_API_URL
+              value: {{ $platformBase | quote }}
             {{- if $isFederationConsoleTenant }}
-            - name: FEDERATION_CONSOLE_TENANT_AS_BASE_URL
-              value: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" $ "name" "tenant-as")) (index $.Values.services "tenant-as").restPort | quote }}
-            - name: FEDERATION_CONSOLE_SESSION_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $.Values.federationConsole.tenantExistingSecret | quote }}
-                  key: {{ $.Values.federationConsole.tenantSessionSecretKey | quote }}
+            - name: FEDERATION_TENANT_BASE_DOMAIN
+              value: {{ include "edk-enterprise.gateway.baseDomain" $ | quote }}
+            - name: FEDERATION_TENANT_CONTEXT_URL
+              value: {{ printf "%s/api/platform/bootstrap/v1/admin-console-context" $platformBase | quote }}
             {{- else }}
-            - name: FEDERATION_CONSOLE_PUBLIC_ORIGIN
+            - name: FEDERATION_OPERATOR_ORIGIN
               value: {{ $.Values.platform.externalBaseUrl | quote }}
-            - name: FEDERATION_CONSOLE_PLATFORM_ISSUER
+            - name: FEDERATION_PLATFORM_AS_ISSUER
               value: {{ $.Values.platform.bootstrap.issuer | quote }}
-            - name: FEDERATION_CONSOLE_PLATFORM_AUTHORIZATION_BASE_URL
+            - name: FEDERATION_PLATFORM_AS_URL
               value: {{ $.Values.platform.externalBaseUrl | quote }}
-            - name: FEDERATION_CONSOLE_PLATFORM_TOKEN_URL
-              value: {{ printf "%s/token" $platformBase | quote }}
-            - name: FEDERATION_CONSOLE_PLATFORM_AUDIENCE
+            - name: FEDERATION_API_AUDIENCE
               value: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
-            - name: FEDERATION_CONSOLE_CLIENT_ID
+            - name: FEDERATION_PLATFORM_CLIENT_ID
               value: {{ $.Values.federationConsole.clientId | quote }}
-            - name: FEDERATION_CONSOLE_SESSION_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $.Values.federationConsole.existingSecret | quote }}
-                  key: {{ $.Values.federationConsole.sessionSecretKey | quote }}
             {{- end }}
             {{- end }}
             {{- range $env := $svc.env }}
