@@ -416,6 +416,16 @@ tenant:
   onboarding:
     operator:
       enabled: true
+  # The platform manages each tenant AS's signing keys as the per-tenant workload
+  # `as-signing-service:<tenant>`, whose client may address only the tenant AS. Its secret is
+  # provisioned per tenant and selected through the tenant-bound secret-use binding.
+  as-signing-management:
+    service-identity:
+      token-endpoint: http://enterprise-platform:18080/token
+      token-endpoint-allow-http: true
+      client-id: as-signing-service
+      tenant-bound-client-id: true
+      audience: enterprise-tenant-as
 kms:
   enterprise:
     lifecycle:

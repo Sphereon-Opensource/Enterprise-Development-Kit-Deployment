@@ -82,6 +82,8 @@ security:
       - service-oid4vp
       - service-eidas
       - service-monolith
+      # The platform's per-tenant signing workload keeps its workload identity here.
+      - as-signing-service
     service_client_bindings:
       "[service-crypto]": kms-service
       "[service-data]": did-service
@@ -166,6 +168,11 @@ transport:
 # container as EDK_INTERNAL_CLIENT_SECRET_ISSUER so the AS registration matches
 # the issuer satellite.
 oauth2:
+  # Only the platform's per-tenant signing workload (`as-signing-service:<tenant>`) may manage this
+  # tenant AS's signing keys.
+  as:
+    signing-management:
+      allowed-service-actors: as-signing-service
   servers:
     default:
       internal-clients:
