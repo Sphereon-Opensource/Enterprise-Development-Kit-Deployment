@@ -416,6 +416,16 @@ tenant:
   onboarding:
     operator:
       enabled: true
+  # The platform manages each tenant AS's signing keys as the per-tenant workload
+  # `as-signing-service:<tenant>`, whose client may address only the tenant AS. Its secret is
+  # provisioned per tenant and selected through the tenant-bound secret-use binding.
+  as-signing-management:
+    service-identity:
+      token-endpoint: http://enterprise-platform:18080/token
+      token-endpoint-allow-http: true
+      client-id: as-signing-service
+      tenant-bound-client-id: true
+      audience: enterprise-tenant-as
 kms:
   enterprise:
     lifecycle:
@@ -834,6 +844,14 @@ authz:
         - oidfed.entities.get
         - oidfed.entities.get-publication
         - oidfed.entities.publish
+        - oidfed.entities.resync
+        - oidfed.service-metadata.approve
+        - oidfed.service-metadata.discard-draft
+        - oidfed.service-metadata.get
+        - oidfed.service-metadata.preview
+        - oidfed.service-metadata.save-draft
+        - oidfed.service-metadata.set-mode
+        - oidfed.service-metadata.sync
         - oidfed.entity-publication-work.run
         - oidfed.entities.update
         - oidfed.entities.verify-origin
@@ -1014,6 +1032,22 @@ authz:
           - pattern: oidfed.entities.get-publication
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.entities.publish
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.resync
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.approve
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.discard-draft
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.preview
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.save-draft
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.set-mode
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.service-metadata.sync
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.entities.update
             any-of: [tenant-admin, platform-admin]

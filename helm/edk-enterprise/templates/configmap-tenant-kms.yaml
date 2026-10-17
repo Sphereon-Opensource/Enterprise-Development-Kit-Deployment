@@ -143,6 +143,9 @@ data:
                   mac:
                     target: LOCAL
     kms:
+      # Only the tenant AS (its tenant-bound client) may prove and read the managed keys it signs with.
+      hosted-as-signing:
+        allowed-service-actors: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
       # Internal-only software provider used before tenant platform config has
       # been pulled. It gives tenant-KMS local crypto support for validating
       # platform bearer signatures; REST discovery hides providers marked

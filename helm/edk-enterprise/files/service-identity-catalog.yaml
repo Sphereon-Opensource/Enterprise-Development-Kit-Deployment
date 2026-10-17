@@ -291,3 +291,13 @@ roles:
     grpcReceiver: false
     peersIn: []
     peersOut: []
+  as-signing-management:
+    kind: auxiliary-client
+    clientId: as-signing-service
+    serviceId: null
+    receiverAudience: null
+    defaultStsAudience: tenant-as
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn: []
+    peersOut: []
