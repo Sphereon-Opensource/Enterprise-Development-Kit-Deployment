@@ -540,6 +540,7 @@ serviceIdentity:
     wallet-unit: wallet-unit-service-client-secret
     wallet-interaction: wallet-interaction-service-client-secret
     trust-domain-identifier: trust-domain-service-client-secret
+    as-signing-management: as-signing-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
   passwordKey: keystore-password
