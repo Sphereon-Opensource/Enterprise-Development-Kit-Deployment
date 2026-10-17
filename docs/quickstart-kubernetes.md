@@ -213,6 +213,7 @@ set. The default `serviceIdentity.clientSecretKeys` values are:
 - `issuer-service-client-secret`
 - `verifier-service-client-secret`
 - `trust-domain-service-client-secret`
+- `as-signing-service-client-secret`
 
 `wallet-unit-service-client-secret` and
 `wallet-interaction-service-client-secret` are needed only when those optional
@@ -370,6 +371,7 @@ kubectl -n edk create secret generic edk-runtime-secrets \
   --from-literal=wallet-unit-service-client-secret='<independent-secret>' \
   --from-literal=wallet-interaction-service-client-secret='<independent-secret>' \
   --from-literal=trust-domain-service-client-secret='<independent-secret>' \
+  --from-literal=as-signing-service-client-secret='<independent-secret>' \
   --from-literal=admin-console-portal-bff-secret='<independent-long-random-portal-bff-secret>' \
   --from-literal=keystore-password='<long-random-pkcs12-password>'
 ```
@@ -393,6 +395,7 @@ serviceIdentity:
     wallet-unit: wallet-unit-service-client-secret
     wallet-interaction: wallet-interaction-service-client-secret
     trust-domain-identifier: trust-domain-service-client-secret
+    as-signing-management: as-signing-service-client-secret
 keystore:
   existingSecret: edk-runtime-secrets
   passwordKey: keystore-password

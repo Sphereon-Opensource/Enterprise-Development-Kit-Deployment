@@ -138,6 +138,10 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
             serviceTokenAudience: enterprise-platform
+          # The managed-signing central read binds the tenant-AS workload token and refuses a
+          # route that would forward the inbound session bearer instead.
+          "[authorization-server-signing-authority]":
+            preferServiceTokenOverSessionBearer: true
       application:
         target: SERVER
         transport: GRPC
