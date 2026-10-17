@@ -12,7 +12,30 @@ allow if {
 }
 
 # A command without an exact role rule is denied. The only other permits are the
-# process-owned SERVICE dispatcher rules for oidfed.entity-publication-work.run below.
+# satellite workload rules and the process-owned SERVICE dispatcher rules for
+# oidfed.entity-publication-work.run below.
+
+# East-west calls from the enterprise satellites. Each command is admitted only for the
+# satellite workload clients listed for it in service_rules. The principal is the
+# satellite's own client id, or that id bound to the session tenant (`<client>:<tenant>`).
+allow if {
+    input.principal.type == "workload"
+    input.context.session_principal_type in {"service", "workload"}
+    workload_client_id in data.federation_publication_policy.service_rules[input.action.name]
+}
+
+workload_client_id := input.principal.id if {
+    is_string(input.principal.id)
+    indexof(input.principal.id, ":") == -1
+}
+
+workload_client_id := parts[0] if {
+    is_string(input.principal.id)
+    parts := split(input.principal.id, ":")
+    count(parts) == 2
+    is_string(input.context.tenantId)
+    parts[1] == input.context.tenantId
+}
 
 # Normal AuthZen/OPA decision for the process-owned SERVICE dispatcher only.
 # PolicyRequestNormalizer has replaced the typed resource identity with command
