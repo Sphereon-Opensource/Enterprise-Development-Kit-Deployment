@@ -626,9 +626,7 @@
         "verifier-service"
       ],
       "platform.config.provision-status-list-signing": [
-        "issuer-service",
-        "kms-service",
-        "verifier-service"
+        "issuer-service"
       ],
       "platform.tenant-endpoint.list": [
         "blob-service",
@@ -647,52 +645,34 @@
         "verifier-service"
       ],
       "secret.authority.issue-permit": [
-        "issuer-service",
-        "kms-service",
-        "tenant-as-service"
+        "kms-service"
       ],
       "secret.kms-authority.list-active-resources": [
-        "issuer-service",
-        "kms-service",
-        "tenant-as-service"
+        "kms-service"
       ],
       "secret.kms-authority.register-managed-key": [
-        "issuer-service",
-        "kms-service",
-        "tenant-as-service"
+        "kms-service"
       ],
       "secret.kms-authority.resolve-address": [
-        "issuer-service",
-        "kms-service",
-        "tenant-as-service"
+        "kms-service"
       ],
       "secret.kms-authority.resolve-binding": [
-        "issuer-service",
-        "kms-service",
-        "tenant-as-service"
+        "kms-service"
       ],
       "secret.kms-authority.resolve-execution-plan": [
-        "kms-service",
-        "tenant-as-service"
+        "kms-service"
       ],
       "secret.kms-authority.resolve-operation": [
-        "issuer-service",
         "kms-service"
       ],
       "secret.kms-authority.resolve-provider": [
-        "kms-service",
-        "tenant-as-service"
+        "kms-service"
       ],
       "secret.kms-authority.resolve-resource": [
-        "issuer-service",
-        "kms-service",
-        "tenant-as-service",
-        "verifier-service"
+        "kms-service"
       ],
       "secret.value.resolve": [
-        "issuer-service",
-        "kms-service",
-        "tenant-as-service"
+        "kms-service"
       ],
       "trust.domains.get": [
         "issuer-service",
