@@ -169,6 +169,14 @@ transport:
         transport: GRPC
         endpoint: grpc://enterprise-platform:9090
         serviceTokenAudience: enterprise-platform
+      # OpenID Federation state and Federation Entity Keys live on the platform; this service
+      # serves the public endpoints of entities identified under its own paths.
+      oidfed:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
       secret:
         target: SERVER
         transport: GRPC
