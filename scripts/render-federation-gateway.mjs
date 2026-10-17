@@ -4,15 +4,16 @@ import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 
 const traefikDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../compose/gateway/traefik')
-const usage = 'Usage: node scripts/render-federation-gateway.mjs --base-domain <dns> [--with-admin-console] [--behind-edge] [--output <path>]'
+const usage = 'Usage: node scripts/render-federation-gateway.mjs --base-domain <dns> [--with-vdx-services] [--with-admin-console] [--behind-edge] [--output <path>]'
 
-export function renderFederationGateway({baseDomain, withAdminConsole = false, behindEdge = false}) {
+export function renderFederationGateway({baseDomain, withVdxServices = false, withAdminConsole = false, behindEdge = false}) {
   const label = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
   if (typeof baseDomain !== 'string' || baseDomain.length > 253 || !baseDomain.includes('.') ||
       !baseDomain.split('.').every(part => label.test(part))) {
     throw new Error('--base-domain must be a lowercase DNS name, for example fed.example.com')
   }
   let text = fs.readFileSync(path.join(traefikDir, 'dynamic.federation.template.yml'), 'utf8')
+  if (!withVdxServices) text = text.replace(/^ *# BEGIN vdx-services\r?\n[\s\S]*?^ *# END vdx-services\r?\n/gm, '')
   if (!withAdminConsole) text = text.replace(/^ *# BEGIN admin-console\r?\n[\s\S]*?^ *# END admin-console\r?\n/gm, '')
   text = text.replaceAll('__BASE_DOMAIN_REGEX__', baseDomain.replaceAll('.', '\\.'))
     .replaceAll('__BASE_DOMAIN__', baseDomain)
@@ -41,6 +42,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
           else output = path.resolve(value)
           break
         }
+        case '--with-vdx-services': options.withVdxServices = true; break
         case '--with-admin-console': options.withAdminConsole = true; break
         case '--behind-edge': options.behindEdge = true; break
         default: throw new Error(`Unknown option: ${args[i]}`)

@@ -176,6 +176,71 @@ http:
       priority: 5000
       tls: {}
 
+    # BEGIN vdx-services
+    # The optional VDX services (compose profile vdx-services). Entities identified under the issuer's
+    # and verifier's own paths are served there; they route oidfed commands to the platform.
+    tenant-issuer:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/oid4vci`) || PathPrefix(`/credential`) ||
+         PathPrefix(`/deferredCredential`) || PathPrefix(`/nonce`) ||
+         PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
+         PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
+         PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
+         PathPrefix(`/api/statuslist/v1`) || PathPrefix(`/api/invitation`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 200
+      tls: {}
+
+    public-design-assets:
+      rule: "PathRegexp(`^/public/assets/design/[^/]+$`)"
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 1100
+      tls: {}
+
+    tenant-catalogs:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/public/catalogs`) || PathPrefix(`/api/catalog/attestation/v1`) || PathPrefix(`/api/catalog/attribute/v1`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 220
+      tls: {}
+
+    tenant-verifier:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/oid4vp`) || PathPrefix(`/api/oid4vp/v1`) ||
+         PathPrefix(`/api/dcql/v1`))
+      entryPoints: ["websecure"]
+      service: svc-verifier
+      priority: 200
+      tls: {}
+
+    tenant-did:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/1.0/identifiers`) || PathPrefix(`/.well-known/did.json`) ||
+         PathPrefix(`/api/did/v1`))
+      entryPoints: ["websecure"]
+      service: svc-did
+      priority: 200
+      tls: {}
+
+    tenant-blob:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/api/theme/v1`) || PathPrefix(`/api/assets/v1`) ||
+         PathRegexp(`^/public/assets/[^/]+/brand/[^/]+$`))
+      entryPoints: ["websecure"]
+      service: svc-blob
+      priority: 300
+      tls: {}
+
+    # END vdx-services
+
     # BEGIN admin-console
     # The optional operator admin console owns its browser paths.
     platform-admin-console:
@@ -239,6 +304,28 @@ http:
         passHostHeader: true
         servers:
           - url: "http://federation-console-tenant:3000"
+    # BEGIN vdx-services
+    svc-issuer:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-issuer:8080"
+    svc-verifier:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-verifier:8080"
+    svc-did:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-did:8080"
+    svc-blob:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://enterprise-blob:8080"
+    # END vdx-services
     # BEGIN admin-console
     svc-admin-console:
       loadBalancer:
