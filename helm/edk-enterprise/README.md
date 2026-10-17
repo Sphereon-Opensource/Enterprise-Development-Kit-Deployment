@@ -38,11 +38,8 @@ This profile supports `topology.mode=distributed` only.
 Create the usual platform, tenant-KMS and tenant-AS database, runtime, keystore,
 federation-session and workload-isolated secret-authority Secrets. Also create
 `edk-oidfed-postgres` for the federation database owner and
-`edk-oidfed-runtime-postgres` for its data-only runtime credentials. Create
-`edk-federation-console` (key `federation-console-session-secret`) and
-`edk-federation-console-tenant` (key `federation-console-tenant-session-secret`),
-each with its own independently generated 32-byte base64url value. The chart
-never generates them and refuses one shared secret for both.
+`edk-oidfed-runtime-postgres` for its data-only runtime credentials. The console
+needs no Secret: each runtime keeps its own process-local session store.
 
 The console runs as two runtimes from one image, split like the admin console.
 `federation-console` (`FEDERATION_CONSOLE_MODE=PLATFORM`) is routed only on the
@@ -259,11 +256,7 @@ fails chart render.
 | `issuerPipeline.existingSecret` | `""` | Required Secret name for issuer pipeline encryption and blind-index keys. |
 | `services.federation-console.enabled` | `false` | Enables the operator (PLATFORM) Federation Console runtime on the operator host. |
 | `services.federation-console-tenant.enabled` | `false` | Enables the tenant (TENANT) Federation Console runtime on tenant hosts. |
-| `federationConsole.clientId` | `federation-console` | Public authorization-code client with required PKCE. |
-| `federationConsole.existingSecret` | `""` | Required when the console is enabled; holds its independent session-encryption secret. |
-| `federationConsole.sessionSecretKey` | `federation-console-session-secret` | Key in the console session Secret. |
-| `federationConsole.tenantExistingSecret` | `""` | Required when the tenant runtime is enabled; holds its own session-encryption secret. |
-| `federationConsole.tenantSessionSecretKey` | `federation-console-tenant-session-secret` | Key in the tenant console session Secret. |
+| `federationConsole.clientId` | `federation-console` | Public authorization-code client with required PKCE. It exchanges the operator's token for an `enterprise-platform` token (operator delegation, `platform-admin`, no provisioning). |
 | `license.installationId` | `""` | Optional explicit runtime pin to a known installation id. Leave empty for first-run setup; the protected bundle supplies the installation id. If set, it must match the installed license claims. |
 | `networkPolicy.enabled` | `true` | Renders service ingress/egress NetworkPolicies. |
 | `networkPolicy.secretProviderEgress.enabled` | `true` | Enables platform-only egress to the mandatory Tier-0 KMS and provider endpoints. Pin in-cluster providers with selectors or external services with CIDRs where possible; an empty peer set permits only the configured ports and still relies on the runtime HTTPS/DNS/IP policy. |

@@ -282,12 +282,11 @@ node ../scripts/render-federation-gateway.mjs --base-domain fed.example.com
 docker compose -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml up -d
 ```
 
-Use your installation domain in the renderer. The generator adds four
+Use your installation domain in the renderer. The generator adds two
 independent 32-byte base64url secrets: `EDK_OIDFED_DB_PASSWORD` for the database
-owner, `EDK_OIDFED_RUNTIME_DB_PASSWORD` for the data-only tenant AS role, and
-`EDK_FEDERATION_CONSOLE_SESSION_SECRET` and
-`EDK_FEDERATION_CONSOLE_TENANT_SESSION_SECRET` for the two console runtimes. It
-keeps existing values. `EDK_FEDERATION_CONSOLE_TAG` defaults to `EDK_TAG`; the
+owner and `EDK_OIDFED_RUNTIME_DB_PASSWORD` for the data-only tenant AS role. It
+keeps existing values. The console runtimes need no secret: each keeps its own
+process-local session store. `EDK_FEDERATION_CONSOLE_TAG` defaults to `EDK_TAG`; the
 image must be built for `/federation-console` with the live API at
 `/federation-console/api/federation`.
 
@@ -299,13 +298,21 @@ tenant hosts, has no operator coordinates or platform client, and resolves the
 tenant from the validated request host. Both are served at `/federation-console`;
 the gateway never strips the prefix.
 
-To include the admin consoles, keep their routes when rendering and enable
-their Compose profile:
+To include the VDX services and the admin consoles, keep their routes when
+rendering and enable their Compose profiles:
 
 ```bash
-node ../scripts/render-federation-gateway.mjs --base-domain fed.example.com --with-admin-console
-docker compose --profile admin-console -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml up -d
+node ../scripts/render-federation-gateway.mjs --base-domain fed.example.com --with-vdx-services --with-admin-console
+docker compose --profile vdx-services --profile admin-console -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.federation.yml up -d
 ```
+
+With the VDX services, the tenant's credential issuers, verifiers and
+authorization servers can become federation entities. An issuer or verifier
+entity is identified under that service's own path, for example
+`https://<tenant>.fed.example.com/oid4vci/<instance>`. The issuer and verifier
+serve its Entity Configuration, while the platform keeps the federation state and
+the Federation Entity Keys. They reach the platform through the `oidfed` route in
+`config/issuer.application.yml` and `config/verifier.application.yml`.
 
 The commands above use the gateway's certificate files and static configuration
 described in section 3b. With an existing shared TLS edge, render with
@@ -314,7 +321,7 @@ described in section 3b. With an existing shared TLS edge, render with
 removes TLS configuration because the edge terminates TLS. You can select a
 different output using `--output <path>` and set
 `EDK_FEDERATION_GATEWAY_DYNAMIC` to that file's path, relative to `compose/`.
-Render with `--with-admin-console` in this mode too if the profile is enabled.
+Render with `--with-vdx-services` and `--with-admin-console` in this mode too if those profiles are enabled.
 
 For the local certificate gateway, set this in `.env` so tenant AS trusts the
 evaluation CA after its environment map is replaced by the overlay:
