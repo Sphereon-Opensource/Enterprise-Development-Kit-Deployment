@@ -735,6 +735,9 @@ spec:
         - path:
             type: PathPrefix
             value: /api/platform/config/v1/tenants
+        - path:
+            type: PathPrefix
+            value: /api/tenants/
         # Trust-domain administration is platform-owned: enterprise-tenant-as carries no
         # lib-trust-domain module, so routing it there returns 404. Compose has always
         # pointed this at the platform service.

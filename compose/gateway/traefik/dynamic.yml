@@ -190,7 +190,7 @@ http:
     tenant-platform-config:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        PathPrefix(`/api/platform/config/v1/tenants`)
+        (PathPrefix(`/api/platform/config/v1/tenants`) || PathPrefix(`/api/tenants/`))
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 300

@@ -161,7 +161,7 @@ __LE_TLS_DOMAINS__
     tenant-platform-config:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        PathPrefix(`/api/platform/config/v1/tenants`)
+        (PathPrefix(`/api/platform/config/v1/tenants`) || PathPrefix(`/api/tenants/`))
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 300
