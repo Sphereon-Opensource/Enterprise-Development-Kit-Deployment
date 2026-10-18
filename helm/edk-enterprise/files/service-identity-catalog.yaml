@@ -72,6 +72,7 @@ roles:
       - issuer
       - verifier
       - admin-console-tenant
+      - federation-console
       - federation-console-tenant
     peersOut:
       - platform
@@ -250,6 +251,7 @@ roles:
     peersIn: []
     peersOut:
       - platform
+      - tenant-as
   federation-console-tenant:
     kind: bff
     clientId: null
