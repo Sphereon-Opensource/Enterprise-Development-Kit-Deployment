@@ -358,6 +358,14 @@ http:
       tls: {}
 
     # Customer identities and credentials belong to the workload AS database.
+    # Platform organizations live in tenant-AS; keep the platform host and path.
+    platform-party:
+      rule: "Host(`platform.saas.localtest.me`) && PathRegexp(`^/api/party/v1(/.*)?$`)"
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 1100
+      tls: {}
+
     tenant-as-identity-admin:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&

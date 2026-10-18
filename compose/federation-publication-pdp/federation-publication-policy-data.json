@@ -2,6 +2,118 @@
   "federation_publication_policy": {
     "worker_id": "oidfed-enrollment-verification-worker",
     "role_rules": {
+      "oidfed.admin-configuration.patch": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-configuration.read": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-configuration.replace": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-configuration.statement": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-keys.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-keys.delete": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-keys.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-keys.read": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-keys.rotate": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-node.read": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-subordinates.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-subordinates.delete": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-subordinates.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-subordinates.patch": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-subordinates.read": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-subordinates.replace": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-subordinates.statement": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-subordinates.status": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-mark-subjects.delete": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-mark-subjects.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-mark-subjects.replace": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-mark-subjects.status": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-mark-subjects.token": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-marks.create": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-marks.delete": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-marks.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-marks.read": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.admin-trust-marks.replace": [
+        "tenant-admin",
+        "platform-admin"
+      ],
       "oidfed.capabilities.get": [
         "tenant-admin",
         "platform-admin"

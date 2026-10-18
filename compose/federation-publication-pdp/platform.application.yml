@@ -817,6 +817,34 @@ authz:
       enforcement-mode: enforced
       fallback-policy: deny
       include-patterns:
+        - oidfed.admin-configuration.patch
+        - oidfed.admin-configuration.read
+        - oidfed.admin-configuration.replace
+        - oidfed.admin-configuration.statement
+        - oidfed.admin-keys.create
+        - oidfed.admin-keys.delete
+        - oidfed.admin-keys.list
+        - oidfed.admin-keys.read
+        - oidfed.admin-keys.rotate
+        - oidfed.admin-node.read
+        - oidfed.admin-subordinates.create
+        - oidfed.admin-subordinates.delete
+        - oidfed.admin-subordinates.list
+        - oidfed.admin-subordinates.patch
+        - oidfed.admin-subordinates.read
+        - oidfed.admin-subordinates.replace
+        - oidfed.admin-subordinates.statement
+        - oidfed.admin-subordinates.status
+        - oidfed.admin-trust-mark-subjects.delete
+        - oidfed.admin-trust-mark-subjects.list
+        - oidfed.admin-trust-mark-subjects.replace
+        - oidfed.admin-trust-mark-subjects.status
+        - oidfed.admin-trust-mark-subjects.token
+        - oidfed.admin-trust-marks.create
+        - oidfed.admin-trust-marks.delete
+        - oidfed.admin-trust-marks.list
+        - oidfed.admin-trust-marks.read
+        - oidfed.admin-trust-marks.replace
         - oidfed.capabilities.get
         - oidfed.connection-contexts.create
         - oidfed.connection-contexts.end
@@ -975,6 +1003,62 @@ authz:
       federationadmin:
         type: roles
         role-rules:
+          - pattern: oidfed.admin-configuration.patch
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-configuration.read
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-configuration.replace
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-configuration.statement
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-keys.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-keys.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-keys.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-keys.read
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-keys.rotate
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-node.read
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-subordinates.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-subordinates.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-subordinates.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-subordinates.patch
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-subordinates.read
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-subordinates.replace
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-subordinates.statement
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-subordinates.status
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-mark-subjects.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-mark-subjects.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-mark-subjects.replace
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-mark-subjects.status
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-mark-subjects.token
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-marks.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-marks.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-marks.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-marks.read
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.admin-trust-marks.replace
+            any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.capabilities.get
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.connection-contexts.create
