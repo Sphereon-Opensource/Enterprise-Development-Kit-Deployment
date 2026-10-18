@@ -516,11 +516,11 @@ oauth2:
       require-pkce: true
       token-endpoint-auth-method: none
       default-access-token-audience: enterprise-platform
-      allowed-access-token-audiences: enterprise-platform
+      allowed-access-token-audiences: enterprise-platform,enterprise-tenant-as
       # Console operators administer the platform; this client cannot provision tenants.
       token-exchange:
         mode: operator-delegation
-        audiences: enterprise-platform
+        audiences: enterprise-platform,enterprise-tenant-as
         self: true
         provisioning: false
         role: platform-admin
