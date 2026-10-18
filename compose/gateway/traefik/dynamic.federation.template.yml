@@ -77,6 +77,14 @@ http:
       tls: {}
 
     # Tenant AS owns tenant identities and OAuth administration.
+    # Platform organizations live in tenant-AS; keep the platform host and path.
+    platform-party:
+      rule: "Host(`platform.__BASE_DOMAIN__`) && PathRegexp(`^/api/party/v1(/.*)?$`)"
+      entryPoints: ["websecure"]
+      service: svc-as
+      priority: 1100
+      tls: {}
+
     tenant-as-identity-admin:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
