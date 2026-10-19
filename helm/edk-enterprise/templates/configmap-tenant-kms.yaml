@@ -107,6 +107,14 @@ data:
               # workload token and refuses a route that would forward the inbound session bearer.
               "[authorization-server-signing-authority]":
                 preferServiceTokenOverSessionBearer: true
+          oidfed:
+            services:
+              key:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.identityServiceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+                serviceTokenAudience: enterprise-platform
+                preferServiceTokenOverSessionBearer: true
           application:
             target: SERVER
             transport: GRPC
@@ -150,6 +158,8 @@ data:
       # Only the tenant AS (its tenant-bound client) may prove and read the managed keys it signs with.
       hosted-as-signing:
         allowed-service-actors: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+      federation-signing:
+        allowed-service-actors: federation-signing-service
       # Internal-only software provider used before tenant platform config has
       # been pulled. It gives tenant-KMS local crypto support for validating
       # platform bearer signatures; REST discovery hides providers marked
