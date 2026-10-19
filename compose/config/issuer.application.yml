@@ -193,7 +193,7 @@ config:
   providers:
     platform-config-remote:
       enabled: true
-      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vci,credential-design,statuslists
+      bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vci
     tenant-config-db:
       enabled: false
 license:
