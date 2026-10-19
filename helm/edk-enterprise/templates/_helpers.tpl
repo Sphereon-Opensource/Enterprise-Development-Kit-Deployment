@@ -224,6 +224,9 @@ ${env:{{ include "edk-enterprise.serviceIdentity.clientSecretEnvName" . }}}
 {{- $svc := index .root.Values.services .role -}}
 {{- if and $svc $svc.enabled }}true{{ else }}false{{ end -}}
 {{- end -}}
+{{- else if and (eq $row.kind "auxiliary-client") (eq .role "federation-key-management") -}}
+{{- /* The federation profile uses per-tenant AUTHORITY typed bindings, never a static chart secret. */ -}}
+false
 {{- else if eq $row.kind "auxiliary-client" -}}
 {{- if (index .root.Values.services "tenant-as").enabled }}true{{ else }}false{{ end -}}
 {{- else }}false{{ end -}}

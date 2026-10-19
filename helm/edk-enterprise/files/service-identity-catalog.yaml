@@ -303,3 +303,13 @@ roles:
     grpcReceiver: false
     peersIn: []
     peersOut: []
+  federation-key-management:
+    kind: auxiliary-client
+    clientId: federation-signing-service
+    serviceId: null
+    receiverAudience: null
+    defaultStsAudience: tenant-kms
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn: []
+    peersOut: []
