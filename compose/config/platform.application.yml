@@ -877,6 +877,7 @@ authz:
         - oidfed.entities.get-publication
         - oidfed.entities.publish
         - oidfed.entities.resync
+        - oidfed.entity-summaries.list
         - oidfed.service-metadata.approve
         - oidfed.service-metadata.discard-draft
         - oidfed.service-metadata.get
@@ -972,6 +973,9 @@ authz:
         - oidfed.superior-statements.preview
         - oidfed.superior-statements.publish
         - oidfed.superiors.verify
+        - oidfed.tenant-overview.get
+        - oidfed.tenant-trust-mark-types.list
+        - oidfed.tenant-trust-marks.list
         - oidfed.trust-mark-applications.get
         - oidfed.trust-mark-applications.issue
         - oidfed.trust-mark-applications.list
@@ -1116,6 +1120,8 @@ authz:
           - pattern: oidfed.entities.publish
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.entities.resync
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entity-summaries.list
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.service-metadata.approve
             any-of: [tenant-admin, platform-admin]
@@ -1306,6 +1312,12 @@ authz:
           - pattern: oidfed.superior-statements.publish
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.superiors.verify
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.tenant-overview.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.tenant-trust-mark-types.list
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.tenant-trust-marks.list
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.trust-mark-applications.get
             any-of: [tenant-admin, platform-admin]
