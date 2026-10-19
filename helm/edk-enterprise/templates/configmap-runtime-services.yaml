@@ -248,7 +248,7 @@ data:
     config:
       providers:
         platform-config-remote:
-          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vci,credential-design,statuslists
+          bootstrap-required-keyspaces: oauth2.servers,crypto.kms.roles,oid4vci
     server:
       service-identity:
         token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}

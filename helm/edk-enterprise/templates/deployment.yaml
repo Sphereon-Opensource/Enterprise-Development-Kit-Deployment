@@ -203,7 +203,7 @@ spec:
               {{- else if eq $name "blob" -}}
               {{- $remoteKeyspaces = "oauth2.servers,crypto.kms.roles,theme" -}}
               {{- else if eq $name "issuer" -}}
-              {{- $remoteKeyspaces = "crypto.kms.roles,oid4vci,credential-design,statuslists" -}}
+              {{- $remoteKeyspaces = "crypto.kms.roles,oid4vci" -}}
               {{- else if eq $name "verifier" -}}
               {{- $remoteKeyspaces = "crypto.kms.roles,oid4vp" -}}
               {{- end }}
