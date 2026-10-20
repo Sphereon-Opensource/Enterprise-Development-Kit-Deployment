@@ -73,6 +73,7 @@ security:
       - service-eidas
       - service-monolith
       - service-tenant-as
+      - federation-signing-service
     service_client_bindings:
       "[service-crypto]": kms-service
       "[service-data]": did-service
@@ -102,6 +103,14 @@ transport:
           # The managed hosted-AS custody check reads central signing authority with the tenant-KMS
           # workload token and refuses a route that would forward the inbound session bearer.
           "[authorization-server-signing-authority]":
+            preferServiceTokenOverSessionBearer: true
+      oidfed:
+        services:
+          key:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
             preferServiceTokenOverSessionBearer: true
       application:
         target: SERVER
@@ -205,6 +214,8 @@ tenant:
     custom-domain:
       enabled: true
 kms:
+  federation-signing:
+    allowed-service-actors: federation-signing-service
   # Only the tenant AS (its tenant-bound `tenant-as-service:<tenant>` client) may prove and read the
   # managed keys it signs with.
   hosted-as-signing:

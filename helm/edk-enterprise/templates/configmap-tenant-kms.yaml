@@ -46,6 +46,7 @@ data:
     security:
       workload-trust-policy:
         trusted_service_ids:
+          - federation-signing-service
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
           {{- if (index .Values.services "did").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}

@@ -146,6 +146,15 @@ transport:
           key:
             transport: GRPC
             endpoint: grpc://enterprise-tenant-kms:9090
+            commands:
+              "[kms.key.prepare-federation]":
+                target: SERVER
+              "[kms.key.read-federation-public]":
+                target: SERVER
+              "[kms.key.sign-federation-jws]":
+                target: SERVER
+              "[kms.key.discard-federation-preparation]":
+                target: SERVER
           # Typed key-resource operations are a separate service namespace.
           # Customer tenant sessions route them to tenant-KMS while the
           # application tenant continues to select LOCAL.
@@ -745,6 +754,15 @@ docs:
     enabled: ${env:EDK_DOCS_PLAYGROUND_ENABLED:true}
     client-id: docs-playground
     origins: ${env:EDK_DOCS_SITE_ORIGINS:https://docs.sphereon.com,http://127.0.0.1:3000,http://localhost:3000}
+oidfed:
+  key-management:
+    service-identity:
+      token-endpoint: http://enterprise-platform:18080/token
+      token-endpoint-allow-http: true
+      platform-issuer: ${env:EXTERNAL_BASE_URL}
+      client-id: federation-signing-service
+      audience: enterprise-tenant-kms
+
 east-west:
   platform:
     base-url: http://enterprise-platform:18080
@@ -853,6 +871,7 @@ authz:
         - oidfed.control.initialize
         - oidfed.diagnostics.inspect-entity-configuration
         - oidfed.diagnostics.resolve
+        - oidfed.diagnostics.discover-subordinates
         - oidfed.enrollment-invitations.create
         - oidfed.enrollment-invitations.get
         - oidfed.enrollment-invitations.list
@@ -1072,6 +1091,8 @@ authz:
           - pattern: oidfed.diagnostics.inspect-entity-configuration
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.diagnostics.resolve
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.diagnostics.discover-subordinates
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.enrollment-invitations.create
             any-of: [tenant-admin, platform-admin]
