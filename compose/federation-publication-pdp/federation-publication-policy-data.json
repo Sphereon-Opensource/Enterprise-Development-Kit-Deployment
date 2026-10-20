@@ -146,6 +146,10 @@
         "tenant-admin",
         "platform-admin"
       ],
+      "oidfed.diagnostics.discover-subordinates": [
+        "tenant-admin",
+        "platform-admin"
+      ],
       "oidfed.enrollment-invitations.create": [
         "tenant-admin",
         "platform-admin"
@@ -724,6 +728,8 @@
       ]
     },
     "service_rules": {
+      "oidfed.key.get-authority": ["kms-service"],
+      "oidfed.key.claim-generation": ["kms-service"],
       "application.license.get-effective": [
         "blob-service",
         "did-service",
