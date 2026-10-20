@@ -114,6 +114,17 @@ http:
       priority: 220
       tls: {}
 
+    # Federation entities may have up to six path segments. The fallback stays below
+    # service-owned /as, /oid4vci and /oid4vp routes, which publish their own entities.
+    tenant-oidfed-path:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathRegexp(`^(/[^/]+){0,6}/(\.well-known/openid-federation|federation_(fetch|list|resolve|trust_mark_status|trust_mark_list|trust_mark|historical_keys|enrollment_invitation|enrollment(/[^/]+/(status|response|withdrawal|keys))?|trust_mark_application(/[^/]+/(status|response|withdrawal))?))$`)
+      entryPoints: ["websecure"]
+      service: svc-platform
+      priority: 90
+      tls: {}
+
     # Tenant AS serves discovery and hosted authorization paths.
     tenant-as:
       rule: >-
