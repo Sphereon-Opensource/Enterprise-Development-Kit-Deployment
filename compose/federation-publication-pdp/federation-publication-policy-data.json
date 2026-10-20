@@ -242,6 +242,10 @@
         "tenant-admin",
         "platform-admin"
       ],
+      "oidfed.entity-summaries.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
       "oidfed.service-metadata.approve": [
         "tenant-admin",
         "platform-admin"
@@ -619,6 +623,18 @@
         "platform-admin"
       ],
       "oidfed.superiors.verify": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.tenant-overview.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.tenant-trust-mark-types.list": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.tenant-trust-marks.list": [
         "tenant-admin",
         "platform-admin"
       ],
