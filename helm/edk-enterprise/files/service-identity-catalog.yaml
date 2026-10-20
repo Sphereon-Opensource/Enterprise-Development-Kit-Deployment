@@ -160,6 +160,7 @@ roles:
     defaultStsAudience: platform
     extraStsAudiences:
       - wallet-onboarding
+      - tenant-kms
     grpcReceiver: true
     peersIn:
       - wallet-interaction
@@ -167,6 +168,7 @@ roles:
     peersOut:
       - platform
       - wallet-onboarding
+      - tenant-kms
   wallet-interaction:
     kind: satellite
     clientId: wallet-interaction-service
@@ -177,6 +179,7 @@ roles:
       - wallet-onboarding
       - tenant-kms
       - wallet-unit
+      - business-wallet-runtime
     grpcReceiver: true
     peersIn:
       - issuer
@@ -186,6 +189,7 @@ roles:
       - wallet-unit
       - tenant-kms
       - platform
+      - business-wallet-runtime
   wallet-onboarding:
     kind: satellite
     clientId: wallet-onboarding-service
@@ -264,6 +268,23 @@ roles:
     peersOut:
       - platform
       - tenant-as
+  # The backend workload is distinct from the business-wallet browser application below.
+  business-wallet-runtime:
+    kind: satellite
+    clientId: business-wallet-service
+    serviceId: service-business-wallet
+    receiverAudience: vdx-business-wallet
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - wallet-unit
+    grpcReceiver: true
+    peersIn:
+      - wallet-unit
+      - wallet-interaction
+      - wallet-onboarding
+    peersOut:
+      - platform
+      - wallet-unit
   business-wallet:
     kind: frontend
     clientId: null
