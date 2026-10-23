@@ -2791,7 +2791,7 @@
                     "value": "application/json"
                   }
                 ],
-                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/backend/credential/offers",
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/instances/{{issuerId}}/backend/credential/offers",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"credential_configuration_ids\": [\n    \"EuPid\"\n  ],\n  \"grants\": {\n    \"pre_authorized_code\": {}\n  },\n  \"credential_subject_data\": {\n    \"family_name\": \"Mustermann\",\n    \"given_name\": \"Erika\",\n    \"birth_date\": \"1964-08-12\",\n    \"age_over_18\": true,\n    \"nationality\": \"DE\",\n    \"issuing_authority\": \"DE\",\n    \"issuing_country\": \"DE\",\n    \"document_number\": \"T22000129\"\n  }\n}",
@@ -2833,7 +2833,7 @@
                     "value": "application/json"
                   }
                 ],
-                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/backend/credential/offers",
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/instances/{{issuerId}}/backend/credential/offers",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"credential_configuration_ids\": [\n    \"EmployeeBadge\"\n  ],\n  \"grants\": {\n    \"pre_authorized_code\": {\n      \"tx_code\": {\n        \"input_mode\": \"numeric\",\n        \"length\": 6\n      }\n    }\n  },\n  \"credential_subject_data\": {\n    \"given_name\": \"Ada\",\n    \"family_name\": \"Lovelace\",\n    \"employee_id\": \"E-1001\"\n  }\n}",
@@ -2866,7 +2866,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/backend/credential/offers/{{offerCorrelationId}}",
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/instances/{{issuerId}}/backend/credential/offers/{{offerCorrelationId}}",
                 "description": "Shows where the wallet is: offer created, token issued, credential issued."
               },
               "response": []
@@ -4609,7 +4609,7 @@
                         "value": "application/json"
                       }
                     ],
-                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/backend/credential/offers",
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/instances/{{issuerId}}/backend/credential/offers",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"credential_configuration_ids\": [\n    \"EuPid\"\n  ],\n  \"grants\": {\n    \"authorization_code\": {\n      \"issuer_state\": \"postman-{{$guid}}\",\n      \"authorization_server\": \"https://{{tenantSlug}}.{{baseDomain}}/as/{{walletProxySlug}}\"\n    }\n  },\n  \"credential_subject_data\": {\n    \"family_name\": \"Mustermann\",\n    \"given_name\": \"Erika\",\n    \"birth_date\": \"1964-08-12\",\n    \"age_over_18\": true,\n    \"nationality\": \"DE\",\n    \"issuing_authority\": \"DE\",\n    \"issuing_country\": \"DE\",\n    \"document_number\": \"T22000129\"\n  }\n}",

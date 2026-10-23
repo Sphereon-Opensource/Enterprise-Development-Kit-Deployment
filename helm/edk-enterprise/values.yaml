@@ -766,8 +766,8 @@ gateway:
   # Gateway API implementations may otherwise impose a short implementation-
   # specific default (Envoy Gateway defaults to 15 seconds). Tenant registration
   # performs fenced provisioning before returning and must be allowed to finish.
-  requestTimeout: "60s"
-  backendRequestTimeout: "60s"
+  requestTimeout: "120s"
+  backendRequestTimeout: "120s"
   # Defaults to global.platformBaseDomain when empty.
   baseDomain: ""
   tls:
