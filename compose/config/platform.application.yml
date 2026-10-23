@@ -979,6 +979,9 @@ authz:
         - oidfed.received-trust-marks.add
         - oidfed.received-trust-marks.list
         - oidfed.received-trust-marks.remove
+        - oidfed.renewal-settings.get
+        - oidfed.renewal-settings.set
+        - oidfed.renewal-settings.reset
         - oidfed.renewal-schedules.cancel
         - oidfed.renewal-schedules.ensure
         - oidfed.renewal-schedules.get
@@ -1307,6 +1310,12 @@ authz:
           - pattern: oidfed.received-trust-marks.list
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.received-trust-marks.remove
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-settings.get
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-settings.set
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.renewal-settings.reset
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.renewal-schedules.cancel
             any-of: [tenant-admin, platform-admin]

@@ -578,6 +578,18 @@
         "tenant-admin",
         "platform-admin"
       ],
+      "oidfed.renewal-settings.get": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.renewal-settings.set": [
+        "tenant-admin",
+        "platform-admin"
+      ],
+      "oidfed.renewal-settings.reset": [
+        "tenant-admin",
+        "platform-admin"
+      ],
       "oidfed.renewal-schedules.cancel": [
         "tenant-admin",
         "platform-admin"
