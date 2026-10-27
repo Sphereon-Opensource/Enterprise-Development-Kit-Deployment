@@ -229,6 +229,9 @@ ${env:{{ include "edk-enterprise.serviceIdentity.clientSecretEnvName" . }}}
 false
 {{- else if eq $row.kind "auxiliary-client" -}}
 {{- if (index .root.Values.services "tenant-as").enabled }}true{{ else }}false{{ end -}}
+{{- else if eq $row.kind "workload" -}}
+{{- /* The platform's own outgoing identity (platform-service). */ -}}
+{{- if .root.Values.serviceIdentity.internalClientExistingSecret }}true{{ else }}false{{ end -}}
 {{- else }}false{{ end -}}
 {{- else }}false{{ end -}}
 {{- end -}}

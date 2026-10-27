@@ -58,6 +58,8 @@ data:
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           {{- end }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+          # The platform's own client (routed customer-KEK and KMS calls).
+          - {{ index .Values.serviceIdentity.serviceIds "platform" | quote }}
           {{- if (index .Values.services "wallet-interaction").enabled }}
           - {{ index .Values.serviceIdentity.serviceIds "wallet-interaction" | quote }}
           {{- end }}
@@ -66,6 +68,7 @@ data:
           {{- end }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "platform" }}]": {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
           {{- if (index .Values.services "did").enabled }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           {{- end }}

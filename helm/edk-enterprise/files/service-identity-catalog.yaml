@@ -4,11 +4,14 @@ schemaVersion: 1
 roles:
   platform:
     kind: workload
-    clientId: null
+    clientId: platform-service
     serviceId: service-platform
     receiverAudience: enterprise-platform
     defaultStsAudience: null
-    extraStsAudiences: []
+    # The invitation hook hosts for the platform tenant (tenant-as-service does the same for every other tenant).
+    extraStsAudiences:
+      - issuer
+      - verifier
     grpcReceiver: true
     peersIn:
       - tenant-kms
@@ -65,6 +68,7 @@ roles:
       - tenant-kms
       - issuer
       - verifier
+      - service-email
     grpcReceiver: true
     peersIn:
       - platform
@@ -83,6 +87,7 @@ roles:
       - blob
       - issuer
       - verifier
+      - service-email
   did:
     kind: satellite
     clientId: did-service
@@ -219,6 +224,18 @@ roles:
       - tenant-kms
       - wallet-unit
       - tenant-as
+  # Notification host for invitation and onboarding mail. A receiver only: it holds no client of its own.
+  service-email:
+    kind: satellite
+    clientId: null
+    serviceId: service-email
+    receiverAudience: service-email
+    defaultStsAudience: null
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn:
+      - tenant-as
+    peersOut: []
   admin-console:
     kind: bff
     clientId: admin-console-portal-bff
