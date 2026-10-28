@@ -477,6 +477,8 @@ serviceIdentity:
   # `internalClientSecretKey` is retired: Helm fails if that value is still set.
   internalClientExistingSecret: ""
   clientSecretKeys:
+    # The platform's own outgoing identity (routed KMS and invitation hooks).
+    platform: platform-service-client-secret
     tenant-kms: kms-service-client-secret
     tenant-as: tenant-as-service-client-secret
     did: did-service-client-secret
@@ -493,6 +495,7 @@ serviceIdentity:
   # platform AS to mint its east-west service token. These match the platform's
   # registered internal clients.
   clientIds:
+    platform: platform-service
     tenant-kms: kms-service
     tenant-as: tenant-as-service
     did: did-service
@@ -508,6 +511,7 @@ serviceIdentity:
   # Local workload labels used to select credentials and configure the binding
   # to each platform-issued JWT client id. They are never sent as identity headers.
   serviceIds:
+    platform: service-platform
     tenant-kms: service-crypto
     tenant-as: service-tenant-as
     did: service-data

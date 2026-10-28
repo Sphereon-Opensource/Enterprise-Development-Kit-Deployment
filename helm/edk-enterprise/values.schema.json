@@ -684,6 +684,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "platform": { "type": "string", "minLength": 1 },
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
             "did": { "type": "string", "minLength": 1 },
@@ -702,6 +703,7 @@
           "additionalProperties": true,
           "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction", "wallet-onboarding"],
           "properties": {
+            "platform": { "type": "string", "minLength": 1 },
             "as-signing-management": { "type": "string", "minLength": 1 },
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
@@ -719,6 +721,7 @@
           "additionalProperties": true,
           "required": ["tenant-kms", "tenant-as", "did", "blob", "issuer", "verifier", "wallet-unit", "wallet-interaction", "wallet-onboarding"],
           "properties": {
+            "platform": { "type": "string", "minLength": 1 },
             "tenant-kms": { "type": "string", "minLength": 1 },
             "tenant-as": { "type": "string", "minLength": 1 },
             "did": { "type": "string", "minLength": 1 },

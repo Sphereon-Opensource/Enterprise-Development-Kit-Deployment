@@ -4,7 +4,7 @@ schemaVersion: 1
 roles:
   platform:
     kind: workload
-    clientId: null
+    clientId: platform-service
     serviceId: service-platform
     receiverAudience: enterprise-platform
     defaultStsAudience: null
@@ -63,7 +63,10 @@ roles:
     defaultStsAudience: platform
     extraStsAudiences:
       - tenant-kms
-    grpcReceiver: false
+      - issuer
+      - verifier
+      - service-email
+    grpcReceiver: true
     peersIn:
       - platform
       - tenant-kms
@@ -71,6 +74,7 @@ roles:
       - blob
       - issuer
       - verifier
+      - wallet-onboarding
       - admin-console-tenant
       - federation-console
       - federation-console-tenant
@@ -78,6 +82,9 @@ roles:
       - platform
       - tenant-kms
       - blob
+      - issuer
+      - verifier
+      - service-email
   did:
     kind: satellite
     clientId: did-service
@@ -106,9 +113,10 @@ roles:
       - tenant-kms
       - did
       - tenant-as
-    grpcReceiver: false
+    grpcReceiver: true
     peersIn:
       - platform
+      - tenant-as
       - admin-console
       - admin-console-tenant
     peersOut:
@@ -124,9 +132,11 @@ roles:
     defaultStsAudience: platform
     extraStsAudiences:
       - tenant-kms
-    grpcReceiver: false
+      - tenant-as
+    grpcReceiver: true
     peersIn:
       - platform
+      - tenant-as
       - admin-console
       - admin-console-tenant
     peersOut:
@@ -199,6 +209,7 @@ roles:
     extraStsAudiences:
       - tenant-kms
       - wallet-unit
+      - tenant-as
     grpcReceiver: true
     peersIn:
       - platform
@@ -209,6 +220,19 @@ roles:
       - platform
       - tenant-kms
       - wallet-unit
+      - tenant-as
+  # Notification host for invitation and onboarding mail. A receiver only: it holds no client of its own.
+  service-email:
+    kind: satellite
+    clientId: null
+    serviceId: service-email
+    receiverAudience: service-email
+    defaultStsAudience: null
+    extraStsAudiences: []
+    grpcReceiver: false
+    peersIn:
+      - tenant-as
+    peersOut: []
   admin-console:
     kind: bff
     clientId: admin-console-portal-bff

@@ -273,11 +273,13 @@ data:
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
     # Catalog write permissions: tenant and platform administrators hold catalog.manage and catalog.publish.
     authz:
       policy:
@@ -290,6 +292,12 @@ data:
                 any-of: [tenant-admin, platform-admin]
               - pattern: catalog.publish
                 any-of: [tenant-admin, platform-admin]
+    # Hook commands (invitation-handler.*) are accepted only from the invitation owner, tenant-AS. The caller's token
+    # is for this host's audience.
+    invitation:
+      handler-host:
+        allowed-workloads: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") | quote }}
     applications:
       admin-console:
         public-base-path: /admin-console
@@ -310,6 +318,7 @@ data:
             password: ${env:EDK_KEYSTORE_PASSWORD}
             path: "{tempDir}/edk-verify-keystore.p12"
     transport:
+      served-commands: "invitation-handler.*"
       routing:
         configScope: APP
         modules:
@@ -438,11 +447,19 @@ data:
           - {{ index .Values.serviceIdentity.serviceIds "did" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+    # Hook commands (invitation-handler.*) are accepted only from the invitation owner, tenant-AS. The caller's token
+    # is for this host's audience.
+    invitation:
+      handler-host:
+        allowed-workloads: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+        audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") | quote }}
     applications:
       admin-console:
         public-base-path: /admin-console
@@ -459,6 +476,7 @@ data:
             password: ${env:EDK_KEYSTORE_PASSWORD}
             path: "{tempDir}/edk-verify-keystore.p12"
     transport:
+      served-commands: "invitation-handler.*"
       routing:
         # The verifier is a route-only satellite. Keep its tenant-KMS and trust
         # destinations fixed by deployment configuration so tenant/principal

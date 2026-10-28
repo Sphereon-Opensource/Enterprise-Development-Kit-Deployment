@@ -88,16 +88,16 @@ data:
         provisioning-client-id: platform-operator-cli
       {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "tenant-kms").enabled }}
       service-identity:
-        # The platform uses the tenant-bound KMS client registered during
-        # onboarding when routed customer KEK commands target tenant-KMS.
+        # The platform uses its own tenant-bound client (platform-service) registered during
+        # onboarding for every outgoing service call: routed customer KEK commands to tenant-KMS.
         token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
         # The endpoint above is the in-cluster east-west address; the destination
         # preauthorizer approves plain http only on this explicit opt-in.
         token-endpoint-allow-http: true
         token-endpoint-source: configured
-        active-as-client-role: kms
-        client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
-        client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "tenant-kms" }}
+        active-as-client-role: platform
+        client-id: {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
+        client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "platform" }}
         tenant-bound-client-id: true
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
         # Routed KMS commands address the tenant-KMS service, so the minted access token may
@@ -347,6 +347,18 @@ data:
                 audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
               {{- end }}
             {{- end }}
+            platform:
+              client-id: {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "platform" }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
+              # Always rendered: the platform's own bootstrap token. It is deliberately not in the internal-resolution
+              # actors, which would widen secret.value.resolve.
+              token-exchange:
+                mode: secret-bootstrap
+                audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+                self: "true"
             kms:
               client-id: {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "tenant-kms" }}
@@ -409,7 +421,7 @@ data:
               {{- if has (index .Values.serviceIdentity.clientIds "tenant-as") $secretBootstrapActors }}
               token-exchange:
                 mode: secret-bootstrap
-                audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+                audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") }}{{ if (index .Values.services "issuer").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") }}{{ end }}{{ if (index .Values.services "verifier").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") }}{{ end }}"
               {{- end }}
             {{- if (index .Values.services "wallet-unit").enabled }}
             wallet-unit:
@@ -826,6 +838,14 @@ data:
         # externally provisioned keys leaves it unset and registration fails closed instead.
         signing-key:
           auto-generate: true
+        {{- if .Values.serviceIdentity.internalClientExistingSecret }}
+        internal-clients:
+          additional:
+            # The platform's own outgoing identity, registered per tenant like the built-in roles.
+            platform:
+              client-id: {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
+              allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
+        {{- end }}
     {{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "tenant-kms").enabled }}
     # AUTHORITY typed credentials are provisioned per tenant; no Kubernetes client secret is rendered.
     oidfed:
@@ -867,6 +887,12 @@ data:
       tenant-verifier:
         base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "verifier")) ((index .Values.services "verifier").restPort) | quote }}
       {{- end }}
+    # Invitation owner of the platform tenant. Every other tenant is owned by tenant-AS. Callers are default deny; keys are
+    # the callers' server.service-identity.client-id values.
+    invitation:
+      owner:
+        serves-platform-tenant: true
+      workflow-workload: "workflow-service"
     # License trust anchor and recipient binding. The platform is the local
     # licensing authority; it trusts the installed license bundle's root CA via
     # this path, and decrypts the license envelope with the recipient key it
