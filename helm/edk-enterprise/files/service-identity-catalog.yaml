@@ -8,10 +8,7 @@ roles:
     serviceId: service-platform
     receiverAudience: enterprise-platform
     defaultStsAudience: null
-    # The invitation hook hosts for the platform tenant (tenant-as-service does the same for every other tenant).
-    extraStsAudiences:
-      - issuer
-      - verifier
+    extraStsAudiences: []
     grpcReceiver: true
     peersIn:
       - tenant-kms

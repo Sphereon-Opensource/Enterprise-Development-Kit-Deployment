@@ -274,14 +274,12 @@ data:
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
-          - {{ index .Values.serviceIdentity.serviceIds "platform" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
-          "[{{ index .Values.serviceIdentity.serviceIds "platform" }}]": {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
     # Catalog write permissions: tenant and platform administrators hold catalog.manage and catalog.publish.
     authz:
       policy:
@@ -294,11 +292,11 @@ data:
                 any-of: [tenant-admin, platform-admin]
               - pattern: catalog.publish
                 any-of: [tenant-admin, platform-admin]
-    # Hook commands (invitation-handler.*) are accepted only from the invitation owners: tenant-AS for every
-    # tenant but the platform, the platform for the platform tenant. The caller's token is for this host's audience.
+    # Hook commands (invitation-handler.*) are accepted only from the invitation owner, tenant-AS. The caller's token
+    # is for this host's audience.
     invitation:
       handler-host:
-        allowed-workloads: "{{ index .Values.serviceIdentity.clientIds "tenant-as" }},{{ index .Values.serviceIdentity.clientIds "platform" }}"
+        allowed-workloads: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") | quote }}
     applications:
       admin-console:
@@ -450,19 +448,17 @@ data:
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
-          - {{ index .Values.serviceIdentity.serviceIds "platform" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
-          "[{{ index .Values.serviceIdentity.serviceIds "platform" }}]": {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
-    # Hook commands (invitation-handler.*) are accepted only from the invitation owners: tenant-AS for every
-    # tenant but the platform, the platform for the platform tenant. The caller's token is for this host's audience.
+    # Hook commands (invitation-handler.*) are accepted only from the invitation owner, tenant-AS. The caller's token
+    # is for this host's audience.
     invitation:
       handler-host:
-        allowed-workloads: "{{ index .Values.serviceIdentity.clientIds "tenant-as" }},{{ index .Values.serviceIdentity.clientIds "platform" }}"
+        allowed-workloads: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") | quote }}
     applications:
       admin-console:

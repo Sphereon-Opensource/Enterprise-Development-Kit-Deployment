@@ -89,8 +89,7 @@ data:
       {{- if and .Values.serviceIdentity.internalClientExistingSecret (index .Values.services "tenant-kms").enabled }}
       service-identity:
         # The platform uses its own tenant-bound client (platform-service) registered during
-        # onboarding for every outgoing service call: routed customer KEK commands to
-        # tenant-KMS and the invitation hooks of the platform tenant.
+        # onboarding for every outgoing service call: routed customer KEK commands to tenant-KMS.
         token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
         # The endpoint above is the in-cluster east-west address; the destination
         # preauthorizer approves plain http only on this explicit opt-in.
@@ -103,7 +102,7 @@ data:
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
         # Routed KMS commands address the tenant-KMS service, so the minted access token may
         # name it; any audience outside this list is refused before a secret is leased.
-        allowed-audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") }}{{ if (index .Values.services "issuer").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") }}{{ end }}{{ if (index .Values.services "verifier").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") }}{{ end }}"
+        allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
       {{- end }}
     cors:
       origins: {{ include "edk-enterprise.browserCorsOrigins" . | quote }}
@@ -353,7 +352,7 @@ data:
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "platform" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
-              allowed-access-token-audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") }}{{ if (index .Values.services "issuer").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") }}{{ end }}{{ if (index .Values.services "verifier").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") }}{{ end }}"
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
               # Always rendered: the platform's own bootstrap token. It is deliberately not in the internal-resolution
               # actors, which would widen secret.value.resolve.
               token-exchange:
@@ -699,30 +698,6 @@ data:
                 transport: HTTP
                 endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) (index .Values.services "tenant-as").restPort | quote }}
           {{- end }}
-          {{- if or (index .Values.services "issuer").enabled (index .Values.services "verifier").enabled }}
-          # Hooks of actions whose handler lives in another service: invitation-handler.<action>.<hook>. The platform
-          # owns the platform tenant's invitations and calls each host with its own service token for that host only.
-          "[invitation-handler]":
-            services:
-              {{- if (index .Values.services "issuer").enabled }}
-              "[credential-issuance]":
-                target: SERVER
-                transport: GRPC
-                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "issuer")) .Values.grpc.port | quote }}
-                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") | quote }}
-                preferServiceTokenOverSessionBearer: true
-                timeoutMs: 15000
-              {{- end }}
-              {{- if (index .Values.services "verifier").enabled }}
-              "[credential-verification]":
-                target: SERVER
-                transport: GRPC
-                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "verifier")) .Values.grpc.port | quote }}
-                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") | quote }}
-                preferServiceTokenOverSessionBearer: true
-                timeoutMs: 15000
-              {{- end }}
-          {{- end }}
     {{- end }}
     # First-boot operator owner and installation identity for the control-plane.
     app:
@@ -869,7 +844,7 @@ data:
             # The platform's own outgoing identity, registered per tenant like the built-in roles.
             platform:
               client-id: {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
-              allowed-audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") }}{{ if (index .Values.services "issuer").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") }}{{ end }}{{ if (index .Values.services "verifier").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") }}{{ end }}"
+              allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
         {{- end }}
     {{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "tenant-kms").enabled }}
     # AUTHORITY typed credentials are provisioned per tenant; no Kubernetes client secret is rendered.
@@ -917,19 +892,7 @@ data:
     invitation:
       owner:
         serves-platform-tenant: true
-      handlers:
-        remote-actions: "credential.issuance,credential.verification"
       workflow-workload: "workflow-service"
-      callers:
-        "[{{ index .Values.serviceIdentity.clientIds "verifier" }}]":
-          actions: "credential.verification"
-          operations: "mint,create-one,get,resolve,redeem"
-        "[{{ index .Values.serviceIdentity.clientIds "issuer" }}]":
-          actions: "credential.issuance"
-          operations: "mint,create-one,create-batch,get,resolve,redeem"
-        "[workflow-service]":
-          actions: "credential.issuance,credential.verification"
-          operations: "create-one,create-batch,resend,cancel,get,list"
     # License trust anchor and recipient binding. The platform is the local
     # licensing authority; it trusts the installed license bundle's root CA via
     # this path, and decrypts the license envelope with the recipient key it
