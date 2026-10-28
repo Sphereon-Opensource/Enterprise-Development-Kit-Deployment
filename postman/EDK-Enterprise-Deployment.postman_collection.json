@@ -2311,8 +2311,65 @@
         },
         {
           "name": "Status lists",
-          "description": "Status lists publish the revocation state of issued credentials. Credential configurations point to one by its `correlationId`, which is also the last segment of its public URL.",
+          "description": "Status lists publish revocation and suspension state. Credential configurations point to one by its `correlationId`, which is also the last segment of its public URL.",
           "item": [
+            {
+              "name": "0. List credential issuers",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "if ([200].includes(pm.response.code)) {",
+                      "  const issuers = pm.response.json().items || [];",
+                      "  const defaultPath = '/oid4vci/' + pm.variables.replaceIn('{{tenantSlug}}');",
+                      "  const issuer = issuers.find(i => (i.endpoints || []).some(e => e.pathPrefix === defaultPath)) || issuers.find(i => i.credentialIssuer);",
+                      "  console.log('Issuers: ' + issuers.map(i => (i.displayName || i.id) + ' ' + (i.credentialIssuer || '(no public identifier)')).join(', '));",
+                      "  pm.test('the tenant has an issuer with a public identifier', () => pm.expect(issuer, 'issuer').to.be.an('object'));",
+                      "  pm.collectionVariables.set('issuerId', issuer.id);",
+                      "  pm.collectionVariables.set('credentialIssuer', issuer.credentialIssuer);",
+                      "  console.log('Issuer ' + issuer.id + ' at ' + issuer.credentialIssuer);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/oid4vci/v1/instances",
+                "description": "Uses the tenant's default issuer, served at `/oid4vci/<tenantSlug>`. The other issuers are listed in the console."
+              },
+              "response": []
+            },
+            {
+              "name": "0a. Get the issuer signing selection",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "if ([200].includes(pm.response.code)) {",
+                      "  const configuration = pm.response.json();",
+                      "  pm.collectionVariables.set('signingKmsResourceHandle', configuration.kmsResourceHandle);",
+                      "  pm.collectionVariables.set('signingKeyAlias', configuration.kmsKeyAlias);",
+                      "  pm.collectionVariables.set('signingVerificationMethodId', configuration.signingVerificationMethodId);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid"
+              },
+              "response": []
+            },
             {
               "name": "1. List status lists",
               "event": [
@@ -2327,6 +2384,11 @@
                       "  console.log('Status lists: ' + lists.map(l => l.correlationId + ' ' + l.id).join(', '));",
                       "  const list = lists.find(l => l.correlationId === 'eupid-revocation') || lists[0];",
                       "  if (list) pm.collectionVariables.set('statusListId', list.id);",
+                      "  const bitstring = lists.find(l => l.correlationId === 'customer-bitstring-hosting');",
+                      "  if (bitstring) {",
+                      "    pm.collectionVariables.set('bitstringStatusListId', bitstring.id);",
+                      "    pm.collectionVariables.set('bitstringStatusListUri', bitstring.statusListUri || ('https://' + pm.environment.get('tenantSlug') + '.' + pm.environment.get('baseDomain') + '/public/statuslists/customer-bitstring-hosting'));",
+                      "  }",
                       "}"
                     ]
                   }
@@ -2380,6 +2442,106 @@
                   "type": "noauth"
                 },
                 "description": "What verifiers download. It is a signed token with the compressed bit string."
+              },
+              "response": []
+            },
+            {
+              "name": "4. Create a hosted bitstring status list",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.collectionVariables.get('bitstringStatusListId')) {",
+                      "  console.log('Skipped: customer-bitstring-hosting already exists.');",
+                      "  pm.execution.skipRequest();",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "if ([201].includes(pm.response.code)) {",
+                      "  const list = pm.response.json();",
+                      "  pm.test('the created list is a hosted two-bit VC-JWT list', () => {",
+                      "    pm.expect(list.correlationId).to.eql('customer-bitstring-hosting');",
+                      "    pm.expect(list.spec).to.eql('bitstring_status_list');",
+                      "    pm.expect(list.proofFormat).to.eql('vc+jwt');",
+                      "    pm.expect(list.bitsPerStatus).to.eql(2);",
+                      "    pm.expect(list.purposes).to.have.members(['revocation', 'suspension']);",
+                      "  });",
+                      "  pm.collectionVariables.set('bitstringStatusListId', list.id);",
+                      "  pm.collectionVariables.set('bitstringStatusListUri', list.statusListUri || ('https://' + pm.environment.get('tenantSlug') + '.' + pm.environment.get('baseDomain') + '/public/statuslists/customer-bitstring-hosting'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/statuslist/v1/statuslists",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"correlationId\": \"customer-bitstring-hosting\",\n  \"spec\": \"bitstring_status_list\",\n  \"proofFormat\": \"vc+jwt\",\n  \"hostingMode\": \"hosted\",\n  \"purposes\": [\n    \"revocation\",\n    \"suspension\"\n  ],\n  \"issuer\": \"{{did}}\",\n  \"signingKeyMode\": \"did:web\",\n  \"kmsResourceHandle\": \"{{signingKmsResourceHandle}}\",\n  \"kmsKeyAlias\": \"{{signingKeyAlias}}\",\n  \"signingVerificationMethodId\": \"{{signingVerificationMethodId}}\",\n  \"statusListUri\": \"https://{{tenantSlug}}.{{baseDomain}}/public/statuslists/customer-bitstring-hosting\",\n  \"length\": 131072,\n  \"bitsPerStatus\": 2,\n  \"ttlSeconds\": 300\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Creates a hosted W3C Bitstring Status List Credential using VC-JWT, two bits per entry, and both revocation and suspension purposes. The list request reuses it on later runs."
+              },
+              "response": []
+            },
+            {
+              "name": "5. Fetch the public bitstring status list",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "if ([200].includes(pm.response.code)) {",
+                      "  pm.test('VC-JWT content type', () => pm.expect(pm.response.headers.get('Content-Type').split(';')[0].trim()).to.eql('application/vc+jwt'));",
+                      "  const compact = pm.response.text().trim();",
+                      "  const parts = compact.split('.');",
+                      "  pm.test('hosted bitstring is a compact signed JWT', () => { pm.expect(parts).to.have.length(3); parts.forEach(part => pm.expect(part).to.not.be.empty); });",
+                      "  const payloadSegment = parts[1].replace(/-/g, '+').replace(/_/g, '/');",
+                      "  const payload = JSON.parse(atob(payloadSegment + '='.repeat((4 - payloadSegment.length % 4) % 4)));",
+                      "  const credential = payload.vc || payload;",
+                      "  const subject = credential.credentialSubject || {};",
+                      "  pm.test('credential publishes the bitstring status payload', () => {",
+                      "    pm.expect([].concat(credential.type || [])).to.include('BitstringStatusListCredential');",
+                      "    pm.expect([].concat(subject.type || [])).to.include('BitstringStatusList');",
+                      "    pm.expect(subject.encodedList).to.be.a('string').and.not.empty;",
+                      "    const purposes = [].concat(subject.statusPurpose || []);",
+                      "    pm.expect(purposes.some(purpose => ['revocation', 'suspension'].includes(purpose))).to.be.true;",
+                      "  });",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/public/statuslists/customer-bitstring-hosting",
+                "auth": {
+                  "type": "noauth"
+                },
+                "description": "Unauthenticated verifier fetch of the hosted VC-JWT. Checks the representation and bitstring payload, not only the management record."
               },
               "response": []
             }
@@ -3745,6 +3907,56 @@
                 "method": "GET",
                 "header": [],
                 "url": "https://{{tenantSlug}}.{{baseDomain}}/api/trust-domain/v1/eligibility/OID4VP_VERIFIER/CREDENTIAL_ISSUER_TRUST"
+              },
+              "response": []
+            },
+            {
+              "name": "6. Fetch a hosted mdoc VICAL",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "let skipped = false;",
+                      "for (const key of [\"vicalAnchorId\"]) {",
+                      "  const value = String(pm.variables.replaceIn('{{' + key + '}}') || '').trim();",
+                      "  if (!value || value.startsWith('{{')) {",
+                      "    console.log('Skipped: set ' + key + ' in your environment to fetch an active hosted mdoc VICAL.');",
+                      "    pm.execution.skipRequest();",
+                      "    skipped = true;",
+                      "    break;",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "if ([200].includes(pm.response.code)) {",
+                      "  const contentType = pm.response.headers.get('Content-Type') || '';",
+                      "  const etag = pm.response.headers.get('ETag') || '';",
+                      "  pm.test('VICAL is served as CBOR', () => pm.expect(contentType.toLowerCase()).to.include('application/cbor'));",
+                      "  pm.test('VICAL has a SHA-256 content ETag', () => pm.expect(etag).to.match(/^\"sha-256:[0-9a-f]{64}\"$/));",
+                      "  pm.test('VICAL is revalidated by caches', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-cache, must-revalidate'));",
+                      "  pm.test('VICAL response is not empty', () => pm.expect(pm.response.text().length).to.be.above(0));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/public/trust-domain/v1/domains/{{trustDomainId}}/vicals/{{vicalAnchorId}}/current",
+                "auth": {
+                  "type": "noauth"
+                },
+                "description": "Optional public read of the active, validated VICAL snapshot for an admitted signer anchor. Set vicalAnchorId to the anchor whose VICAL is active. The response is the original CBOR, served without a tenant token."
               },
               "response": []
             }
@@ -5116,7 +5328,7 @@
     },
     {
       "key": "tenantScopedVariables",
-      "value": "tenantId,onboardingCorrelationId,ownerActivationLink,authorizationServerId,serviceClientExists,kmsResourceHandle,kmsProviderId,keyAlias,signature,azureResourceHandle,azureResourceVersion,azureCredentialSecretRef,sharedProviderId,sharedAzureResourceHandle,sharedAzureResourceVersion,sharedAzureCredentialSecretRef,issuerId,credentialIssuer,designId,statusListId,signingKmsResourceHandle,signingKeyAlias,signingVerificationMethodId,employeeBadgeStatusListId,employeeBadgeDesignId,employeeBadgeResourceId,issuanceTemplateId,offerCorrelationId,credentialOfferUri,txCode,txCodeRequired,preAuthorizedCode,walletProxyCredential,eupidCredential,issuerMetadataUrl,credentialEndpoint,nonceEndpoint,walletAuthorizationServer,walletTokenEndpoint,walletAccessToken,credentialIdentifier,cNonce,proofJwt,holderPrivateKey,holderPublicJwk,credentialStatusIndex,credentialStatusListUri,credentialStatusListId,verifierId,employeeBadgeQueryExists,employeeBadgeQueryBound,verificationTemplateId,verificationCorrelationId,requestObjectUri,trustDomainId,walletProxyId,walletClientExists,keycloakServerId,keycloakServerRevision,keycloakServerLifecycle,federationBindingId,federationBindingEnabled,issuerBindingId,euPidAuthorizationServerRevision,issuerState",
+      "value": "tenantId,onboardingCorrelationId,ownerActivationLink,authorizationServerId,serviceClientExists,kmsResourceHandle,kmsProviderId,keyAlias,signature,azureResourceHandle,azureResourceVersion,azureCredentialSecretRef,sharedProviderId,sharedAzureResourceHandle,sharedAzureResourceVersion,sharedAzureCredentialSecretRef,issuerId,credentialIssuer,designId,statusListId,bitstringStatusListId,bitstringStatusListUri,signingKmsResourceHandle,signingKeyAlias,signingVerificationMethodId,employeeBadgeStatusListId,employeeBadgeDesignId,employeeBadgeResourceId,issuanceTemplateId,offerCorrelationId,credentialOfferUri,txCode,txCodeRequired,preAuthorizedCode,walletProxyCredential,eupidCredential,issuerMetadataUrl,credentialEndpoint,nonceEndpoint,walletAuthorizationServer,walletTokenEndpoint,walletAccessToken,credentialIdentifier,cNonce,proofJwt,holderPrivateKey,holderPublicJwk,credentialStatusIndex,credentialStatusListUri,credentialStatusListId,verifierId,employeeBadgeQueryExists,employeeBadgeQueryBound,verificationTemplateId,verificationCorrelationId,requestObjectUri,trustDomainId,vicalAnchorId,walletProxyId,walletClientExists,keycloakServerId,keycloakServerRevision,keycloakServerLifecycle,federationBindingId,federationBindingEnabled,issuerBindingId,euPidAuthorizationServerRevision,issuerState",
       "type": "string",
       "description": "Variables cleared when tenantSlug changes."
     },
@@ -5239,6 +5451,18 @@
       "value": "",
       "type": "string",
       "description": "Status list id read by \"Get a status list\"."
+    },
+    {
+      "key": "bitstringStatusListId",
+      "value": "",
+      "type": "string",
+      "description": "Id of the `customer-bitstring-hosting` bitstring status list."
+    },
+    {
+      "key": "bitstringStatusListUri",
+      "value": "",
+      "type": "string",
+      "description": "Public URI of the hosted `customer-bitstring-hosting` bitstring credential."
     },
     {
       "key": "signingKmsResourceHandle",
@@ -5449,6 +5673,12 @@
       "value": "",
       "type": "string",
       "description": "Trust domain read by the trust domain requests."
+    },
+    {
+      "key": "vicalAnchorId",
+      "value": "",
+      "type": "string",
+      "description": "Anchor id whose active, validated VICAL is hosted at the public route."
     },
     {
       "key": "walletProxyId",

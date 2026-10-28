@@ -81,7 +81,7 @@ client's credentials.
 | Define your own credential | Add an `EmployeeBadge` SD-JWT VC: a status list, a design, and the credential configuration. |
 | Issue credentials | Create offers (from a template, for EuPid, and for EmployeeBadge with a transaction code), receive the credential in a test wallet, and revoke it. |
 | Verify credentials | Create a DCQL query, bind it to the verifier, create an authorization request from a template or a query, and poll its result. |
-| Trust domains | Read the trust domains, anchors and attachments that decide which issuers the verifier accepts. |
+| Trust domains | Read the trust domains, anchors and attachments that decide which issuers the verifier accepts; optionally fetch the active hosted mdoc VICAL without a token. |
 | Keycloak wallet login (optional) | Let wallet users sign in at Keycloak before they receive a credential. |
 
 Each folder starts by listing what exists. The list requests store the ids that later requests
@@ -90,6 +90,11 @@ again. Start a folder at its first request. Postman's console (**View > Show Pos
 shows what each request found or skipped.
 
 Switching `tenantSlug` clears the ids captured for the previous tenant.
+
+To exercise VICAL hosting, set the collection variable `vicalAnchorId` to an anchor with an active,
+validated VICAL snapshot, then run **Trust domains / 6. Fetch a hosted mdoc VICAL**. The request
+uses the public `/public/trust-domain/v1/.../current` route and checks the CBOR media type, snapshot
+ETag, cache policy and response body. It skips itself when no anchor id is set.
 
 ## Issue and receive a credential
 
