@@ -27,7 +27,8 @@ server:
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-platform
+    # The connector vault's keys stay in tenant KMS custody.
+    allowed-audiences: enterprise-platform,enterprise-tenant-kms
 sphereon:
   service:
     id: service-blob
@@ -44,15 +45,33 @@ transport:
         serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: true
         services:
-          key: &blobPlatformKmsGrpcRoute
+          key:
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
-          keys: *blobPlatformKmsGrpcRoute
+            commands:
+              # The connector vault's keys stay in tenant KMS custody; tenant KMS runs each operation.
+              "[kms.key.vault-managed-operation]":
+                target: SERVER
+                transport: GRPC
+                endpoint: grpc://enterprise-tenant-kms:9090
+                serviceTokenAudience: enterprise-tenant-kms
+                preferServiceTokenOverSessionBearer: true
+          keys: &blobPlatformKmsGrpcRoute
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
           signature: *blobPlatformKmsGrpcRoute
           mac: *blobPlatformKmsGrpcRoute
           encryption: *blobPlatformKmsGrpcRoute
           ecdh: *blobPlatformKmsGrpcRoute
+      # Trust domains live on the platform: connector activation and outbound TLS read endpoint trust there.
+      trust:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
       platform:
         target: SERVER
         transport: GRPC
