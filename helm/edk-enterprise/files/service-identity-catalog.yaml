@@ -113,6 +113,7 @@ roles:
       - tenant-kms
       - did
       - tenant-as
+      - business-wallet-runtime
     grpcReceiver: true
     peersIn:
       - platform
@@ -124,6 +125,7 @@ roles:
       - tenant-as
       - platform
       - wallet-interaction
+      - business-wallet-runtime
   verifier:
     kind: satellite
     clientId: verifier-service
@@ -306,6 +308,7 @@ roles:
       - wallet-unit
       - wallet-interaction
       - wallet-onboarding
+      - issuer
     peersOut:
       - platform
       - wallet-unit
