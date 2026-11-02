@@ -70,6 +70,7 @@ security:
       - service-data
       - service-oid4vci
       - service-oid4vp
+      - service-blob
       - service-eidas
       - service-monolith
       - service-tenant-as
@@ -79,6 +80,7 @@ security:
       "[service-data]": did-service
       "[service-oid4vci]": issuer-service
       "[service-oid4vp]": verifier-service
+      "[service-blob]": blob-service
       "[service-tenant-as]": tenant-as-service
 transport:
   grpc:
