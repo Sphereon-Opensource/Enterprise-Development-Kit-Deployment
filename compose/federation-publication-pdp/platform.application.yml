@@ -665,10 +665,11 @@ oauth2:
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_BLOB}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
-          allowed-access-token-audiences: enterprise-blob
+          allowed-access-token-audiences: enterprise-blob,enterprise-tenant-kms
           token-exchange:
             mode: secret-bootstrap
-            audiences: enterprise-platform
+            # The connector vault runs its keys through tenant KMS.
+            audiences: enterprise-platform,enterprise-tenant-kms
         verifier:
           client-id: verifier-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
