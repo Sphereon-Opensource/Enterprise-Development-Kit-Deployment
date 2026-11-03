@@ -39,7 +39,8 @@ server:
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-tenant-kms
+    # The hosted login page reads the tenant's brand assets from the blob service.
+    allowed-audiences: enterprise-tenant-kms,enterprise-blob
 sphereon:
   telemetry:
     enabled: true
@@ -119,14 +120,16 @@ transport:
           mac: *tenantKmsGrpcRoute
           encryption: *tenantKmsGrpcRoute
           ecdh: *tenantKmsGrpcRoute
+      # Tenant branding and the asset library belong to the blob service: the hosted login page reads the
+      # tenant's brand assets (its logos) from that owner, the same store the admin console uploads to.
       assets:
-        serviceTokenAudience: enterprise-platform
+        serviceTokenAudience: enterprise-blob
         preferServiceTokenOverSessionBearer: false
         services:
           content:
             target: SERVER
             transport: GRPC
-            endpoint: grpc://enterprise-platform:9090
+            endpoint: grpc://enterprise-blob:9090
       platform:
         target: SERVER
         transport: GRPC

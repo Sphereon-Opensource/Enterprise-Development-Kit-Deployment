@@ -392,7 +392,9 @@ services:
       EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_BLOB:?Run scripts/generate-compose-secrets.mjs}
       EXTERNAL_BASE_URL: http://enterprise-blob:8080
       REST_ENABLED: "true"
-      GRPC_ENABLED: "false"
+      # The tenant AS reads the tenant's brand assets for its hosted login page over gRPC.
+      GRPC_ENABLED: "true"
+      GRPC_PORT: "9090"
     volumes:
       - ./config/blob.application.yml:/app/config/application.yml:ro
       - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro

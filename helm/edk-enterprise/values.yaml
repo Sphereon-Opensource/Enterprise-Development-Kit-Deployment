@@ -508,6 +508,9 @@ serviceIdentity:
     wallet-unit: wallet-unit-service
     wallet-interaction: wallet-interaction-service
     wallet-onboarding: wallet-onboarding-service
+    # The enterprise portal is deployed beside this release, not by it. The blob
+    # service binds this client id to admit its branding and asset reads.
+    portal: portal-service
   # Local workload labels used to select credentials and configure the binding
   # to each platform-issued JWT client id. They are never sent as identity headers.
   serviceIds:
@@ -521,6 +524,7 @@ serviceIdentity:
     wallet-unit: service-wallet-unit
     wallet-interaction: service-wallet-interaction
     wallet-onboarding: service-wallet-onboarding
+    portal: service-portal
   # Receiver and STS audiences come from files/service-identity-catalog.yaml
   # (vendored with VDX Helm and the frontend). They are not Helm values and
   # there is no serviceIdentity.audiences override surface.

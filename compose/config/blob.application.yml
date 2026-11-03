@@ -199,6 +199,14 @@ security:
   "profiles.default-required-aal": "aal1"
   "profiles.default-cross-border-policy": "allow"
   "commands.default-required-aal": "aal1"
+  # East-west callers over gRPC: the tenant AS, whose hosted login page reads the tenant's brand assets
+  # (assets.content.get). That read matches no rule below, so the roles engine admits it; every branding write
+  # still requires an administrator.
+  workload-trust-policy:
+    trusted_service_ids:
+      - service-tenant-as
+    service_client_bindings:
+      "[service-tenant-as]": tenant-as-service
 
 # Tenant branding and asset-library writes require a tenant or platform administrator.
 authz:
@@ -208,6 +216,21 @@ authz:
       blob-roles:
         type: roles
         role-rules:
+          # The theme definition, seed and cache commands behind the REST routes are callable east-west too.
+          - pattern: theme.definitions.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.definitions.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.definitions.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.definitions.undo
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.definitions.restore
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.seed.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.cache.purge
+            any-of: [tenant-admin, platform-admin]
           - pattern: theme.rest-brand.set
             any-of: [tenant-admin, platform-admin]
           - pattern: theme.rest-brand.set-application

@@ -684,7 +684,8 @@ oauth2:
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
-          allowed-access-token-audiences: enterprise-tenant-kms
+          # The hosted login page reads the tenant's brand assets from the blob service.
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-blob
           token-exchange:
             mode: secret-bootstrap
             audiences: enterprise-platform
