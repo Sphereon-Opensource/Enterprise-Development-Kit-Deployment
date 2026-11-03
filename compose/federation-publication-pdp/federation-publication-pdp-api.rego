@@ -6,9 +6,14 @@ import rego.v1
 # are unavailable; policy and immutable data are supplied by read-only mounts.
 default allow = false
 
+# The policy engine asks for the decision member (`allow`), and for `reasons` on a deny, rather than the whole package.
 allow if {
     input.method == "POST"
-    input.path == ["v1", "data", "sphereon", "authz"]
+    input.path in {
+        ["v1", "data", "sphereon", "authz"],
+        ["v1", "data", "sphereon", "authz", "allow"],
+        ["v1", "data", "sphereon", "authz", "reasons"],
+    }
 }
 
 allow if {

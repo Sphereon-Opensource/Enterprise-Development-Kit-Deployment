@@ -148,6 +148,19 @@ data:
             endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
             serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: false
+    # East-west callers over gRPC: the tenant AS, whose hosted login page reads the tenant's brand
+    # assets (assets.content.get), and the enterprise portal, which reads the tenant branding and brand
+    # assets a publication captures (theme.tenant.resolve, theme.applications.get,
+    # theme.features.resolve, assets.content.get). Those reads match no blob role rule below, so the
+    # roles engine admits them; every branding write still requires an administrator.
+    security:
+      workload-trust-policy:
+        trusted_service_ids:
+          - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+          - {{ index .Values.serviceIdentity.serviceIds "portal" | quote }}
+        service_client_bindings:
+          "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "portal" }}]": {{ index .Values.serviceIdentity.clientIds "portal" | quote }}
     connector:
       vault:
         # The dedicated blob workload owns the encrypted vault repository for

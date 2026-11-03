@@ -63,7 +63,8 @@ data:
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
-        allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
+        # The hosted login page reads the tenant's brand assets from the blob service.
+        allowed-audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") }}{{ if (index .Values.services "blob").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob") }}{{ end }}"
     {{- end }}
     security:
       workload-trust-policy:
@@ -209,6 +210,19 @@ data:
                     target: SERVER
                     transport: GRPC
                     endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+          {{- if (index .Values.services "blob").enabled }}
+          # Tenant branding and the asset library belong to the blob service: the hosted login page
+          # reads the tenant's brand assets (its logos) from that owner, the same store the admin
+          # console uploads to.
+          assets:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob") | quote }}
+            preferServiceTokenOverSessionBearer: false
+            services:
+              content:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "blob")) .Values.grpc.port | quote }}
+          {{- end }}
     # The AS holds no application-tenant bootstrap of its own; the platform owns the
     # control-plane ceremony, so the AS skips it on startup.
     application:
