@@ -216,6 +216,21 @@ authz:
       blob-roles:
         type: roles
         role-rules:
+          # The theme definition, seed and cache commands behind the REST routes are callable east-west too.
+          - pattern: theme.definitions.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.definitions.update
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.definitions.delete
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.definitions.undo
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.definitions.restore
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.seed.create
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.cache.purge
+            any-of: [tenant-admin, platform-admin]
           - pattern: theme.rest-brand.set
             any-of: [tenant-admin, platform-admin]
           - pattern: theme.rest-brand.set-application
