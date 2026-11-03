@@ -97,6 +97,7 @@ roles:
     grpcReceiver: false
     peersIn:
       - platform
+      - issuer
       - verifier
       - admin-console
       - admin-console-tenant
@@ -124,6 +125,7 @@ roles:
     peersOut:
       - tenant-kms
       - tenant-as
+      - did
       - platform
       - wallet-interaction
       - business-wallet-runtime

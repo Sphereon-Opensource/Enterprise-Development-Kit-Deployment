@@ -153,6 +153,20 @@ transport:
         endpoint: http://enterprise-tenant-as:18083
         serviceTokenAudience: enterprise-tenant-as
         preferServiceTokenOverSessionBearer: true
+      # In DID signing the issuer derives the credential signing key from the selected assertion method, which only
+      # the tenant DID registry on enterprise-did knows. Only that one read is routed; every other did-manager command
+      # of this service stays local.
+      "[did-manager]":
+        serviceTokenAudience: enterprise-tenant-did
+        preferServiceTokenOverSessionBearer: true
+        services:
+          "[verification-methods]":
+            commands:
+              "[did-manager.verification-methods.resolve-assertion-key]":
+                target: SERVER
+                transport: HTTP
+                endpoint: http://enterprise-did:8080
+                timeoutMs: 10000
       platform:
         target: SERVER
         transport: GRPC

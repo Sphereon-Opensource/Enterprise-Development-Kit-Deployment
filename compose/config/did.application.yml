@@ -83,6 +83,8 @@ security:
       "[service-data]": did-service
       "[service-oid4vci]": issuer-service
       "[service-oid4vp]": verifier-service
+      # A platform operator's DID-mode credential configuration save reads the assertion-method key.
+      "[service-platform]": platform-service
 transport:
   grpc:
     enabled: false
