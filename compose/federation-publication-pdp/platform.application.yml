@@ -47,7 +47,7 @@ server:
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-tenant-kms
+    allowed-audiences: enterprise-tenant-kms,enterprise-tenant-did
 # Browser CORS allow-list for the setup/admin UI and optional documentation sites.
 # ONBOARDING_UI_BASE_URL is the platform operator UI origin. EDK_DOCS_SITE_ORIGINS is a
 # comma-separated list of interactive docs origins (Sphereon hosted docs, local lab,
@@ -208,6 +208,20 @@ transport:
             target: SERVER
             transport: HTTP
             endpoint: http://enterprise-tenant-as:18083
+      # DID signing: a platform operator who saves a tenant credential configuration in DID mode gets the
+      # signing key derived from the selected assertion method, which only the tenant DID registry on
+      # enterprise-did knows. Only that one read is routed; the platform's own DID commands stay local.
+      "[did-manager]":
+        serviceTokenAudience: enterprise-tenant-did
+        preferServiceTokenOverSessionBearer: true
+        services:
+          "[verification-methods]":
+            commands:
+              "[did-manager.verification-methods.resolve-assertion-key]":
+                target: SERVER
+                transport: HTTP
+                endpoint: http://enterprise-did:8080
+                timeoutMs: 10000
 database:
   app:
     default:

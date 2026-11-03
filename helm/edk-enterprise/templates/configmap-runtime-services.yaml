@@ -47,6 +47,8 @@ data:
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
+          # A platform operator's DID-mode credential configuration save reads the assertion-method key.
+          "[{{ index .Values.serviceIdentity.serviceIds "platform" }}]": {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
     did:
       persistence:
         type: postgresql
@@ -386,6 +388,19 @@ data:
             endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
             serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-as") | quote }}
             preferServiceTokenOverSessionBearer: true
+          # In DID signing the issuer derives the credential signing key from the selected assertion method, which only
+          # the tenant DID registry knows. Only that one read is routed; every other did-manager command stays local.
+          "[did-manager]":
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "did") | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              "[verification-methods]":
+                commands:
+                  "[did-manager.verification-methods.resolve-assertion-key]":
+                    target: SERVER
+                    transport: HTTP
+                    endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
+                    timeoutMs: 10000
           trust:
             target: SERVER
             transport: GRPC
