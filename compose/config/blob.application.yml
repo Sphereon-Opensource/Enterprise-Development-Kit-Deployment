@@ -205,8 +205,11 @@ security:
   workload-trust-policy:
     trusted_service_ids:
       - service-tenant-as
+      # The branding context of a rendered mail (theme.branding.resolve). This platform acts as kms-service.
+      - service-platform
     service_client_bindings:
       "[service-tenant-as]": tenant-as-service
+      "[service-platform]": kms-service
 
 # Tenant branding and asset-library writes require a tenant or platform administrator.
 authz:

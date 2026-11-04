@@ -160,6 +160,7 @@ roles:
       - blob
     grpcReceiver: true
     peersIn:
+      - platform
       - tenant-as
       - admin-console
       - admin-console-tenant

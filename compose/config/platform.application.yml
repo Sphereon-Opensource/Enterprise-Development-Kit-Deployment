@@ -47,7 +47,8 @@ server:
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-tenant-kms,enterprise-tenant-did
+    # enterprise-blob: the branding context of a rendered mail.
+    allowed-audiences: enterprise-tenant-kms,enterprise-tenant-did,enterprise-blob
 # Browser CORS allow-list for the setup/admin UI and optional documentation sites.
 # ONBOARDING_UI_BASE_URL is the platform operator UI origin. EDK_DOCS_SITE_ORIGINS is a
 # comma-separated list of interactive docs origins (Sphereon hosted docs, local lab,
@@ -135,6 +136,16 @@ transport:
     port: 9090
   routing:
     modules:
+      # Tenant branding belongs to the blob service: a preview or test send reads the branding context there. The
+      # platform asks as its own workload, and the read names its tenant.
+      theme:
+        services:
+          branding:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-blob:9090
+            serviceTokenAudience: enterprise-blob
+            preferServiceTokenOverSessionBearer: true
       # Deployment coordinates only. Tenant provisioning selects SERVER for
       # customer-tenant sessions; platform/anonymous sessions remain LOCAL.
       kms:
@@ -657,7 +668,7 @@ oauth2:
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_KMS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
-          allowed-access-token-audiences: enterprise-tenant-kms
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-blob
           token-exchange:
             mode: secret-bootstrap
             audiences: enterprise-platform
