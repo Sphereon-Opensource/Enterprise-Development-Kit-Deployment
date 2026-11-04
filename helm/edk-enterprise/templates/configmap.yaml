@@ -103,7 +103,7 @@ data:
         # Routed KMS commands address the tenant-KMS service and the DID-signing key read addresses
         # the DID service, so the minted access token may name them; any audience outside this list
         # is refused before a secret is leased.
-        allowed-audiences: {{ printf "%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) | quote }}
+        allowed-audiences: {{ printf "%s,%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob")) | quote }}
       {{- end }}
     cors:
       origins: {{ include "edk-enterprise.browserCorsOrigins" . | quote }}
@@ -353,7 +353,7 @@ data:
               client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" "platform" }}
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               default-access-token-audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
-              allowed-access-token-audiences: {{ printf "%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) | quote }}
+              allowed-access-token-audiences: {{ printf "%s,%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob")) | quote }}
               # Always rendered: the platform's own bootstrap token. It is deliberately not in the internal-resolution
               # actors, which would widen secret.value.resolve.
               token-exchange:
@@ -622,6 +622,17 @@ data:
     transport:
       routing:
         modules:
+          {{- if (index .Values.services "blob").enabled }}
+          # Tenant branding belongs to the blob service: a preview or test send reads the branding context there.
+          theme:
+            services:
+              branding:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "blob")) .Values.grpc.port | quote }}
+                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob") | quote }}
+                preferServiceTokenOverSessionBearer: true
+          {{- end }}
           {{- if (index .Values.services "tenant-kms").enabled }}
           # Deployment coordinates only. Tenant provisioning selects SERVER for
           # customer-tenant sessions; platform/anonymous sessions remain LOCAL.

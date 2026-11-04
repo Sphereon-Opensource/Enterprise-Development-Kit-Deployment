@@ -160,9 +160,12 @@ data:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "portal" | quote }}
+          # The branding context of a rendered mail (theme.branding.resolve).
+          - {{ index .Values.serviceIdentity.serviceIds "platform" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "portal" }}]": {{ index .Values.serviceIdentity.clientIds "portal" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "platform" }}]": {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
     connector:
       vault:
         # The dedicated blob workload owns the encrypted vault repository for
