@@ -130,6 +130,15 @@ transport:
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-blob:9090
+      # The connector registry runs on enterprise-blob. The invitation gate at mint resolves attached bindings and
+      # runs recipient and claim lookups there.
+      connector:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-blob:9090
+        serviceTokenAudience: enterprise-blob
+        preferServiceTokenOverSessionBearer: true
+        timeoutMs: 15000
       platform:
         target: SERVER
         transport: GRPC

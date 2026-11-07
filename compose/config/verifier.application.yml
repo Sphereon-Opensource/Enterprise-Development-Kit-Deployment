@@ -24,11 +24,14 @@ server:
     token-endpoint-source: active-as
     active-as-token-endpoint: http://enterprise-tenant-as:18083/token
     active-as-client-role: verifier
+    # Operator calls forwarded to the issuer (verification invitation jobs) carry a token delegated for the operator.
+    delegation:
+      enabled: true
     client-id: verifier-service
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-tenant-kms
+    allowed-audiences: enterprise-tenant-kms,enterprise-issuer
 applications:
   admin-console:
     public-base-path: ${env:EDK_ADMIN_CONSOLE_PUBLIC_BASE_PATH:/admin-console}
@@ -86,6 +89,20 @@ transport:
   routing:
     configScope: APP
     modules:
+      # Invitation job commands (invitation-job.service.<command>) route to the issuer, which owns the jobs of every tenant.
+      # The verification submit endpoints of this service call only invitation-job.service.submit-verification, the one
+      # job command the issuer grants this service. The call carries the operator: the operator's bearer is exchanged
+      # (RFC 8693, server.service-identity.delegation) for a token with the issuer audience and this service as actor,
+      # so the issuer authorizes the operator, not this workload.
+      "[invitation-job]":
+        services:
+          service:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-issuer:9090
+            serviceTokenAudience: enterprise-issuer
+            preferServiceTokenOverSessionBearer: false
+            timeoutMs: 30000
       kms:
         serviceTokenAudience: enterprise-tenant-kms
         preferServiceTokenOverSessionBearer: true

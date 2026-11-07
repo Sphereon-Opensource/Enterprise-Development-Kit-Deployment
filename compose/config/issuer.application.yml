@@ -106,6 +106,11 @@ security:
 # engine for catalog.manage (create, update, delete, link, import, validate) and catalog.publish
 # (publish, disable). Tenant and platform administrators hold both; every other command follows the
 # roles engine default and is permitted. Catalog reads are not routed through these rules.
+# Invitation jobs of callers acting for no business wallet (operators, the tenant's API clients) ask the
+# policy engine for invitation-job.<issuance|verification>.<submit|read|send|resolve|cancel|delete|list>
+# on the issuer or verifier instance, and for invitation-job.sources.list. Here tenant and platform
+# administrators hold them on every instance; a deployment that grants an API client named instances
+# uses an OPA engine with the invitation_job grant data (see deploy/docker/policy/opa/README.md).
 authz:
   policy:
     default-engine: issuer-roles
@@ -117,10 +122,19 @@ authz:
             any-of: [tenant-admin, platform-admin]
           - pattern: catalog.publish
             any-of: [tenant-admin, platform-admin]
+          - pattern: invitation-job.issuance.*
+            any-of: [tenant-admin, platform-admin]
+          - pattern: invitation-job.verification.*
+            any-of: [tenant-admin, platform-admin]
+          - pattern: invitation-job.sources.*
+            any-of: [tenant-admin, platform-admin]
 transport:
   grpc:
     enabled: false
     port: 9090
+  # Per-caller command ceilings, on gRPC and HTTP alike: the verifier submits verification jobs only (for an operator,
+  # with a token delegated for that operator); the workflow worker runs the curated job steps only.
+  caller-command-restrictions: '[{"callerId":"verifier-service","tenantScoped":true,"allowedCommands":["invitation-job.service.submit-verification"]},{"callerId":"workflow-service","tenantScoped":true,"allowedCommands":["invitation-job.service.submit","invitation-job.service.get","invitation-job.service.held-rows","invitation-job.service.send","invitation-job.service.resolve","invitation-job.service.cancel"]}]'
   routing:
     configScope: APP
     modules:
@@ -292,6 +306,12 @@ blob:
     designs:
       type: kvstore
       kvStoreId: design-assets
+# Invitation jobs: the in-process sweep delivers due callbacks, reports invitation outcomes, marks abandoned jobs failed
+# and purges expired rosters. It runs as the service workload (server.service-identity.client-id).
+invitation-job:
+  sweep:
+    scheduler:
+      enabled: true
 # Pipeline session payloads are sealed with this master KEK before they reach the
 # KV backend. The Compose setup generates separate base64url keys for each
 # deployment. Keep them with the deployment's other secrets.
