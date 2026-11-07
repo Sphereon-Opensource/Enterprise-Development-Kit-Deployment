@@ -28,7 +28,7 @@ server:
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-tenant-kms
+    allowed-audiences: enterprise-tenant-kms,enterprise-issuer
 applications:
   admin-console:
     public-base-path: ${env:EDK_ADMIN_CONSOLE_PUBLIC_BASE_PATH:/admin-console}
@@ -86,6 +86,17 @@ transport:
   routing:
     configScope: APP
     modules:
+      # Invitation job commands (invitation-job.service.<command>) route to the issuer, which owns the jobs of every tenant.
+      # The verification submit endpoints of this service delegate to them.
+      "[invitation-job]":
+        services:
+          service:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-issuer:9090
+            serviceTokenAudience: enterprise-issuer
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 30000
       kms:
         serviceTokenAudience: enterprise-tenant-kms
         preferServiceTokenOverSessionBearer: true

@@ -50,7 +50,7 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
             commands:
-              # The connector vault's keys stay in tenant KMS custody; tenant KMS runs each operation.
+              # The connector vault keys and the keys of encrypted reusable rosters (tabular rows) stay in tenant KMS custody; tenant KMS runs each operation.
               "[kms.key.vault-managed-operation]":
                 target: SERVER
                 transport: GRPC

@@ -222,6 +222,15 @@ data:
                 target: SERVER
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "blob")) .Values.grpc.port | quote }}
+          # The connector registry runs on the blob service. The invitation gate at mint resolves attached bindings
+          # and runs recipient and claim lookups there.
+          connector:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "blob")) .Values.grpc.port | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob") | quote }}
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
           {{- end }}
     # The AS holds no application-tenant bootstrap of its own; the platform owns the
     # control-plane ceremony, so the AS skips it on startup.

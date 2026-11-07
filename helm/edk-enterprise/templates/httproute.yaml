@@ -781,7 +781,7 @@ spec:
         - path:
             type: PathPrefix
             value: /api/trust-domain/v1
-        {{- range $path := list "/api/audit/v1" "/api/forms/v1" "/api/workflow/v1" "/api/lifecycle/v1" "/api/services/v1" "/api/v1/config" "/api/invitation/v1/invitations" }}
+        {{- range $path := list "/api/audit/v1" "/api/forms/v1" "/api/workflow/v1" "/api/lifecycle/v1" "/api/services/v1" "/api/v1/config" "/api/invitation/v1/invitations" "/api/semanticmapping/v1" }}
         - path:
             type: PathPrefix
             value: {{ $path | quote }}

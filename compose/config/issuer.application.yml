@@ -292,6 +292,12 @@ blob:
     designs:
       type: kvstore
       kvStoreId: design-assets
+# Invitation jobs: the in-process sweep delivers due callbacks, reports invitation outcomes, marks abandoned jobs failed
+# and purges expired rosters. It runs as the service workload (server.service-identity.client-id).
+invitation-job:
+  sweep:
+    scheduler:
+      enabled: true
 # Pipeline session payloads are sealed with this master KEK before they reach the
 # KV backend. The Compose setup generates separate base64url keys for each
 # deployment. Keep them with the deployment's other secrets.

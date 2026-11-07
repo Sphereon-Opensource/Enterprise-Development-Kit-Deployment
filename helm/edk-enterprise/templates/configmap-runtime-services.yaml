@@ -331,6 +331,12 @@ data:
       handler-host:
         allowed-workloads: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") | quote }}
+    # Invitation jobs: the in-process sweep delivers due callbacks, reports invitation outcomes, marks abandoned jobs
+    # failed and purges expired rosters. It runs as the service workload (server.service-identity.client-id).
+    invitation-job:
+      sweep:
+        scheduler:
+          enabled: true
     applications:
       admin-console:
         public-base-path: /admin-console
@@ -351,7 +357,8 @@ data:
             password: ${env:EDK_KEYSTORE_PASSWORD}
             path: "{tempDir}/edk-verify-keystore.p12"
     transport:
-      served-commands: "invitation-handler.*"
+      # The verifier forwards its invitation job commands (invitation-job.service.*) to this service over gRPC.
+      served-commands: "invitation-handler.*,invitation-job.*"
       routing:
         configScope: APP
         modules:
@@ -485,7 +492,7 @@ data:
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
-        allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") | quote }}
+        allowed-audiences: {{ printf "%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer")) | quote }}
     security:
       workload-trust-policy:
         trusted_service_ids:
@@ -530,6 +537,17 @@ data:
         configScope: APP
         modules:
 {{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
+          # Invitation job commands (invitation-job.service.<command>) route to the issuer, which owns the jobs of every
+          # tenant. The verification submit endpoints of this service delegate to them.
+          "[invitation-job]":
+            services:
+              service:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "issuer")) .Values.grpc.port | quote }}
+                serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") | quote }}
+                preferServiceTokenOverSessionBearer: true
+                timeoutMs: 30000
           secret:
             target: SERVER
             transport: GRPC

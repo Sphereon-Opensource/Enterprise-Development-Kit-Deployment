@@ -700,10 +700,11 @@ oauth2:
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
-          allowed-access-token-audiences: enterprise-tenant-kms
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-issuer
           token-exchange:
             mode: secret-bootstrap
-            audiences: enterprise-platform
+            # The verifier forwards its verification invitation jobs to enterprise-issuer.
+            audiences: enterprise-platform,enterprise-issuer
         tenantas:
           client-id: tenant-as-service
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
@@ -713,11 +714,12 @@ oauth2:
           allowed-access-token-audiences: enterprise-tenant-kms,enterprise-blob
           token-exchange:
             mode: secret-bootstrap
-            audiences: enterprise-platform
+            # The invitation gate at mint resolves connector attachments on enterprise-blob.
+            audiences: enterprise-platform,enterprise-blob
 # Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
 # Holder protocols and testing/catalog wrappers are excluded by the backend projection.
 developer-console:
-  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/v1/tabular-mapping-templates"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1","/api/oauth2/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/attestation/v1","/api/catalog/attribute/v1","/public/schema","/public/statuslists"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
+  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/services/v1","/api/v1/config","/api/invitation/v1/invitations","/api/semanticmapping/v1"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/connector/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/claimmapping/v1"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1","/api/oauth2/v1"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/attestation/v1","/api/catalog/attribute/v1","/public/schema","/public/statuslists","/api/invitation/v1/jobs","/api/invitation/v1/recipientsources"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
 application:
   bff:
     oauth-client:
