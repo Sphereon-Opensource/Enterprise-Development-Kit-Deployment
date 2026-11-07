@@ -314,6 +314,8 @@ data:
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
     # Catalog write permissions: tenant and platform administrators hold catalog.manage and catalog.publish.
+    # Invitation jobs of callers acting for no business wallet: tenant and platform administrators hold the
+    # invitation-job actions on every issuer and verifier instance.
     authz:
       policy:
         default-engine: issuer-roles
@@ -324,6 +326,12 @@ data:
               - pattern: catalog.manage
                 any-of: [tenant-admin, platform-admin]
               - pattern: catalog.publish
+                any-of: [tenant-admin, platform-admin]
+              - pattern: invitation-job.issuance.*
+                any-of: [tenant-admin, platform-admin]
+              - pattern: invitation-job.verification.*
+                any-of: [tenant-admin, platform-admin]
+              - pattern: invitation-job.sources.*
                 any-of: [tenant-admin, platform-admin]
     # Hook commands (invitation-handler.*) are accepted only from the invitation owner, tenant-AS. The caller's token
     # is for this host's audience.
@@ -357,8 +365,13 @@ data:
             password: ${env:EDK_KEYSTORE_PASSWORD}
             path: "{tempDir}/edk-verify-keystore.p12"
     transport:
-      # The verifier forwards its invitation job commands (invitation-job.service.*) to this service over gRPC.
-      served-commands: "invitation-handler.*,invitation-job.*"
+      # Over gRPC this service answers the invitation-handler hooks (tenant-AS), the curated invitation job steps of the
+      # workflow worker and the verification job submit the verifier forwards for its operators. Job reads, lists,
+      # deletes, sweeps and recipient sources are not served to other services.
+      served-commands: "invitation-handler.*,invitation-job.service.submit,invitation-job.service.submit-verification,invitation-job.service.get,invitation-job.service.held-rows,invitation-job.service.send,invitation-job.service.resolve,invitation-job.service.cancel"
+      # Per-caller command ceilings, on gRPC and HTTP alike: the verifier submits verification jobs only (for an operator,
+      # with a token delegated for that operator); the workflow worker runs the curated job steps only.
+      caller-command-restrictions: '[{"callerId":"{{ index .Values.serviceIdentity.clientIds "verifier" }}","tenantScoped":true,"allowedCommands":["invitation-job.service.submit-verification"]},{"callerId":"workflow-service","tenantScoped":true,"allowedCommands":["invitation-job.service.submit","invitation-job.service.get","invitation-job.service.held-rows","invitation-job.service.send","invitation-job.service.resolve","invitation-job.service.cancel"]}]'
       routing:
         configScope: APP
         modules:
@@ -488,6 +501,9 @@ data:
         token-endpoint-source: active-as
         active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
         active-as-client-role: verifier
+        # Operator calls forwarded to the issuer carry a token delegated for the operator.
+        delegation:
+          enabled: true
         client-id: {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
         client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
         tenant-bound-client-id: true
@@ -538,7 +554,9 @@ data:
         modules:
 {{ include "edk-enterprise.remotePlatformRoutingModules" . | indent 10 }}
           # Invitation job commands (invitation-job.service.<command>) route to the issuer, which owns the jobs of every
-          # tenant. The verification submit endpoints of this service delegate to them.
+          # tenant. The verification submit endpoints of this service call only invitation-job.service.submit-verification,
+          # the one job command the issuer grants this service, with a token delegated for the operator (RFC 8693, this
+          # service as actor), so the issuer authorizes the operator.
           "[invitation-job]":
             services:
               service:
@@ -546,7 +564,7 @@ data:
                 transport: GRPC
                 endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "issuer")) .Values.grpc.port | quote }}
                 serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") | quote }}
-                preferServiceTokenOverSessionBearer: true
+                preferServiceTokenOverSessionBearer: false
                 timeoutMs: 30000
           secret:
             target: SERVER
