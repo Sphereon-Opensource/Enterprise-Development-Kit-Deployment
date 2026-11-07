@@ -1967,7 +1967,7 @@
                   "request": {
                     "method": "POST",
                     "header": [],
-                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/kms/shared-providers/{{sharedProviderId}}:enable",
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/kms/shared-providers/{{sharedProviderId}}/enable",
                     "description": "Enables the vault that the platform offered to this tenant. The vault credentials stay with the platform."
                   },
                   "response": []
