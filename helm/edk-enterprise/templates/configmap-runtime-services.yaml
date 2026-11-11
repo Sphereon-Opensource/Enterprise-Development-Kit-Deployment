@@ -340,7 +340,7 @@ data:
         allowed-workloads: {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") | quote }}
     # Invitation jobs: the in-process sweep delivers due callbacks, reports invitation outcomes, marks abandoned jobs
-    # failed and purges expired rosters. It runs as the service workload (server.service-identity.client-id).
+    # failed and purges expired rosters. It runs in-process under its own workload principal, invitation-job-sweep-worker.
     invitation-job:
       sweep:
         scheduler:
