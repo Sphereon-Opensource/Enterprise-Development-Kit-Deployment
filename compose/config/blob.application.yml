@@ -50,7 +50,7 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-platform:9090
             commands:
-              # The connector vault's keys stay in tenant KMS custody; tenant KMS runs each operation.
+              # The connector vault keys and the keys of encrypted reusable rosters (tabular rows) stay in tenant KMS custody; tenant KMS runs each operation.
               "[kms.key.vault-managed-operation]":
                 target: SERVER
                 transport: GRPC
@@ -284,3 +284,11 @@ authz:
             any-of: [tenant-admin, platform-admin]
           - pattern: asset.rest-library.delete
             any-of: [tenant-admin, platform-admin]
+
+# Blob store each consumer reads and writes. There is no default store: every consumer names its store.
+asset:
+  store-id: default
+credential-design:
+  store-id: default
+schema-registry:
+  store-id: default

@@ -127,6 +127,18 @@ __LE_TLS_DOMAINS__
       tls:
         certResolver: le
 
+    # Invitation jobs run where the batch orchestrator runs, the issuer: the job resource and saved recipient
+    # sources under /api/invitation/v1. The verification submit paths under /api/oid4vp/v1 belong to the verifier,
+    # which forwards the job to the issuer.
+    tenant-issuer-invitation-jobs:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/api/invitation/v1/jobs`) || PathPrefix(`/api/invitation/v1/recipientsources`))
+      entryPoints: ["websecure"]
+      service: svc-issuer
+      priority: 330
+      tls: {}
+
     tenant-backend-platform:
 
       rule: >-
@@ -137,7 +149,8 @@ __LE_TLS_DOMAINS__
          PathPrefix(`/api/lifecycle/v1`) ||
          PathPrefix(`/api/services/v1`) ||
          PathPrefix(`/api/v1/config`) ||
-         PathPrefix(`/api/invitation/v1/invitations`))
+         PathPrefix(`/api/invitation/v1/invitations`) ||
+         PathPrefix(`/api/semanticmapping/v1`))
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 310
@@ -151,7 +164,7 @@ __LE_TLS_DOMAINS__
          PathPrefix(`/api/blob-store/v1`) ||
          PathPrefix(`/api/users/v1`) ||
          PathPrefix(`/api/v1/schemas`) ||
-         PathPrefix(`/api/v1/tabular-mapping-templates`))
+         PathPrefix(`/api/claimmapping/v1`))
       entryPoints: ["websecure"]
       service: svc-blob
       priority: 310

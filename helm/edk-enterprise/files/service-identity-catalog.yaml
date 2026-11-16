@@ -120,6 +120,7 @@ roles:
     peersIn:
       - platform
       - tenant-as
+      - verifier
       - admin-console
       - admin-console-tenant
     peersOut:
@@ -138,6 +139,7 @@ roles:
     extraStsAudiences:
       - tenant-kms
       - tenant-as
+      - issuer
     grpcReceiver: true
     peersIn:
       - platform
@@ -147,6 +149,7 @@ roles:
     peersOut:
       - tenant-kms
       - tenant-as
+      - issuer
       - did
       - platform
       - wallet-interaction

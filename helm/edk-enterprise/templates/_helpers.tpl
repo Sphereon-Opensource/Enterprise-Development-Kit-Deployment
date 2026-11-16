@@ -328,6 +328,8 @@ name, or an empty list for services that are not tenant-routed.
 - /api/statuslist/v1
 - /api/catalog/attestation/v1
 - /api/catalog/attribute/v1
+- /api/invitation/v1/jobs
+- /api/invitation/v1/recipientsources
 {{- else if eq $name "verifier" -}}
 - /oid4vp
 - /request_uri
@@ -352,7 +354,7 @@ name, or an empty list for services that are not tenant-routed.
 - /api/blob-store/v1
 - /api/users/v1
 - /api/v1/schemas
-- /api/v1/tabular-mapping-templates
+- /api/claimmapping/v1
 {{- else if eq $name "tenant-as" -}}
 - /as
 - /authorize

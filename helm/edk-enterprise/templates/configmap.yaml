@@ -410,7 +410,7 @@ data:
               {{- if has (index .Values.serviceIdentity.clientIds "verifier") $secretBootstrapActors }}
               token-exchange:
                 mode: secret-bootstrap
-                audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+                audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") }}{{ if (index .Values.services "issuer").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") }}{{ end }}"
               {{- end }}
             {{- end }}
             tenantas:
@@ -422,7 +422,7 @@ data:
               {{- if has (index .Values.serviceIdentity.clientIds "tenant-as") $secretBootstrapActors }}
               token-exchange:
                 mode: secret-bootstrap
-                audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") }}{{ if (index .Values.services "issuer").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") }}{{ end }}{{ if (index .Values.services "verifier").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") }}{{ end }}"
+                audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") }}{{ if (index .Values.services "issuer").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer") }}{{ end }}{{ if (index .Values.services "verifier").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "verifier") }}{{ end }}{{ if (index .Values.services "blob").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob") }}{{ end }}"
               {{- end }}
             {{- if (index .Values.services "wallet-unit").enabled }}
             wallet-unit:
