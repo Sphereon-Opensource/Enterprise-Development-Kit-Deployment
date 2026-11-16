@@ -389,3 +389,11 @@ secret:
         issuer: enterprise-platform
         audience: sphereon-secret-use
         verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+
+# Blob store each consumer reads and writes. There is no default store: every consumer names its store.
+asset:
+  store-id: designs
+credential-design:
+  store-id: designs
+schema-registry:
+  store-id: designs

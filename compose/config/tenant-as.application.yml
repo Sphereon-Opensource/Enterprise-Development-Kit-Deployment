@@ -359,3 +359,9 @@ kv:
         type: KvStoreConfig
         backendId: database
         scopeBinding: TENANT
+
+# Blob store each consumer reads and writes. There is no default store: every consumer names its store.
+credential-design:
+  store-id: designs
+schema-registry:
+  store-id: designs
