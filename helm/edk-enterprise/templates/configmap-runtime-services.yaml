@@ -375,7 +375,7 @@ data:
       # Over gRPC this service answers the invitation-handler hooks (tenant-AS), the curated invitation job steps of the
       # workflow worker and the verification job submit the verifier forwards for its operators. Job reads, lists,
       # deletes, sweeps and recipient sources are not served to other services.
-      served-commands: "invitation-handler.*,invitation-job.service.submit,invitation-job.service.submit-verification,invitation-job.service.get,invitation-job.service.held-rows,invitation-job.service.send,invitation-job.service.resolve,invitation-job.service.cancel"
+      served-commands: "invitation-handler.*,invitation-job.service.submit,invitation-job.service.submit-verification,invitation-job.service.get,invitation-job.service.held-rows,invitation-job.service.send,invitation-job.service.resolve,invitation-job.service.cancel,oid4vci.issuer.iae-admit"
       # Per-caller command ceilings, on gRPC and HTTP alike: the verifier submits verification jobs only (for an operator,
       # with a token delegated for that operator); the workflow worker runs the curated job steps only.
       caller-command-restrictions: '[{"callerId":"{{ index .Values.serviceIdentity.clientIds "verifier" }}","tenantScoped":true,"allowedCommands":["invitation-job.service.submit-verification"]},{"callerId":"workflow-service","tenantScoped":true,"allowedCommands":["invitation-job.service.submit","invitation-job.service.get","invitation-job.service.held-rows","invitation-job.service.send","invitation-job.service.resolve","invitation-job.service.cancel"]}]'

@@ -52,6 +52,7 @@ roles:
       - wallet-onboarding
       - admin-console
       - admin-console-tenant
+      - business-wallet-runtime
     peersOut:
       - tenant-as
       - platform
@@ -310,6 +311,7 @@ roles:
     defaultStsAudience: platform
     extraStsAudiences:
       - wallet-unit
+      - tenant-kms
     grpcReceiver: true
     peersIn:
       - wallet-unit
@@ -319,6 +321,7 @@ roles:
     peersOut:
       - platform
       - wallet-unit
+      - tenant-kms
   business-wallet:
     kind: frontend
     clientId: null

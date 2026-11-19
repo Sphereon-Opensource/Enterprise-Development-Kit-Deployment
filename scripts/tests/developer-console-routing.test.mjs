@@ -31,6 +31,7 @@ test('Developer Console page routing stays exact and API paths retain their sepa
 
 const portalRouters = [
   'instance-testing-console-page', 'instance-testing-console-api', 'instance-testing-console-support',
+  'instance-catalog-console-page', 'instance-catalog-console-api',
   'developer-console-page', 'developer-journeys-artifact', 'developer-console-api',
   'developer-console-api-bearer', 'tenant-developer-console-api', 'developer-console-auth',
 ]
@@ -86,6 +87,14 @@ for (const behindEdge of [false, true]) {
       ['instance-testing-console-api', '/testing-console/api/oid4vci/v1/testing/issuer-id', '/admin-console/api/oid4vci/v1/testing/issuer-id'],
       ['instance-testing-console-api', '/testing-console/api/oid4vp/v1/testing/verifier-id', '/admin-console/api/oid4vp/v1/testing/verifier-id'],
       ['instance-testing-console-api', '/testing-console/api/portal-oauth/callback', '/admin-console/api/portal-oauth/callback'],
+      // The public catalog pages the Admin Console advertises for a published catalog.
+      ['instance-catalog-console-page', '/catalog-console/catalogs/webuild-pid', '/admin-console/catalog-console/catalogs/webuild-pid'],
+      ['instance-catalog-console-page', '/catalog-console/attributes/pw-attrs/', '/admin-console/catalog-console/attributes/pw-attrs/'],
+      ['instance-catalog-console-page', '/catalog-console/issuer/issuer-id', '/admin-console/catalog-console/issuer/issuer-id'],
+      ['instance-catalog-console-page', '/catalog-console/verifier/verifier-id', '/admin-console/catalog-console/verifier/verifier-id'],
+      ['instance-catalog-console-api', '/catalog-console/api/oid4vci/v1/catalog-console/issuer-id', '/admin-console/api/oid4vci/v1/catalog-console/issuer-id'],
+      ['instance-catalog-console-api', '/catalog-console/api/oid4vp/v1/catalog-console/verifier-id', '/admin-console/api/oid4vp/v1/catalog-console/verifier-id'],
+      ['instance-catalog-console-api', '/catalog-console/api/portal-oauth/callback', '/admin-console/api/portal-oauth/callback'],
       ['developer-console-page', '/developer-console', '/admin-console/developer-console'],
       ['developer-console-page', '/developer-console/oauth/callback', '/admin-console/developer-console/oauth/callback'],
       ['developer-journeys-artifact', '/developer-journeys/index.json', '/admin-console/developer-journeys/index.json'],
@@ -101,11 +110,13 @@ for (const behindEdge of [false, true]) {
       assert.equal(routed(source, {host: 'platform.fed.example.com', path})[0], 'platform', path)
     }
     for (const path of ['/testing-console/admin/id', '/testing-console/issuer/id/extra',
+      '/catalog-console/admin/id', '/catalog-console/catalogs/slug/extra', '/catalog-console/api/platform/admin/v1',
       '/developer-console/api/platform/admin/v1', '/developer-console/api/auth/unknown', '/developer-console/extra']) {
       assert.ok(!portalRouters.some(name => routeMatches(routes[name], {host, path})), path)
     }
     for (const path of ['/admin-console/_next/static/app.js', '/admin-console/public/assets/logo.png',
-      '/admin-console/health', '/admin-console/api/portal-oauth/callback']) {
+      '/admin-console/health', '/admin-console/api/portal-oauth/callback',
+      '/admin-console/api/oid4vci/v1/catalog-console/issuer-id', '/admin-console/api/oid4vp/v1/catalog-console/verifier-id']) {
       assert.ok(routeMatches(routes['instance-testing-console-support'], {host, path}), path)
       assert.match(routed(source, {host, path})[1], /service: svc-admin-console-tenant/)
     }

@@ -321,13 +321,46 @@ http:
       priority: 265
       tls: {}
 
+    # --- Public catalog-console pages ----------------------------------------
+    # The Admin Console advertises /catalog-console/catalogs/{slug} as the web
+    # interface of a published catalog, next to /catalog-console/attributes/{slug}
+    # and /catalog-console/(issuer|verifier)/{id}. AddPrefix keeps Next mounted
+    # beneath /admin-console, like the testing console.
+    instance-catalog-console-page:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathRegexp(`^/catalog-console/(catalogs|attributes|issuer|verifier)/[^/]+/?$`)
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["instance-testing-console-add-admin-prefix"]
+      priority: 260
+      tls: {}
+
+    # Browser-facing catalog-console API under the neutral /catalog-console prefix.
+    instance-catalog-console-api:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/catalog-console/api/oid4vci/v1/catalog-console`) ||
+         PathPrefix(`/catalog-console/api/oid4vp/v1/catalog-console`) ||
+         Path(`/catalog-console/api/portal-oauth/login`) ||
+         Path(`/catalog-console/api/portal-oauth/callback`) ||
+         Path(`/catalog-console/api/portal-oauth/grant`) ||
+         Path(`/catalog-console/api/portal-oauth/revoke`))
+      entryPoints: ["websecure"]
+      service: svc-admin-console-tenant
+      middlewares: ["instance-catalog-console-api-rewrite"]
+      priority: 265
+      tls: {}
+
     # Next support paths remain direct because their internal and external
     # URLs already include the /admin-console basePath. Do not broaden this to
     # a generic /admin-console route on instance hosts.
     instance-testing-console-support:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/admin-console/api/oid4vci/v1/testing`) ||
+        (PathPrefix(`/admin-console/api/oid4vci/v1/catalog-console`) ||
+         PathPrefix(`/admin-console/api/oid4vp/v1/catalog-console`) ||
+         PathPrefix(`/admin-console/api/oid4vci/v1/testing`) ||
          PathPrefix(`/admin-console/api/oid4vp/v1/testing`) ||
          Path(`/admin-console/api/portal-oauth/login`) ||
          Path(`/admin-console/api/portal-oauth/callback`) ||
@@ -425,6 +458,10 @@ http:
     instance-testing-console-add-admin-prefix:
       addPrefix:
         prefix: /admin-console
+    instance-catalog-console-api-rewrite:
+      replacePathRegex:
+        regex: "^/catalog-console/(.*)"
+        replacement: "/admin-console/$1"
     instance-testing-console-api-rewrite:
       replacePathRegex:
         regex: "^/testing-console/(.*)"
