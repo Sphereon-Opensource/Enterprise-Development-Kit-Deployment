@@ -58,11 +58,22 @@ http:
          PathPrefix(`/api/forms/v1`) ||
          PathPrefix(`/api/workflow/v1`) ||
          PathPrefix(`/api/lifecycle/v1`) ||
+         PathPrefix(`/api/modeling/v1`) ||
+         PathPrefix(`/api/organization/v1`) ||
          PathPrefix(`/api/services/v1`) ||
-         PathPrefix(`/api/v1/config`) ||
-         PathPrefix(`/api/invitation/v1/invitations`))
+         PathPrefix(`/api/v1/config`))
       entryPoints: ["websecure"]
       service: svc-platform
+      priority: 310
+      tls: {}
+
+    # The invitation REST API (mint, resolve, redeem) is served by the owner, tenant-AS.
+    tenant-as-invitations:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        PathPrefix(`/api/invitation`)
+      entryPoints: ["websecure"]
+      service: svc-as
       priority: 310
       tls: {}
 
@@ -206,7 +217,7 @@ http:
          PathPrefix(`/notification`) || PathPrefix(`/public/statuslists`) ||
          PathPrefix(`/.well-known/openid-credential-issuer`) || PathPrefix(`/public/schema`) ||
          PathPrefix(`/api/oid4vci/v1`) || PathPrefix(`/api/credential-design/v1`) ||
-         PathPrefix(`/api/statuslist/v1`) || PathPrefix(`/api/invitation`))
+         PathPrefix(`/api/statuslist/v1`))
       entryPoints: ["websecure"]
       service: svc-issuer
       priority: 200

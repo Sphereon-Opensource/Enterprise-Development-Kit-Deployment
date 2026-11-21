@@ -32,6 +32,24 @@ integrations:
     # Existing Service (same namespace) that fronts enterprise-wallet-onboarding.
     serviceName: ""
     restPort: 8080
+  # Optional journey workloads deployed beside this release: the authored-workflow worker, the tenant Portal and the
+  # Inbox. All three are off; the enterprise service set needs none of them. Enabling one routes the platform's calls
+  # to the named Service over gRPC and admits that workload where it calls this release.
+  workflow:
+    enabled: false
+    # Existing Service (same namespace) that fronts enterprise-workflow.
+    serviceName: ""
+    grpcPort: 9090
+  portal:
+    enabled: false
+    # Existing Service (same namespace) that fronts enterprise-portal.
+    serviceName: ""
+    grpcPort: 9090
+  inbox:
+    enabled: false
+    # Existing Service (same namespace) that fronts vdx-inbox.
+    serviceName: ""
+    grpcPort: 9090
 
 # Settings that exist only because the monolith is one Kubernetes workload.
 # Database, license, origin, email, tenant, and secret values remain in their
@@ -491,6 +509,10 @@ serviceIdentity:
     trust-domain-identifier: trust-domain-service-client-secret
     # Platform per-tenant AS signing workload (`as-signing-service:<tenant>`).
     as-signing-management: as-signing-service-client-secret
+    # Read only while the matching integrations.<role> is enabled.
+    workflow: workflow-service-client-secret
+    portal: portal-service-client-secret
+    inbox: inbox-service-client-secret
   # Per-service client_credentials client id each satellite presents to the
   # platform AS to mint its east-west service token. These match the platform's
   # registered internal clients.
@@ -511,6 +533,9 @@ serviceIdentity:
     # The enterprise portal is deployed beside this release, not by it. The blob
     # service binds this client id to admit its branding and asset reads.
     portal: portal-service
+    # Optional journey workloads (integrations.workflow / integrations.inbox), deployed beside this release.
+    workflow: workflow-service
+    inbox: inbox-service
   # Local workload labels used to select credentials and configure the binding
   # to each platform-issued JWT client id. They are never sent as identity headers.
   serviceIds:
@@ -525,6 +550,8 @@ serviceIdentity:
     wallet-interaction: service-wallet-interaction
     wallet-onboarding: service-wallet-onboarding
     portal: service-portal
+    workflow: service-workflow
+    inbox: service-inbox
   # Receiver and STS audiences come from files/service-identity-catalog.yaml
   # (vendored with VDX Helm and the frontend). They are not Helm values and
   # there is no serviceIdentity.audiences override surface.
