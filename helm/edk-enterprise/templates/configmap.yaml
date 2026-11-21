@@ -103,7 +103,35 @@ data:
         # Routed KMS commands address the tenant-KMS service and the DID-signing key read addresses
         # the DID service, so the minted access token may name them; any audience outside this list
         # is refused before a secret is leased.
-        allowed-audiences: {{ printf "%s,%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob")) | quote }}
+        {{- /* The optional journey workloads add the audiences the platform routes to (integrations.workflow|portal). */}}
+        {{- $platformAudiences := list (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob")) }}
+        {{- range $role := list "workflow" "portal" }}
+        {{- if (index $.Values.integrations $role).enabled }}
+        {{- $platformAudiences = append $platformAudiences (include "edk-enterprise.serviceAudience" (dict "root" $ "name" $role)) }}
+        {{- end }}
+        {{- end }}
+        allowed-audiences: {{ join "," $platformAudiences | quote }}
+        {{- if .Values.integrations.workflow.enabled }}
+        # A person's lifecycle start and form translation reach the workflow worker with a token delegated for that
+        # person at the tenant authorization server, naming the platform as actor.
+        delegation:
+          enabled: true
+          profile-selection: verified-issuer
+          token-endpoint-source: active-as
+          active-as-token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+          active-as-client-role: platform-delegation
+          tenant-bound-client-id: true
+          audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+          allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "workflow") | quote }}
+        platform-user-delegation:
+          token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          token-endpoint-allow-http: true
+          active-as-client-role: platform-delegation
+          client-id: platform-delegation-service
+          tenant-bound-client-id: true
+          audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+          allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "workflow") | quote }}
+        {{- end }}
       {{- end }}
     cors:
       origins: {{ include "edk-enterprise.browserCorsOrigins" . | quote }}
@@ -463,6 +491,20 @@ data:
                 audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
               {{- end }}
             {{- end }}
+            {{- /* Optional journey workloads deployed beside this release (integrations.workflow|portal|inbox). */}}
+            {{- range $role := list "workflow" "portal" "inbox" }}
+            {{- if (index $.Values.integrations $role).enabled }}
+            {{ $role }}:
+              client-id: {{ index $.Values.serviceIdentity.clientIds $role | quote }}
+              client-secret: {{ include "edk-enterprise.serviceIdentity.clientSecretEnvInterpolation" $role }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              default-access-token-audience: {{ include "edk-enterprise.serviceIdentity.defaultStsAudience" (dict "root" $ "role" $role) | quote }}
+              allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" $ "role" $role) | quote }}
+              token-exchange:
+                mode: secret-bootstrap
+                audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform") | quote }}
+            {{- end }}
+            {{- end }}
           {{- end }}
       clients:
         {{- if (index .Values.services "federation-console").enabled }}
@@ -726,6 +768,57 @@ data:
                     endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
                     timeoutMs: 10000
           {{- end }}
+          {{- if .Values.integrations.workflow.enabled }}
+          {{- $workflowEndpoint := include "edk-enterprise.journeyGrpcEndpoint" (dict "root" . "role" "workflow") }}
+          # Lifecycle execution belongs to the optional workflow worker. A person's start and form translation carry a
+          # token delegated for that person, never the platform's own.
+          lifecycle:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ $workflowEndpoint | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "workflow") | quote }}
+            preferServiceTokenOverSessionBearer: false
+            services:
+              execution:
+                delegationMode: REQUIRED
+              form:
+                delegationMode: REQUIRED
+          # The platform mounts the workflow REST surfaces; the engine and the submission store live on the worker.
+          # Form submissions are handed over with the platform's own workload token.
+          workflow:
+            serviceTokenAudience: enterprise-workflow
+            services:
+              submission:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ $workflowEndpoint | quote }}
+                preferServiceTokenOverSessionBearer: true
+              execution:
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ $workflowEndpoint | quote }}
+                preferServiceTokenOverSessionBearer: false
+                delegationMode: REQUIRED
+              "[form-operation]":
+                target: SERVER
+                transport: GRPC
+                endpoint: {{ $workflowEndpoint | quote }}
+                preferServiceTokenOverSessionBearer: false
+                delegationMode: REQUIRED
+          {{- end }}
+          {{- if .Values.integrations.portal.enabled }}
+          portal:
+            target: SERVER
+            transport: GRPC
+            endpoint: {{ include "edk-enterprise.journeyGrpcEndpoint" (dict "root" . "role" "portal") | quote }}
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "portal") | quote }}
+            preferServiceTokenOverSessionBearer: true
+          {{- end }}
+        {{- if .Values.integrations.workflow.enabled }}
+        # Nothing is delegated unless a route asks for it.
+        defaults:
+          delegationMode: DISABLED
+        {{- end }}
     {{- end }}
     # First-boot operator owner and installation identity for the control-plane.
     app:
@@ -873,6 +966,23 @@ data:
             platform:
               client-id: {{ index .Values.serviceIdentity.clientIds "platform" | quote }}
               allowed-audiences: {{ printf "%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "did")) | quote }}
+            {{- if .Values.integrations.workflow.enabled }}
+            # The tenant-bound client the platform's person-delegated workflow calls are minted with.
+            platform-delegation:
+              client-id: platform-delegation-service
+              allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "workflow") | quote }}
+              grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+              user-delegation-source: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+              user-delegation-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "workflow") | quote }}
+              user-delegation-on-tenant-as: true
+            {{- end }}
+            {{- range $role := list "workflow" "portal" "inbox" }}
+            {{- if (index $.Values.integrations $role).enabled }}
+            {{ $role }}:
+              client-id: {{ index $.Values.serviceIdentity.clientIds $role | quote }}
+              allowed-audiences: {{ printf "%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" $ "name" "platform")) (include "edk-enterprise.serviceIdentity.extraStsAudiencesCsv" (dict "root" $ "role" $role)) | quote }}
+            {{- end }}
+            {{- end }}
         {{- end }}
     {{- if and (eq (include "edk-enterprise.topologyMode" .) "distributed") (index .Values.services "tenant-kms").enabled }}
     # AUTHORITY typed credentials are provisioned per tenant; no Kubernetes client secret is rendered.
