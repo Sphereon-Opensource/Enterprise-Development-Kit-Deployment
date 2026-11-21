@@ -415,6 +415,17 @@ trust-domain:
       client-id: trust-domain-service
       tenant-bound-client-id: true
       audience: enterprise-tenant-as
+# The connector vault (connector.vault.store-id): Forms submissions and protected case payloads. `database` keeps the
+# vault's ciphertext in the tenant's own database (blob_store, created by the platform migration barrier), so it needs
+# no volume. The blob service has no default store, so the vault names its store explicitly.
+blob:
+  stores:
+    connector-vault:
+      type: database
+      scopeBinding: TENANT
+connector:
+  vault:
+    store-id: connector-vault
 kv-stores:
   # Email catalog templates share one durable platform store. The catalog
   # namespaces per-tenant published state inside it using the resolved tenant id.
