@@ -122,7 +122,11 @@ root so Helm can load files/service-identity-catalog.yaml.
 {{- if not $extra -}}
 {{- fail (printf "service-identity role %q extraStsAudiences entry %q is unknown" $role .) -}}
 {{- end -}}
+{{- /* A workload this chart never deploys (it has a client of its own but no services entry here, such as the
+       business-wallet backend) cannot receive a call from this release, so no client may obtain its audience. */ -}}
+{{- if or (not $extra.clientId) (hasKey $.root.Values.services .) -}}
 {{- $audiences = append $audiences (required (printf "service-identity extra STS role %q has no receiverAudience" .) $extra.receiverAudience) -}}
+{{- end -}}
 {{- end -}}
 {{- join "," $audiences -}}
 {{- end -}}

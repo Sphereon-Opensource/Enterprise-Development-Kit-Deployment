@@ -314,12 +314,15 @@ data:
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+          # The portal creates, reads and withdraws its visitors' credential offers (oid4vci.rest.create|status|delete).
+          - {{ index .Values.serviceIdentity.serviceIds "portal" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "portal" }}]": {{ index .Values.serviceIdentity.clientIds "portal" | quote }}
     # Catalog write permissions: tenant and platform administrators hold catalog.manage and catalog.publish.
     # Invitation jobs of callers acting for no business wallet: tenant and platform administrators hold the
     # invitation-job actions on every issuer and verifier instance.
@@ -533,12 +536,15 @@ data:
           - {{ index .Values.serviceIdentity.serviceIds "issuer" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "verifier" | quote }}
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
+          # The portal creates and reads presentation requests for its visitors (oid4vp.universal.*).
+          - {{ index .Values.serviceIdentity.serviceIds "portal" | quote }}
         service_client_bindings:
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-kms" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-kms" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "did" }}]": {{ index .Values.serviceIdentity.clientIds "did" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "issuer" }}]": {{ index .Values.serviceIdentity.clientIds "issuer" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "verifier" }}]": {{ index .Values.serviceIdentity.clientIds "verifier" | quote }}
           "[{{ index .Values.serviceIdentity.serviceIds "tenant-as" }}]": {{ index .Values.serviceIdentity.clientIds "tenant-as" | quote }}
+          "[{{ index .Values.serviceIdentity.serviceIds "portal" }}]": {{ index .Values.serviceIdentity.clientIds "portal" | quote }}
     # Hook commands (invitation-handler.*) are accepted only from the invitation owner, tenant-AS. The caller's token
     # is for this host's audience.
     invitation:

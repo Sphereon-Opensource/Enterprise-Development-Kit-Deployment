@@ -8,9 +8,14 @@ roles:
     serviceId: service-platform
     receiverAudience: enterprise-platform
     defaultStsAudience: null
-    extraStsAudiences: []
+    extraStsAudiences:
+      - workflow
+      - portal
     grpcReceiver: true
     peersIn:
+      - workflow
+      - portal
+      - inbox
       - tenant-kms
       - tenant-as
       - did
@@ -25,6 +30,8 @@ roles:
       - federation-console
       - federation-console-tenant
     peersOut:
+      - workflow
+      - portal
       - tenant-as
       - tenant-kms
       - did
@@ -42,6 +49,9 @@ roles:
       - tenant-kms
     grpcReceiver: true
     peersIn:
+      - workflow
+      - portal
+      - inbox
       - platform
       - tenant-as
       - did
@@ -70,6 +80,8 @@ roles:
       - service-email
     grpcReceiver: true
     peersIn:
+      - workflow
+      - portal
       - platform
       - tenant-kms
       - did
@@ -87,6 +99,67 @@ roles:
       - issuer
       - verifier
       - service-email
+  workflow:
+    kind: satellite
+    clientId: workflow-service
+    serviceId: service-workflow
+    receiverAudience: enterprise-workflow
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+      - tenant-as
+      - portal
+      - inbox
+      - issuer
+    grpcReceiver: true
+    peersIn:
+      - platform
+      - portal
+    peersOut:
+      - platform
+      - tenant-kms
+      - tenant-as
+      - portal
+      - inbox
+      - issuer
+  inbox:
+    kind: satellite
+    clientId: inbox-service
+    serviceId: service-inbox
+    receiverAudience: enterprise-inbox
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+    grpcReceiver: true
+    peersIn:
+      - workflow
+    peersOut:
+      - platform
+      - tenant-kms
+  portal:
+    kind: satellite
+    clientId: portal-service
+    serviceId: service-portal
+    receiverAudience: enterprise-portal
+    defaultStsAudience: platform
+    extraStsAudiences:
+      - tenant-kms
+      - workflow
+      - issuer
+      - verifier
+      - blob
+    grpcReceiver: true
+    peersIn:
+      - platform
+      - workflow
+    peersOut:
+      - platform
+      - workflow
+      - tenant-kms
+      - tenant-as
+      - issuer
+      - verifier
+      - blob
   did:
     kind: satellite
     clientId: did-service
@@ -119,6 +192,8 @@ roles:
       - business-wallet-runtime
     grpcReceiver: true
     peersIn:
+      - portal
+      - workflow
       - platform
       - tenant-as
       - verifier
@@ -143,6 +218,7 @@ roles:
       - issuer
     grpcReceiver: true
     peersIn:
+      - portal
       - platform
       - tenant-as
       - admin-console
@@ -164,6 +240,7 @@ roles:
       - blob
     grpcReceiver: true
     peersIn:
+      - portal
       - platform
       - tenant-as
       - admin-console
