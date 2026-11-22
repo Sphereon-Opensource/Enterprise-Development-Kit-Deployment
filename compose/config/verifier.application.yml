@@ -77,11 +77,20 @@ security:
       - service-oid4vp
       - service-eidas
       - service-monolith
+      # The portal creates and reads presentation requests for its visitors.
+      - service-portal
+      # The platform executes verification templates for case evidence and reads the request's status.
+      - service-platform
     service_client_bindings:
       "[service-crypto]": kms-service
       "[service-data]": did-service
       "[service-oid4vci]": issuer-service
       "[service-oid4vp]": verifier-service
+      # The invitation owner calls the invitation-handler hooks.
+      "[service-tenant-as]": tenant-as-service
+      "[service-portal]": portal-service
+      # This platform acts as kms-service.
+      "[service-platform]": kms-service
 transport:
   grpc:
     enabled: false

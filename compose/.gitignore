@@ -5,3 +5,4 @@ config/license-recipient.jwk.json
 config/license-root-ca.pem
 .secret-authority/
 gateway/traefik/dynamic.federation.generated.yml
+gateway/traefik/dynamic.journey.generated.yml

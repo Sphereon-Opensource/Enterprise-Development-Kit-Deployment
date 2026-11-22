@@ -97,11 +97,19 @@ security:
       - service-oid4vp
       - service-eidas
       - service-monolith
+      - service-portal
+      - service-workflow
     service_client_bindings:
       "[service-crypto]": kms-service
       "[service-data]": did-service
       "[service-oid4vci]": issuer-service
       "[service-oid4vp]": verifier-service
+      # The invitation owner calls the invitation-handler hooks.
+      "[service-tenant-as]": tenant-as-service
+      # The portal creates, reads and withdraws its visitors' credential offers (oid4vci.rest.create|status|delete).
+      "[service-portal]": portal-service
+      # The workflow worker runs the curated invitation job steps on this service.
+      "[service-workflow]": workflow-service
 # Catalog write permissions. The catalog commands (attestation and attribute APIs) ask the policy
 # engine for catalog.manage (create, update, delete, link, import, validate) and catalog.publish
 # (publish, disable). Tenant and platform administrators hold both; every other command follows the
