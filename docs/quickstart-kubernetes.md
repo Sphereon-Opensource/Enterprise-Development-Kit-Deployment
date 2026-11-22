@@ -264,11 +264,11 @@ the private half only if you deploy that workload.
 
 ### Business wallet
 
-RC4 enables `services.business-wallet` by default, and the upgrade overlay
-does not change that, so the upgrade adds a business-wallet Deployment pulling
-the `business-wallet` image at your release tag. Set
-`services.business-wallet.enabled: false` in your values if you do not deploy
-the business wallet.
+The chart does not deploy the business wallet by default. Its image,
+`vdx-business-wallet-web`, is a wallet image: it is not part of the EDK
+enterprise image set and is not distributed through the EDK registry. To deploy
+the business wallet, set `services.business-wallet.enabled: true` and set
+`global.walletImageRegistry` to the registry that holds the wallet images.
 
 ### OID4VCI issuer identifier
 
