@@ -61,7 +61,10 @@
             "serviceName": { "type": "string" },
             "restPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
           }
-        }
+        },
+        "workflow": { "$ref": "#/definitions/journeyIntegration" },
+        "portal": { "$ref": "#/definitions/journeyIntegration" },
+        "inbox": { "$ref": "#/definitions/journeyIntegration" }
       }
     },
     "monolith": {
@@ -695,7 +698,10 @@
             "wallet-interaction": { "type": "string", "minLength": 1 },
             "wallet-onboarding": { "type": "string", "minLength": 1 },
             "trust-domain-identifier": { "type": "string", "minLength": 1 },
-            "as-signing-management": { "type": "string", "minLength": 1 }
+            "as-signing-management": { "type": "string", "minLength": 1 },
+            "workflow": { "type": "string", "minLength": 1 },
+            "portal": { "type": "string", "minLength": 1 },
+            "inbox": { "type": "string", "minLength": 1 }
           }
         },
         "clientIds": {
@@ -1066,6 +1072,16 @@
     }
   },
   "definitions": {
+    "journeyIntegration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "serviceName", "grpcPort"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "serviceName": { "type": "string" },
+        "grpcPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
     "databaseEndpoint": {
       "type": "object",
       "additionalProperties": true,

@@ -122,7 +122,13 @@ root so Helm can load files/service-identity-catalog.yaml.
 {{- if not $extra -}}
 {{- fail (printf "service-identity role %q extraStsAudiences entry %q is unknown" $role .) -}}
 {{- end -}}
+{{- /* A workload this chart neither deploys nor integrates (it has a client of its own but no services entry and no
+       enabled integrations entry here, such as the business-wallet backend) cannot receive a call from this release,
+       so no client may obtain its audience. */ -}}
+{{- $integration := index (default dict $.root.Values.integrations) . -}}
+{{- if or (not $extra.clientId) (hasKey $.root.Values.services .) (and $integration $integration.enabled) -}}
 {{- $audiences = append $audiences (required (printf "service-identity extra STS role %q has no receiverAudience" .) $extra.receiverAudience) -}}
+{{- end -}}
 {{- end -}}
 {{- join "," $audiences -}}
 {{- end -}}
@@ -197,6 +203,19 @@ ${env:{{ include "edk-enterprise.serviceIdentity.clientSecretEnvName" . }}}
 {{- default 8080 $wo.restPort -}}
 {{- end -}}
 
+{{/*
+gRPC address of an optional journey workload (integrations.workflow|portal|inbox) deployed beside this release.
+Requires dict root + role; fails when the integration is enabled without the Service it names.
+*/}}
+{{- define "edk-enterprise.journeyGrpcEndpoint" -}}
+{{- $integration := index .root.Values.integrations .role -}}
+{{- $name := trim (default "" $integration.serviceName) -}}
+{{- if eq $name "" -}}
+{{- fail (printf "integrations.%s.serviceName is required when integrations.%s.enabled=true; point it at the existing Service in this namespace." .role .role) -}}
+{{- end -}}
+{{- printf "grpc://%s:%v" $name $integration.grpcPort -}}
+{{- end -}}
+
 {{- define "edk-enterprise.walletOnboardingBackendServiceName" -}}
 {{- if eq (include "edk-enterprise.walletOnboardingServiceEnabled" .) "true" -}}
 {{- include "edk-enterprise.serviceName" (dict "root" . "name" "wallet-onboarding") -}}
@@ -220,6 +239,9 @@ ${env:{{ include "edk-enterprise.serviceIdentity.clientSecretEnvName" . }}}
 {{- if eq $row.kind "satellite" -}}
 {{- if eq .role "wallet-onboarding" -}}
 {{- if eq (include "edk-enterprise.walletOnboardingEnabled" .root) "true" }}true{{ else }}false{{ end -}}
+{{- else if has .role (list "workflow" "portal" "inbox") -}}
+{{- /* Journey workloads run beside this release, but the platform STS registers their clients. */ -}}
+{{- if (index .root.Values.integrations .role).enabled }}true{{ else }}false{{ end -}}
 {{- else -}}
 {{- $svc := index .root.Values.services .role -}}
 {{- if and $svc $svc.enabled }}true{{ else }}false{{ end -}}
@@ -366,6 +388,9 @@ name, or an empty list for services that are not tenant-routed.
 - /logout
 - /account-action
 - /api/account-actions
+{{/* The invitation REST API (mint, resolve, redeem) is served by its owner, which on tenant hosts is tenant-AS. */}}
+- /api/invitation/v1/invitations
+- /api/invitation/v1/redeem
 - /api/trust-domain/v1
 - /.well-known/oauth-authorization-server
 - /.well-known/openid-configuration
@@ -483,10 +508,13 @@ Requires dict root + secretName.
 {{- $installed = default dict .data -}}
 {{- end -}}
 {{- $optional := dict -}}
-{{- range $role := list "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" "wallet-onboarding" -}}
+{{- range $role := list "did" "blob" "issuer" "verifier" "wallet-unit" "wallet-interaction" "wallet-onboarding" "workflow" "portal" "inbox" -}}
 {{- $enabled := false -}}
 {{- if eq $role "wallet-onboarding" -}}
 {{- $enabled = eq (include "edk-enterprise.walletOnboardingEnabled" $root) "true" -}}
+{{- else if has $role (list "workflow" "portal" "inbox") -}}
+{{- /* Journey workloads run beside this release; integrations.<role>.enabled says whether one is there. */ -}}
+{{- $enabled = (index $root.Values.integrations $role).enabled -}}
 {{- else -}}
 {{- $enabled = (index $root.Values.services $role).enabled -}}
 {{- end -}}
