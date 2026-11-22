@@ -10,7 +10,6 @@
 {{- $isFederationConsoleTenant := eq $name "federation-console-tenant" }}
 {{- $isFederationConsole := or (eq $name "federation-console") $isFederationConsoleTenant }}
 {{- $isFrontend := or $isAdminConsole $isBusinessWallet $isFederationConsole }}
-{{- $imageTag := $svc.imageTag | default $.Values.global.imageTag | default $.Chart.AppVersion }}
 {{- $secretAuthoritySecret := "" }}
 {{- if not $isFrontend }}
 {{- $secretAuthoritySecret = index $.Values.secretAuthority.existingSecrets $name }}
@@ -83,7 +82,7 @@ spec:
              license across restarts. The setup API still writes the imported
              bundle's root CA into the same volume. */}}
         - name: seed-license-trust
-          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $imageTag }}"
+          image: {{ include "edk-enterprise.image" (dict "root" $ "name" $name) | quote }}
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
@@ -108,7 +107,7 @@ spec:
         # the serving Service (/ready), which is the platform-owned migration
         # and license barrier. A gRPC TCP listener alone is only liveness.
         - name: wait-for-platform-grpc
-          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $imageTag }}"
+          image: {{ include "edk-enterprise.image" (dict "root" $ "name" $name) | quote }}
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
@@ -132,7 +131,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ $name }}
-          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image }}:{{ $imageTag }}"
+          image: {{ include "edk-enterprise.image" (dict "root" $ "name" $name) | quote }}
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}

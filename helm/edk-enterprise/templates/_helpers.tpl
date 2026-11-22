@@ -439,6 +439,32 @@ name, or an empty list for services that are not tenant-routed.
 {{- end -}}
 
 {{/*
+Image reference for one service key, called with (dict "root" $ "name" $name).
+Wallet workloads (wallet-unit, wallet-interaction, wallet-onboarding and
+business-wallet) run wallet images, which are not part of the EDK enterprise
+image set. They resolve from global.walletImageRegistry, which must be set and
+must not point at the EDK registry. Every other workload resolves from
+global.imageRegistry.
+*/}}
+{{- define "edk-enterprise.image" -}}
+{{- $root := .root -}}
+{{- $name := .name -}}
+{{- $svc := index $root.Values.services $name -}}
+{{- $tag := $svc.imageTag | default $root.Values.global.imageTag | default $root.Chart.AppVersion -}}
+{{- $registry := $root.Values.global.imageRegistry -}}
+{{- if has $name (list "wallet-unit" "wallet-interaction" "wallet-onboarding" "business-wallet") -}}
+{{- $registry = trimSuffix "/" (trim (toString (default "" $root.Values.global.walletImageRegistry))) -}}
+{{- if eq $registry "" -}}
+{{- fail (printf "global.walletImageRegistry is required because services.%s is enabled. Wallet images are not part of the EDK enterprise image set and are not distributed through the EDK registry; set global.walletImageRegistry to the registry that holds them." $name) -}}
+{{- end -}}
+{{- if contains "edk-docker" (lower $registry) -}}
+{{- fail (printf "global.walletImageRegistry must not point at the EDK registry (got %q). Wallet images are not distributed through edk-docker; set it to the registry that holds them." $registry) -}}
+{{- end -}}
+{{- end -}}
+{{- printf "%s/%s:%s" $registry $svc.image $tag -}}
+{{- end -}}
+
+{{/*
 Reject unsafe `latest` settings that can leave old enterprise images running
 after a Helm upgrade. Production releases must use a versioned tag. Development
 may use `latest`, but only with an Always pull policy.
