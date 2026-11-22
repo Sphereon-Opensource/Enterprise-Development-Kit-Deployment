@@ -8,8 +8,7 @@
 {{- $bootstrap := .Values.platform.bootstrap }}
 {{- $operatorHost := printf "%s.%s" .Values.gateway.operatorHost $base }}
 {{- $wildcard := printf "*.%s" $base }}
-{{- $adminImage := printf "%s/%s:%s" .Values.global.imageRegistry (index .Values.services "admin-console").image ((index .Values.services "admin-console").imageTag | default .Values.global.imageTag | default .Chart.AppVersion) }}
-{{- $walletImage := printf "%s/%s:%s" .Values.global.imageRegistry (index .Values.services "business-wallet").image ((index .Values.services "business-wallet").imageTag | default .Values.global.imageTag | default .Chart.AppVersion) }}
+{{- $adminImage := include "edk-enterprise.image" (dict "root" . "name" "admin-console") }}
 {{- if and .Values.platformKeystore.enabled (not .Values.platformKeystore.existingClaim) }}
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -607,7 +606,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: business-wallet
-          image: {{ $walletImage | quote }}
+          image: {{ include "edk-enterprise.image" (dict "root" . "name" "business-wallet") | quote }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}

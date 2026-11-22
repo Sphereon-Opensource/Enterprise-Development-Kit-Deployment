@@ -224,7 +224,8 @@ fails chart render.
 
 | Value | Default | Purpose |
 | --- | --- | --- |
-| `global.imageRegistry` | `nexus.sphereon.com/edk-docker` | Registry root for all service images. Must not be `sphereon` or `docker.io/sphereon`. |
+| `global.imageRegistry` | `nexus.sphereon.com/edk-docker` | Registry root for the EDK enterprise service images. Must not be `sphereon` or `docker.io/sphereon`. |
+| `global.walletImageRegistry` | `""` | Registry root for the wallet workloads (`wallet-unit`, `wallet-interaction`, `wallet-onboarding`, `business-wallet`). Wallet images are not part of the EDK enterprise image set and are not distributed through the EDK registry. Required when a wallet workload is enabled; must not contain `edk-docker`. |
 | `global.imageTag` | `0.25.0-SNAPSHOT` | Image tag used for all enterprise services. Production rejects `latest`; pin the approved tag supplied through your EDK distribution channel. |
 | `global.imagePullPolicy` | `IfNotPresent` | Kubernetes image pull policy. Non-production `latest` requires `Always` to avoid silently reusing a stale node-local image. |
 | `global.imagePullSecrets` | `[]` | Pull secrets rendered into every service pod. |
@@ -302,12 +303,12 @@ either topology.
 
 ## Service Values
 
-Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `wallet-unit`, `wallet-interaction`, `wallet-onboarding`, `issuer`, `verifier`, or `admin-console`.
+Each service is configured under `services.<name>` where `<name>` is `platform`, `tenant-kms`, `did`, `tenant-as`, `wallet-unit`, `wallet-interaction`, `wallet-onboarding`, `issuer`, `verifier`, `admin-console`, or `business-wallet`.
 
 | Value | Purpose |
 | --- | --- |
 | `enabled` | Enable or disable the service. |
-| `image` | Image repository name under `global.imageRegistry`. |
+| `image` | Image repository name under `global.imageRegistry`, or under `global.walletImageRegistry` for the wallet workloads. |
 | `replicas` | Deployment replica count. |
 | `restPort` | Internal container and Kubernetes Service REST port. Leave the default unless your OEM, MSP, or EDK distributor supplies an override; it is not a customer endpoint. |
 | `publicIngress` | Legacy per-service ingress settings. Disabled by default; customer deployments use the Gateway. |
@@ -324,15 +325,22 @@ Default backing components:
 | `did` | `true` | `enterprise-did` | DID resolver and `did:web` hosting behind the tenant gateway |
 | `tenant-as` | `true` | `enterprise-tenant-as` | Tenant OAuth2 authorization server behind the tenant gateway |
 | `blob` | `true` | `service-data` | Tenant blob and theme data behind the tenant gateway |
-| `wallet-unit` | `false` | `enterprise-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
-| `wallet-interaction` | `false` | `enterprise-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
-| `wallet-onboarding` | `false` | `enterprise-wallet-onboarding` | Managed wallet IDV, profile activation, readiness, and wallet-unit provisioning |
+| `wallet-unit` | `false` | `vdx-wallet-unit` | Server-side wallet-unit lifecycle and policy-gated wallet-key commands |
+| `wallet-interaction` | `false` | `vdx-wallet-interaction` | Headless wallet interaction runtime for issuer/verifier wallet protocol flows |
+| `wallet-onboarding` | `false` | `vdx-wallet-onboarding` | Managed wallet IDV, profile activation, readiness, and wallet-unit provisioning |
 | `issuer` | `true` | `enterprise-issuer` | OID4VCI issuer routes behind the tenant gateway |
 | `verifier` | `true` | `enterprise-verifier` | OID4VP verifier routes behind the tenant gateway |
 | `admin-console` | `true` | `admin-console` | Platform operator UI on the platform host |
 | `admin-console-tenant` | `true` | `admin-console` | Tenant-only UI and testing console on registered tenant hosts |
 | `federation-console` | `false` | `federation-console` | Operator Federation UI and BFF at `/federation-console` on the operator host |
 | `federation-console-tenant` | `false` | `federation-console` | Tenant Federation UI and BFF at `/federation-console` on tenant hosts |
+| `business-wallet` | `false` | `vdx-business-wallet-web` | Business wallet web frontend on tenant hosts at `/wallets` |
+
+The wallet workloads (`wallet-unit`, `wallet-interaction`, `wallet-onboarding`
+and `business-wallet`) resolve their images from `global.walletImageRegistry`.
+Set it to the registry that holds the wallet images before you enable one of
+them. Rendering fails when a wallet workload is enabled and the value is empty
+or contains `edk-docker`.
 
 Customer deployments use one public Gateway. Tenant KMS, DID, tenant-AS,
 wallet-unit, wallet-interaction, wallet-onboarding, issuer, and verifier remain

@@ -2,6 +2,13 @@ global:
   # Registry distributed with the standard EDK channel. An OEM/MSP may provide
   # a private mirror with the same enterprise image set.
   imageRegistry: nexus.sphereon.com/edk-docker
+  # Registry for the wallet workloads (services.wallet-unit, wallet-interaction,
+  # wallet-onboarding and business-wallet). Wallet images are not part of the EDK
+  # enterprise image set and are not distributed through the EDK registry. Set
+  # this to the registry that holds them when you enable a wallet workload.
+  # Rendering fails when a wallet workload is enabled and this is empty, or when
+  # it points at edk-docker.
+  walletImageRegistry: ""
   # Pin the approved enterprise release tag in production. `latest` is rejected
   # in prod and requires imagePullPolicy=Always in non-production testing.
   imageTag: "0.26.0-SNAPSHOT"
@@ -1009,7 +1016,8 @@ services:
 
   wallet-unit:
     enabled: false
-    image: enterprise-wallet-unit
+    # Wallet image, resolved from global.walletImageRegistry.
+    image: vdx-wallet-unit
     replicas: 1
     restPort: 8080
     publicIngress:
@@ -1035,7 +1043,8 @@ services:
 
   wallet-interaction:
     enabled: false
-    image: enterprise-wallet-interaction
+    # Wallet image, resolved from global.walletImageRegistry.
+    image: vdx-wallet-interaction
     replicas: 1
     restPort: 8080
     publicIngress:
@@ -1068,7 +1077,8 @@ services:
   # attestation evidence or release readiness.
   wallet-onboarding:
     enabled: false
-    image: enterprise-wallet-onboarding
+    # Wallet image, resolved from global.walletImageRegistry.
+    image: vdx-wallet-onboarding
     replicas: 1
     restPort: 8080
     publicIngress:
@@ -1309,9 +1319,12 @@ services:
 
   # One tenant-host runtime serves every configured business wallet. Tenant and
   # wallet selection remain request-scoped through the platform bootstrap API.
+  # This is the business wallet web frontend. Enabling it requires
+  # global.walletImageRegistry.
   business-wallet:
-    enabled: true
-    image: business-wallet
+    enabled: false
+    # Wallet image, resolved from global.walletImageRegistry.
+    image: vdx-business-wallet-web
     replicas: 1
     restPort: 3006
     publicIngress:
