@@ -974,7 +974,6 @@ data:
               grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
               user-delegation-source: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
               user-delegation-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "workflow") | quote }}
-              user-delegation-on-tenant-as: true
             {{- end }}
             {{- range $role := list "workflow" "portal" "inbox" }}
             {{- if (index $.Values.integrations $role).enabled }}
