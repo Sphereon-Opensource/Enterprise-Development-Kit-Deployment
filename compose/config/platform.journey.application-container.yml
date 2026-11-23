@@ -66,7 +66,6 @@ tenant:
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           user-delegation-source: enterprise-platform
           user-delegation-audiences: enterprise-workflow
-          user-delegation-on-tenant-as: true
         portal:
           client-id: portal-service
           allowed-audiences: enterprise-platform,enterprise-tenant-kms,enterprise-workflow,enterprise-issuer,enterprise-verifier,enterprise-blob
