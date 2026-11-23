@@ -922,6 +922,9 @@ authz:
         - oidfed.service-metadata.save-draft
         - oidfed.service-metadata.set-mode
         - oidfed.service-metadata.sync
+        - oidfed.structure-plans.preview
+        - oidfed.structure-plans.apply
+        - oidfed.entities.informational
         - oidfed.entity-publication-work.run
         - oidfed.entities.update
         - oidfed.entities.verify-origin
@@ -1184,6 +1187,12 @@ authz:
           - pattern: oidfed.service-metadata.set-mode
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.service-metadata.sync
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.structure-plans.preview
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.structure-plans.apply
+            any-of: [tenant-admin, platform-admin]
+          - pattern: oidfed.entities.informational
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.entities.update
             any-of: [tenant-admin, platform-admin]
