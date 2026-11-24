@@ -107,12 +107,6 @@ http:
       service: svc-blob
       priority: 1100
       tls: {}
-    api-connector:
-      rule: "Path(`/api/connector/v1`) || PathPrefix(`/api/connector/v1/`)"
-      entryPoints: ["websecure"]
-      service: svc-blob
-      priority: 1100
-      tls: {}
     public-blob-assets:
       rule: "PathRegexp(`^/public/assets/[^/]+/brand/[^/]+$`)"
       entryPoints: ["websecure"]
@@ -175,6 +169,7 @@ http:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
         (PathPrefix(`/api/audit/v1`) ||
+         PathPrefix(`/api/connector/v1`) ||
          PathPrefix(`/api/forms/v1`) ||
          PathPrefix(`/api/workflow/v1`) ||
          PathPrefix(`/api/lifecycle/v1`) ||
@@ -201,8 +196,7 @@ http:
     tenant-backend-blob:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.saas\.localtest\.me$`) &&
-        (PathPrefix(`/api/connector/v1`) ||
-         PathPrefix(`/api/blob-store/v1`) ||
+        (PathPrefix(`/api/blob-store/v1`) ||
          PathPrefix(`/api/users/v1`) ||
          PathPrefix(`/api/v1/schemas`) ||
          PathPrefix(`/api/claimmapping/v1`))

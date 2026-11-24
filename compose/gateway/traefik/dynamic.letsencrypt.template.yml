@@ -144,6 +144,7 @@ __LE_TLS_DOMAINS__
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
         (PathPrefix(`/api/audit/v1`) ||
+         PathPrefix(`/api/connector/v1`) ||
          PathPrefix(`/api/forms/v1`) ||
          PathPrefix(`/api/workflow/v1`) ||
          PathPrefix(`/api/lifecycle/v1`) ||
@@ -172,8 +173,7 @@ __LE_TLS_DOMAINS__
     tenant-backend-blob:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        (PathPrefix(`/api/connector/v1`) ||
-         PathPrefix(`/api/blob-store/v1`) ||
+        (PathPrefix(`/api/blob-store/v1`) ||
          PathPrefix(`/api/users/v1`) ||
          PathPrefix(`/api/v1/schemas`) ||
          PathPrefix(`/api/claimmapping/v1`))

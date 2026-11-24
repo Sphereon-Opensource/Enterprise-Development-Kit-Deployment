@@ -130,13 +130,25 @@ transport:
             target: SERVER
             transport: GRPC
             endpoint: grpc://enterprise-blob:9090
-      # The connector registry runs on enterprise-blob. The invitation gate at mint resolves attached bindings and
+      # A workflow worker's credential.issuance mint is proved by the case approval the platform holds
+      # (organization.case-issuance-approval.verify), under this service's own workload token. The service name is
+      # bracket-quoted: unquoted, its hyphens split the key.
+      organization:
+        services:
+          "[case-issuance-approval]":
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
+      # The connector registry runs in the platform. The invitation gate at mint resolves attached bindings and
       # runs recipient and claim lookups there.
       connector:
         target: SERVER
         transport: GRPC
-        endpoint: grpc://enterprise-blob:9090
-        serviceTokenAudience: enterprise-blob
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: true
         timeoutMs: 15000
       platform:
