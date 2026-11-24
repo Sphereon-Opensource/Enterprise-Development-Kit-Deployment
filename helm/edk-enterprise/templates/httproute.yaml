@@ -545,9 +545,6 @@ spec:
             type: PathPrefix
             value: /api/assets/v1
         - path:
-            type: PathPrefix
-            value: /api/connector/v1
-        - path:
             type: RegularExpression
             value: "^/public/assets/[^/]+/brand/[^/]+$"
       backendRefs:
@@ -782,7 +779,7 @@ spec:
             type: PathPrefix
             value: /api/trust-domain/v1
         {{- /* The invitation REST API on tenant hosts belongs to tenant-AS (see its gateway paths). */}}
-        {{- range $path := list "/api/audit/v1" "/api/forms/v1" "/api/workflow/v1" "/api/lifecycle/v1" "/api/modeling/v1" "/api/organization/v1" "/api/services/v1" "/api/v1/config" "/api/semanticmapping/v1" }}
+        {{- range $path := list "/api/audit/v1" "/api/connector/v1" "/api/forms/v1" "/api/workflow/v1" "/api/lifecycle/v1" "/api/modeling/v1" "/api/organization/v1" "/api/services/v1" "/api/v1/config" "/api/semanticmapping/v1" }}
         - path:
             type: PathPrefix
             value: {{ $path | quote }}
