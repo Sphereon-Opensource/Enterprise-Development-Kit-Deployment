@@ -189,6 +189,15 @@ transport:
                 transport: HTTP
                 endpoint: http://enterprise-did:8080
                 timeoutMs: 10000
+      # The connector registry runs in the platform: binding listing, attachment resolution and the governed lookups and
+      # exports of the pipeline.
+      connector:
+        target: SERVER
+        transport: GRPC
+        endpoint: grpc://enterprise-platform:9090
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
+        timeoutMs: 15000
       platform:
         target: SERVER
         transport: GRPC

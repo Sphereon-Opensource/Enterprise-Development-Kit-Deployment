@@ -372,7 +372,6 @@ name, or an empty list for services that are not tenant-routed.
 {{- else if eq $name "blob" -}}
 - /api/theme/v1
 - /api/assets/v1
-- /api/connector/v1
 - /api/blob-store/v1
 - /api/users/v1
 - /api/v1/schemas
