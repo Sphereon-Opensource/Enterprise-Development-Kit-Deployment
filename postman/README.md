@@ -78,7 +78,7 @@ client's credentials.
 | Credential issuer | Read the issuer, its credential configurations and its public metadata. |
 | Credential designs | Read the designs that control how wallets display credentials. |
 | Status lists | Read the status lists and the public status list token. |
-| Define your own credential | Add an `EmployeeBadge` SD-JWT VC: a status list, a design, and the credential configuration. |
+| Define your own credential | Add an `EmployeeBadge` SD-JWT VC: a status list, a design that you publish, and the credential configuration. |
 | Issue credentials | Create offers (from a template, for EuPid, and for EmployeeBadge with a transaction code), receive the credential in a test wallet, and revoke it. |
 | Verify credentials | Create a DCQL query, bind it to the verifier, create an authorization request from a template or a query, and poll its result. |
 | Trust domains | Read the trust domains, anchors and attachments that decide which issuers the verifier accepts; optionally fetch the active hosted mdoc VICAL without a token. |

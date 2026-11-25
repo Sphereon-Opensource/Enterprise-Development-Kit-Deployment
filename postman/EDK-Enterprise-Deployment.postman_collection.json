@@ -2757,7 +2757,31 @@
               "response": []
             },
             {
-              "name": "7. Get the EmployeeBadge configuration",
+              "name": "7. Publish the credential design",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "if ([200].includes(pm.response.code)) {",
+                      "  pm.test('The design is published', () => pm.expect(pm.response.json().state).to.eql('PUBLISHED'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/credential-design/v1/designs/credentials/{{employeeBadgeDesignId}}/versions/1/publish",
+                "description": "A new design is a draft. The issuer issues an `EmployeeBadge` only from a published design, and the tenant serves its type metadata only once the design is published. This publishes the first version of the design. Publishing a version that is already published changes nothing and answers the same way, so you can run this again."
+              },
+              "response": []
+            },
+            {
+              "name": "8. Get the EmployeeBadge configuration",
               "event": [
                 {
                   "listen": "test",
@@ -2781,7 +2805,7 @@
               "response": []
             },
             {
-              "name": "8. Save the EmployeeBadge configuration",
+              "name": "9. Save the EmployeeBadge configuration",
               "event": [
                 {
                   "listen": "prerequest",
@@ -2829,7 +2853,7 @@
               "response": []
             },
             {
-              "name": "9. Read the published type metadata",
+              "name": "10. Read the published type metadata",
               "event": [
                 {
                   "listen": "test",

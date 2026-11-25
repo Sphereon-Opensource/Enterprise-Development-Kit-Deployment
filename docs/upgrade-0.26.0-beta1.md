@@ -117,9 +117,31 @@ report healthy and only validate the schema; they never receive DDL
 credentials. Take backups of both databases first: a schema that 0.26.0 has
 migrated cannot be opened by 0.25.0 images.
 
+### Credential designs have versions that you publish
+
+In 0.26.0 a credential design has versions, and the issuer uses the
+published version. This changes two things:
+
+- **Existing designs keep working.** The upgrade publishes the current
+  version of every design that 0.25.0 stored. Credential configurations,
+  issuance templates and offers that use those designs issue as before, from
+  the same design. You do not have to do anything.
+- **A new design starts as a draft.** After
+  `POST /api/credential-design/v1/designs/credentials`, publish it with
+  `POST /api/credential-design/v1/designs/credentials/{designId}/versions/1/publish`
+  before you issue from it. Until then a credential offer for its
+  configuration is refused with `409` and the hosted type metadata
+  (`/public/schema/vct/{vct}`) answers `404`. The Postman collection has the
+  publish request in **Define your own credential**.
+
 ### Credential format identifier for W3C VCDM 2.0 JWT credentials
 
-0.26.0 uses the format identifiers this way:
+W3C VC credential formats were not part of a supported 0.25.0 deployment,
+which issues SD-JWT VC and ISO mdoc credentials. This section only concerns
+you if you configured a W3C VC credential on a test installation. SD-JWT VC
+(`dc+sd-jwt`) and mdoc (`mso_mdoc`) are unchanged.
+
+0.26.0 uses the W3C format identifiers this way:
 
 | Credential | 0.25.0 | 0.26.0 |
 | --- | --- | --- |
@@ -145,6 +167,90 @@ what clients see:
 
 Credentials issued before the upgrade are not touched and stay valid: the
 format identifier is not part of a credential.
+
+### Breaking API changes
+
+Check your integration against this list before you upgrade. The Postman
+collection in this kit already uses the 0.26.0 calls. The list has three
+parts:
+
+1. **Must read:** calls that the 0.25.0 kit showed in its Postman collection
+   or documentation. An integration built from the kit uses these.
+2. **Check if you use them:** other issuer, verifier, design, organization
+   unit and blob store calls.
+3. **Everything else:** the forms, connector and lifecycle APIs were
+   reachable through the 0.25.0 gateway but were not part of the kit's
+   collection or documentation. Their changes are in
+   [the full list](api-changes-0.26.0-beta1.md), which also repeats parts 1
+   and 2 call by call.
+
+#### Must read
+
+**Credential offers moved under the issuer instance.** This is the change
+most integrations meet first.
+
+| 0.25.0 | 0.26.0 |
+| --- | --- |
+| `POST /api/oid4vci/v1/backend/credential/offers` | `POST /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers` |
+| `GET /api/oid4vci/v1/backend/credential/offers/{correlation_id}` | `GET /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers/{correlation_id}` |
+| `DELETE /api/oid4vci/v1/backend/credential/offers/{correlation_id}` | `DELETE /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers/{correlation_id}` |
+
+`{instanceId}` is the id of the credential issuer; read it with
+`GET /api/oid4vci/v1/instances`. The 0.25.0 paths answer `404` with a message
+that names the new path. Request and response bodies are unchanged.
+
+**Action paths no longer use a colon.** Every `:verb` suffix became a path
+segment. The 0.25.0 collection used the first row (enable a shared vault).
+
+| 0.25.0 | 0.26.0 |
+| --- | --- |
+| `POST /api/platform/config/v1/tenants/{tenantId}/kms/shared-providers/{providerId}:enable` (also `:disable`, and `.../kms/resources:attach`) | `.../shared-providers/{providerId}/enable`, `/disable`, `.../kms/resources/attach` |
+| `POST /api/blob-store/v1/blobs:search` (also `:verify`, `:copy`, `:move`) | `/api/blob-store/v1/blobs/search` |
+| `/api/lifecycle/v1/...:verb` | the same path with `/verb` |
+
+#### Check if you use them
+
+**W3C VC format identifier.** A W3C VCDM 2.0 JWT credential uses `vc+jwt`
+instead of `jwt_vc_json-ld`. See the section above.
+
+**Removed.**
+
+- `/api/v1/tabular-mapping-templates` is gone. Claim mappings are managed
+  under `/api/claimmapping/v1`, with a different model.
+- `/api/platform/config/v1/tenants/{tenantId}/audiences` answers `404`.
+  Audiences are not part of the enterprise installation.
+
+**Changed fields.**
+
+- Verification result,
+  `GET /oid4vp/backend/auth/requests/{correlation_id}`: a value in
+  `verified_data.credential_claims[].claims` can be any JSON value (object,
+  array, number, boolean, null), not only a string.
+- Issuance and verification templates: `spec.recipient_lookup_sources` is no
+  longer accepted or returned.
+- Credential designs: `bindings[].@context` can be a string or an array.
+- DCQL preview: entries of `provenance[].generatedClaimPaths` are objects.
+- Organization units: `parentOuId` is required when you create a unit other
+  than the first of a tenant, and `PUT /api/party/v1/ou/{id}` no longer moves
+  a unit. Use `POST /api/party/v1/ou/{id}/move`.
+- Blob listing, `GET /api/blob-store/v1/stores/{storeId}/blobs`: the `prefix`
+  query parameter is required.
+- Issuer sessions, `POST /api/oid4vci/v1/backend/sessions`: the stage values
+  `FORM_LIFECYCLE`, `FORM_ACTION_START`, `FORM_ACTION_COMPLETE` and
+  `PORTAL_FLOW` are no longer accepted in
+  `pipeline_configuration.invocationBindings[].stage`.
+
+#### Everything else
+
+The forms API (`/api/forms/v1`) and the connector API (`/api/connector/v1`)
+changed many request and response field types, and a number of text fields
+now accept only listed values. Generate your client again from the 0.26.0
+OpenAPI documents if you use these APIs. Every change is in
+[the full list](api-changes-0.26.0-beta1.md).
+
+The DID API, the tenant KMS API and the verifier paths did not change in a
+breaking way. Authentication, scopes, status codes and content types are
+unchanged for every API.
 
 ### New optional overlays
 
