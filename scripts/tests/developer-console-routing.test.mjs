@@ -20,6 +20,15 @@ test('Developer Console page rewrite preserves the root and callback slash shape
   }
 })
 
+test('the public certificate and Let\'s Encrypt templates carry the same page rewrite', () => {
+  const expected = source.split('    developer-console-page-rewrite:')[1].split('    developer-journeys-artifact-rewrite:')[0]
+  for (const template of ['dynamic.public-cert.template.yml', 'dynamic.letsencrypt.template.yml']) {
+    const text = readFileSync(new URL(`../../compose/gateway/traefik/${template}`, import.meta.url), 'utf8')
+    const actual = text.split('    developer-console-page-rewrite:')[1].split('    developer-journeys-artifact-rewrite:')[0]
+    assert.equal(actual.replaceAll('\r\n', '\n'), expected.replaceAll('\r\n', '\n'), `${template} must rewrite like dynamic.yml`)
+  }
+})
+
 test('Developer Console page routing stays exact and API paths retain their separate rewrite', () => {
   const page = source.split('    developer-console-page:')[1].split('    developer-journeys-artifact:')[0]
   assert.ok(page.includes('Path(`/developer-console`)'))

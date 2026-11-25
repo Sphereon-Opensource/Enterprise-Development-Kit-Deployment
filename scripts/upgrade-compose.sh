@@ -110,6 +110,11 @@ if [[ -n "$INSTALLED_IMAGE_TAG" ]]; then
     "0.25.0-rc4-to-0.25.0-rc5"; then
     die "Refusing unsupported release downgrade: $INSTALLED_IMAGE_TAG -> $IMAGE_TAG"
   fi
+  installed_release_rank="$(edk_release_number "$INSTALLED_IMAGE_TAG")"
+  if [[ "$installed_release_rank" -gt 0 && "$installed_release_rank" -lt 10 &&
+        "$(edk_release_number "$IMAGE_TAG")" -ge 20 ]]; then
+    die "Upgrade the $INSTALLED_IMAGE_TAG installation to 0.25.0 first; 0.26.0 upgrades start from the 0.25.0 release."
+  fi
   INTERMEDIATE_IMAGE_TAG="$EDK_INTERMEDIATE_IMAGE_TAG"
 fi
 
