@@ -779,10 +779,19 @@ spec:
             type: PathPrefix
             value: /api/trust-domain/v1
         {{- /* The invitation REST API on tenant hosts belongs to tenant-AS (see its gateway paths). */}}
-        {{- range $path := list "/api/audit/v1" "/api/connector/v1" "/api/forms/v1" "/api/workflow/v1" "/api/lifecycle/v1" "/api/modeling/v1" "/api/organization/v1" "/api/services/v1" "/api/v1/config" "/api/semanticmapping/v1" }}
+        {{- range $path := list "/api/audit/v1" "/api/connector/v1" "/api/forms/v1" "/api/modeling/v1" "/api/organization/v1" "/api/services/v1" "/api/v1/config" "/api/semanticmapping/v1" }}
         - path:
             type: PathPrefix
             value: {{ $path | quote }}
+        {{- end }}
+        {{- /* Workflow and lifecycle execution run on a workflow worker deployed beside this release; the platform
+        routes them over gRPC only when integrations.workflow is enabled, so the gateway exposes them only then. */}}
+        {{- if .Values.integrations.workflow.enabled }}
+        {{- range $path := list "/api/workflow/v1" "/api/lifecycle/v1" }}
+        - path:
+            type: PathPrefix
+            value: {{ $path | quote }}
+        {{- end }}
         {{- end }}
       backendRefs:
         - name: {{ include "edk-enterprise.serviceName" (dict "root" . "name" "platform") }}

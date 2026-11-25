@@ -1,0 +1,59 @@
+# Optional Inbox overlay: the tenant Inbox (vdx-inbox). The enterprise stack runs without it. Use it after
+# docker-compose.gateway.yml (or a rendered gateway overlay):
+#
+#   1. node scripts/render-inbox-gateway.mjs --base-domain <domain> --input gateway/traefik/<rendered table> \
+#        --output gateway/traefik/dynamic.inbox.generated.yml
+#   2. EDK_INBOX_GATEWAY_CONFIG=./gateway/traefik/dynamic.inbox.generated.yml docker compose \
+#        -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.inbox.yml up -d
+#
+# The Inbox needs the platform for tokens, calendar and licence commands, the tenant database, a policy service and a
+# workload key. Generate the secret-authority keys for service-inbox together with the base workloads, set
+# EDK_INTERNAL_CLIENT_SECRET_INBOX, and supply a policy service with the reviewed tenant policies through
+# EDK_INBOX_OPA_ENDPOINT.
+#
+# The Inbox image is published by the VDX image build, not with the enterprise images: set VDX_REGISTRY and VDX_TAG.
+# An enterprise image role for it is a follow-up outside this release.
+
+services:
+  traefik:
+    volumes:
+      - ${EDK_INBOX_GATEWAY_CONFIG:?Render an Inbox gateway config with scripts/render-inbox-gateway.mjs}:/etc/traefik/dynamic/dynamic.yml:ro
+
+  enterprise-platform:
+    environment:
+      EDK_INTERNAL_CLIENT_SECRET_INBOX: ${EDK_INTERNAL_CLIENT_SECRET_INBOX:?Set the Inbox client secret}
+    volumes:
+      - ./config/platform.inbox.application-container.yml:/app/config/application-container.yml:ro
+
+  vdx-inbox:
+    image: ${VDX_REGISTRY:?Set VDX_REGISTRY to the native Inbox image registry}/vdx-inbox:${VDX_TAG:?Set VDX_TAG to the approved native Inbox image tag}
+    depends_on:
+      enterprise-platform:
+        condition: service_healthy
+    networks: [appnet, tenant-db-net]
+    environment:
+      APP_PROFILE: container
+      SPHEREON_CONFIG_LOCATION: /app/config
+      EDK_PLATFORM_BASE_DOMAIN: ${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      EDK_PLATFORM_ISSUER: https://platform.${EDK_PLATFORM_BASE_DOMAIN:?EDK_PLATFORM_BASE_DOMAIN must be set explicitly}
+      EDK_TRUST_TENANT_REGISTRY_ISSUERS: "true"
+      EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_INBOX:?Set the Inbox client secret}
+      EDK_TENANT_DB_HOST: tenant-postgres
+      EDK_TENANT_DB_NAME: ${EDK_TENANT_DB_NAME:-tenant}
+      EDK_DB_USERNAME: ${EDK_TENANT_DB_USERNAME:-edk_tenant}
+      EDK_DB_PASSWORD: ${EDK_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_TENANT_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD: ${EDK_SECRET_MANAGEMENT_RUNTIME_DB_PASSWORD:?Run scripts/generate-compose-secrets.mjs}
+      GRPC_AUTH_MODE: service-jwt
+      TRANSPORT_AUTH_EXPECTED_AUDIENCE: enterprise-inbox
+      CALENDAR_COMMAND_ENDPOINT: grpc://enterprise-platform:9090
+      AUTHZ_POLICY_ENGINES_OPA_MAIN_ENDPOINT: ${EDK_INBOX_OPA_ENDPOINT:?Set EDK_INBOX_OPA_ENDPOINT to the reviewed policy service}
+      # Workloads allowed to post case notices. Empty by default: no workload in this kit posts notices, so the
+      # notice API stays closed. Name a workload here only when one that posts notices is deployed beside the stack.
+      INBOX_NOTICES_WORKLOADS: ${INBOX_NOTICES_WORKLOADS:-}
+      LICENSE_DEPLOYMENT_ID: ${LICENSE_DEPLOYMENT_ID:?Set LICENSE_DEPLOYMENT_ID}
+      SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY: ${SECRET_AUTHORITY_SATELLITE_ASSERTION_SIGNING_KEY:?Run scripts/generate-secret-authority-keys, then scripts/generate-compose-secrets.mjs}
+      SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS: ${SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS:?Run scripts/generate-secret-authority-keys, then scripts/generate-compose-secrets.mjs}
+    volumes:
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/public/central-permit.pub.pem:/app/secret-authority/public/central-permit.pub.pem:ro
+      - ${EDK_SECRET_AUTHORITY_ROOT:?Set EDK_SECRET_AUTHORITY_ROOT}/workload/service-inbox:/app/secret-authority/workload:ro

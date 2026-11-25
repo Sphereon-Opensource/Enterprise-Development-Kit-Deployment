@@ -1,0 +1,30 @@
+# Optional Inbox profile for the platform: registers the Inbox client and binds its workload.
+# Mounted as /app/config/application-container.yml by compose/docker-compose.inbox.yml only. The base deployment
+# runs without it and routes nothing to the Inbox.
+
+oauth2:
+  servers:
+    platform:
+      internal-clients:
+        inbox:
+          client-id: inbox-service
+          client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_INBOX}
+          grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
+          default-access-token-audience: enterprise-platform
+          allowed-access-token-audiences: enterprise-tenant-kms
+          token-exchange:
+            mode: secret-bootstrap
+            audiences: enterprise-platform
+
+tenant:
+  registration:
+    internal-clients:
+      additional:
+        inbox:
+          client-id: inbox-service
+          allowed-audiences: enterprise-platform,enterprise-tenant-kms
+
+security:
+  workload-trust-policy:
+    service_client_bindings:
+      "[service-inbox]": inbox-service

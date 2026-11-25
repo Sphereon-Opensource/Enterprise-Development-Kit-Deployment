@@ -99,6 +99,13 @@ you operate your own reverse proxy, apply the same changes there.
 | `/api/invitation/v1/jobs`, `/api/invitation/v1/recipientsources` | Added | Issuer |
 | `/public/trust-domain/v1` | Added, anonymous | Platform |
 | OpenID Federation paths ending in `.well-known/openid-federation` or starting with `federation_` | Added | Platform |
+| `/api/workflow/v1`, `/api/lifecycle/v1` | Removed | Platform |
+
+0.25.0 routed `/api/workflow/v1` and `/api/lifecycle/v1` to the platform, but
+this kit runs no workflow runtime, so nothing answered them. The workflow and
+lifecycle execution APIs belong to VDX deployments. The forms API
+(`/api/forms/v1`) stays on the platform. In the Helm chart both paths are
+routed only when `integrations.workflow.enabled` is `true`.
 
 On the platform host, `/api/party/v1` is new and goes to the tenant
 authorization server, and `/api/connector/v1` is removed.
@@ -182,7 +189,8 @@ parts:
    reachable through the 0.25.0 gateway but were not part of the kit's
    collection or documentation. Their changes are in
    [the full list](api-changes-0.26.0-beta1.md), which also repeats parts 1
-   and 2 call by call.
+   and 2 call by call. The 0.26.0-beta1 gateway no longer routes the
+   lifecycle API (see [Gateway routes](#gateway-routes)).
 
 #### Must read
 
@@ -256,9 +264,28 @@ unchanged for every API.
 
 The kit now also contains overlays for OpenID Federation
 (`docker-compose.federation.yml`, `docker-compose.federation-publication-pdp.yml`)
-and for workflows (`docker-compose.workflow.yml`). They are not part of the
+and for the tenant Inbox (`docker-compose.inbox.yml`). They are not part of the
 default stack and this upgrade does not need them. The secret generator adds
 two `EDK_OIDFED_*` passwords to `.env`; the default stack does not read them.
+
+The Inbox overlay adds the `vdx-inbox` service and the platform settings it
+needs. Its image comes from the VDX image build, so set `VDX_REGISTRY` and
+`VDX_TAG`, and set `EDK_INTERNAL_CLIENT_SECRET_INBOX` and
+`EDK_INBOX_OPA_ENDPOINT`. Generate a secret-authority key for `service-inbox`
+together with the base workloads. Then render the gateway table with the
+Inbox route and start the stack with three Compose files:
+
+```bash
+node scripts/render-inbox-gateway.mjs --base-domain <domain> \
+  --input compose/gateway/traefik/<rendered table> \
+  --output compose/gateway/traefik/dynamic.inbox.generated.yml
+cd compose
+EDK_INBOX_GATEWAY_CONFIG=./gateway/traefik/dynamic.inbox.generated.yml docker compose \
+  -f docker-compose.yml -f docker-compose.gateway.yml -f docker-compose.inbox.yml up -d
+```
+
+Workflows are not an overlay of this kit. The workflow worker, its Temporal
+store and the tenant Portal are part of VDX deployments.
 
 ### Postman collection
 

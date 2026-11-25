@@ -171,8 +171,6 @@ http:
         (PathPrefix(`/api/audit/v1`) ||
          PathPrefix(`/api/connector/v1`) ||
          PathPrefix(`/api/forms/v1`) ||
-         PathPrefix(`/api/workflow/v1`) ||
-         PathPrefix(`/api/lifecycle/v1`) ||
          PathPrefix(`/api/modeling/v1`) ||
          PathPrefix(`/api/organization/v1`) ||
          PathPrefix(`/api/services/v1`) ||
