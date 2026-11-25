@@ -223,7 +223,6 @@ segment. The 0.25.0 collection used the first row (enable a shared vault).
 | --- | --- |
 | `POST /api/platform/config/v1/tenants/{tenantId}/kms/shared-providers/{providerId}:enable` (also `:disable`, and `.../kms/resources:attach`) | `.../shared-providers/{providerId}/enable`, `/disable`, `.../kms/resources/attach` |
 | `POST /api/blob-store/v1/blobs:search` (also `:verify`, `:copy`, `:move`) | `/api/blob-store/v1/blobs/search` |
-| `/api/lifecycle/v1/...:verb` | the same path with `/verb` |
 
 #### Check if you use them
 
