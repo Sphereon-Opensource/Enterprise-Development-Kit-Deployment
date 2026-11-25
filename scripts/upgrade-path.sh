@@ -18,6 +18,11 @@ edk_release_number() {
     0.25.0-RC5|0.25.0-RC5[-._]*) printf '5\n' ;;
     # The final release ranks above all release candidates, including future RCs.
     0.25.0|0.25.0[-._][0-9]*) printf '10\n' ;;
+    # 0.26.0 pre-releases and the final release rank above every 0.25.0 tag, so a
+    # downgrade to 0.25.0 is refused. BETA10 and RC10 stay within their own band.
+    0.26.0-BETA[0-9]|0.26.0-BETA[0-9][-._0-9]*) printf '20\n' ;;
+    0.26.0-RC[0-9]|0.26.0-RC[0-9][-._0-9]*) printf '25\n' ;;
+    0.26.0|0.26.0[-._][0-9]*) printf '30\n' ;;
     *) printf '0\n' ;;
   esac
 }
