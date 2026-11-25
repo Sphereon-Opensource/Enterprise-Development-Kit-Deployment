@@ -24,7 +24,7 @@ services:
       - ./config/platform.journey.application-container.yml:/app/config/application-container.yml:ro
 
   temporal-postgres:
-    image: postgres:15-alpine
+    image: postgres:15.20-alpine
     environment:
       POSTGRES_USER: temporal
       POSTGRES_PASSWORD: ${EDK_TEMPORAL_POSTGRES_PASSWORD:?Set EDK_TEMPORAL_POSTGRES_PASSWORD}

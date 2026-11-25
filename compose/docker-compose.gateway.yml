@@ -33,7 +33,7 @@ x-edk-gateway-public-env: &edk-gateway-public-env
 
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.7.20
     depends_on:
       enterprise-platform:
         condition: service_healthy
