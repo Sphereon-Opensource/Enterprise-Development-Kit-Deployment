@@ -10,6 +10,10 @@ same API.
 Authentication, scopes, success status codes and content types did not change for any
 call. The DID API and the tenant KMS API have no breaking change.
 
+The issuer now requires a published design. For a draft, the hosted type metadata
+returns 404 and creating a credential offer returns 409. Publish new designs
+before issuing. The upgrade publishes the current versions of existing designs.
+
 ## Issuer, verifier, DCQL, designs, organization units and blob store
 
 | Service | 0.25.0 | 0.26.0 | What to change |

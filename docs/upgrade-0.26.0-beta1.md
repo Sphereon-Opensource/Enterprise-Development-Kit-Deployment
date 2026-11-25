@@ -58,8 +58,10 @@ it after the upgrade as described in [After the upgrade](#after-the-upgrade).
 - `docker-compose.gateway.yml` (local certificate gateway): `enterprise-blob`
   gets the public URL settings, the local truststore and the certificate
   mount that the other services already had.
-- The public certificate, Let's Encrypt and behind-edge Compose templates are
-  unchanged.
+- The bundled Traefik gateways move from `v3.3` to `v3.7.20`. This includes
+  the public certificate, Let's Encrypt and behind-edge Compose templates.
+  If you use an external TLS edge, this updates the customer kit's gateway
+  behind it. Keep your existing external edge configuration.
 
 Take the 0.26.0-beta1 files. If you changed a Compose file, reapply your
 change to the new file.
@@ -85,8 +87,8 @@ starting invitation jobs at the issuer.
 ### Gateway routes
 
 The route table changed in `compose/gateway/traefik/dynamic.yml` and in the
-public certificate and Let's Encrypt templates. A route file rendered from a
-0.25.0 template lacks the new routes, so render it again from the
+public certificate, Let's Encrypt and behind-edge templates. Render the
+route file again from the
 0.26.0-beta1 template with the same command and base domain as at install. If
 you operate your own reverse proxy, apply the same changes there.
 
@@ -123,6 +125,11 @@ schema in the tenant database. The other services wait for the platform to
 report healthy and only validate the schema; they never receive DDL
 credentials. Take backups of both databases first: a schema that 0.26.0 has
 migrated cannot be opened by 0.25.0 images.
+
+The enterprise kit stops provisioning tables used exclusively by wallet
+services. On upgrade, the platform removes these table groups only when
+they are empty and no objects outside the group depend on them. It keeps
+groups that hold data or have external dependencies and logs the reason.
 
 ### Credential designs have versions that you publish
 
