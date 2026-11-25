@@ -24,6 +24,7 @@ metadata:
     app.kubernetes.io/component: tenant-as
 data:
   application.yml: |
+{{ include "edk-enterprise.openapiPublishedProductConfig" . | indent 4 }}
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "tenant-as")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     # Federation initiation happens before tenant context exists. Keep its
