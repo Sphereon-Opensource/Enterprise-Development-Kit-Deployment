@@ -798,6 +798,11 @@ auth:
   login:
     require-application: false
 platform:
+  # The platform migrates every schema of the installation. This kit installs no wallet services, so the
+  # schemas only they use are not created in the tenant storage. Set this to true when wallet services are
+  # added to the installation, before they start.
+  migration:
+    wallet-service-schemas: false
   # Workloads that read hosted AS authority: the tenant AS signing runtime and the tenant KMS
   # custody checks for hosted AS signing keys.
   authorization-server-authority:
