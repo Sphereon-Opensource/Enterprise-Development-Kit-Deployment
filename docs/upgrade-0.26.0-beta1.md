@@ -194,18 +194,27 @@ parts:
 
 #### Must read
 
-**Credential offers moved under the issuer instance.** This is the change
-most integrations meet first.
+**Credential offers have a new path under the issuer instance. The 0.25.0
+paths are deprecated and still work.** This is the change most integrations
+meet first.
 
-| 0.25.0 | 0.26.0 |
+| 0.25.0 (deprecated, still works) | 0.26.0 |
 | --- | --- |
 | `POST /api/oid4vci/v1/backend/credential/offers` | `POST /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers` |
 | `GET /api/oid4vci/v1/backend/credential/offers/{correlation_id}` | `GET /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers/{correlation_id}` |
 | `DELETE /api/oid4vci/v1/backend/credential/offers/{correlation_id}` | `DELETE /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers/{correlation_id}` |
 
-`{instanceId}` is the id of the credential issuer; read it with
-`GET /api/oid4vci/v1/instances`. The 0.25.0 paths answer `404` with a message
-that names the new path. Request and response bodies are unchanged.
+An integration that calls the 0.25.0 paths keeps working in 0.26 without
+changes. Request and response bodies are the same as in 0.25.0; on the 0.25.0
+path, the `status_uri` of a new offer also uses the 0.25.0 path. The 0.25.0
+paths are deprecated, so new integrations use the instance path. `{instanceId}` is the id of the credential
+issuer; read it with `GET /api/oid4vci/v1/instances`.
+
+On a 0.25.0 path, the platform uses the tenant's credential issuer. When the
+tenant has more than one credential issuer, it uses the one published on the
+host you call, if exactly one is. Otherwise the call answers `400` with a
+message that names the instance path, and no offer is created. Such a tenant
+must move to the instance path.
 
 **Action paths no longer use a colon.** Every `:verb` suffix became a path
 segment. The 0.25.0 collection used the first row (enable a shared vault).
@@ -214,7 +223,6 @@ segment. The 0.25.0 collection used the first row (enable a shared vault).
 | --- | --- |
 | `POST /api/platform/config/v1/tenants/{tenantId}/kms/shared-providers/{providerId}:enable` (also `:disable`, and `.../kms/resources:attach`) | `.../shared-providers/{providerId}/enable`, `/disable`, `.../kms/resources/attach` |
 | `POST /api/blob-store/v1/blobs:search` (also `:verify`, `:copy`, `:move`) | `/api/blob-store/v1/blobs/search` |
-| `/api/lifecycle/v1/...:verb` | the same path with `/verb` |
 
 #### Check if you use them
 
@@ -227,6 +235,12 @@ instead of `jwt_vc_json-ld`. See the section above.
   under `/api/claimmapping/v1`, with a different model.
 - `/api/platform/config/v1/tenants/{tenantId}/audiences` answers `404`.
   Audiences are not part of the enterprise installation.
+
+**Mandatory claims are enforced.** When a credential design marks a claim as
+mandatory, the issuer refuses a credential request whose offer did not supply
+that claim, with `invalid_credential_request` and the list of missing claims.
+0.25.0 issued the credential without the claim. Send every mandatory claim in
+`credential_subject_data` when you create the offer.
 
 **Changed fields.**
 
