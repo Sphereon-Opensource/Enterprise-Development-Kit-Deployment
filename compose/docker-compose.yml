@@ -287,6 +287,9 @@ services:
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
       EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_TENANT_AS:?Run scripts/generate-compose-secrets.mjs}
+      # The issuer and verifier call the invitation commands this service owns over gRPC.
+      GRPC_ENABLED: "true"
+      GRPC_PORT: "9090"
       EDK_INTERNAL_CLIENT_SECRET_ISSUER: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Run scripts/generate-compose-secrets.mjs}
       FEDERATION_SESSION_ENCRYPTION_KEY: ${EDK_FEDERATION_SESSION_ENCRYPTION_KEY:?Run scripts/generate-compose-secrets.mjs}
       PORT: "18083"
@@ -423,6 +426,9 @@ services:
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
       EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_ISSUER:?Run scripts/generate-compose-secrets.mjs}
+      # The tenant authorization server and the verifier call issuer commands (invitation hooks and jobs) over gRPC.
+      GRPC_ENABLED: "true"
+      GRPC_PORT: "9090"
       EXTERNAL_BASE_URL: ${EDK_ISSUER_EXTERNAL_BASE_URL:-http://localhost:18084}
       EDK_PIPELINE_MASTER_KEK: ${EDK_PIPELINE_MASTER_KEK:?Run scripts/generate-compose-secrets.mjs}
       EDK_PIPELINE_BLIND_INDEX_KEY: ${EDK_PIPELINE_BLIND_INDEX_KEY:?Run scripts/generate-compose-secrets.mjs}
@@ -457,6 +463,9 @@ services:
     environment:
       <<: [*edk-common-env, *edk-tenant-db-env]
       EDK_INTERNAL_CLIENT_SECRET: ${EDK_INTERNAL_CLIENT_SECRET_VERIFIER:?Run scripts/generate-compose-secrets.mjs}
+      # The tenant authorization server calls verifier commands (invitation hooks, interactive authorization) over gRPC.
+      GRPC_ENABLED: "true"
+      GRPC_PORT: "9090"
       EXTERNAL_BASE_URL: ${EDK_VERIFIER_EXTERNAL_BASE_URL:-http://localhost:18085}
     volumes:
       - ./config/verifier.application.yml:/app/config/application.yml:ro

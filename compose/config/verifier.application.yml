@@ -31,7 +31,9 @@ server:
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    allowed-audiences: enterprise-tenant-kms,enterprise-issuer
+    # Receivers this service mints workload tokens for: tenant KMS (key commands), the tenant authorization
+    # server (invitation commands) and the issuer (verification invitation jobs).
+    allowed-audiences: enterprise-tenant-kms,enterprise-tenant-as,enterprise-issuer
 applications:
   admin-console:
     public-base-path: ${env:EDK_ADMIN_CONSOLE_PUBLIC_BASE_PATH:/admin-console}
@@ -93,11 +95,42 @@ security:
       "[service-platform]": kms-service
 transport:
   grpc:
+    # The inbound gRPC listener is switched by the GRPC_ENABLED environment variable of the service, not by this key.
     enabled: false
     port: 9090
+  # What this service answers on its internal gRPC transport; every other command is refused there. The tenant
+  # authorization server calls the invitation-handler hooks, the Interactive Authorization presentation request and
+  # its verification (oid4vp.iae.*) and the presentation request of account recovery (oid4vp.universal.*).
+  # The REST surface and in-process dispatch are not affected.
+  served-commands: "invitation-handler.*,oid4vp.iae.*,oid4vp.universal.*"
   routing:
     configScope: APP
     modules:
+      # The semantic model runs in the platform: connector fields resolve their model elements there
+      # (model.element.resolve), SEMANTIC_MODEL_ELEMENT attachments get the elements an exchange uses
+      # (model.element.scope) and presented claims get their coordinates (model.element.claim-coordinates).
+      # Only the element service of the model module is routed.
+      model:
+        services:
+          element:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
+      # Invitation commands (invitation.service.<command>) route to the tenant authorization server, which owns the
+      # invitations of every tenant except the platform tenant. Verification invitations are minted, read and
+      # redeemed there; this service carries only the routed client.
+      invitation:
+        services:
+          service:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-as:9090
+            serviceTokenAudience: enterprise-tenant-as
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
       # The connector registry runs in the platform: binding listing, attachment resolution and the governed lookups and
       # exports of the pipeline.
       connector:
@@ -287,3 +320,20 @@ secret:
         issuer: enterprise-platform
         audience: sphereon-secret-use
         verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+
+# Authorization sessions live in the tenant database, so a verification survives a restart and reaches every
+# replica. Without this entry the store falls back to process memory and a claimed verification is refused.
+kv:
+  stores:
+    oid4vp:
+      authorization_session:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
+
+# Invitation hooks (invitation-handler.*) are accepted only from the tenant authorization server's tenant-bound
+# service token, exchanged for this service's own audience.
+invitation:
+  handler-host:
+    allowed-workloads: tenant-as-service
+    audience: enterprise-verifier

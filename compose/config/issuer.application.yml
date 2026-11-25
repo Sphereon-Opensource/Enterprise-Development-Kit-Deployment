@@ -138,14 +138,59 @@ authz:
             any-of: [tenant-admin, platform-admin]
 transport:
   grpc:
+    # The inbound gRPC listener is switched by the GRPC_ENABLED environment variable of the service, not by this key.
     enabled: false
     port: 9090
+  # What this service answers on its internal gRPC transport; every other command is refused there. The tenant
+  # authorization server calls the invitation-handler hooks and asks whether an Interactive Authorization grant may
+  # complete (oid4vci.issuer.iae-admit, oid4vci.issuer.grant-step). The verifier forwards the verification job submit
+  # of its operators; the remaining job steps are served to the workflow worker of the optional workflow overlay.
+  # The REST surface and in-process dispatch are not affected.
+  served-commands: "invitation-handler.*,invitation-job.service.submit,invitation-job.service.submit-verification,invitation-job.service.get,invitation-job.service.held-rows,invitation-job.service.send,invitation-job.service.resolve,invitation-job.service.cancel,oid4vci.issuer.iae-admit,oid4vci.issuer.grant-step"
   # Per-caller command ceilings, on gRPC and HTTP alike: the verifier submits verification jobs only (for an operator,
   # with a token delegated for that operator); the workflow worker runs the curated job steps only.
   caller-command-restrictions: '[{"callerId":"verifier-service","tenantScoped":true,"allowedCommands":["invitation-job.service.submit-verification"]},{"callerId":"workflow-service","tenantScoped":true,"allowedCommands":["invitation-job.service.submit","invitation-job.service.get","invitation-job.service.held-rows","invitation-job.service.send","invitation-job.service.resolve","invitation-job.service.cancel"]}]'
   routing:
     configScope: APP
     modules:
+      # Invitation commands (invitation.service.<command>) route to the tenant authorization server, which owns the
+      # invitations of every tenant except the platform tenant. Invitation jobs, credential invitations and their
+      # redemption mint, read and reserve invitations there; this service carries only the routed client.
+      invitation:
+        services:
+          service:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-tenant-as:9090
+            serviceTokenAudience: enterprise-tenant-as
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
+      # A governed education design that froze no outcome mapping addresses uses the tenant's current ones, kept by
+      # the platform in the tenant's education issuance context. Only this read is routed; the hyphenated command id
+      # needs the bracket form, written bare the route silently falls back to LOCAL.
+      education:
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
+        services:
+          europass:
+            commands:
+              "[education.europass.outcome-mapping-assets-get]":
+                target: SERVER
+                transport: GRPC
+                endpoint: grpc://enterprise-platform:9090
+                timeoutMs: 10000
+      # The semantic model runs in the platform: connector fields resolve their model elements there
+      # (model.element.resolve), SEMANTIC_MODEL_ELEMENT attachments get the elements an exchange uses
+      # (model.element.scope) and connector binding usages are recorded there. Only the element service is routed.
+      model:
+        services:
+          element:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
       kms:
         serviceTokenAudience: enterprise-tenant-kms
         preferServiceTokenOverSessionBearer: true
@@ -329,6 +374,12 @@ invitation-job:
   sweep:
     scheduler:
       enabled: true
+# Invitation hooks (invitation-handler.*) are accepted only from the tenant authorization server's tenant-bound
+# service token, exchanged for this service's own audience.
+invitation:
+  handler-host:
+    allowed-workloads: tenant-as-service
+    audience: enterprise-issuer
 # Pipeline session payloads are sealed with this master KEK before they reach the
 # KV backend. The Compose setup generates separate base64url keys for each
 # deployment. Keep them with the deployment's other secrets.
@@ -378,6 +429,14 @@ kv:
         type: KvStoreConfig
         backendId: database
         scopeBinding: TENANT
+      # Idempotency claims of credential offers created with a correlation id (store id oid4vci.rest.sessions).
+      # Without this entry every such offer is refused with KV_STORE_NOT_DECLARED, and tenant registration fails
+      # because its sample offer cannot be created.
+      rest:
+        sessions:
+          type: KvStoreConfig
+          backendId: database
+          scopeBinding: TENANT
     # Blob descriptor/metadata index for design assets. The dotted store id
     # "blob.metadata" is represented as nested config keys.
     blob:

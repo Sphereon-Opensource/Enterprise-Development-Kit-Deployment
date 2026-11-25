@@ -39,8 +39,10 @@ server:
     client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET}
     tenant-bound-client-id: true
     audience: enterprise-platform
-    # The hosted login page reads the tenant's brand assets from the blob service.
-    allowed-audiences: enterprise-tenant-kms,enterprise-blob
+    # The hosted login page reads the tenant's brand assets from the blob service. Invitation hooks and the
+    # Interactive Authorization calls exchange a tenant token for the receiving service's own audience
+    # (issuer, verifier).
+    allowed-audiences: enterprise-tenant-kms,enterprise-issuer,enterprise-verifier,enterprise-blob
 sphereon:
   telemetry:
     enabled: true
@@ -92,11 +94,77 @@ security:
       "[service-oid4vp]": verifier-service
 transport:
   grpc:
+    # The inbound gRPC listener is switched by the GRPC_ENABLED environment variable of the service, not by this key.
     enabled: false
     port: 9090
+  # What this service answers on its internal gRPC transport; every other command is refused there. It owns the
+  # invitations of every tenant except the platform tenant, and the issuer and verifier call invitation.service.*
+  # here. The REST surface and in-process dispatch are not affected.
+  served-commands: "invitation.service.*"
   routing:
     configScope: APP
     modules:
+      # Hooks of invitation actions whose handler lives in another service: invitation-handler.<action>.<hook>. The
+      # resolver takes the module from the first id segment and the service from the second, so one entry per action
+      # covers its hooks. The call exchanges a tenant token for the hosting service's own audience.
+      "[invitation-handler]":
+        services:
+          "[credential-issuance]":
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-issuer:9090
+            serviceTokenAudience: enterprise-issuer
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
+          "[credential-verification]":
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-verifier:9090
+            serviceTokenAudience: enterprise-verifier
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
+      # OID4VCI 1.1 Interactive Authorization: the authorization server asks the tenant's verifier for the
+      # presentation request and its verification (oid4vp.iae.create, oid4vp.iae.verify) under this service's own
+      # workload token, never the wallet's bearer.
+      oid4vp:
+        services:
+          iae:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-verifier:9090
+            serviceTokenAudience: enterprise-verifier
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
+          # Account recovery by credential presentation: the request with the tenant's recovery query and its
+          # verified result (oid4vp.universal.create, oid4vp.universal.status), under this service's own workload token.
+          universal:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-verifier:9090
+            serviceTokenAudience: enterprise-verifier
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
+          # The saved presentation query a wallet verification method names (oid4vp.dcql.get), from the DCQL store
+          # the platform hosts, under this service's own workload token.
+          dcql:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-platform:9090
+            serviceTokenAudience: enterprise-platform
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
+      # Before it issues the authorization code, the authorization server asks the issuer whether the presented
+      # credential may complete another grant of the offer (oid4vci.issuer.iae-admit), under this service's own
+      # workload token.
+      oid4vci:
+        services:
+          issuer:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-issuer:9090
+            serviceTokenAudience: enterprise-issuer
+            preferServiceTokenOverSessionBearer: true
+            timeoutMs: 15000
       kms:
         serviceTokenAudience: enterprise-tenant-kms
         preferServiceTokenOverSessionBearer: true
@@ -151,6 +219,24 @@ transport:
         serviceTokenAudience: enterprise-platform
         preferServiceTokenOverSessionBearer: true
         timeoutMs: 15000
+      # Email delivery belongs to the platform: it holds the email accounts, the routing policy and the SMTP
+      # transport. This service binds EmailService to the three routed email commands and carries no email
+      # implementation, so every session needs these routes; without them sign-in fails. The calls run under this
+      # service's own workload token. With no email account configured the platform answers is-available false and
+      # a send returns a delivery error, so owners are activated through the manual activation link.
+      email:
+        serviceTokenAudience: enterprise-platform
+        preferServiceTokenOverSessionBearer: true
+        services:
+          service:
+            commands:
+              "[email.service.send]": &platformEmailGrpcRoute
+                target: SERVER
+                transport: GRPC
+                endpoint: grpc://enterprise-platform:9090
+                timeoutMs: 15000
+              "[email.service.send-templated]": *platformEmailGrpcRoute
+              "[email.service.is-available]": *platformEmailGrpcRoute
       platform:
         target: SERVER
         transport: GRPC
@@ -371,6 +457,23 @@ kv:
         type: KvStoreConfig
         backendId: database
         scopeBinding: TENANT
+
+# Invitation owner: this service holds the invitation state of every tenant except the platform tenant. Callers are
+# default deny; the keys are the callers' server.service-identity.client-id values. The handlers of the two listed
+# actions run in the issuer and the verifier (transport.routing.modules.[invitation-handler]).
+invitation:
+  handlers:
+    remote-actions: "credential.issuance,credential.verification"
+  callers:
+    "[verifier-service]":
+      actions: "credential.verification"
+      operations: "mint,create-one,get,resolve,redeem"
+    # The invitation job orchestrator runs on the issuer and creates verification batches too.
+    "[issuer-service]":
+      actions: "credential.issuance,credential.verification"
+      # list: the invitation job service reads the invitations of its batches (held rows, sweep, callbacks).
+      # reserve: the issuer reserves, releases and reports the one issuance of an invitation.
+      operations: "mint,create-one,create-batch,get,list,resolve,redeem,reserve"
 
 # Blob store each consumer reads and writes. There is no default store: every consumer names its store.
 credential-design:

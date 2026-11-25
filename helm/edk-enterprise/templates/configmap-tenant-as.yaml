@@ -244,6 +244,24 @@ data:
             serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
             preferServiceTokenOverSessionBearer: true
             timeoutMs: 15000
+          # Email delivery belongs to the platform: it holds the email accounts, the routing policy and the SMTP
+          # transport. This service binds EmailService to the three routed email commands and carries no email
+          # implementation, so every session needs these routes; without them sign-in fails. The calls run under
+          # this service's own workload token. With no email account configured the platform answers is-available
+          # false and a send returns a delivery error, so owners are activated through the manual activation link.
+          email:
+            serviceTokenAudience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
+            preferServiceTokenOverSessionBearer: true
+            services:
+              service:
+                commands:
+                  "[email.service.send]": &platformEmailGrpcRoute
+                    target: SERVER
+                    transport: GRPC
+                    endpoint: {{ printf "grpc://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) .Values.grpc.port | quote }}
+                    timeoutMs: 15000
+                  "[email.service.send-templated]": *platformEmailGrpcRoute
+                  "[email.service.is-available]": *platformEmailGrpcRoute
     # The AS holds no application-tenant bootstrap of its own; the platform owns the
     # control-plane ceremony, so the AS skips it on startup.
     application:
