@@ -498,7 +498,7 @@ services:
       ADMIN_CONSOLE_PUBLIC_ORIGIN: *edk-platform-public-url
       ADMIN_CONSOLE_ALLOW_LOCAL_DEVELOPMENT: "true"
       ADMIN_CONSOLE_TRUSTED_INGRESS_MODE: DIRECT
-      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-blob:8080
+      ADMIN_CONSOLE_BFF_OAUTH_TRUSTED_INTERNAL_HTTP_ORIGINS: http://enterprise-platform:18080,http://enterprise-tenant-as:18083,http://enterprise-blob:8080
       ADMIN_CONSOLE_WORKLOAD_CLIENT_ID: admin-console-portal-bff
       ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET: ${EDK_ADMIN_CONSOLE_WORKLOAD_CLIENT_SECRET:?Run scripts/generate-compose-secrets.mjs}
       ADMIN_CONSOLE_AUDIT_BASE_URL: http://enterprise-platform:18080
