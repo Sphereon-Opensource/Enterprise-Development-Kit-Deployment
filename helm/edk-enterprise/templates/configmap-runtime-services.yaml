@@ -14,6 +14,7 @@ metadata:
     app.kubernetes.io/component: did
 data:
   application.yml: |
+{{ include "edk-enterprise.openapiPublishedProductConfig" . | indent 4 }}
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "did")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     config:
@@ -108,6 +109,7 @@ metadata:
     app.kubernetes.io/component: blob
 data:
   application.yml: |
+{{ include "edk-enterprise.openapiPublishedProductConfig" . | indent 4 }}
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "blob")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     config:
@@ -283,6 +285,7 @@ metadata:
     app.kubernetes.io/component: issuer
 data:
   application.yml: |
+{{ include "edk-enterprise.openapiPublishedProductConfig" . | indent 4 }}
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "issuer")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     config:
@@ -523,6 +526,7 @@ metadata:
     app.kubernetes.io/component: verifier
 data:
   application.yml: |
+{{ include "edk-enterprise.openapiPublishedProductConfig" . | indent 4 }}
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "verifier")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     config:

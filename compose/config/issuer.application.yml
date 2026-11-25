@@ -473,3 +473,9 @@ credential-design:
   store-id: designs
 schema-registry:
   store-id: designs
+
+# This kit runs the enterprise services only. Each service publishes the OpenAPI operations of the EDK
+# product and leaves out the ones that belong to wallet, workflow and other VDX services. Remove this
+# setting when such services are added to the installation.
+openapi:
+  published-product: edk
