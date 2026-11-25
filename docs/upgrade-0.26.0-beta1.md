@@ -42,10 +42,19 @@ it after the upgrade as described in [After the upgrade](#after-the-upgrade).
 
 ### Compose files
 
-- `docker-compose.yml`: the `enterprise-blob` service now runs its internal
-  gRPC server (`GRPC_ENABLED: "true"`, `GRPC_PORT: "9090"`). The tenant
-  authorization server reads tenant branding from it. The port is not
-  published.
+- `docker-compose.yml`: the `enterprise-tenant-as`, `enterprise-blob`,
+  `enterprise-issuer` and `enterprise-verifier` services now run their
+  internal gRPC server (`GRPC_ENABLED: "true"`, `GRPC_PORT: "9090"`). The
+  tenant authorization server reads tenant branding from the blob service,
+  and the tenant authorization server, issuer and verifier call each other
+  for invitations and interactive authorization. The ports are not
+  published. Without these settings tenant sign-in and credential offers
+  fail.
+- `docker-compose.yml`: newer supporting images. PostgreSQL moves from
+  `postgres:16-alpine` to the pinned `postgres:16.16-alpine` (same major
+  version, the data directory is reused as is), the OpenTelemetry collector
+  to `0.165.0` and Jaeger to `jaegertracing/jaeger:2.23.0`. Jaeger 2 no
+  longer needs `COLLECTOR_OTLP_ENABLED`.
 - `docker-compose.gateway.yml` (local certificate gateway): `enterprise-blob`
   gets the public URL settings, the local truststore and the certificate
   mount that the other services already had.
@@ -107,6 +116,35 @@ schema in the tenant database. The other services wait for the platform to
 report healthy and only validate the schema; they never receive DDL
 credentials. Take backups of both databases first: a schema that 0.26.0 has
 migrated cannot be opened by 0.25.0 images.
+
+### Credential format identifier for W3C VCDM 2.0 JWT credentials
+
+0.26.0 uses the format identifiers this way:
+
+| Credential | 0.25.0 | 0.26.0 |
+| --- | --- | --- |
+| W3C VCDM 2.0 as a JWT | `jwt_vc_json-ld` | `vc+jwt` |
+| W3C VCDM 1.1 JSON-LD as a JWT | not available | `jwt_vc_json-ld`, with the VCDM 1.1 context in `credential_definition.@context` |
+| W3C VCDM 1.1 as a JWT | `jwt_vc_json` | `jwt_vc_json` (unchanged) |
+
+On its first start the 0.26.0-beta1 platform rewrites every credential
+configuration that 0.25.0 stored with `jwt_vc_json-ld` to `vc+jwt`, once. The
+credential that is issued does not change, and the credential configuration
+identifiers (for example `Membership`) stay the same. What does change is
+what clients see:
+
+- Credential issuer metadata lists these configurations with
+  `"format": "vc+jwt"`.
+- A wallet or test client that selects a configuration by identifier keeps
+  working. A client that filters or requests by the format string
+  `jwt_vc_json-ld` must use `vc+jwt` for these credentials.
+- A request that creates or updates a VCDM 2.0 JWT configuration with
+  `jwt_vc_json-ld` is refused with
+  `credential_definition.@context is required for jwt_vc_json-ld`. Send
+  `vc+jwt`.
+
+Credentials issued before the upgrade are not touched and stay valid: the
+format identifier is not part of a credential.
 
 ### New optional overlays
 
