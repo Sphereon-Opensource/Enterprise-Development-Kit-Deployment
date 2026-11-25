@@ -117,6 +117,13 @@ transport:
             transport: GRPC
             endpoint: grpc://enterprise-workflow:9090
             preferServiceTokenOverSessionBearer: true
+          # A worker step's issuance intent is stamped only after the workflow owner attests the running execution,
+          # asked with the platform's own workload token.
+          attestation:
+            target: SERVER
+            transport: GRPC
+            endpoint: grpc://enterprise-workflow:9090
+            preferServiceTokenOverSessionBearer: true
           execution:
             target: SERVER
             transport: GRPC
