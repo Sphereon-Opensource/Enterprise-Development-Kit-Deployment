@@ -2757,7 +2757,31 @@
               "response": []
             },
             {
-              "name": "7. Get the EmployeeBadge configuration",
+              "name": "7. Publish the credential design",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "if ([200].includes(pm.response.code)) {",
+                      "  pm.test('The design is published', () => pm.expect(pm.response.json().state).to.eql('PUBLISHED'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "https://{{tenantSlug}}.{{baseDomain}}/api/credential-design/v1/designs/credentials/{{employeeBadgeDesignId}}/versions/1/publish",
+                "description": "A new design is a draft. The issuer issues an `EmployeeBadge` only from a published design, and the tenant serves its type metadata only once the design is published. This publishes the first version of the design. Publishing a version that is already published changes nothing and answers the same way, so you can run this again."
+              },
+              "response": []
+            },
+            {
+              "name": "8. Get the EmployeeBadge configuration",
               "event": [
                 {
                   "listen": "test",
@@ -2781,7 +2805,7 @@
               "response": []
             },
             {
-              "name": "8. Save the EmployeeBadge configuration",
+              "name": "9. Save the EmployeeBadge configuration",
               "event": [
                 {
                   "listen": "prerequest",
@@ -2829,7 +2853,7 @@
               "response": []
             },
             {
-              "name": "9. Read the published type metadata",
+              "name": "10. Read the published type metadata",
               "event": [
                 {
                   "listen": "test",
@@ -3941,7 +3965,7 @@
                       "  const contentType = pm.response.headers.get('Content-Type') || '';",
                       "  const etag = pm.response.headers.get('ETag') || '';",
                       "  pm.test('VICAL is served as CBOR', () => pm.expect(contentType.toLowerCase()).to.include('application/cbor'));",
-                      "  pm.test('VICAL has a SHA-256 content ETag', () => pm.expect(etag).to.match(/^\"sha-256:[0-9a-f]{64}\"$/));",
+                      "  pm.test('VICAL has a SHA-256 content ETag', () => pm.expect(etag).to.match(/^\"[0-9a-f]{64}\"$/));",
                       "  pm.test('VICAL is revalidated by caches', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-cache, must-revalidate'));",
                       "  pm.test('VICAL response is not empty', () => pm.expect(pm.response.text().length).to.be.above(0));",
                       "}"
@@ -4674,7 +4698,7 @@
             },
             {
               "name": "Issue EuPid with a Keycloak login",
-              "description": "The wallet signs in at Keycloak before it receives the credential. Run **Set up the wallet proxy** first.\n\nWhile EuPid uses the wallet proxy it only allows the authorization code grant, so the pre-authorized EuPid offers in **Issue credentials** are refused. The last request switches EuPid back.",
+              "description": "The wallet signs in at Keycloak before it receives the credential. Run **Set up the wallet proxy** first.\n\nWhile EuPid uses the wallet proxy it only allows the authorization code grant, so the pre-authorized EuPid offers in **Issue credentials** are refused. Run the final requests to switch EuPid back and restore its previous grant setting.",
               "item": [
                 {
                   "name": "1. Get the EuPid authorization server choice",
@@ -4777,6 +4801,106 @@
                   "response": []
                 },
                 {
+                  "name": "2a. Read the EuPid authorization code grant setting",
+                  "event": [
+                    {
+                      "listen": "prerequest",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "let skipped = false;",
+                          "for (const key of [\"keycloakIssuer\",\"keycloakClientId\",\"keycloakClientSecret\"]) {",
+                          "  const value = String(pm.variables.replaceIn('{{' + key + '}}') || '').trim();",
+                          "  if (!value || value.startsWith('{{')) {",
+                          "    console.log('Skipped: set ' + key + ' in your environment to use Keycloak as the wallet login.');",
+                          "    pm.execution.skipRequest();",
+                          "    skipped = true;",
+                          "    break;",
+                          "  }",
+                          "}",
+                          "if (!skipped) for (const key of [\"issuerId\",\"walletProxyId\"]) if (!pm.collectionVariables.get(key)) { console.log('Skipped: run Set up the wallet proxy first.'); pm.execution.skipRequest(); skipped = true; break; }",
+                          "pm.collectionVariables.unset('euPidPreviousAuthorizationCode');"
+                        ]
+                      }
+                    },
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                          "if ([200].includes(pm.response.code)) {",
+                          "  pm.collectionVariables.set('euPidPreviousAuthorizationCode', JSON.stringify(pm.response.json().grants?.authorizationCode?.enabled ?? null));",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "2b. Enable the authorization code grant for EuPid",
+                  "event": [
+                    {
+                      "listen": "prerequest",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "let skipped = false;",
+                          "for (const key of [\"keycloakIssuer\",\"keycloakClientId\",\"keycloakClientSecret\"]) {",
+                          "  const value = String(pm.variables.replaceIn('{{' + key + '}}') || '').trim();",
+                          "  if (!value || value.startsWith('{{')) {",
+                          "    console.log('Skipped: set ' + key + ' in your environment to use Keycloak as the wallet login.');",
+                          "    pm.execution.skipRequest();",
+                          "    skipped = true;",
+                          "    break;",
+                          "  }",
+                          "}",
+                          "if (!skipped) for (const key of [\"euPidPreviousAuthorizationCode\"]) if (!pm.collectionVariables.get(key)) { console.log('Skipped: run Read the EuPid authorization code grant setting first.'); pm.execution.skipRequest(); skipped = true; break; }"
+                        ]
+                      }
+                    },
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                          "if ([200].includes(pm.response.code)) {",
+                          "  pm.test('EuPid allows authorization code offers', () => pm.expect(pm.response.json().grants?.authorizationCode?.enabled).to.equal(true));",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"grants\": {\n    \"authorizationCode\": {\n      \"enabled\": true\n    }\n  }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "description": "The issuer grant setting permits authorization code offers for EuPid. The authorization server choice controls where those offers send the wallet."
+                  },
+                  "response": []
+                },
+                {
                   "name": "3. Create an authorization code offer",
                   "event": [
                     {
@@ -4793,7 +4917,9 @@
                           "    skipped = true;",
                           "    break;",
                           "  }",
-                          "}"
+                          "}",
+                          "if (!skipped) for (const key of [\"euPidPreviousAuthorizationCode\"]) if (!pm.collectionVariables.get(key)) { console.log('Skipped: run Read the EuPid authorization code grant setting first.'); pm.execution.skipRequest(); skipped = true; break; }",
+                          "pm.collectionVariables.unset('keycloakCredentialOfferUri');"
                         ]
                       }
                     },
@@ -4806,7 +4932,7 @@
                           "if ([201].includes(pm.response.code)) {",
                           "  const offer = pm.response.json();",
                           "  pm.collectionVariables.set('offerCorrelationId', offer.correlation_id);",
-                          "  pm.collectionVariables.set('credentialOfferUri', decodeURIComponent(offer.offer_uri.split('credential_offer_uri=')[1]));",
+                          "  pm.collectionVariables.set('keycloakCredentialOfferUri', decodeURIComponent(offer.offer_uri.split('credential_offer_uri=')[1]));",
                           "  console.log('Wallet link: ' + offer.offer_uri);",
                           "}"
                         ]
@@ -4852,7 +4978,8 @@
                           "    skipped = true;",
                           "    break;",
                           "  }",
-                          "}"
+                          "}",
+                          "if (!skipped) for (const key of [\"keycloakCredentialOfferUri\"]) if (!pm.collectionVariables.get(key)) { console.log('Skipped: run Create an authorization code offer first.'); pm.execution.skipRequest(); skipped = true; break; }"
                         ]
                       }
                     },
@@ -4876,7 +5003,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "{{credentialOfferUri}}",
+                    "url": "{{keycloakCredentialOfferUri}}",
                     "auth": {
                       "type": "noauth"
                     }
@@ -5275,6 +5402,63 @@
                     "description": "Clears the choice, so EuPid again uses the tenant's default authorization server and pre-authorized offers work. It can take a few seconds to apply."
                   },
                   "response": []
+                },
+                {
+                  "name": "9. Restore the previous EuPid authorization code grant setting",
+                  "event": [
+                    {
+                      "listen": "prerequest",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "let skipped = false;",
+                          "for (const key of [\"keycloakIssuer\",\"keycloakClientId\",\"keycloakClientSecret\"]) {",
+                          "  const value = String(pm.variables.replaceIn('{{' + key + '}}') || '').trim();",
+                          "  if (!value || value.startsWith('{{')) {",
+                          "    console.log('Skipped: set ' + key + ' in your environment to use Keycloak as the wallet login.');",
+                          "    pm.execution.skipRequest();",
+                          "    skipped = true;",
+                          "    break;",
+                          "  }",
+                          "}",
+                          "if (!skipped) for (const key of [\"euPidPreviousAuthorizationCode\"]) if (!pm.collectionVariables.get(key)) { console.log('Skipped: run Read the EuPid authorization code grant setting first.'); pm.execution.skipRequest(); skipped = true; break; }"
+                        ]
+                      }
+                    },
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                          "if ([200].includes(pm.response.code)) {",
+                          "  pm.test('EuPid grant setting is restored', () => pm.expect(pm.response.json().grants?.authorizationCode?.enabled ?? null).to.equal(JSON.parse(pm.collectionVariables.get('euPidPreviousAuthorizationCode'))));",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "https://{{tenantSlug}}.{{baseDomain}}/api/platform/config/v1/tenants/{{tenantId}}/oid4vci/issuer/instances/{{issuerId}}/credential-config-settings/EuPid",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\"grants\":{\"authorizationCode\":{\"enabled\":{{euPidPreviousAuthorizationCode}}}}}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "description": "Restores the previous EuPid grant override. Clearing the override restores inheritance when the configuration inherited its grant setting."
+                  },
+                  "response": []
                 }
               ]
             }
@@ -5328,7 +5512,7 @@
     },
     {
       "key": "tenantScopedVariables",
-      "value": "tenantId,onboardingCorrelationId,ownerActivationLink,authorizationServerId,serviceClientExists,kmsResourceHandle,kmsProviderId,keyAlias,signature,azureResourceHandle,azureResourceVersion,azureCredentialSecretRef,sharedProviderId,sharedAzureResourceHandle,sharedAzureResourceVersion,sharedAzureCredentialSecretRef,issuerId,credentialIssuer,designId,statusListId,bitstringStatusListId,bitstringStatusListUri,signingKmsResourceHandle,signingKeyAlias,signingVerificationMethodId,employeeBadgeStatusListId,employeeBadgeDesignId,employeeBadgeResourceId,issuanceTemplateId,offerCorrelationId,credentialOfferUri,txCode,txCodeRequired,preAuthorizedCode,walletProxyCredential,eupidCredential,issuerMetadataUrl,credentialEndpoint,nonceEndpoint,walletAuthorizationServer,walletTokenEndpoint,walletAccessToken,credentialIdentifier,cNonce,proofJwt,holderPrivateKey,holderPublicJwk,credentialStatusIndex,credentialStatusListUri,credentialStatusListId,verifierId,employeeBadgeQueryExists,employeeBadgeQueryBound,verificationTemplateId,verificationCorrelationId,requestObjectUri,trustDomainId,vicalAnchorId,walletProxyId,walletClientExists,keycloakServerId,keycloakServerRevision,keycloakServerLifecycle,federationBindingId,federationBindingEnabled,issuerBindingId,euPidAuthorizationServerRevision,issuerState",
+      "value": "tenantId,onboardingCorrelationId,ownerActivationLink,authorizationServerId,serviceClientExists,kmsResourceHandle,kmsProviderId,keyAlias,signature,azureResourceHandle,azureResourceVersion,azureCredentialSecretRef,sharedProviderId,sharedAzureResourceHandle,sharedAzureResourceVersion,sharedAzureCredentialSecretRef,issuerId,credentialIssuer,designId,statusListId,bitstringStatusListId,bitstringStatusListUri,signingKmsResourceHandle,signingKeyAlias,signingVerificationMethodId,employeeBadgeStatusListId,employeeBadgeDesignId,employeeBadgeResourceId,issuanceTemplateId,offerCorrelationId,credentialOfferUri,txCode,txCodeRequired,preAuthorizedCode,walletProxyCredential,eupidCredential,issuerMetadataUrl,credentialEndpoint,nonceEndpoint,walletAuthorizationServer,walletTokenEndpoint,walletAccessToken,credentialIdentifier,cNonce,proofJwt,holderPrivateKey,holderPublicJwk,credentialStatusIndex,credentialStatusListUri,credentialStatusListId,verifierId,employeeBadgeQueryExists,employeeBadgeQueryBound,verificationTemplateId,verificationCorrelationId,requestObjectUri,trustDomainId,vicalAnchorId,walletProxyId,walletClientExists,keycloakServerId,keycloakServerRevision,keycloakServerLifecycle,federationBindingId,federationBindingEnabled,issuerBindingId,euPidAuthorizationServerRevision,euPidPreviousAuthorizationCode,keycloakCredentialOfferUri,issuerState",
       "type": "string",
       "description": "Variables cleared when tenantSlug changes."
     },
@@ -5733,6 +5917,18 @@
       "value": "",
       "type": "string",
       "description": "Revision of the EuPid authorization server choice, sent with changes."
+    },
+    {
+      "key": "euPidPreviousAuthorizationCode",
+      "value": "",
+      "type": "string",
+      "description": "EuPid authorization code grant override to restore after the Keycloak example."
+    },
+    {
+      "key": "keycloakCredentialOfferUri",
+      "value": "",
+      "type": "string",
+      "description": "Credential offer URI of the Keycloak authorization code offer."
     },
     {
       "key": "issuerState",

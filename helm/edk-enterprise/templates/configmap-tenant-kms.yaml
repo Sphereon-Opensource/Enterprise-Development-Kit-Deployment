@@ -26,6 +26,7 @@ metadata:
     app.kubernetes.io/component: tenant-kms
 data:
   application.yml: |
+{{ include "edk-enterprise.openapiPublishedProductConfig" . | indent 4 }}
 {{ include "edk-enterprise.secretAuthoritySatelliteConfig" (dict "workloadId" (index .Values.serviceIdentity.serviceIds "tenant-kms")) | indent 4 }}
 {{ include "edk-enterprise.secretManagementSatelliteDatabaseConfig" . | indent 4 }}
     server:

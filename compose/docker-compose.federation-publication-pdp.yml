@@ -2,7 +2,7 @@
 services:
   federation-publication-pdp:
     restart: unless-stopped
-    image: openpolicyagent/opa@sha256:9e0010512cf405e66bfd7b89394f514e56fe0464822df0527e780344ab151450
+    image: openpolicyagent/opa:1.22.4@sha256:ff50f50332ff9e722ffafe2658c195ced1f9b6d4f3064000c2ecfa8cdf7acccf
     command:
       - run
       - --server

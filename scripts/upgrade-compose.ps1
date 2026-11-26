@@ -35,6 +35,11 @@ function Get-ReleaseNumber([string]$Tag) {
     if ($normalized -match '^0\.25\.0-RC5(?:$|[-._].+)') { return 5 }
     # The final release ranks above all release candidates, including future RCs.
     if ($normalized -match '^0\.25\.0(?:$|[-._][0-9].*)') { return 10 }
+    # 0.26.0 pre-releases and the final release rank above every 0.25.0 tag, so a
+    # downgrade to 0.25.0 is refused.
+    if ($normalized -match '^0\.26\.0-BETA[0-9](?:$|[-._0-9].*)') { return 20 }
+    if ($normalized -match '^0\.26\.0-RC[0-9](?:$|[-._0-9].*)') { return 25 }
+    if ($normalized -match '^0\.26\.0(?:$|[-._][0-9].*)') { return 30 }
     return 0
 }
 
@@ -73,6 +78,9 @@ $installedRelease = Get-ReleaseNumber $InstalledImageTag
 $targetRelease = Get-ReleaseNumber $ImageTag
 if ($installedRelease -gt 0 -and $targetRelease -gt 0 -and $targetRelease -lt $installedRelease) {
     throw "Refusing unsupported release downgrade: $InstalledImageTag -> $ImageTag"
+}
+if ($installedRelease -gt 0 -and $installedRelease -lt 10 -and $targetRelease -ge 20) {
+    throw "Upgrade the $InstalledImageTag installation to 0.25.0 first; 0.26.0 upgrades start from the 0.25.0 release."
 }
 
 # Render the exact target configuration before creating a backup or pulling

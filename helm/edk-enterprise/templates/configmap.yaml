@@ -63,6 +63,7 @@ data:
   # environment variable name cannot express (the platform tenant datasource
   # and the hyphenated control-plane bootstrap keys).
   application.yml: |
+{{ include "edk-enterprise.openapiPublishedProductConfig" . | indent 4 }}
     developer-console:
       gateway-services: {{ include "edk-enterprise.developerConsoleGatewayServices" . | quote }}
 {{ include "edk-enterprise.secretAuthorityPlatformConfig" . | indent 4 }}
@@ -831,6 +832,10 @@ data:
     app:
       deployment-mode: {{ $bootstrap.deploymentMode | quote }}
     platform:
+      # The platform migrates every schema of the installation. The schemas only the wallet services use
+      # are created when one of those workloads is enabled.
+      migration:
+        wallet-service-schemas: {{ or (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled (index .Values.services "wallet-onboarding").enabled (index .Values.services "business-wallet").enabled | quote }}
       # Workloads that read hosted AS authority: the tenant AS signing runtime and the tenant KMS
       # custody checks for hosted AS signing keys.
       authorization-server-authority:

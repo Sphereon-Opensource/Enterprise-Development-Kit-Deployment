@@ -423,9 +423,25 @@ blob:
     connector-vault:
       type: database
       scopeBinding: TENANT
+    # Operator inbox of the staged vocabulary import: chunked rows in the tenant's database (blob_store, created by
+    # the platform migration barrier). This mounted file replaces the configuration packaged in the image, so the
+    # store is declared here.
+    vocabulary-sources:
+      type: database
+      scopeBinding: TENANT
 connector:
   vault:
     store-id: connector-vault
+# Blob descriptor and metadata index of the blob stores above. The blob service keys it as the KV store id
+# "blob.metadata"; the dotted id is written as nested keys. The database backend keeps it in the tenant's database;
+# without this entry the index lives in process memory and is lost on restart.
+kv:
+  stores:
+    blob:
+      metadata:
+        type: KvStoreConfig
+        backendId: database
+        scopeBinding: TENANT
 kv-stores:
   # Email catalog templates share one durable platform store. The catalog
   # namespaces per-tenant published state inside it using the resolved tenant id.
@@ -543,6 +559,26 @@ crypto:
         algorithm: ES256
       verifier-request-object-signing:
         algorithm: ES256
+      # Forms stores submissions in the connector vault, so every Forms write resolves these
+      # roles. Vault content must survive restarts: keep them on the persisted platform provider.
+      connector:
+        vault:
+          content:
+            provider: platform
+            algorithm: AES_256
+          manifest:
+            provider: platform
+            algorithm: Ed25519
+      vault:
+        iak:
+          provider: platform
+          algorithm: AES_256
+        policy:
+          provider: platform
+          algorithm: EdDSA
+        writer:
+          provider: platform
+          algorithm: EdDSA
 oauth2:
   user-provider:
     mode: local
@@ -711,7 +747,8 @@ oauth2:
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_VERIFIER}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
-          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-issuer
+          # The verifier calls the invitation commands of the tenant authorization server.
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-tenant-as,enterprise-issuer
           token-exchange:
             mode: secret-bootstrap
             # The verifier forwards its verification invitation jobs to enterprise-issuer.
@@ -721,16 +758,18 @@ oauth2:
           client-secret: ${env:EDK_INTERNAL_CLIENT_SECRET_TENANT_AS}
           grant-types: "client_credentials,urn:ietf:params:oauth:grant-type:token-exchange"
           default-access-token-audience: enterprise-platform
-          # The hosted login page reads the tenant's brand assets from the blob service.
-          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-blob
+          # The hosted login page reads the tenant's brand assets from the blob service. Invitation hooks and the
+          # Interactive Authorization calls address the issuer and the verifier.
+          allowed-access-token-audiences: enterprise-tenant-kms,enterprise-issuer,enterprise-verifier,enterprise-blob
           token-exchange:
             mode: secret-bootstrap
-            # The invitation gate at mint resolves connector attachments in the platform.
-            audiences: enterprise-platform
+            # The invitation gate at mint resolves connector attachments in the platform. Invitation hooks exchange
+            # a tenant token for the hosting service's own audience (issuer, verifier).
+            audiences: enterprise-platform,enterprise-issuer,enterprise-verifier
 # Gateway-exposed backend REST APIs only. Keep aligned with the shipped Traefik routes.
 # Holder protocols and testing/catalog wrappers are excluded by the backend projection.
 developer-console:
-  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/workflow/v1","/api/lifecycle/v1","/api/modeling/v1","/api/organization/v1","/api/services/v1","/api/v1/config","/api/semanticmapping/v1","/api/connector/v1"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/claimmapping/v1"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1","/api/oauth2/v1","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/attestation/v1","/api/catalog/attribute/v1","/public/schema","/public/statuslists","/api/invitation/v1/jobs","/api/invitation/v1/recipientsources"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
+  gateway-services: '[{"serviceId":"service-platform","audience":"enterprise-platform","scopes":[],"pathPrefixes":["/api/platform/config/v1/tenants","/api/tenants","/api/trust-domain/v1","/api/audit/v1","/api/forms/v1","/api/modeling/v1","/api/organization/v1","/api/services/v1","/api/v1/config","/api/semanticmapping/v1","/api/connector/v1"],"enabled":true},{"serviceId":"service-crypto","audience":"enterprise-tenant-kms","scopes":[],"pathPrefixes":["/api/kms/v1"],"enabled":true},{"serviceId":"service-data","audience":"enterprise-tenant-did","scopes":[],"pathPrefixes":["/api/did/v1","/1.0/identifiers"],"enabled":true},{"serviceId":"service-blob","audience":"enterprise-blob","scopes":[],"pathPrefixes":["/api/theme/v1","/api/assets/v1","/api/blob-store/v1","/api/users/v1","/api/v1/schemas","/api/claimmapping/v1"],"enabled":true},{"serviceId":"service-tenant-as","audience":"enterprise-tenant-as","scopes":[],"pathPrefixes":["/api/identity/v1","/api/identity-auth/v1/admin","/api/party/v1","/api/account-actions/v1","/api/oauth2/v1","/api/invitation/v1/invitations"],"enabled":true},{"serviceId":"service-oid4vci","audience":"enterprise-issuer","scopes":[],"pathPrefixes":["/api/oid4vci/v1","/api/credential-design/v1","/api/statuslist/v1","/api/catalog/attestation/v1","/api/catalog/attribute/v1","/public/schema","/public/statuslists","/api/invitation/v1/jobs","/api/invitation/v1/recipientsources"],"enabled":true},{"serviceId":"service-oid4vp","audience":"enterprise-verifier","scopes":[],"pathPrefixes":["/api/oid4vp/v1","/api/dcql/v1","/oid4vp/backend"],"enabled":true}]'
 application:
   bff:
     oauth-client:
@@ -759,6 +798,11 @@ auth:
   login:
     require-application: false
 platform:
+  # The platform migrates every schema of the installation. This kit installs no wallet services, so the
+  # schemas only they use are not created in the tenant storage. Set this to true when wallet services are
+  # added to the installation, before they start.
+  migration:
+    wallet-service-schemas: false
   # Workloads that read hosted AS authority: the tenant AS signing runtime and the tenant KMS
   # custody checks for hosted AS signing keys.
   authorization-server-authority:
@@ -819,6 +863,22 @@ east-west:
     base-url: http://enterprise-issuer:8080
   tenant-verifier:
     base-url: http://enterprise-verifier:8080
+
+# Invitation owner of the platform tenant. Every other tenant is owned by the tenant authorization server.
+# Workload callers are default deny; none is listed here.
+invitation:
+  owner:
+    serves-platform-tenant: true
+
+# Scheduled refresh of trust sources whose snapshot is about to lapse. An imported mdoc VICAL is usable for at
+# most an hour after its last validation, so a VICAL-backed anchor needs this worker to keep supplying issuer
+# certificates. The principal is the identity the refresh is authorized and recorded for.
+trust:
+  sources:
+    refresh:
+      worker:
+        enabled: true
+        principal-id: trust-source-refresh-worker
 license:
   # This is the local licensing authority: it owns the deployment and is exempt
   # from the deployment license gate.
@@ -1440,3 +1500,9 @@ authz:
             any-of: [tenant-admin, platform-admin]
           - pattern: oidfed.trust-marks.revoke
             any-of: [tenant-admin, platform-admin]
+
+# This kit runs the enterprise services only. Each service publishes the OpenAPI operations of the EDK
+# product and leaves out the ones that belong to wallet, workflow and other VDX services. Remove this
+# setting when such services are added to the installation.
+openapi:
+  published-product: edk

@@ -240,6 +240,15 @@ authz:
             any-of: [tenant-admin, platform-admin]
           - pattern: theme.rest-brand.delete-application
             any-of: [tenant-admin, platform-admin]
+          # Product and audience branding writes follow the same administrator rule.
+          - pattern: theme.rest-brand.set-product
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-brand.delete-product
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-brand.set-audience
+            any-of: [tenant-admin, platform-admin]
+          - pattern: theme.rest-brand.delete-audience
+            any-of: [tenant-admin, platform-admin]
           - pattern: theme.rest-stylesheet.set
             any-of: [tenant-admin, platform-admin]
           - pattern: theme.rest-stylesheet.delete
@@ -292,3 +301,9 @@ credential-design:
   store-id: default
 schema-registry:
   store-id: default
+
+# This kit runs the enterprise services only. Each service publishes the OpenAPI operations of the EDK
+# product and leaves out the ones that belong to wallet, workflow and other VDX services. Remove this
+# setting when such services are added to the installation.
+openapi:
+  published-product: edk

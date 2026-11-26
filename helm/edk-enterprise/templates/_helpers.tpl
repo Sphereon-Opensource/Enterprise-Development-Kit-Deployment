@@ -850,3 +850,18 @@ would create endpoints that can never provision or use tenant keys.
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+The OpenAPI documents the enterprise services publish. A release without wallet workloads publishes the
+operations of the EDK product only; with a wallet workload enabled the services publish the complete
+documents, as the image carries them.
+*/}}
+{{- define "edk-enterprise.openapiPublishedProductConfig" -}}
+{{- if or (index .Values.services "wallet-unit").enabled (index .Values.services "wallet-interaction").enabled (index .Values.services "wallet-onboarding").enabled (index .Values.services "business-wallet").enabled -}}
+# A wallet workload is enabled: this service publishes the complete OpenAPI documents.
+{{- else -}}
+# No wallet workload is enabled: this service publishes the OpenAPI operations of the EDK product only.
+openapi:
+  published-product: edk
+{{- end -}}
+{{- end -}}

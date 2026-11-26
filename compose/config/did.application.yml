@@ -232,3 +232,9 @@ secret:
         issuer: enterprise-platform
         audience: sphereon-secret-use
         verification-keys: ${env:SECRET_AUTHORITY_SATELLITE_PERMIT_VERIFICATION_KEYS}
+
+# This kit runs the enterprise services only. Each service publishes the OpenAPI operations of the EDK
+# product and leaves out the ones that belong to wallet, workflow and other VDX services. Remove this
+# setting when such services are added to the installation.
+openapi:
+  published-product: edk
