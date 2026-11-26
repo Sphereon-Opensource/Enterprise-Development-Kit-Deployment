@@ -70,11 +70,20 @@ or empty), timeouts (dict or empty). */}}
 {{- $isSpecs := eq $read "specs" -}}
 {{- $path := dict "type" (ternary "PathPrefix" "Exact" $isSpecs) "value" (printf "%s/%s" $publicPrefix $read) -}}
 {{- $rewrite := ternary (dict "type" "ReplacePrefixMatch" "replacePrefixMatch" (printf "%s/%s" $apiPrefix $read)) (dict "type" "ReplaceFullPath" "replaceFullPath" (printf "%s/%s" $apiPrefix $read)) $isSpecs -}}
+{{- $rewriteFilters := list (dict "type" "URLRewrite" "urlRewrite" (dict "path" $rewrite)) -}}
 {{- $matches := list -}}
 {{- range $method := list "GET" "HEAD" -}}
-{{- $matches = append $matches (dict "path" $path "method" $method "headers" $bearer) -}}
+{{- $match := dict "path" $path "method" $method "headers" $bearer -}}
+{{- if $isSpecs -}}
+{{- /* Gateway API requires one PathPrefix match per prefix-rewrite rule. */ -}}
+{{- $rules = append $rules (dict "matches" (list $match) "filters" $rewriteFilters) -}}
+{{- else -}}
+{{- $matches = append $matches $match -}}
 {{- end -}}
-{{- $rules = append $rules (dict "matches" $matches "filters" (list (dict "type" "URLRewrite" "urlRewrite" (dict "path" $rewrite)))) -}}
+{{- end -}}
+{{- if not $isSpecs -}}
+{{- $rules = append $rules (dict "matches" $matches "filters" $rewriteFilters) -}}
+{{- end -}}
 {{- end -}}
 {{- $matches := list -}}
 {{- range $read := append $reads "specs" -}}
