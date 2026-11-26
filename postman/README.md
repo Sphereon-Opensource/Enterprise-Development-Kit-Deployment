@@ -92,7 +92,7 @@ shows what each request found or skipped.
 Switching `tenantSlug` clears the ids captured for the previous tenant.
 
 To exercise VICAL hosting, set the collection variable `vicalAnchorId` to an anchor with an active,
-validated VICAL snapshot, then run **Trust domains / 6. Fetch a hosted mdoc VICAL**. The request
+validated VICAL snapshot, then run **Trust domains / 6. Fetch a hosted mdoc VICAL (optional)**. The request
 uses the public `/public/trust-domain/v1/.../current` route and checks the CBOR media type, snapshot
 ETag, cache policy and response body. It skips itself when no anchor id is set.
 

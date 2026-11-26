@@ -381,17 +381,17 @@ __LE_TLS_DOMAINS__
     tenant-trust-domain:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        PathPrefix(`/api/trust-domain/v1`)
+        (PathPrefix(`/api/trust-domain/v1`) || PathPrefix(`/api/vical/v1`))
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 220
 
-    # Anonymous delivery of hosted LoTE artifacts. Preserve the tenant host: the platform serves
+    # Anonymous delivery of hosted LoTE and VICAL artifacts. Preserve the tenant host: the platform serves
     # only the lists the resolved tenant explicitly enabled, never another tenant's.
     tenant-trust-domain-public:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
-        PathPrefix(`/public/trust-domain/v1`)
+        (PathPrefix(`/public/trust-domain/v1`) || PathPrefix(`/public/vical/v1`))
       entryPoints: ["websecure"]
       service: svc-platform
       priority: 220

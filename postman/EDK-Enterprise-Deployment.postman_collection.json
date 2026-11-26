@@ -3935,7 +3935,7 @@
               "response": []
             },
             {
-              "name": "6. Fetch a hosted mdoc VICAL",
+              "name": "6. Fetch a hosted mdoc VICAL (optional)",
               "event": [
                 {
                   "listen": "prerequest",
