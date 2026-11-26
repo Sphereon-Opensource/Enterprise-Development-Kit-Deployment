@@ -52,7 +52,7 @@ Options:
   --timeout DURATION            Helm/kubectl timeout (default: 15m).
   --backup-root PATH            Backup parent directory.
   --release-set-evidence PATH   Canonical enterprise-image-set.json for an
-                                immutable RC3, RC4, RC5, or 0.25.0 upgrade.
+                                immutable RC3, RC4, RC5, 0.25.0, or 0.26.0-beta1 upgrade.
   -h, --help                    Show this help.
 
 Rollback contract:
@@ -154,9 +154,9 @@ done
 [[ "$NAMESPACE" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid Kubernetes namespace: $NAMESPACE"
 [[ "$RUNTIME_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid runtime Secret name."
 [[ "$PIPELINE_SECRET_NAME" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || die "Invalid pipeline Secret name."
-if [[ "$IMAGE_TAG" =~ ^(0\.25\.0-RC[345]([._-][A-Za-z0-9][A-Za-z0-9._-]*)?|0\.25\.0($|[-._][0-9].*))$ ]]; then
+if [[ "$IMAGE_TAG" =~ ^(0\.26\.0-beta1|0\.25\.0-RC[345]([._-][A-Za-z0-9][A-Za-z0-9._-]*)?|0\.25\.0($|[-._][0-9].*))$ ]]; then
   [[ -n "$RELEASE_SET_EVIDENCE" ]] ||
-    die "--release-set-evidence is required for immutable RC3, RC4, RC5, and 0.25.0 upgrades."
+    die "--release-set-evidence is required for immutable RC3, RC4, RC5, 0.25.0, and 0.26.0-beta1 upgrades."
 fi
 
 require_command helm
@@ -196,12 +196,23 @@ if [[ -n "$RELEASE_SET_EVIDENCE" ]]; then
         typeof image.labels?.revision === "string" && image.labels.revision.length > 0 &&
         typeof image.labels?.created === "string" && image.labels.created.length > 0 &&
         /^sha256:[a-f0-9]{64}$/.test(image.labels?.sourceFingerprint || "");
+      const expectedImageCount = process.env.RELEASE_REQUESTED_TAG === "0.26.0-beta1" ? 8 : 7;
+      if (expectedImageCount === 8) {
+        const registry = "nexus.sphereon.com/edk-docker";
+        const names = ["admin-console", "enterprise-platform", "enterprise-tenant-kms", "enterprise-did",
+          "enterprise-tenant-as", "enterprise-issuer", "enterprise-verifier", "service-data"];
+        const refs = new Set(Array.isArray(report.images) ? report.images.map((image) => image.reference) : []);
+        if (report.registry !== registry || refs.size !== names.length ||
+            !names.every((name) => refs.has(`${registry}/${name}:0.26.0-beta1`))) {
+          throw new Error("beta1 release evidence must name the exact eight canonical Nexus references");
+        }
+      }
       if (report.tag !== process.env.RELEASE_REQUESTED_TAG ||
           build.version !== process.env.RELEASE_REQUESTED_TAG ||
-          !Array.isArray(report.images) || report.images.length !== 7 ||
+          !Array.isArray(report.images) || report.images.length !== expectedImageCount ||
           typeof build.source !== "string" || build.source.length === 0 ||
           report.images.some((image) => !hasImmutableImageProvenance(image))) {
-        throw new Error("release-set evidence does not bind the requested tag to seven immutable image bytes with per-image provenance");
+        throw new Error("release-set evidence does not bind the requested tag to the expected immutable image set with per-image provenance");
       }
       const canonical = {
         tag: report.tag,
