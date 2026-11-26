@@ -866,8 +866,9 @@ openapi:
 {{- end -}}
 {{- end -}}
 
-{{/* Shared with the password defaults in compose/config. Explicit profiles and command policy still apply. */}}
+{{/* Shared with the default security profile in compose/config. Explicit profiles and command policy still apply. */}}
 {{- define "edk-enterprise.authenticationAssuranceDefaults" -}}
 "profiles.default-required-aal": "aal1"
+"profiles.default-cross-border-policy": "allow"
 "commands.default-required-aal": "aal1"
 {{- end -}}
