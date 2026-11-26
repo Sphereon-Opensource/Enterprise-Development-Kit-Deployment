@@ -72,11 +72,10 @@ data:
         auth:
           anonymous-path-prefixes: {{ index .Values.serviceIdentity.anonymousPathPrefixes "platform" | quote }}
           # The platform AS stamps tokens with the public issuer, but validates
-          # them by fetching JWKS through the in-cluster service. This keeps
-          # operator token validation independent from external gateway TLS
-          # trust inside the service containers.
+          # them through the platform's own listener. Calling its Kubernetes
+          # Service from the same pod can time out through a hairpin route.
           issuer: ${env:EXTERNAL_BASE_URL}
-          jwks-uri: {{ printf "http://%s:%v/.well-known/jwks.json" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          jwks-uri: {{ printf "http://localhost:%v/.well-known/jwks.json" ((index .Values.services "platform").restPort) | quote }}
           # Tenant-scoped platform-config APIs accept only issuers that resolve
           # to an active OAUTH2_AUTHORIZATION_SERVER registry binding.
           trust-tenant-registry-issuers: true
