@@ -614,6 +614,7 @@ data:
     # transport. Each local label is bound to the client id in the validated JWT.
     # The satellites read config and the license-state projection through these.
     security:
+{{ include "edk-enterprise.authenticationAssuranceDefaults" . | indent 6 }}
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
