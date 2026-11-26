@@ -755,6 +755,10 @@ data:
                 target: SERVER
                 transport: HTTP
                 endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) (index .Values.services "tenant-as").restPort | quote }}
+              "[owner-account-actions]":
+                target: SERVER
+                transport: HTTP
+                endpoint: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) (index .Values.services "tenant-as").restPort | quote }}
           {{- end }}
           {{- if (index .Values.services "did").enabled }}
           # DID signing: a platform operator who saves a tenant credential configuration in DID mode gets
