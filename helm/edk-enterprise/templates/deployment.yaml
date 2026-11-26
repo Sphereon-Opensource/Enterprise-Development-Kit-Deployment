@@ -656,6 +656,7 @@ spec:
                    its gRPC receiver, which carries the config reads and the license-state
                    projection (application.license.get-effective) each satellite fails closed
                    without. */}}
+            {{- if ne $name "tenant-kms" }}
             - name: TRANSPORT_ROUTING_MODULES_PLATFORM_TARGET
               value: "SERVER"
             - name: TRANSPORT_ROUTING_MODULES_PLATFORM_TRANSPORT
@@ -668,17 +669,17 @@ spec:
               value: "GRPC"
             - name: TRANSPORT_ROUTING_MODULES_PLATFORM_SERVICES_CONFIG_ENDPOINT
               value: {{ printf "grpc://%s-platform:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
-            # Satellites never read tenant routing/public-endpoint metadata from
-            # a local tenant DB. They resolve it through the platform service so
-            # anonymous public Host routes work across namespaces/clusters.
-            - name: TENANT_RESOLUTION_REMOTE
-              value: "true"
             - name: TRANSPORT_ROUTING_MODULES_APPLICATION_TARGET
               value: "SERVER"
             - name: TRANSPORT_ROUTING_MODULES_APPLICATION_TRANSPORT
               value: "GRPC"
             - name: TRANSPORT_ROUTING_MODULES_APPLICATION_ENDPOINT
               value: {{ printf "grpc://%s-platform:%v" (include "edk-enterprise.fullname" $) $.Values.grpc.port | quote }}
+            {{- end }}
+            # Satellites resolve tenant routing through the platform.
+            # Tenant KMS uses its ConfigMap for the identity-ready gRPC routes.
+            - name: TENANT_RESOLUTION_REMOTE
+              value: "true"
             {{- end }}
             {{- if eq $name "platform" }}
             {{- /* Break-glass operator credential for the first-boot owner. Supplied
