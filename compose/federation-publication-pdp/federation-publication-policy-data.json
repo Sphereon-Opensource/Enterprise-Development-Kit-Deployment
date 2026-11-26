@@ -791,6 +791,14 @@
       "platform.config.provision-status-list-signing": [
         "issuer-service"
       ],
+      "platform.service-registration.register": [
+        "blob-service",
+        "did-service",
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service",
+        "verifier-service"
+      ],
       "platform.tenant-endpoint.list": [
         "blob-service",
         "did-service",
