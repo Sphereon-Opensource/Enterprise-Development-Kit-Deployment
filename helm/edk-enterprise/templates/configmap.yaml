@@ -29,6 +29,7 @@ Rendered only for the platform service.
 {{- $tenantDb := .Values.database.tenant }}
 {{- $bootstrap := .Values.platform.bootstrap }}
 {{- $licenseTrust := .Values.license.trust }}
+{{- $platformLoopbackUrl := printf "http://localhost:%v" .Values.services.platform.restPort }}
 {{- $secretBootstrapActors := .Values.secretManagement.internalResolution.allowedServiceActors }}
 {{- if and (index .Values.services "wallet-unit").enabled (not (has (index .Values.serviceIdentity.clientIds "wallet-unit") $secretBootstrapActors)) }}
 {{- $secretBootstrapActors = append $secretBootstrapActors (index .Values.serviceIdentity.clientIds "wallet-unit") }}
@@ -75,7 +76,7 @@ data:
           # them through the platform's own listener. Calling its Kubernetes
           # Service from the same pod can time out through a hairpin route.
           issuer: ${env:EXTERNAL_BASE_URL}
-          jwks-uri: {{ printf "http://localhost:%v/.well-known/jwks.json" ((index .Values.services "platform").restPort) | quote }}
+          jwks-uri: {{ printf "%s/.well-known/jwks.json" $platformLoopbackUrl | quote }}
           # Tenant-scoped platform-config APIs accept only issuers that resolve
           # to an active OAUTH2_AUTHORIZATION_SERVER registry binding.
           trust-tenant-registry-issuers: true
@@ -90,9 +91,9 @@ data:
       service-identity:
         # The platform uses its own tenant-bound client (platform-service) registered during
         # onboarding for every outgoing service call: routed customer KEK commands to tenant-KMS.
-        token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
-        # The endpoint above is the in-cluster east-west address; the destination
-        # preauthorizer approves plain http only on this explicit opt-in.
+        token-endpoint: {{ printf "%s/token" $platformLoopbackUrl | quote }}
+        # This endpoint belongs to the same pod. The destination preauthorizer
+        # approves plain HTTP only on explicit opt-in.
         token-endpoint-allow-http: true
         token-endpoint-source: configured
         active-as-client-role: platform
@@ -124,7 +125,7 @@ data:
           audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
           allowed-audiences: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "workflow") | quote }}
         platform-user-delegation:
-          token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          token-endpoint: {{ printf "%s/token" $platformLoopbackUrl | quote }}
           token-endpoint-allow-http: true
           active-as-client-role: platform-delegation
           client-id: platform-delegation-service
@@ -299,7 +300,7 @@ data:
         # A closed token profile selects these server-authored coordinates; the opaque tenant-bound
         # client secret is resolved by the secret broker and is never rendered into this ConfigMap.
         service-identity:
-          token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          token-endpoint: {{ printf "%s/token" $platformLoopbackUrl | quote }}
           token-endpoint-allow-http: true
           client-id: {{ index .Values.serviceIdentity.clientIds "trust-domain-identifier" | quote }}
           tenant-bound-client-id: true
@@ -957,7 +958,7 @@ data:
       # secret is resolved by the secret broker and is never rendered into this ConfigMap.
       as-signing-management:
         service-identity:
-          token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          token-endpoint: {{ printf "%s/token" $platformLoopbackUrl | quote }}
           token-endpoint-allow-http: true
           client-id: {{ index .Values.serviceIdentity.clientIds "as-signing-management" | quote }}
           tenant-bound-client-id: true
@@ -999,7 +1000,7 @@ data:
     oidfed:
       key-management:
         service-identity:
-          token-endpoint: {{ printf "http://%s:%v/token" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+          token-endpoint: {{ printf "%s/token" $platformLoopbackUrl | quote }}
           token-endpoint-allow-http: true
           platform-issuer: ${env:EXTERNAL_BASE_URL}
           client-id: federation-signing-service
@@ -1014,7 +1015,7 @@ data:
     # tenant KMS over its REST API.
     east-west:
       platform:
-        base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "platform")) ((index .Values.services "platform").restPort) | quote }}
+        base-url: {{ $platformLoopbackUrl | quote }}
       {{- if (index .Values.services "tenant-as").enabled }}
       tenant-as:
         base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
