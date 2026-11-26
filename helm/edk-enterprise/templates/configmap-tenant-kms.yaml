@@ -46,6 +46,7 @@ data:
     # calls, each bound to the client id of the service token the caller presents.
     # Tenant and principal claims are taken only from the validated workload JWT.
     security:
+{{ include "edk-enterprise.authenticationAssuranceDefaults" . | indent 6 }}
       workload-trust-policy:
         trusted_service_ids:
           - federation-signing-service

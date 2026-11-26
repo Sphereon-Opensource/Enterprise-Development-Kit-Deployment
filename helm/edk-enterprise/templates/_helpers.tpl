@@ -865,3 +865,9 @@ openapi:
   published-product: edk
 {{- end -}}
 {{- end -}}
+
+{{/* Shared with the password defaults in compose/config. Explicit profiles and command policy still apply. */}}
+{{- define "edk-enterprise.authenticationAssuranceDefaults" -}}
+"profiles.default-required-aal": "aal1"
+"commands.default-required-aal": "aal1"
+{{- end -}}

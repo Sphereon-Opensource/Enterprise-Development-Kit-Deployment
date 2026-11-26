@@ -68,6 +68,7 @@ data:
         allowed-audiences: "{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms") }}{{ if (index .Values.services "blob").enabled }},{{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "blob") }}{{ end }}"
     {{- end }}
     security:
+{{ include "edk-enterprise.authenticationAssuranceDefaults" . | indent 6 }}
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}

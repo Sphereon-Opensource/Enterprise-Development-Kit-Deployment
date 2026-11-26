@@ -37,6 +37,7 @@ data:
       tenant-did:
         base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
     security:
+{{ include "edk-enterprise.authenticationAssuranceDefaults" . | indent 6 }}
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
@@ -158,6 +159,7 @@ data:
     # theme.features.resolve, assets.content.get). Those reads match no blob role rule below, so the
     # roles engine admits them; every branding write still requires an administrator.
     security:
+{{ include "edk-enterprise.authenticationAssuranceDefaults" . | indent 6 }}
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-as" | quote }}
@@ -310,6 +312,7 @@ data:
       tenant-did:
         base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "did")) ((index .Values.services "did").restPort) | quote }}
     security:
+{{ include "edk-enterprise.authenticationAssuranceDefaults" . | indent 6 }}
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
@@ -549,6 +552,7 @@ data:
         audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
         allowed-audiences: {{ printf "%s,%s" (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-kms")) (include "edk-enterprise.serviceAudience" (dict "root" . "name" "issuer")) | quote }}
     security:
+{{ include "edk-enterprise.authenticationAssuranceDefaults" . | indent 6 }}
       workload-trust-policy:
         trusted_service_ids:
           - {{ index .Values.serviceIdentity.serviceIds "tenant-kms" | quote }}
