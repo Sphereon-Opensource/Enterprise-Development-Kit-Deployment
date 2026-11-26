@@ -51,6 +51,20 @@ for (const filename of ['dynamic.federation.template.yml', 'dynamic.public-cert.
   })
 }
 
+test('tenant VICAL authoring and hosting keep platform route ownership', () => {
+  for (const filename of ['dynamic.federation.template.yml', 'dynamic.public-cert.template.yml', 'dynamic.letsencrypt.template.yml', 'dynamic.yml']) {
+    const source = readFileSync(new URL(`../../compose/gateway/traefik/${filename}`, import.meta.url), 'utf8')
+    const management = router(source, 'tenant-trust-domain')
+    const hosting = router(source, 'tenant-trust-domain-public')
+    assert.ok(management.includes('PathPrefix(`/api/vical/v1`)'), filename)
+    assert.ok(hosting.includes('PathPrefix(`/public/vical/v1`)'), filename)
+    for (const rule of [management, hosting]) {
+      assert.match(rule, /HostRegexp\(/, filename)
+      assert.match(rule, /service: svc-platform/, filename)
+    }
+  }
+})
+
 test('rendered federation gateway preserves fallback routing through TLS and edge modes', () => {
   for (const behindEdge of [false, true]) {
     const source = renderFederationGateway({baseDomain: 'fed.example.com', withVdxServices: true, behindEdge})
