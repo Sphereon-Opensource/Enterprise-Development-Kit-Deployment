@@ -251,7 +251,7 @@ spec:
                    image's baked application.yml through a subPath mount. */}}
             - name: SERVER_REST_AUTH_ENABLED
               value: {{ $.Values.auth.enabled | quote }}
-            {{- if ne $name "platform" }}
+            {{- if and (ne $name "platform") (ne $name "tenant-as") }}
             # Dynamic hosted-AS issuers keep their public URL as the JWT issuer,
             # but satellites fetch the matching tenant JWKS through this release-local
             # service address. The validator preserves the issuer route path.

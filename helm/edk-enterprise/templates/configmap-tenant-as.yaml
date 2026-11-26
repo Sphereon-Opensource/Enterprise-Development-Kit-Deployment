@@ -49,7 +49,7 @@ data:
           # Hosted-AS issuers include a tenant path. The validator preserves
           # it after prefixing persisted tenant/AS identities on the internal
           # JWKS bridge; the public issuer remains the JWT `iss` value.
-          self-jwks-base-url: {{ printf "http://%s:%v" (include "edk-enterprise.serviceName" (dict "root" . "name" "tenant-as")) ((index .Values.services "tenant-as").restPort) | quote }}
+          self-jwks-base-url: {{ printf "http://localhost:%v" ((index .Values.services "tenant-as").restPort) | quote }}
     {{- if .Values.serviceIdentity.internalClientExistingSecret }}
     # The tenant AS reaches tenant-kms with a tenant-bound workload client.
     # Tokens are still minted at the platform AS to avoid the signing -> KMS ->
