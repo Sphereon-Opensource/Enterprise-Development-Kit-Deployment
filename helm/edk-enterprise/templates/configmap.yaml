@@ -554,7 +554,9 @@ data:
           post-logout-redirect-uris: "${env:ONBOARDING_UI_BASE_URL}/admin-console"
           allowed-scopes: openid
           default-access-token-audience: {{ include "edk-enterprise.serviceAudience" (dict "root" . "name" "platform") | quote }}
-          allowed-access-token-audiences: {{ include "edk-enterprise.serviceIdentity.peersOutAudiencesCsv" (dict "root" . "role" "admin-console") | quote }}
+          {{- $consoleAudiences := splitList "," (include "edk-enterprise.serviceIdentity.peersOutAudiencesCsv" (dict "root" . "role" "admin-console")) }}
+          {{- /* The operator exchanges for the tenant AS during registration, in addition to the console's normal peers. */}}
+          allowed-access-token-audiences: {{ append $consoleAudiences (include "edk-enterprise.serviceAudience" (dict "root" . "name" "tenant-as")) | uniq | join "," | quote }}
           token-endpoint-auth-method: none
           # Platform STS authority: operators delegate onto descendant tenants and administer the
           # platform tenant; this is the tenant-registration channel (tenant-provisioning role).
