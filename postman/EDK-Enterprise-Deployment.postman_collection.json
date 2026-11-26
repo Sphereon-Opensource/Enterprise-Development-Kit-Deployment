@@ -3965,7 +3965,7 @@
                       "  const contentType = pm.response.headers.get('Content-Type') || '';",
                       "  const etag = pm.response.headers.get('ETag') || '';",
                       "  pm.test('VICAL is served as CBOR', () => pm.expect(contentType.toLowerCase()).to.include('application/cbor'));",
-                      "  pm.test('VICAL has a SHA-256 content ETag', () => pm.expect(etag).to.match(/^\"sha-256:[0-9a-f]{64}\"$/));",
+                      "  pm.test('VICAL has a SHA-256 content ETag', () => pm.expect(etag).to.match(/^\"[0-9a-f]{64}\"$/));",
                       "  pm.test('VICAL is revalidated by caches', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-cache, must-revalidate'));",
                       "  pm.test('VICAL response is not empty', () => pm.expect(pm.response.text().length).to.be.above(0));",
                       "}"
