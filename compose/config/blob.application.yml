@@ -156,6 +156,10 @@ connector:
     # dedicated BlobService store below. This binding is deployment-owned and
     # applies to platform and customer tenant sessions alike.
     store-id: default
+service-data:
+  blob:
+    enterprise-actions:
+      enabled: true
 blob:
   stores:
     default:
