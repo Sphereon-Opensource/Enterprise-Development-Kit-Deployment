@@ -223,13 +223,21 @@ host you call, if exactly one is. Otherwise the call answers `400` with a
 message that names the instance path, and no offer is created. Such a tenant
 must move to the instance path.
 
-**Action paths no longer use a colon.** Every `:verb` suffix became a path
-segment. The 0.25.0 collection used the first row (enable a shared vault).
+**Use the beta1 action paths.** Update clients before sending requests to
+beta1. The old KMS and blob action paths return HTTP 404.
 
-| 0.25.0 | 0.26.0 |
+| 0.25.0 `POST` path | 0.26.0-beta1 `POST` path |
 | --- | --- |
-| `POST /api/platform/config/v1/tenants/{tenantId}/kms/shared-providers/{providerId}:enable` (also `:disable`, and `.../kms/resources:attach`) | `.../shared-providers/{providerId}/enable`, `/disable`, `.../kms/resources/attach` |
-| `POST /api/blob-store/v1/blobs:search` (also `:verify`, `:copy`, `:move`) | `/api/blob-store/v1/blobs/search` |
+| `/api/platform/config/v1/tenants/{tenantId}/kms/shared-providers/{providerId}:enable` | `/api/platform/config/v1/tenants/{tenantId}/kms/shared-providers/{providerId}/enable` |
+| `/api/platform/config/v1/tenants/{tenantId}/kms/shared-providers/{providerId}:disable` | `/api/platform/config/v1/tenants/{tenantId}/kms/shared-providers/{providerId}/disable` |
+| `/api/platform/config/v1/tenants/{tenantId}/kms/resources:attach` | `/api/platform/config/v1/tenants/{tenantId}/kms/resources/actions/attach` |
+| `/api/blob-store/v1/blobs:search` | `/api/blob-store/v1/blobs/search?storeId={storeId}` |
+| `/api/blob-store/v1/stores/{storeId}/blobs:verify` | `/api/blob-store/v1/stores/{storeId}/blobs/verify` |
+| `/api/blob-store/v1/blobs:copy` | `/api/blob-store/v1/blobs/copy` |
+| `/api/blob-store/v1/blobs:move` | `/api/blob-store/v1/blobs/move` |
+
+The Enterprise Compose kit enables the four blob actions for tenant
+administrators acting in their own tenant.
 
 #### Check if you use them
 
@@ -238,8 +246,9 @@ instead of `jwt_vc_json-ld`. See the section above.
 
 **Removed.**
 
-- `/api/v1/tabular-mapping-templates` is gone. Claim mappings are managed
-  under `/api/claimmapping/v1`, with a different model.
+- `/api/v1/tabular-mapping-templates` returns HTTP 404. Migrate clients to
+  `/api/claimmapping/v1/mappings` and convert template payloads to versioned
+  claim mappings.
 - `/api/platform/config/v1/tenants/{tenantId}/audiences` answers `404`.
   Audiences are not part of the enterprise installation.
 
