@@ -213,6 +213,19 @@ return HTTP 404. Read the credential issuer ID with
 
 The request and response bodies retain the same shape. The returned `status_uri` uses the instance-scoped status route.
 
+**Issuer configuration writes require an instance ID.** Use `PUT`, `PATCH`
+or `DELETE` on
+`/api/platform/config/v1/tenants/{tenantId}/oid4vci/issuer/instances/{instanceId}/credential-config-settings/{credentialConfigurationId}`.
+The corresponding writes without an issuer instance return HTTP 404.
+
+**Update Trust Mark issuers through the operated federation.** Read the
+operated federation and use its current version as `If-Match` when calling
+`PUT /api/platform/config/v1/tenants/{tenantId}/openid-federation/federations/{federationId}/trustmarkissuers`.
+Send the entire issuer map, including the entries you want to retain. The
+per-issuer authorization and withdrawal POST paths have been removed. Create
+an operated-federation record for a standalone Trust Anchor before using the
+new operation.
+
 **Use the beta1 action paths.** Update clients before sending requests to
 beta1. The old KMS and blob action paths return HTTP 404.
 
