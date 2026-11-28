@@ -807,6 +807,36 @@
         "tenant-as-service",
         "verifier-service"
       ],
+      "connector.attachment.resolve-bindings": [
+        "issuer-service",
+        "tenant-as-service",
+        "verifier-service"
+      ],
+      "connector.invocation-binding.list": [
+        "issuer-service",
+        "tenant-as-service",
+        "verifier-service"
+      ],
+      "model.element.scope": [
+        "issuer-service",
+        "verifier-service"
+      ],
+      "platform.tenant.list-workloads": [
+        "blob-service",
+        "did-service",
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service",
+        "verifier-service"
+      ],
+      "platform.tenant.watch-invalidations": [
+        "blob-service",
+        "did-service",
+        "issuer-service",
+        "kms-service",
+        "tenant-as-service",
+        "verifier-service"
+      ],
       "platform.tenant.resolve": [
         "blob-service",
         "did-service",

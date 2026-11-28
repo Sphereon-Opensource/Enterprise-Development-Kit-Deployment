@@ -187,3 +187,38 @@ test('managed key authority callbacks permit only the KMS workload through the g
   assert.match(policy, /workload_client_id := parts\[0\] if \{\s*is_string\(input\.principal\.id\)\s*parts := split\(input\.principal\.id, ":"\)\s*count\(parts\) == 2\s*is_string\(input\.context\.tenantId\)\s*parts\[1\] == input\.context\.tenantId\s*\}/,
     'A tenant-bound client must match the exact session tenant, with no extra suffixes')
 })
+
+test('publication PDP admits the deployed workload clients for tenant distribution, semantic scope and connector attachments', () => {
+  const {role_rules: roles, service_rules: services} =
+    JSON.parse(readConfig('compose/federation-publication-pdp/federation-publication-policy-data.json')).federation_publication_policy
+  const satelliteClients = ['blob-service', 'did-service', 'issuer-service', 'kms-service', 'tenant-as-service', 'verifier-service']
+  assert.deepEqual(services['platform.tenant.list-workloads'], satelliteClients)
+  assert.deepEqual(services['platform.tenant.watch-invalidations'], satelliteClients)
+  assert.deepEqual(services['model.element.scope'], ['issuer-service', 'verifier-service'])
+  const connectorClients = ['issuer-service', 'tenant-as-service', 'verifier-service']
+  for (const id of ['connector.attachment.resolve-bindings', 'connector.invocation-binding.list']) {
+    assert.deepEqual(services[id], connectorClients)
+    assert.ok(!Object.hasOwn(roles, id), `A human role must not authorize ${id}`)
+  }
+  for (const id of ['platform.tenant.list-workloads', 'platform.tenant.watch-invalidations', 'model.element.scope']) {
+    assert.ok(!Object.hasOwn(roles, id), `A human role must not authorize ${id}`)
+  }
+})
+
+test('publication PDP platform configuration inherits current base service settings', () => {
+  const base = readConfig('compose/config/platform.application.yml').replaceAll('\r\n', '\n')
+  const overlay = readConfig('compose/federation-publication-pdp/platform.application.yml').replaceAll('\r\n', '\n')
+  assert.match(overlay, /^    default-engine: federation-publication-opa$/m)
+  assert.match(overlay, /^        - oidfed\.entity-publication-work\.run$/m)
+  assert.deepEqual(scalarConfig(overlay, ['authz', 'policy', 'engines', 'federation-publication-opa']), {
+    type: 'opa',
+    endpoint: 'http://federation-publication-pdp:8181',
+    'policy-path': '/v1/data/sphereon/authz',
+    'health-path': '/health',
+  })
+  const normalized = overlay
+    .replace('    default-engine: federation-publication-opa\n', '    default-engine: federationadmin\n')
+    .replace('        - oidfed.entity-publication-work.run\n', '')
+    .replace(/^      federation-publication-opa:\n(?:        [^\n]+\n)+/m, '')
+  assert.ok(normalized === base, 'The publication PDP overlay has drifted from the base platform configuration')
+})
