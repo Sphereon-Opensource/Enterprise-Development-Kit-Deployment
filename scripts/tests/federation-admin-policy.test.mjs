@@ -222,3 +222,29 @@ test('publication PDP platform configuration inherits current base service setti
     .replace(/^      federation-publication-opa:\n(?:        [^\n]+\n)+/m, '')
   assert.ok(normalized === base, 'The publication PDP overlay has drifted from the base platform configuration')
 })
+
+test('publication PDP selects exact tenant administration permissions for trust and VICAL', () => {
+  const {role_rules: roleRules, service_rules: serviceRules, trust_admin_resources: resources,
+    trust_source_refresh_worker_id: worker} =
+    JSON.parse(readConfig('compose/federation-publication-pdp/federation-publication-policy-data.json')).federation_publication_policy
+
+  assert.deepEqual(resources, {
+    'trust.lote.create-draft': 'TrustDomainLoTE',
+    'trust.lote.delete-provider': 'TrustDomainLoTE',
+    'trust.lote.publish': 'TrustDomainLoTE',
+    'trust.lote.upsert-provider': 'TrustDomainLoTE',
+    'trust.lote.validate-draft': 'TrustDomainLoTE',
+    'trust.mdoc-vical.manage': 'TrustSourceDomain',
+    'trust.sources.activate': 'TrustSourceDomain',
+    'trust.sources.manage': 'TrustSourceDomain',
+    'trust.sources.refresh': 'TrustSourceDomain',
+  })
+  for (const action of Object.keys(resources)) {
+    assert.ok(!Object.hasOwn(roleRules, action), `${action} must retain its typed resource and tenant checks`)
+    assert.ok(!Object.hasOwn(serviceRules, action), `${action} must use the typed trust policy`)
+  }
+  const overlay = readConfig('compose/federation-publication-pdp/platform.application.yml')
+  const refresh = scalarConfig(overlay, ['trust', 'sources', 'refresh', 'worker'])
+  assert.equal(refresh.enabled, 'true')
+  assert.equal(refresh['principal-id'], worker)
+})
