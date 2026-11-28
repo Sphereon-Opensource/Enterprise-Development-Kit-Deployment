@@ -201,27 +201,17 @@ parts:
 
 #### Must read
 
-**Credential offers have a new path under the issuer instance. The 0.25.0
-paths are deprecated and still work.** This is the change most integrations
-meet first.
+**Credential offers use instance-scoped routes in beta1.** The 0.25.0 paths
+return HTTP 404. Read the credential issuer ID with
+`GET /api/oid4vci/v1/instances` and include it in every offer request.
 
-| 0.25.0 (deprecated, still works) | 0.26.0 |
+| 0.25.0 | 0.26.0-beta1 |
 | --- | --- |
 | `POST /api/oid4vci/v1/backend/credential/offers` | `POST /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers` |
 | `GET /api/oid4vci/v1/backend/credential/offers/{correlation_id}` | `GET /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers/{correlation_id}` |
 | `DELETE /api/oid4vci/v1/backend/credential/offers/{correlation_id}` | `DELETE /api/oid4vci/v1/instances/{instanceId}/backend/credential/offers/{correlation_id}` |
 
-An integration that calls the 0.25.0 paths keeps working in 0.26 without
-changes. Request and response bodies are the same as in 0.25.0; on the 0.25.0
-path, the `status_uri` of a new offer also uses the 0.25.0 path. The 0.25.0
-paths are deprecated, so new integrations use the instance path. `{instanceId}` is the id of the credential
-issuer; read it with `GET /api/oid4vci/v1/instances`.
-
-On a 0.25.0 path, the platform uses the tenant's credential issuer. When the
-tenant has more than one credential issuer, it uses the one published on the
-host you call, if exactly one is. Otherwise the call answers `400` with a
-message that names the instance path, and no offer is created. Such a tenant
-must move to the instance path.
+The request and response bodies retain the same shape. The returned `status_uri` uses the instance-scoped status route.
 
 **Use the beta1 action paths.** Update clients before sending requests to
 beta1. The old KMS and blob action paths return HTTP 404.
