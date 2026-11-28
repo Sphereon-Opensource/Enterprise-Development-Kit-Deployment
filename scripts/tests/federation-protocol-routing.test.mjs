@@ -75,3 +75,19 @@ test('rendered federation gateway preserves fallback routing through TLS and edg
     assert.match(router(source, 'tenant-oidfed'), /priority: 230/)
   }
 })
+
+test('the Enterprise federation gateway retains the data service routes', () => {
+  for (const behindEdge of [false, true]) {
+    const options = {baseDomain: 'fed.example.com', behindEdge}
+    const federationOnly = renderFederationGateway(options)
+    assert.doesNotMatch(federationOnly, /tenant-backend-blob|\/api\/claimmapping\/v1/)
+
+    const enterprise = renderFederationGateway({...options, withVdxServices: true})
+    const data = router(enterprise, 'tenant-backend-blob')
+    const paths = [...data.matchAll(/PathPrefix\(`([^`]+)`\)/g)].map(match => match[1])
+    assert.deepEqual(paths, ['/api/blob-store/v1', '/api/users/v1', '/api/v1/schemas', '/api/claimmapping/v1'])
+    assert.ok(data.includes('HostRegexp(`^[a-z0-9-]+\\.fed\\.example\\.com$`)'))
+    assert.match(data, /service: svc-blob/)
+    assert.doesNotMatch(enterprise, /\/api\/v1\/tabular-mapping-templates/)
+  }
+})

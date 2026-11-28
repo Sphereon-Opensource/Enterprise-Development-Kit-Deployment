@@ -259,6 +259,18 @@ http:
       priority: 200
       tls: {}
 
+    tenant-backend-blob:
+      rule: >-
+        HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
+        (PathPrefix(`/api/blob-store/v1`) ||
+         PathPrefix(`/api/users/v1`) ||
+         PathPrefix(`/api/v1/schemas`) ||
+         PathPrefix(`/api/claimmapping/v1`))
+      entryPoints: ["websecure"]
+      service: svc-blob
+      priority: 310
+      tls: {}
+
     tenant-blob:
       rule: >-
         HostRegexp(`^[a-z0-9-]+\.__BASE_DOMAIN_REGEX__$`) &&
