@@ -13,7 +13,7 @@ allow if {
 
 # Trust-source and LoTE permissions use typed requests built from a validated tenant session.
 allow if {
-    input.principal.type == "USER"
+    input.principal.type in {"USER", "WORKLOAD"}
     role := input.principal.attributes.roles[_]
     role in {"tenant-admin", "platform-admin"}
     input.resource.type == data.federation_publication_policy.trust_admin_resources[input.action.name]
