@@ -213,10 +213,12 @@ return HTTP 404. Read the credential issuer ID with
 
 The request and response bodies retain the same shape. The returned `status_uri` uses the instance-scoped status route.
 
-**Issuer configuration writes require an instance ID.** Use `PUT`, `PATCH`
-or `DELETE` on
-`/api/platform/config/v1/tenants/{tenantId}/oid4vci/issuer/instances/{instanceId}/credential-config-settings/{credentialConfigurationId}`.
-The corresponding writes without an issuer instance return HTTP 404.
+**Issuer credential configurations require an instance ID.** Read or write
+`credential-config-settings` and read `effective-credential-config-settings`
+under `/api/platform/config/v1/tenants/{tenantId}/oid4vci/issuer/instances/{instanceId}`.
+Use `POST` on `credential-config-imports` under the same instance path.
+The earlier configuration, effective configuration and import routes without
+an issuer instance return HTTP 404.
 
 **Update Trust Mark issuers through the operated federation.** Read the
 operated federation and use its current version as `If-Match` when calling
