@@ -807,6 +807,16 @@
         "tenant-as-service",
         "verifier-service"
       ],
+      "connector.attachment.resolve-bindings": [
+        "issuer-service",
+        "tenant-as-service",
+        "verifier-service"
+      ],
+      "connector.invocation-binding.list": [
+        "issuer-service",
+        "tenant-as-service",
+        "verifier-service"
+      ],
       "model.element.scope": [
         "issuer-service",
         "verifier-service"

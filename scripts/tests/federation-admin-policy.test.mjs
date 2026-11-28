@@ -188,13 +188,18 @@ test('managed key authority callbacks permit only the KMS workload through the g
     'A tenant-bound client must match the exact session tenant, with no extra suffixes')
 })
 
-test('publication PDP admits the deployed workload clients for tenant distribution and semantic scope', () => {
+test('publication PDP admits the deployed workload clients for tenant distribution, semantic scope and connector attachments', () => {
   const {role_rules: roles, service_rules: services} =
     JSON.parse(readConfig('compose/federation-publication-pdp/federation-publication-policy-data.json')).federation_publication_policy
   const satelliteClients = ['blob-service', 'did-service', 'issuer-service', 'kms-service', 'tenant-as-service', 'verifier-service']
   assert.deepEqual(services['platform.tenant.list-workloads'], satelliteClients)
   assert.deepEqual(services['platform.tenant.watch-invalidations'], satelliteClients)
   assert.deepEqual(services['model.element.scope'], ['issuer-service', 'verifier-service'])
+  const connectorClients = ['issuer-service', 'tenant-as-service', 'verifier-service']
+  for (const id of ['connector.attachment.resolve-bindings', 'connector.invocation-binding.list']) {
+    assert.deepEqual(services[id], connectorClients)
+    assert.ok(!Object.hasOwn(roles, id), `A human role must not authorize ${id}`)
+  }
   for (const id of ['platform.tenant.list-workloads', 'platform.tenant.watch-invalidations', 'model.element.scope']) {
     assert.ok(!Object.hasOwn(roles, id), `A human role must not authorize ${id}`)
   }
