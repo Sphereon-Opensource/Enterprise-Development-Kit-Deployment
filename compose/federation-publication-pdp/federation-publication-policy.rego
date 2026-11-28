@@ -11,9 +11,32 @@ allow if {
     role == required[_]
 }
 
-# A command without an exact role rule is denied. The only other permits are the
-# satellite workload rules and the process-owned SERVICE dispatcher rules for
-# oidfed.entity-publication-work.run below.
+# Trust-source and LoTE permissions use typed requests built from a validated tenant session.
+allow if {
+    input.principal.type in {"USER", "WORKLOAD"}
+    role := input.principal.attributes.roles[_]
+    role in {"tenant-admin", "platform-admin"}
+    input.resource.type == data.federation_publication_policy.trust_admin_resources[input.action.name]
+    valid_trust_scope
+    input.principal.attributes.tenant_id == input.context.tenantId
+}
+
+# The in-process refresh dispatcher is the only caller that uses this principal type.
+allow if {
+    input.action.name == "trust.sources.refresh"
+    input.principal.type == "Principal"
+    input.principal.id == data.federation_publication_policy.trust_source_refresh_worker_id
+    input.resource.type == "TrustSourceDomain"
+    valid_trust_scope
+}
+
+valid_trust_scope if {
+    is_string(input.context.tenantId)
+    trim_space(input.context.tenantId) != ""
+    is_string(input.resource.id)
+    trim_space(input.resource.id) != ""
+}
+
 
 # East-west calls from the enterprise satellites. Each command is admitted only for the
 # satellite workload clients listed for it in service_rules. The principal is the

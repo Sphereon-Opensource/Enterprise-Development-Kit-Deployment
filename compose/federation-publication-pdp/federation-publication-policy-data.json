@@ -1,6 +1,18 @@
 {
   "federation_publication_policy": {
     "worker_id": "oidfed-enrollment-verification-worker",
+    "trust_source_refresh_worker_id": "trust-source-refresh-worker",
+    "trust_admin_resources": {
+      "trust.lote.create-draft": "TrustDomainLoTE",
+      "trust.lote.delete-provider": "TrustDomainLoTE",
+      "trust.lote.publish": "TrustDomainLoTE",
+      "trust.lote.upsert-provider": "TrustDomainLoTE",
+      "trust.lote.validate-draft": "TrustDomainLoTE",
+      "trust.mdoc-vical.manage": "TrustSourceDomain",
+      "trust.sources.activate": "TrustSourceDomain",
+      "trust.sources.manage": "TrustSourceDomain",
+      "trust.sources.refresh": "TrustSourceDomain"
+    },
     "role_rules": {
       "oidfed.admin-configuration.patch": [
         "tenant-admin",
